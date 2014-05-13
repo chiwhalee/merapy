@@ -25,4 +25,7 @@ tmp/*
 *.out
 *.ipynb
 *.html
+lib/*
+archive/*
+document/*
 

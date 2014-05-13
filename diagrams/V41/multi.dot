@@ -1,0 +1,9 @@
+graph  {
+	1 -- 2 [key=1];
+1 -- 2 [key=2];
+1 -- 2 [key=x,
+length=100];
+3;
+node1 -- node2 [key=0];
+hello;
+}

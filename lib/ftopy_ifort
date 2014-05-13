@@ -1,0 +1,48 @@
+#!/bin/sh
+
+
+
+# USAGE OF f2py
+#
+# 1. 数组总是会自动改成从1开始编号, 从而不用担心这一点,e.g pass arr = [1, 2, 3] into a fort_func, arr will auto change into [0, 1, 2, 3]
+# 
+#
+#
+#
+#
+#
+#
+
+#try this:
+    #LDFLAGS = $LDFLAGS:-L/opt/intel/mkl/lib/intel64
+    #FLIBS =  $FLIBS:-lmkl_lapack95_lp64 -lmkl_mc -lmkl_core -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lmkl_def  
+    #f2py -c -m common_64_ifort common4py.f90 -I/opt/intel/mkl/include  $LDFLAGS  $FLIBS --f90flags="-openmp" --fcompiler=intelem 
+
+    #export LDFLAGS="$LDFLAGS -L/opt/intel/mkl/lib/intel64"
+    #export FLIBS= "$FLIBS -lmkl_lapack95_lp64 -lmkl_mc -lmkl_core -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lmkl_def"
+
+    #f2py -c -m common_64_ifort common4py.f90  $(LDFLAGS) $($FLIBS)  --fcompiler=intelem
+
+
+
+f2py -c -m array_permutation_64_ifort array_permutation4py.f90 -liomp5 --f90flags="-openmp"  --fcompiler=intelem
+f2py -c -m random_64_ifort random4py.f90 --fcompiler=intelem
+
+f2py -c -m common_64_ifort common4py.f90 -I/opt/intel/mkl/include  -L/opt/intel/mkl/lib/intel64 \
+    -lmkl_lapack95_lp64 -lmkl_mc -lmkl_core -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lmkl_def  \
+    --f90flags="-openmp -g -traceback -check all -fp-stack-check -heap-arrays 0" \
+     --fcompiler=intelem
+
+#--f90flags="-openmp"
+#--f90flags="-openmp -g -traceback -check all -fp-stack-check"
+
+#notes:
+    #libomp5 is needed, or else an error 
+        #undefined symbol: __kmpc_end_serialized_parallel
+        #would occur
+    #libmkl_def is needed
+    # flag -heap-arrays 0 is needed, or else, it will crash when array is too large
+
+
+
+
