@@ -107,7 +107,7 @@ def ssh_connect(hostname):
         args= dict(host='210.45.117.30', user='zhli', connect_timeout=100)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
-        args= dict(host='211.86.151.102', user='zhihuali', connect_timeout=3600)
+        args= dict(host='211.86.151.102', user='zhihuali', connect_timeout=3600*4)
     else: 
         raise ValueError(hostname)
     
@@ -139,7 +139,8 @@ def rpyc_conn_zerodeploy(hostname):
 def rpyc_conn_local_zerodeploy(): 
     try: 
         get_ip_address()
-        ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
+        #ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
+        ssh = ssh_connect('local')
         server = DeployedServer(ssh)
         conn = server.classic_connect()
         path = ["/home/zhli/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"]
@@ -198,7 +199,8 @@ def rpyc_conn_local():
         #EOFError:
         get_ip_address()
         
-        ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
+        #ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
+        ssh = ssh_connect('local')
         conn = rpyc.classic.ssh_connect(ssh, 17013)
         yield conn
     finally:
