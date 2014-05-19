@@ -2,6 +2,7 @@
 """
 """
 import numpy as np
+import cPickle as pickle 
 import sys
 import string
 import random
@@ -159,6 +160,11 @@ def random_str(size=6, head='', tail=''):
     chars=string.ascii_uppercase + string.digits 
     middle = ''.join(random.choice(chars) for _ in range(size))
     res=''.join([head, middle, tail])
+    return res
+
+def load(path):
+    with open(path, 'rb') as inn: 
+        res = pickle.load(inn)
     return res
 
 
