@@ -1,6 +1,7 @@
 #coding=utf8
 #include "header.f90"
 
+import unittest 
 import numpy as np
 import numpy.linalg as linalg
 from scipy.sparse.linalg import eigs
@@ -499,11 +500,13 @@ class test_Tensor_svd():
     #u,  w, u2234= simple_itensor()
     #u = test_iTensor.instance("u")
     #w = test_iTensor.instance("w")
+    u = test_iTensor(symmetry='U1').u
     def __init__(self, symmetry):
-        from tensor import  test_iTensor
+        from tensor import test_iTensor
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
         pass
-        self.u = test_iTensor.instance("u")
+        #self.u = test_iTensor.instance("u")
+        #self.u = test_iTensor(symmetry='Travial').u
 
     #@classmethod
     def group_legs(self, rank=3):
@@ -521,7 +524,7 @@ class test_Tensor_svd():
         """
         u = cls.u.copy()
         u.data[:] = 0
-        Tensor_svd.svd(u, ndiv)
+        Tensor_svd.svd(u, ndiv=2)
         #u.QSp[0].reverse()
         #u.QSp[1].reverse()
         #u.QSp[2].reverse()
@@ -554,13 +557,19 @@ class test_Tensor_svd():
         print "a", a, "b", b
         pass
     
-
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
+        pass
+    
+    def test_svd(self): 
+        pass
+    
 if __name__ == "__main__":
 
     tt = test_Tensor_svd(symmetry="Travial")
     #tt.group_legs(rank=3)
-    #tt.svd()
-    tt.eig()
+    tt.svd()
+    #tt.eig()
     #tt.random_unit_tensor()
     #tt.random_unit_tensor_large()
     
