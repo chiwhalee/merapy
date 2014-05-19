@@ -10,6 +10,7 @@ from collections import OrderedDict
 import matplotlib.pyplot as plt
 import unittest
 
+import merapy 
 from merapy.hamiltonian import System
 from merapy.tensor_svd import Tensor_svd
 from merapy.quantum_number_py import *
@@ -46,7 +47,6 @@ def rho_eig(rho, k, info=0):
         #issue: is this list large enough?
         qn_list = [0, -1, 1, -2, 2, -3, 3, -4, 4]
     qn_instance_list = [qn_factory(symmetry, ii) for ii in qn_list]
-   
     
     v = {}
     
@@ -705,47 +705,89 @@ def concurrence():
 def negativity(): 
     pass
 
-class TestOne(unittest.TestCase): 
+class TestIt(unittest.TestCase): 
     def setUp(self): 
-        pass
-    def runTest(self): 
-        pass
-    def test_aaa(self): 
-        self.assertTrue(1==2)
-    def test_bbb(self): 
-        self.assertTrue(1==2)
-   
-
-if __name__ == '__main__':
-    ttt = TestOne()
-    ttt.test_aaa()
-    ttt.test_bbb()
-    #exit()
-    
-    if len(sys.argv)>1:
-        path = sys.argv[1]   
-    else:
-        
-        path = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
+        path_dic = {}
+        path_z2 = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
         #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/12-4lay.pickle'
         #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/mera_backup_test_folder/2.pickle'
         #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/run-ising/ternary-symm=triv/2.pickle'     
-        S = System.load(path)
+        path_dic['z2'] = path_z2
+        self.path_dic = path_dic
+
+    def test_temp(self): 
+        pass
+    
+    def test_central_charge(self): 
+        #path = './states_for_tests/dim=4-symm=U1-model=heisbg.pickle'
+        path = './states_for_tests/dim=12-lay=4-symm=U1-model=heisbg.pickle'
+        S = merapy.load(path)
          
-        print central_charge(S=S, force_update=True, info=0)
-        print "res should be {'EE': {1: 0.842492, 2: 1.010302}, 'c': 0.50343}" 
-        
+        res = central_charge(S=S, force_update=True, info=0)
+        res_old = {'EE': {1: 1.511427, 2: 1.688231}, 'c': 0.530412}
+        print res  
+    
+    def test_entanglement_extra(self):    
+        pass 
         #entanglement_extra(S, k=80, info=2)
         #path = '/home/zhli/Documents/mera_backup_tensor/run-xx/ternary/traiv-symm/prod-state/4.pickle' 
         
         #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
+  
+    def test_entanglement_brute_force_6(self): 
+        path = './states_for_tests/dim=4-symm=U1-model=heisbg.pickle'
+        #path = './states_for_tests/dim=12-lay=4-symm=U1-model=heisbg.pickle'
+        #path = self.path_dic['z2']
+
+        S = merapy.load(path)
+        #entanglement_extra(S, k=80, info=2)
         
-        #t=iTensor(18, qsp,qn)
-        #t.data.size
-        #9075135300    
-        #应该把 纠缠的值输出出来!!!!
-        #print rho_red.data.size
-        #9075135300
+        #res = entanglement_brute_force_9(S=S, k=80, plot=0, info=2);  
+        res = entanglement_brute_force_6(S=S, k=80, plot=0, info=2);  
+        print res['EE']
+
+
+if __name__ == '__main__':
+    #ttt = TestIt()
+    #ttt.test_aaa()
+    #ttt.test_bbb()
+    
+    if len(sys.argv)>1:
+        path = sys.argv[1]   
+    else:
+        if 0:         
+            path = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
+            #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/12-4lay.pickle'
+            #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/mera_backup_test_folder/2.pickle'
+            #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/run-ising/ternary-symm=triv/2.pickle'     
+            S = System.load(path)
+             
+            print central_charge(S=S, force_update=True, info=0)
+            print "res should be {'EE': {1: 0.842492, 2: 1.010302}, 'c': 0.50343}" 
+            
+            #entanglement_extra(S, k=80, info=2)
+            #path = '/home/zhli/Documents/mera_backup_tensor/run-xx/ternary/traiv-symm/prod-state/4.pickle' 
+            
+            #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
+    
+        if 0: #examine
+            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+            #unittest.TextTestRunner(verbosity=0).run(suite)    
+            TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
+            unittest.main()
+        else: 
+            suite = unittest.TestSuite()
+            add_list = [
+               #TestIt('test_temp'), 
+               TestIt('test_entanglement_brute_force_6'), 
+           
+            ]
+            for a in add_list: 
+                suite.addTest(a)
+            #suite.addTest(TestIt('test_ising'))
+            #suite.addTest(TestIt('test_heisbg'))
+            unittest.TextTestRunner().run(suite)
+           
 
 
 
