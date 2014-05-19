@@ -143,27 +143,6 @@ CFG_ISING_BASIC.update({
      })
 
 
-def make_ising_config(h, backup_parpath=None, root1=None): 
-    config = copy_config(CFG_ISING_BASIC)
-    updaters = dict(updaters_u1)
-    config['updaters'] = updaters
-    config['updaters']['finite_range_func'] = finite_site_u1
-    
-    root_name = 'run-ising'
-    root = '/'.join([MERA_BACKUP_ROOT, root_name])
-    config['backup_root']  = root
-    root_local = '/'.join([MERA_BACKUP_ROOT_LOCAL, root_name])
-    root1 = 'ternary/z2-symm/scale-invar' if root1 is None else root1 
-    if backup_parpath is None: 
-        fn = 'h=%s/'%h  
-        config['backup_parpath'] = '/'.join([root, root1, fn]) 
-        backup_parpath_local = '/'.join([root_local, root1, fn])     
-        config['backup_parpath_local'] = backup_parpath_local
-    else: 
-        config['backup_parpath'] = backup_parpath
-        
-    config['model_param'].update(h=h)
-    return config
 
 
 CFG_HEISBG_BASIC = copy_config(CFG_MERA)
