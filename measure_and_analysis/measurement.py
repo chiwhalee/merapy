@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #coding=utf8
 #PYTHON_ARGCOMPLETE_OK 
+import numpy as np 
 import unittest
 import argparse, argcomplete
 import sys
@@ -13,7 +14,7 @@ import warnings
 from merapy.hamiltonian import System
 #from mera_wigner_crystal import ham_wigner_crystal
 
-from vmps.mps import MPS
+#from vmps.mps import MPS
 if 0: 
     from merapy.measure_and_analysis.central_charge import * #central_charge, entanglement_entropy, entanglement_spectrum, entanglement_extra
     from merapy.measure_and_analysis.correlation import correlation, correlation_extra
@@ -24,8 +25,9 @@ import merapy.measure_and_analysis as mmm
 import merapy as kkk 
 import merapy.measure_and_analysis.all as all_mera
 import vmps.measure_and_analysis.all as all_mps
+import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
 
-from merapy.measure_and_analysis.result_db import ResultDB,  FIELD_NAME_LIST
+from merapy.measure_and_analysis.result_db import ResultDB, FIELD_NAME_LIST
 from merapy.decorators import timer
 
 
@@ -165,55 +167,74 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
     use_local_storage =  kwargs.get('use_local_storage', False)
     rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
     
-    if isinstance(S, MPS): 
-        algorithm = 'mps'
-    else: 
-        algorithm = 'mera'
-        
-    if algorithm == 'mera':  
-        field = list(FIELD_NAME_LIST)
-        all_func = all_mera
-        if S.model == 'wigner_crystal': 
-            db_version = 1.0 
-            #rdb['version'] = 1.0
+    if 1: 
+        #if isinstance(S, MPS): 
+        if S.__class__.__name__ == 'MPS':                  
+            algorithm = 'mps'
+        #elif isinstance(S, np.ndarray): 
+        elif isinstance(S, dict): 
+            algorithm = 'idmrg'
         else: 
-            db_version = None
-       
-        if S.symmetry == 'U1': 
-            try: 
-                field.remove('entanglement_brute_force_9')
-                field.remove('entanglement_brute_force_9_aver')
-            except: 
-                pass
+            algorithm = 'mera'
         
-        propt = S.key_property()
-        dim,  layer = propt['trunc_dim'], propt['num_of_layer']
-        iter = S.iter
-        fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
-        path = parpath + '/' + fn
+        if algorithm == 'mera':  
+            field = list(FIELD_NAME_LIST)
+            all_func = all_mera
+            if S.model == 'wigner_crystal': 
+                db_version = 1.0 
+                #rdb['version'] = 1.0
+            else: 
+                db_version = None
+           
+            if S.symmetry == 'U1': 
+                try: 
+                    field.remove('entanglement_brute_force_9')
+                    field.remove('entanglement_brute_force_9_aver')
+                except: 
+                    pass
+            
+            propt = S.key_property()
+            dim,  layer = propt['trunc_dim'], propt['num_of_layer']
+            iter = S.iter
+            fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
+            path = parpath + '/' + fn
+            
+            if db_version is None: 
+                k = (dim, layer, iter)
+                if not rdb.has_key(k): 
+                    rdb[k] = OrderedDict()
+            
+            shape = (dim, layer)
+            corr_param = dict(direction=None, force_update=False, distance_max=10**4)
         
-        if db_version is None: 
-            k = (dim, layer, iter)
-            if not rdb.has_key(k): 
-                rdb[k] = OrderedDict()
-        
-        shape = (dim, layer)
-        corr_param = dict(direction=None, force_update=False, distance_max=10**4)
-    
-    elif algorithm == 'mps': 
-        field = ['correlation']
-        all_func = all_mps
-        mps = S
-        db_version = 1.0
-        N, D = mps.N, mps.D
-        fn = "N=%d-D=%d.pickle"%(N, D)
-        path = '/'.join([parpath, fn])
-        dim,  layer = None, None
-        shape =  mps.N, mps.D  
-        iter = -1
-        #field = ['correlation']
-        corr_param = {}
-    
+        elif algorithm == 'mps': 
+            field = ['correlation']
+            all_func = all_mps
+            mps = S
+            db_version = 1.0
+            N, D = mps.N, mps.D
+            fn = "N=%d-D=%d.pickle"%(N, D)
+            path = '/'.join([parpath, fn])
+            dim,  layer = None, None
+            shape =  mps.N, mps.D  
+            iter = -1
+            #field = ['correlation']
+            corr_param = {}
+            
+        elif algorithm == 'idmrg': 
+            field = ['correlation', 'magnetization']
+            all_func = all_idmrg
+            A = S['A']
+            db_version = 1.0
+            N, D = 0, A.shape[0]
+            fn = "N=%d-D=%d.pickle"%(N, D)
+            path = '/'.join([parpath, fn])
+            dim,  layer = None, None
+            shape =  N, D 
+            iter = -1
+            #field = ['correlation']
+            corr_param = {}
+   
     which = which if which is not None else field 
     if exclude_which is not None: 
         print  'exlude this from measure_S: ', exclude_which
@@ -247,10 +268,14 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
             msg ='%20s'%('found in db')
         else: 
             try:
-                if algorithm == 'mera':  
-                    res = ff(S=S, **param[w])
-                else: 
-                    res = ff(mps, **param[w])
+                if 0: 
+                    if algorithm == 'mera':  
+                        res = ff(S=S, **param[w])
+                    else: 
+                        res = ff(mps, **param[w])
+                        
+                res = ff(S, **param[w])
+                   
                 msg = '%20s'%('done')
                 if kwargs.get('show', False): 
                     pprint.pprint(res, indent=1, width=200)
@@ -278,9 +303,13 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
             #db['energy'] = S.energy_record
             #rdb.insert(field_name='energy', sh=shape, iter=iter, val=S.energy)
             rdb['energy'][shape] = S.energy_record
-    else: 
+    elif algorithm == 'mps': 
         rdb['version'] = 1.0
         rdb['algorithm'] = 'mps'
+    elif algorithm == 'idmrg': 
+        rdb['version'] = 1.0
+        rdb['algorithm'] = 'idmrg'
+        
         
     rdb.commit(info=1)
     if len(failed_list)>0: 
@@ -306,8 +335,10 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
     aaa = os.path.abspath(dir_list[0])
     if 'mera' in aaa : 
         algorithm = 'mera'
-    elif 'mps' in aaa: 
+    elif 'mps' in aaa and 'idmrg' not in aaa: 
         algorithm = 'mps'
+    elif 'idmrg' in aaa:
+        algorithm = 'idmrg'
     else: 
         raise
     
@@ -348,7 +379,20 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
                 except IOError as err: 
                     path_not_found.append(path)
                     continue
+
+            elif algorithm == 'idmrg': 
+                N, D = sh
+                fn = "N=%d-D=%d.pickle"%(N, D)
+                path = '/'.join([dir, fn])
+                try: 
+                    inn = open(path, 'rb')
+                    S = pickle.load(inn)
+                    #S= temp['A']
+                except IOError as err: 
+                    path_not_found.append(path)
+                    continue
                 
+
             #mm.measure_all(S, path, which, exclude_which=exclude_which, force=force, **kwargs)
             measure_S(S, dir, which, exclude_which=exclude_which, force=force, 
                     fault_tolerant=fault_tolerant, **kwargs)
@@ -384,10 +428,33 @@ class TestIt(unittest.TestCase):
             args['mera_shape_list'] = [(40, 40)]
             args['fault_tolerant'] = 0
         self.args= args 
+    
     def test_temp(self): 
+        pass
+    
+    def test_idmrg_correlation(self): 
         args= self.args
         dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
-        args.update(dir_list=[dir], mera_shape_list=[(40, 10)])
+        dir = '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
+        args.update(dir_list=[dir], mera_shape_list=[(0, 8)], which=['correlation'])
+        
+        measure_all( **args )
+   
+    def test_idmrg_magnetization(self): 
+        args= self.args
+        dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
+        dir = '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
+        args.update(dir_list=[dir], mera_shape_list=[(0, 8)], which=['magnetization'])
+        
+        measure_all( **args )
+    
+    def test_vmps_all(self): 
+        args = self.args
+        dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
+        #which=['energy'],
+        which = None
+        args.update(dir_list=[dir],which=which, force=0, mera_shape_list=[(40, 10)])
+        #measure_all( **args )
         measure_all( **args )
     
     def tearDown(self): 
@@ -436,20 +503,6 @@ if __name__ == '__main__':
         measure_all( **args )
         
     else: 
-        args= {}
-        args['which'] = ['correlation']
-        args['force'] = 0
-        args['show'] = 1
-        if 0: 
-            dir = '/home/zhli/Documents/mera_backup_tensor/run-wigner-crystal/a=2.0-h=1.4142135-V=0.0/'
-            args['dir_list'] = [dir]
-            args['db_version'] = None #1.0
-            args['mera_shape_list'] = [(4, 4)]
-        else: 
-            dir = '/home/zhli/mps_backup_folder/run-ising/h=1.0/' 
-            args['dir_list'] = [dir]
-            args['mera_shape_list'] = [(40, 40)]
-            args['fault_tolerant'] = 0
         
         if 0: #examine
             #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
@@ -459,7 +512,8 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               TestIt('test_temp'), 
+               #TestIt('test_temp'), 
+               TestIt('test_vmps_all'), 
         
             ]
             for a in add_list: 
@@ -468,7 +522,6 @@ if __name__ == '__main__':
             #suite.addTest(TestIt('test_heisbg'))
             unittest.TextTestRunner().run(suite)
            
-    #measure_all( **args )
     
     
     
