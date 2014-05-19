@@ -412,7 +412,8 @@ def __correlation_extra(S, r, direct, info=0):
         descending_ham(S.mera, S, ilayer=1)
     rho = S.rho_2[l][0]  
     res = System.contract_oo_rho_2(oo_final, rho)
-    if direct == 'zz': 
+    #if direct == 'zz': 
+    if direct in ['zz', 'xx', 'yy']: 
         mag_o1 = __magnetization(S, direct[0], r)
         mag_o2 = __magnetization(S, direct[1], r)
         res= res-mag_o1*mag_o2
