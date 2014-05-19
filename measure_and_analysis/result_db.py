@@ -104,6 +104,12 @@ class ResultDB(OrderedDict):
             if self.get('version') != 1.0 and dbname != self.dbname + '.new': 
                 self.upgrade()
     
+    def __repr__(self): 
+        return self.keys()
+    
+    def __str__(self): 
+        return str(self.keys())
+    
     if 0: 
         def __getitem__(self, k): 
             """
@@ -128,6 +134,15 @@ class ResultDB(OrderedDict):
         with open(path, 'rb') as inn: 
             res=pickle.load(inn)
             return res
+    
+    def reload_class(self): 
+        module_name =self.__class__.__module__
+        #print module_name
+        module=importlib.import_module(module_name)
+        reload(module)
+        name = self.__class__.__name__
+        self.__class__=getattr(module, name)
+        print('class %s is reloaded'%(name, ))
     
     def create_parpath(self): 
         cmd = 'mkdir %s'%self.parpath
@@ -649,7 +664,6 @@ class ResultDB(OrderedDict):
         if fig is None and ax is None: 
             fig=plt.figure(figsize=figsize)
         if ax is None: 
-            
             if len(fig.axes)==0: 
                 ax=fig.add_subplot(111)
             else: 
@@ -663,12 +677,20 @@ class ResultDB(OrderedDict):
                 if not ax_found: 
                     raise Exception('ax is not defined; examine the layout of fig')
                     
-                
+        style_default = {
+                'marker':'.', 
+                'label': '', 
+                'color': None, 
+                }    
+        
         temp = ['marker', 'label', 'color']
         dic = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
         
         if not dic.has_key('label'): 
             dic['label'] = ''
+        if not dic.has_key('marker'): 
+            dic['marker'] = '.'
+        
         ax.plot(x, y, **dic)
         
         temp = ['xlabel', 'ylabel', 'xlim', 'ylim', 'xscale', 'yscale']
@@ -689,12 +711,11 @@ class ResultDB(OrderedDict):
         if kwargs.get('return_ax', False): 
             return fig, ax
         else: 
-            return fig
+            #return fig
+            return ax.figure
 
 
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
-       
-        
         if layer=='top':
             ll= [sh[1]-2 ] 
         elif layer=='all':
@@ -708,7 +729,6 @@ class ResultDB(OrderedDict):
         for layer in ll:
             if 1: 
                 #rec = db.fetch_easy('entanglement_entropy', shape, [layer])
-                #sh1 =  sh if npt alpha_sh_map.has_key()
                 rec = self.fetch_easy('entanglement_entropy', sh)
                 if rec is not None : 
                     rec = rec.get(layer)
@@ -1011,12 +1031,14 @@ class ResultDB(OrderedDict):
             assert which in ['correlation_extra', 'correlation', 'correlation_mixed']
             sh_list = sh
             fig = kwargs.get('fig')
-            if fig is None : 
-                fig=plt.figure(figsize=(6, 4))
-            if len(fig.axes)==0: 
-                ax=fig.add_subplot(111)
-            else: 
-                ax = fig.axes[-1]
+            ax = kwargs.get('ax')
+            if ax is None: 
+                if fig is None :
+                    fig=plt.figure(figsize=(6, 4))
+                if len(fig.axes)==0: 
+                    ax=fig.add_subplot(111)
+                else: 
+                    ax = fig.axes[-1]
         not_found=[]
         is_many_sh = 0
         if len(sh_list)==2 : # and isinstance(sh_list[0], int): 
@@ -1026,35 +1048,6 @@ class ResultDB(OrderedDict):
         #if direct == 'pm': direct = 'xx' 
         sub_key_list = [direct] if which == 'correlation_extra' else [direct, 'val'] 
         for sh in sh_list: 
-            if 0:   #bac
-                if which == 'correlation_mixed': 
-                    rec1=self.fetch_easy('correlation_extra', mera_shape=sh, sub_key_list=[direct])
-                    rec2=self.fetch_easy('correlation', mera_shape=sh, sub_key_list=[direct, 'val'])
-                    if rec1 is None  or rec2 is None: 
-                        not_found.append(sh)
-                        continue
-                    if log_scale: 
-                        x1, y1=zip(*rec1[0:-1:2])
-                    else: 
-                        x1, y1 = zip(*rec1);  
-                    x2, y2 = zip(*rec2)
-                    x1 = np.array(x1);    x2 = np.array(x2);  
-                    y1 = np.array(y1);    y2 = np.array(y2);  
-                    x1_max = np.max(x1);  temp = np.where(x2>x1_max) 
-                    x = np.append(x1, x2[temp])
-                    y = np.append(y1, y2[temp])
-                else: 
-                    if which == 'correlation': 
-                        rec=self.fetch_easy(which, mera_shape=sh, sub_key_list=[direct, 'val'])
-                    elif which == 'correlation_extra': 
-                        rec=self.fetch_easy(which, mera_shape=sh, sub_key_list=[direct])
-                    if rec is None: 
-                        not_found.append(sh)
-                        continue
-                    if which  == 'correlation_extra' and log_scale:  
-                        x,y=zip(*rec[0:-1:2])
-                    else: 
-                        x, y = zip(*rec[: ])
             
             period = 2 if log_scale else 1
                 
@@ -1462,6 +1455,41 @@ class ResultDB_idmrg(ResultDB):
             raise 
             #print a, path
         return eng
+    
+    def get_correlation(self, sh, which='correlation_extra', direct='xx', 
+            r_min=None,  r_max=None, period=None, fault_tolerant=1,  info=0): 
+        
+
+        which = 'correlation'  #not extra
+        key_list = [direct]
+        period = period if period is not None else 2            
+        rec = self.fetch_easy(which, mera_shape=sh, sub_key_list=key_list, 
+                fault_tolerant=fault_tolerant, info=info-1) 
+        
+        if rec is None: 
+            return None
+       
+        rec = rec.items()
+        #rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
+        
+        x,y=zip(*rec[0:-1:period])
+    
+        if direct == 'pm':   
+            y=np.array(y);  y=y*2;  
+        
+        x = np.array(x)
+        a = 0
+        b = -1
+        if r_min is not None : 
+            temp = np.where(x>=r_min);  a=temp[0][0]
+        if r_max is not None : 
+            temp = np.where(x<=r_max);  b=temp[0][-1] + 1
+            x = x[a: b]
+            y = y[a: b]
+           
+                   
+        return x, y    
+    
    
     def get_EE(self, dim): 
         res=self._measure(self.calc_EE, dim=dim)
@@ -1501,6 +1529,12 @@ class TestResultDB(unittest.TestCase):
         parpath_idmrg = '/home/zhli/mps_backup_folder/run-heisbg-long/alpha=2.0'
     def test_temp(self): 
         pass 
+        #parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
+        parpath =  '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
+        
+        db = ResultDB_idmrg(parpath)
+        
+        print db.get_correlation((0, 8))
     
     def test_idmrg_get_EE(self): 
         parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
@@ -1599,8 +1633,8 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               #TestResultDB('test_temp'), 
-               TestResultDB('test_idmrg_get_EE'), 
+               TestResultDB('test_temp'), 
+               #TestResultDB('test_idmrg_get_EE'), 
   
             ]
             for a in add_list: 

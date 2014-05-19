@@ -54,7 +54,8 @@ class OrderedDictLazy(OrderedDict):
             else: 
                 msg = '%s not in self.alpha_parpath_dict'%(a, )
                 warnings.warn(msg)
-                db = self.result_db_class(parpath='/tmp/empty.db.pickle', **self.result_db_args)
+                #db = self.result_db_class(parpath='/tmp/empty.db.pickle', **self.result_db_args)
+                db = self.result_db_class(parpath='/tmp', dbname='empty.db.pickle', **self.result_db_args)
                 
             return db
         else: 
@@ -68,12 +69,13 @@ class Analysis(object):
     #DISTANCE_LIST = [3**i for i in range(1, 9)]
     def __init__(self, fn=None, path=None, parpath=None, backup_tensor_root='./', 
             remote_root = None, local_root=None, param_name_list=None, 
-            result_db_class=None, result_db_args= {}):
+            result_db_class=None, result_db_args= {}, algorithm=None):
         self.remote_root = remote_root
         self.local_root = local_root
         self.param_name_list= param_name_list
         self.result_db_class= result_db_class if result_db_class is not None else ResultDB
         self.result_db_args= result_db_args if result_db_args is not None else ResultDB
+        self.algorithm = algorithm
         
         if 1:  #remove these later
             if fn is not None:
@@ -249,17 +251,25 @@ class Analysis(object):
             part_update = 1
             
         alpha_list = alpha_list if alpha_list is not None else  sorted(self.alpha_parpath_dict)
+        error = []
         for a in alpha_list: 
-            p = self.alpha_parpath_dict[a]
-            db = self.result_db_class(parpath=p, create_empty_db=create_empty_db, version=db_version, algorithm=algorithm)
-            #rdb[a] = db
-            self.alpha_rdb_dict[a] = db
+            try: 
+                p = self.alpha_parpath_dict[a]
+                db = self.result_db_class(parpath=p, create_empty_db=create_empty_db, version=db_version, algorithm=algorithm)
+                #rdb[a] = db
+                self.alpha_rdb_dict[a] = db
+            except Exception as err: 
+                error.append((a, err))
         msg = 'alpha_rdb_dict is reset'
+        
         if part_update: 
             msg += '  for %s'%(alpha_list, )
         else: 
             msg += '  for all alpha' 
         print msg
+        
+        if len(error)>1: 
+            print error
     
     def set_parpath_dict(self, root=None, signiture=None, info=0): 
         if root is None: 
@@ -276,12 +286,14 @@ class Analysis(object):
         self.alpha_list_all.sort()
         self.alpha_list = list(self.alpha_list_all)
 
-    def search_alpha(self, alpha_str):
+    def search_alpha(self, alpha_str, alpha_list=None):
         if not isinstance(alpha_str, str): 
             alpha_str = str(alpha_str)
-        #all_key = self.alpha_rdb_dict.keys()
-        all_key = self.alpha_parpath_dict.keys()
-        #all_key = map(str, all_key)
+        if alpha_list is None: 
+            all_key = self.alpha_parpath_dict.keys()
+        else: 
+            all_key = alpha_list
+        
         res= []
         for a in all_key: 
             if alpha_str in str(a): 
@@ -301,8 +313,10 @@ class Analysis(object):
     def upgrade_result_db(self): 
         res = mera_backup_dir_finder(root)
     
-    def measure_all(self, aa, sh_list='all', sh_min=None, sh_max=None,  which=None, 
+    def measure_all(self, aa=None, sh_list='all', sh_min=None, sh_max=None,  which=None, 
             exclude_which=None, force=0, fault_tolerant=1, recursive=False,  **kwargs): 
+        if aa is None: 
+            aa = self.alpha_list
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
         measure_all_orig(dir_list, mera_shape_list=sh_list, sh_min=sh_min, sh_max=sh_max, which=which, 
@@ -316,7 +330,8 @@ class Analysis(object):
         return res
     
     def _outline(self, which, alpha_list=None, mera_shape_list=None, show_eng_diff=False,  grid_view=False): 
-        print 'outline at %s'%(str(datetime.datetime.now()), )
+        dir_name = '' if self.local_root is None else '...'+self.local_root[-30:]
+        print 'outline %s at %s'%(dir_name, str(datetime.datetime.now()), )
         data=[]
         if mera_shape_list is None: 
             mera_shape_list=[(4, 4)] + [(8, i) for i in [4,5]] + [(12, i) for i in [4,5]]
@@ -807,8 +822,9 @@ class Analysis(object):
         plt.savefig(fn ,bbox_inches='tight') # save as png
         os.popen("display " + fn)
 
-    def plot_energy(self, aa, sh, param_name=None, **kwargs): 
-        
+    def plot_energy(self, aa=None, sh=None, param_name=None, **kwargs): 
+        if aa is None: 
+            aa = list(self.alpha_list)
         aa_dic = self.preprocess_alpha_list(aa)
         
         for sh in [sh]:
@@ -1093,8 +1109,6 @@ class Analysis(object):
             return fig
     
     def plot_central_charge_vs_layer(self, aa, sh, alpha_remap={}, alpha_sh_map={}, **kwargs):
-        
-        
         for a in aa: 
             
             try: 
@@ -1106,13 +1120,12 @@ class Analysis(object):
                 if fig is not None : 
                     kwargs['fig'] = fig
             except Exception as e: 
-                msg = 'aaa except %s %s '%( a, e )
+                msg = 'error: %s %s '%( a, e )
                 print  msg, 
                 #raise(e)
             
         if kwargs.get('return_fig', False): 
             return fig
-   
     
     def plot_correlation_bac(self, alpha_list, mera_shape_list, alpha_remap={}, alpha_shape_dic={},  
             direct='pm', which='correlation_extra', fig=None,  log_scale=1,  return_fig=0, draw=0, **kwargs): 
@@ -1233,36 +1246,18 @@ class Analysis(object):
         if return_fig:
             return fig
 
-
-    def _plot_entanglment_vs_alpha(self, aa, sh, layer):
-        aa=list(aa)
-        aa.sort(reverse=1)
-        fig=plt.figure()
-        ax=fig.add_subplot(111)
-        for i in [1, 2]:
-            cc=[]
-            for a in aa:
-                db=self.alpha_rdb_dict[a]
-                e=db.fetch_easy('entanglement_entropy', sh, sub_key_list=[layer, i])
-                cc.append(e)
-            x= aa
-            y= cc
-            ax.plot(x, y, '.-')
-        ax.invert_xaxis()
-        ax.set_ylabel('entanglement',fontsize=18)
-        ax.set_xlabel('$\\alpha$',fontsize=18)
-        ax.set_title('at layer=%d'%layer)
-        ax.grid(1)
-        l=ax.legend(['$EE_1$', '$EE_2$'])
-
-    def plot_entanglement_vs_alpha(self, aa, sh, alpha_remap={}, site_list=None, 
+    def plot_entanglement_vs_alpha(self, aa, sh, alpha_remap={}, sh_remap=None, site_list=None, 
             layer=0, switch='entropy', **kwargs):
-        print 'ploting switch=%s'%(switch, )
         """
             switch in [entropy, extra, brute_force, brute_force_6, brute_force_9]
         """
         #-----------------------------------------------------------------------
+        print 'ploting switch=%s'%(switch, )
         if 1: 
+            if alpha_remap is None: 
+                alpha_remap = {}
+            if sh_remap is None: 
+                sh_remap = {}
             fault_tolerant = kwargs.get('fault_tolerant', True)
             info = kwargs.get('info', 0)
             aa=list(aa)
@@ -1270,34 +1265,26 @@ class Analysis(object):
             
             fig = kwargs.get('fig')
             param_name = kwargs.get('param_name')
-            if 0: 
-                if fig is None: 
-                    fig=plt.figure(figsize=(5, 3))
-                if len(fig.axes)==0: 
-                    ax=fig.add_subplot(111)
-                else: 
-                    ax = fig.axes[-1]
         
-        #-----------------------------------------------------------------------
-        algorithm = self[aa[0]].get('algorithm')
-        if algorithm != 'mps':  
-            if switch == 'entropy': 
-                site_list = [1, 2] if site_list is None else site_list
-                sub_key_list = [layer]
-            elif switch == 'extra': 
-                sub_key_list = ['EE']
-                site_list = [0] if site_list is None else site_list
-            elif switch in ['brute_force', 'brute_force_6', 'brute_force_9']: 
-                sub_key_list = ['EE']
-                site_list = [10, 12] if site_list is None else site_list
-        elif algorithm == 'mps': 
-                site_list = [sh[0]//2] if site_list is None else site_list
+        if 1:  #-----------------------------------------------------------------------
+            algorithm = self[aa[0]].get('algorithm')
+            if algorithm != 'mps':  
+                if switch == 'entropy': 
+                    site_list = [1, 2] if site_list is None else site_list
+                    sub_key_list = [layer]
+                elif switch == 'extra': 
+                    sub_key_list = ['EE']
+                    site_list = [0] if site_list is None else site_list
+                elif switch in ['brute_force', 'brute_force_6', 'brute_force_9']: 
+                    sub_key_list = ['EE']
+                    site_list = [10, 12] if site_list is None else site_list
+            elif algorithm == 'mps': 
+                    site_list = [sh[0]//2] if site_list is None else site_list
             
-        
         for i in site_list: 
             not_found = []
             x = []
-            y=[]
+            y = []
             for a in aa:
                 a_orig = a
                 a1 = alpha_remap.get(a)
@@ -1314,7 +1301,10 @@ class Analysis(object):
                     pass
                     name = 'entanglement_entropy'
                     sub_key_list_1 = ['EE', i, 1]
-                e=db.fetch_easy(name, sh, sub_key_list=sub_key_list_1, info=info, fault_tolerant=fault_tolerant)
+                
+                
+                shape = sh_remap[a] if sh_remap.has_key(a) else sh
+                e=db.fetch_easy(name, shape, sub_key_list=sub_key_list_1, info=info, fault_tolerant=fault_tolerant)
                     
                 if param_name is not None : 
                     a_orig = a[self.param_name_list.index(param_name)]
@@ -1324,8 +1314,8 @@ class Analysis(object):
                     y.append(e)
                 else: 
                     not_found.append(a)
-            #label = '%d site'%i if kwargs.get('label') is None else kwargs.get('label')
             
+            #label = '%d site'%i if kwargs.get('label') is None else kwargs.get('label')
             args = dict(marker='.', return_ax=1, label=str(i), title='at layer=%d'%layer)
             args.update(kwargs)
             fig, ax=self._plot(x, y, **args)
@@ -1351,36 +1341,6 @@ class Analysis(object):
         if kwargs.get('return_fig'): 
             return fig
 
-    def _plot_entanglment_extra_vs_alpha(self, aa, sh, sub_key_list): 
-        aa=list(aa)
-        aa.sort(reverse=1)
-        fig=plt.figure()
-        ax=fig.add_subplot(111)
-        
-        if 1: 
-            cc=[]
-            for a in aa:
-                db=self.alpha_rdb_dict[a]
-                e=db.fetch_easy('entanglement_extra', sh, sub_key_list=sub_key_list)
-     
-                cc.append(e)
-            x= aa
-            y= cc
-            ax.plot(x, y, '.-')
-        ax.invert_xaxis()
-        ax.set_ylabel('entanglement',fontsize=18)
-        ax.set_xlabel('$\\alpha$',fontsize=18)
-        #ax.set_title('at layer=%d'%layer)
-        ax.grid(1)
-     
-    def plot_entanglement_vs_alpha_old(self, aa, sh, layer=0, switch=None, return_fig=False):
-        if switch is None: 
-            self._plot_entanglment_vs_alpha(aa, sh, layer=layer)
-        elif switch == 'extra':          
-            self._plot_entanglment_vs_alpha(aa, sh, layer, sub_key_list=['EE'])
-        elif switch == 'brute_force': 
-            self._plot_entanglment_vs_alpha(aa, sh, layer, sub_key_list=['EE'])
-    
     def plot_entanglement_vs_layer(self, aa, sh): 
         aa=[a for a in aa]
         aa.sort(reverse=1)
@@ -1425,9 +1385,28 @@ class Analysis(object):
         if kwargs.get('return_fig'): 
             return fig
     
-    def plot_magnetization(self, aa): 
-        pass
-      
+    def plot_magnetization(self, aa=None, sh=None, **kwargs): 
+        if aa is None: 
+            aa = list(self.alpha_list)
+        if self.algorithm == 'mera': 
+            key_list = [0]
+        elif self.algorithm == 'idmrg': 
+            key_list = None
+        else: 
+            raise NotImplemented
+        
+        x=[]; y=[]
+        for a in aa:
+            db=self.alpha_rdb_dict[a]
+            rec=db.fetch_easy('magnetization', sh, sub_key_list=key_list)
+            x.append(a)
+            y.append(rec)
+            
+        fig = self._plot(x, y, marker='.', **kwargs)
+        if kwargs.get('return_fig') : 
+            return fig
+            
+              
     def show_scaling_dim(self, aa, sh, alpha_remap={}, alpha_shape_dic={}): 
         data=[]
         aa = list(aa)
@@ -1619,12 +1598,14 @@ class Analysis(object):
         print('class %s is reloaded'%(name, ))
 
 class Analysis_mera(Analysis): 
-     def __init__(self, **kwargs): 
+    def __init__(self, **kwargs): 
+        kwargs['algorithm'] = 'mera'
         Analysis.__init__(self, **kwargs)
 
 class Analysis_vmps(Analysis): 
      def __init__(self, **kwargs): 
-        kwargs['result_db_class'] =  ResultDB_vmps
+        #kwargs['result_db_class'] =  ResultDB_vmps
+        kwargs.update(algorithm='mera', result_db_class=ResultDB_vmps)
         Analysis.__init__(self, **kwargs)
 
 class Analysis_idmrg(Analysis): 
@@ -1634,7 +1615,7 @@ class Analysis_idmrg(Analysis):
                 remote_root = None, local_root=None, param_name_list=None, 
                 result_db_class=None, result_db_args= {}):
         """        
-        kwargs['result_db_class'] =  ResultDB_idmrg
+        kwargs.update(algorithm='idmrg', result_db_class=ResultDB_idmrg)
         Analysis.__init__(self, **kwargs)
         #super(Analysis, self).__init__(**kwargs)
     
@@ -1644,11 +1625,12 @@ class Analysis_idmrg(Analysis):
             db=self[a]
             try:
                 path='/'.join([db.parpath, 'N=0-D=%d.pickle'%D])
-                S=iDMRG.load( path)
+                S=self.load( path)
                 eng=S['energy']
                 res[a]=eng
-            except:
-                print a, path
+            except Exception as err:
+                print a, err
+                
         return res
     
     def calc_EE(self, S):
