@@ -25,7 +25,10 @@ import merapy.measure_and_analysis as mmm
 import merapy as kkk 
 import merapy.measure_and_analysis.all as all_mera
 import vmps.measure_and_analysis.all as all_mps
-import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
+try: 
+    import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
+except ImportError as err: 
+    print err 
 
 from merapy.measure_and_analysis.result_db import ResultDB, FIELD_NAME_LIST
 from merapy.decorators import timer
@@ -412,7 +415,6 @@ def mera_backup_dir_finder(root):
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 
-        
         args= {}
         args['which'] = ['correlation']
         args['force'] = 0
@@ -431,7 +433,13 @@ class TestIt(unittest.TestCase):
     
     def test_temp(self): 
         pass
-    
+        args= self.args
+        dir = '/home/zhli/Documents/mera_backup_tensor/run-long-better/new_run/alpha=1.9'
+        args.update(dir_list=[dir], mera_shape_list=[(4, 4)], which=['entanglement_brute_force_6'])
+        
+        measure_all( **args )
+   
+   
     def test_idmrg_correlation(self): 
         args= self.args
         dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
@@ -512,8 +520,8 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               #TestIt('test_temp'), 
-               TestIt('test_vmps_all'), 
+               TestIt('test_temp'), 
+               #TestIt('test_vmps_all'), 
         
             ]
             for a in add_list: 

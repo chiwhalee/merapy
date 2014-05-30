@@ -415,11 +415,12 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
     EE = {}
     spectrum = {}
     #mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: (9, 8, 7)}
-    mapper = {6: (6, 5, 4, 3, 2, 1, 0), 2: (2, 1, 0), 9: range(9, -1, -1)}
+    mapper = {6: (6, 5, 4, 3, 2, 1, 0), 3: (3, 2, 1, 0),  2: (2, 1, 0), 9: range(9, -1, -1)}
     def set_val(rho_red, site_num, k, info=info): 
         nn = mapper[site_num]
         for n in nn: 
             n1 = n*multiple
+            #print 'nnnnnnnnnnnnn', n 
             if n == 0: 
                 data = rho_red.data[: ]
                 #assert  abs(data-1.0)<1e-10
@@ -434,7 +435,7 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
             #rho_red = partial_trace_rho(rho_red, site_num-n)
             rho_red = partial_trace_rho(rho_red, 1) 
         
-    if 1: 
+    if 0: 
         site_num = 2
         descending_ham(S.mera, S, ilayer=1)
         rho_red = S.rho_2[0][0].copy()
@@ -445,6 +446,8 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
         if 1: 
             descending_ham(S.mera, S, ilayer=1)
             rho_red = S.rho_3[0][0].copy()
+            #print rho_red 
+            set_val(rho_red, site_num, k=100)
         #V = S.mera.V[0][0].copy()
       
     if 1:
@@ -468,30 +471,6 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
       
         set_val(rho_red, site_num, k=200)
     
-    site_num = 9  
-    if site_num <= site_num_max: 
-        
-        #if site_num > site_num_max: 
-            
-        G = G_calc_EE(site_num)
-        tnet_sys = TensorNetwork()
-        tnet_sys.TG = G
-        temp = TensorNetwork.make_tensor_link(S, G, trans_invar=1)
-        tnet_sys.tlink[: G.size] = temp
-        A = tnet_sys.contract_except(G.size, G.contract_order,final_order=G.final_order, info=info-1)
-       
-        layer = 2
-        A_dag = A.conjugate(A.rank-1)
-        rho2 = S.rho_2[layer][0].copy()
-        rho1 = partial_trace_rho(rho2, n=1)
-        
-        temp, leg = A.contract(rho1, range(A.rank), [ 1000,A.rank-1])
-        
-        v1 = range(temp.rank)
-        v2 = [temp.rank-1] + [1000 + i for i in range(A_dag.rank-1)]
-        rho_red, leg = temp.contract(A_dag, v1, v2 )
-        set_val(rho_red, 9, k=80, info=info)
-        
     res = {'EE': EE, 'spectrum': spectrum}
     if plot: 
         x, y = zip(*EE.items());
@@ -740,9 +719,11 @@ class TestIt(unittest.TestCase):
         #path = self.path_dic['z2']
 
         S = merapy.load(path)
+        res=entanglement_entropy(S, spectrum=0, info=2, path=None, verbose=False) 
+        print  res 
+        print central_charge(S=S, force_update=True, info=0)
         #entanglement_extra(S, k=80, info=2)
         
-        #res = entanglement_brute_force_9(S=S, k=80, plot=0, info=2);  
         res = entanglement_brute_force_6(S=S, k=80, plot=0, info=2);  
         print res['EE']
 
@@ -755,11 +736,12 @@ if __name__ == '__main__':
     if len(sys.argv)>1:
         path = sys.argv[1]   
     else:
-        if 0:         
+        if 1:         
             path = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
-            #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/12-4lay.pickle'
+            path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/12-4lay.pickle'
             #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/mera_backup_test_folder/2.pickle'
             #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/run-ising/ternary-symm=triv/2.pickle'     
+            #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/new_run/alpha=1.6/12-4lay.pickle'
             S = System.load(path)
              
             print central_charge(S=S, force_update=True, info=0)
@@ -768,6 +750,8 @@ if __name__ == '__main__':
             #entanglement_extra(S, k=80, info=2)
             #path = '/home/zhli/Documents/mera_backup_tensor/run-xx/ternary/traiv-symm/prod-state/4.pickle' 
             
+            #res=entanglement_brute_force(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
+            res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
             #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
     
         if 0: #examine
@@ -775,7 +759,7 @@ if __name__ == '__main__':
             #unittest.TextTestRunner(verbosity=0).run(suite)    
             TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
             unittest.main()
-        else: 
+        if 0: 
             suite = unittest.TestSuite()
             add_list = [
                #TestIt('test_temp'), 

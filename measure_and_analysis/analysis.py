@@ -245,6 +245,7 @@ class Analysis(object):
             module = importlib.import_module(module_name)
             reload(module)
             self.result_db_class= module.__getattribute__(self.result_db_class.__name__)
+            print '%s is reloaded'%(self.result_db_class.__name__, )
         
         part_update = 0
         if alpha_list is not None: 
@@ -329,9 +330,10 @@ class Analysis(object):
             res=pickle.load(inn)
         return res
     
-    def _outline(self, which, alpha_list=None, mera_shape_list=None, show_eng_diff=False,  grid_view=False): 
-        dir_name = '' if self.local_root is None else '...'+self.local_root[-30:]
-        print 'outline %s at %s'%(dir_name, str(datetime.datetime.now()), )
+    def _outline(self, which, alpha_list=None, mera_shape_list=None, show_eng_diff=False,  grid_view=False, info=0): 
+        if info>-1: 
+            dir_name = '' if self.local_root is None else '...'+self.local_root[-30:]
+            print 'outline %s at %s'%(dir_name, str(datetime.datetime.now()), )
         data=[]
         if mera_shape_list is None: 
             mera_shape_list=[(4, 4)] + [(8, i) for i in [4,5]] + [(12, i) for i in [4,5]]
@@ -388,11 +390,11 @@ class Analysis(object):
         if grid_view:     
             print tabulate(data, headers= ['a']+map(str,mera_shape_list), tablefmt='grid', stralign='center') 
 
-    def outline_file(self, alpha_list=None, mera_shape_list=None, show_eng_diff=False): 
-        self._outline('file', alpha_list=alpha_list, mera_shape_list=mera_shape_list, show_eng_diff=show_eng_diff)
+    def outline_file(self, alpha_list=None, mera_shape_list=None, show_eng_diff=False, info=0): 
+        self._outline('file', alpha_list=alpha_list, mera_shape_list=mera_shape_list, show_eng_diff=show_eng_diff, info=info)
     
-    def outline_db(self, alpha_list=None, mera_shape_list=None, show_eng_diff=False):
-        self._outline('db', alpha_list=alpha_list, mera_shape_list=mera_shape_list)
+    def outline_db(self, alpha_list=None, mera_shape_list=None, show_eng_diff=False, info=0):
+        self._outline('db', alpha_list=alpha_list, mera_shape_list=mera_shape_list, info=info)
 
     def preprocess_alpha_list(self, alpha_list): 
         temp = self.alpha_parpath_dict.keys()
@@ -1305,7 +1307,7 @@ class Analysis(object):
                 
                 shape = sh_remap[a] if sh_remap.has_key(a) else sh
                 e=db.fetch_easy(name, shape, sub_key_list=sub_key_list_1, info=info, fault_tolerant=fault_tolerant)
-                    
+                
                 if param_name is not None : 
                     a_orig = a[self.param_name_list.index(param_name)]
               
@@ -1635,7 +1637,8 @@ class Analysis_idmrg(Analysis):
     
     def calc_EE(self, S):
         res=None
-        lam = S['Lambda']
+        #lam = S['Lambda']
+        lam = S['lam']
         U, s, V = np.linalg.svd(lam)
         spect= s
         #print np.sum(s**2)

@@ -66,10 +66,23 @@ class TestIt(unittest.TestCase):
 if __name__ == '__main__':  
     
     if 1: #examine
-        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
-        #unittest.TextTestRunner(verbosity=0).run(suite)    
-        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
-        unittest.main()
+        if 1: 
+            from concurrencytest import ConcurrentTestSuite, fork_for_tests
+            loader = unittest.TestLoader()
+            suite = []
+            for cls in [TestIt]: 
+                temp = loader.loadTestsFromTestCase(cls)
+                suite.append(temp)
+            suite = unittest.TestSuite(suite)
+            
+            suite = ConcurrentTestSuite(suite, fork_for_tests(2))
+            unittest.TextTestRunner(verbosity=0).run(suite)
+        else: 
+                
+            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+            #unittest.TextTestRunner(verbosity=0).run(suite)    
+            TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+            unittest.main()
     else: 
         suite = unittest.TestSuite()
         add_list = [

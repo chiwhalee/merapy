@@ -12,6 +12,7 @@ from operator import itemgetter
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+import importlib
 import numpy as np
 import pandas
 from scipy.optimize import curve_fit
@@ -106,9 +107,19 @@ class ResultDB(OrderedDict):
     
     def __repr__(self): 
         return self.keys()
+        temp = []
+        temp.append(self.parpath)
+        temp.append(str(self.keys()))
+        res= '\n'.join(temp)
+        return res 
     
     def __str__(self): 
-        return str(self.keys())
+        
+        temp = []
+        temp.append(self.parpath)
+        temp.append(str(self.keys()))
+        res= '\n'.join(temp)
+        return res 
     
     if 0: 
         def __getitem__(self, k): 
@@ -1435,7 +1446,8 @@ class ResultDB_idmrg(ResultDB):
     
     def calc_EE(self, S):
         res=None
-        lam = S['Lambda']
+        #lam = S['Lambda']
+        lam = S['lam']
         U, s, V = np.linalg.svd(lam)
         spect = s
         #print np.sum(s**2)
@@ -1490,7 +1502,6 @@ class ResultDB_idmrg(ResultDB):
                    
         return x, y    
     
-   
     def get_EE(self, dim): 
         res=self._measure(self.calc_EE, dim=dim)
         return res
