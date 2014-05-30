@@ -23,6 +23,8 @@
     as for Z2 (parity) symmetry, there is no difference between a vector and its dual, 
     that is to say need not distinguish upper and lower legs
 """
+import unittest 
+
 from system_parameter import SystemParam
 import numpy as np
 import warnings
@@ -368,7 +370,7 @@ class QuantSpaceBase(object):
     def __ge__(self, other): 
         if self.QnClass != other.QnClass: 
             return False
-        if self.nQN !=  other.nQN: 
+        if self.nQN < other.nQN: 
             return False
         return not self < other
         
@@ -1269,41 +1271,90 @@ class _performence(object):
         print "copy",t2-t1
         print "copy1",t3-t2
 
-
-if __name__ == "__main__":
-    for symm in GROUP_NAMES:
-    #for symm in ["U1"]:
-    #for symm in []:
-        print symm*10
-        tq=test_qn(symmetry=symm)
-        print tq.qsp_base
-        print tq.qsp_base.key_property()
-        pf=_performence
-        #reset_System_QSp(symmetry="Trav")
-        tq.has_quant_num()
-        tq.add()
-        print "1"*100
-        tq.update()
-        tq.reverse()
-        #tq.add_to_quant_space()
-        #tq.property()
-        #tq.pickle()
-        tq.eq()
-        #pf.copy_qn()
-        #pf.copy_qsp()
-    if 1: 
-        q1 = QspU1.max(16, 3)
-        q2 = QspU1.max(17, 5)
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
+        pass
+    
+    def test_temp(self): 
+        pass 
+    
+    def test_old_all(self): 
+        for symm in GROUP_NAMES:
+        #for symm in ["U1"]:
+        #for symm in []:
+            print symm*10
+            tq=test_qn(symmetry=symm)
+            print tq.qsp_base
+            print tq.qsp_base.key_property()
+            pf=_performence
+            #reset_System_QSp(symmetry="Trav")
+            tq.has_quant_num()
+            tq.add()
+            print "1"*100
+            tq.update()
+            tq.reverse()
+            #tq.add_to_quant_space()
+            #tq.property()
+            #tq.pickle()
+            tq.eq()
+            #pf.copy_qn()
+            #pf.copy_qsp()
+        if 1: 
+            q1 = QspU1.max(16, 3)
+            q2 = QspU1.max(17, 5)
+            
+            assert (not q1<q2)  or (not q1==q2) or (not q1<q2)
+            print q2
+            print q2 >= q1 
+            
+        if 1: 
+            q1=QspU1.easy_init( qns=(0, 1, -1), dims=(2, 2, 2) )
+            q2=QspU1.easy_init( qns=(1, 2, 0), dims=(2, 2, 2) )
+            print q1,  q2
+            print q1.tensor_prod(q2)
+    
+    def test_compare(self): 
+        q1 = QspU1.max(8)
+        q2 = QspU1.max(14, 5)
         
-        assert (not q1<q2)  or (not q1==q2) or (not q1<q2)
+        #assert (not q1<q2)  or (not q1==q2) or (not q1<q2)
         print q2
-        print q2 >= q1 
+        print q1 
+        #print q2  ==   q1 
+        self.assertTrue(q1 < q2)
+        self.assertTrue(q2 >=  q1)
+   
+if __name__ == "__main__":
         
-    if 1: 
-        q1=QspU1.easy_init( qns=(0, 1, -1), dims=(2, 2, 2) )
-        q2=QspU1.easy_init( qns=(1, 2, 0), dims=(2, 2, 2) )
-        print q1,  q2
-        print q1.tensor_prod(q2)
-        
-        
+    if 1: #examine
+        if 1: 
+            from concurrencytest import ConcurrentTestSuite, fork_for_tests
+            loader = unittest.TestLoader()
+            suite = []
+            for cls in [TestIt]: 
+                temp = loader.loadTestsFromTestCase(cls)
+                suite.append(temp)
+            suite = unittest.TestSuite(suite)
+            
+            suite = ConcurrentTestSuite(suite, fork_for_tests(2))
+            unittest.TextTestRunner(verbosity=0).run(suite)
+        else: 
+                
+            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+            #unittest.TextTestRunner(verbosity=0).run(suite)    
+            TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+            unittest.main()
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           #TestIt('test_temp'), 
+           #TestIt('test_old_all'), 
+           TestIt('test_compare'), 
+        ]
+        for a in add_list: 
+            suite.addTest(a)
+        #suite.addTest(TestIt('test_ising'))
+        #suite.addTest(TestIt('test_heisbg'))
+        unittest.TextTestRunner().run(suite)
+       
 
