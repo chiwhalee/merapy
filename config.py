@@ -20,13 +20,15 @@ __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_mode
         "cfg_graph", "cfg_binary", "cfg_modified_binary", "cfg_quaternary", "cfg_quinary"]
 
 uname=platform.uname()[1]
+home = os.path.expanduser('~')
 if uname  ==  'QTG-WS1-ubuntu': 
-    MERA_BACKUP_ROOT = '/home/zhli/Documents/mera_backup_tensor' 
+    MERA_BACKUP_DIR = '/home/zhli/Documents/mera_backup_tensor' 
 else: 
-    home = os.path.expanduser('~')
-    MERA_BACKUP_ROOT = '/'.join([home, 'mera_backup_tensor'])
+    MERA_BACKUP_DIR = '/'.join([home, 'mera_backup_tensor'])
 
-MERA_BACKUP_ROOT_LOCAL = '/home/zhli/Documents/mera_backup_tensor' 
+BACKUP_BASE_DIR = BACKUP_BASE_DIR_LOCAL = '/'.join([home, 'backup_tensor_dir'])
+
+MERA_BACKUP_DIR_LOCAL = '/home/zhli/Documents/mera_backup_tensor' 
 
 
 updaters_u1 = {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
@@ -68,11 +70,15 @@ def copy_config(cfg):
     res['model_param'] = model_param
     return res
 
+#meta cfg for everything  
 CFG_BASE = {
     'NUM_OF_THREADS':1, 
     #for dist comput
         'hostname': socket.gethostname(), 
         'LOCALHOSTNAME':'QTG-WS1-ubuntu',  
+        'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
+        'BACKUP_BASE_DIR_LOCAL':BACKUP_BASE_DIR_LOCAL,       
+
         'use_local_storage': False,  #store and save to local (local means center, my computer)
        
         }
@@ -82,6 +88,7 @@ CFG_BASE = {
 
 CFG_MERA = copy_config(CFG_BASE)
 CFG_MERA.update({
+        'algorithm': 'mera', 
         'USE_CUSTOM_RAND':False,  #always need try different seeds 
         'USE_REFLECTION': False,
         'RAND_SEED':1234,  #this is seed for custom rand
@@ -122,8 +129,10 @@ CFG_MERA.update({
         #    'mera_shape_max': None, 
         #    'dim_diff_remap': {}, 
         #    } , 
-        'BACKUP_BASE_DIR': MERA_BACKUP_ROOT,         
-        'BACKUP_BASE_DIR_LOCAL': MERA_BACKUP_ROOT_LOCAL,         
+        #'BACKUP_BASE_DIR': MERA_BACKUP_DIR,         
+        #'BACKUP_BASE_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL,         
+        'MERA_BACKUP_DIR': MERA_BACKUP_DIR, 
+        'MERA_BACKUP_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL, 
  })
 
 
@@ -162,6 +171,7 @@ CFG_POTTS_BASIC = CFG_MERA.copy()
 CFG_POTTS_BASIC.update({
     'unitary_init': 'unit_tensor',
     'updaters':None, 
+    'trunc_dim': 3,  
     #model specific
     'combine_2site':False, 
     'MODEL': 'Potts',
@@ -285,11 +295,44 @@ def check_config(cfg):
 # eventually,  I would make config into a class
 class Config(dict): 
     @staticmethod
+    def set_backup_parpath_old(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
+        if cfg['algorithm'] == 'mera':  
+            ROOT = cfg['MERA_BACKUP_DIR']
+            ROOT_LOCAL = cfg['MERA_BACKUP_DIR_LOCAL']
+        elif cfg['algorithm'] in ['vmps', 'idmrg']: 
+            ROOT = cfg['MPS_BACKUP_DIR']
+            ROOT_LOCAL = cfg['MPS_BACKUP_DIR_LOCAL']
+        else: 
+            raise
+           
+            #ROOT = cfg['BACKUP_BASE_DIR']
+            #ROOT_LOCAL = cfg['BACKUP_BASE_DIR_LOCAL']
+        root = '/'.join([ROOT, project_name, root1]) 
+        root_local = '/'.join([ROOT_LOCAL, project_name, root1])  
+        cfg['root'] = root
+        cfg['root_local'] = root_local
+        if backup_parpath != 0: #CONVENTION: 0 means not set it
+            if backup_parpath is None :  
+                #fn =  'alpha=%s'%alpha  + surfix
+                backup_parpath = '/'.join([root, fn]).replace('//', '/')
+                backup_parpath_local = '/'.join([root_local, fn]).replace('//', '/')
+                
+            cfg['backup_parpath'] = backup_parpath
+            cfg['backup_parpath_local'] = locals().get('backup_parpath_local')
+            
+            if cfg['hostname'] != cfg['LOCALHOSTNAME'] : 
+                cfg['use_local_storage'] = 1
+    
+    @staticmethod       
     def set_backup_parpath(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
         ROOT = cfg['BACKUP_BASE_DIR']
         ROOT_LOCAL = cfg['BACKUP_BASE_DIR_LOCAL']
-        root = '/'.join([ROOT, project_name, root1]) 
-        root_local = '/'.join([ROOT_LOCAL, project_name, root1])  
+        alg = cfg['algorithm']
+        alg_sur = cfg['algorithm_surfix']
+        if alg_sur: 
+            alg = '-'.join([alg, alg_sur])
+        root = '/'.join([ROOT, project_name, alg,  root1]) 
+        root_local = '/'.join([ROOT_LOCAL, project_name,alg,  root1])  
         cfg['root'] = root
         cfg['root_local'] = root_local
         if backup_parpath != 0: #CONVENTION: 0 means not set it
