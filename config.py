@@ -26,7 +26,8 @@ if uname  ==  'QTG-WS1-ubuntu':
 else: 
     MERA_BACKUP_DIR = '/'.join([home, 'mera_backup_tensor'])
 
-BACKUP_BASE_DIR = BACKUP_BASE_DIR_LOCAL = '/'.join([home, 'backup_tensor_dir'])
+BACKUP_BASE_DIR =  '/'.join([home, 'backup_tensor_dir'])
+BACKUP_BASE_DIR_LOCAL = '/home/zhli/backup_tensor_dir' #'/'.join([home, 'backup_tensor_dir'])
 
 MERA_BACKUP_DIR_LOCAL = '/home/zhli/Documents/mera_backup_tensor' 
 

@@ -66,7 +66,7 @@ class TestIt(unittest.TestCase):
 if __name__ == '__main__':  
     
     if 1: #examine
-        if 1: 
+        if 0: 
             from concurrencytest import ConcurrentTestSuite, fork_for_tests
             loader = unittest.TestLoader()
             suite = []
