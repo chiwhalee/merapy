@@ -90,6 +90,8 @@ CFG_BASE = {
 CFG_MERA = copy_config(CFG_BASE)
 CFG_MERA.update({
         'algorithm': 'mera', 
+        'algorithm_surfix': '', 
+        
         'USE_CUSTOM_RAND':False,  #always need try different seeds 
         'USE_REFLECTION': False,
         'RAND_SEED':1234,  #this is seed for custom rand
@@ -336,10 +338,13 @@ class Config(dict):
         root_local = '/'.join([ROOT_LOCAL, project_name,alg,  root1])  
         cfg['root'] = root
         cfg['root_local'] = root_local
+        #surfix  = '-'+surfix if surfix != ''  else ''
+        if surfix != '': 
+            fn = '-'.join([fn, surfix])
         if backup_parpath != 0: #CONVENTION: 0 means not set it
             if backup_parpath is None :  
                 #fn =  'alpha=%s'%alpha  + surfix
-                backup_parpath = '/'.join([root, fn]).replace('//', '/')
+                backup_parpath = '/'.join([root, fn ]).replace('//', '/')
                 backup_parpath_local = '/'.join([root_local, fn]).replace('//', '/')
                 
             cfg['backup_parpath'] = backup_parpath
@@ -358,9 +363,10 @@ class TestIt(unittest.TestCase):
         pass
     def test_set_backup_parpath(self): 
         cfg = copy_config(CFG_ISING_BASIC)
-        Config.set_backup_parpath(cfg, 'proj', fn='', root1='middle', surfix='surf')
+        Config.set_backup_parpath(cfg, 'proj', fn='h=1.0', root1='middle', surfix='surf')
         path  = cfg['backup_parpath_local']
-        a = '/home/zhli/Documents/mera_backup_tensor/proj/middle/'
+        a = '/home/zhli/backup_tensor_dir/proj/mera/middle/h=1.0-surf'
+        print path 
         self.assertTrue(path==a)
         
 
