@@ -14,6 +14,7 @@ from merapy.context_util import redirect
 
 #import tensor_py
 #from quantum_number_py_new import QN_idendity, QSp_null
+#from merapy.quantum_number_py import symmetry_to_Qsp  
 
 num_of_instance = 0
 
@@ -136,46 +137,43 @@ def tensor_player(which):
                     self.data = np.ndarray(self.totDim, buffer=buffer, dtype=self.dtype, order="C")
 
             def data_entrance_recorder(self, order="F"):
+                
                 rank, QSp, totQN = self.rank, self.QSp, self.totQN
-                pTot =1
-                for i in xrange(rank):
-                    pTot *= QSp[i].nQN
-                self.idx_dim=pTot
+                rank_1 = rank if rank != 0 else 1 
+               
+                if rank == 0: 
+                    QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
+               
+                #self.Dims = np.array([QSp[i].totDim for  i in xrange(rank_1)])
+                    
+                temp = 1   
+                for i in xrange(rank_1):
+                    temp *= QSp[i].nQN
+                self.idx_dim = temp   # 量子数组合 总数目 
 
-                #if self.shallow:
-                if 0:
-                    self.allocated = False
-                    self.data = None
-                    self.idx = None
-                    self.Block_idx = None
-                    self.Addr_idx = None
-                    return
-
+                #attention_this_may_be_wrong 在python中  -1对应着最后一个元素，而Fortran中什么也不对应, 所以改成下面的
+                #self.idx=np.array([int(self.idx_dim)]*self.idx_dim, int)   #-1                
+                self.idx=np.ndarray((self.idx_dim, ), int)   #-1                
+                self.idx[: ] = self.idx_dim
+                self.Block_idx=np.ndarray((3, self.idx_dim),dtype=int)
                 
-                self.idx=np.array([int(self.idx_dim)]*self.idx_dim,"int")   #-1                
-                
+                #iQN[i]用作leg i 上的量子数 计数
+                iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
+                # 实际使用的addr_inx的长度为 self.nidx
+                self.Addr_idx=np.ndarray((rank_1, self.idx_dim),dtype=int)        
+                    
                 nidx=0
                 totDim=0
-                
-                if rank == 0: 
-                    iQN = np.zeros(1, dtype="int")
-                    self.Addr_idx=np.ndarray((1,self.idx_dim),dtype="int")        
-                else:
-                    iQN = np.zeros(self.rank, dtype="int")
-                    #iQN 用于给量子数组合编号
-                    self.Addr_idx=np.ndarray((self.rank,self.idx_dim),dtype="int")        
-                
+                    
                 tQN_r= self.totQN.copy()  # here must copy
                 tQN_r.reverse()
-                
-                self.Block_idx=np.ndarray((3,self.idx_dim),dtype="int")
 
-                for p in xrange(pTot):
-                    tQN = self.QSp[0].QNs[iQN[0]]
+                for p in xrange(self.idx_dim):
+                    tQN = QSp[0].QNs[iQN[0]]
                     #这里计算了总量子数 tQN, 然后
                     #判断量子数组合是否满足指定的对称性要求
                     for i in xrange(1,rank):
-                        tQN = tQN+self.QSp[i].QNs[iQN[i]]
+                        tQN = tQN+QSp[i].QNs[iQN[i]]
                     if tQN==tQN_r:
                         #q895  why not tQN == totQN?  因为operater- state duality, 从而在操作下变换正好相反？
                         #其中包含协变/反变的意味
@@ -225,11 +223,12 @@ def tensor_player(which):
                                 i = i-1
                 self.nidx = nidx
                 self.totDim = totDim
-                inner.tape[inner.calls] = (self.Addr_idx.copy(), self.Block_idx.copy(), self.idx.copy(), 
-                        self.nidx,self.idx_dim, self.totDim)
+                inner.tape[inner.calls] = ( self.Addr_idx.copy(), self.Block_idx.copy(), 
+                        self.idx.copy(), self.nidx, self.idx_dim, self.totDim)
 
             def data_entrance_player(self, order="F"):
-                (self.Addr_idx, self.Block_idx, self.idx, self.nidx,self.idx_dim, self.totDim)=inner.tape[inner.calls]
+                ( self.Addr_idx, self.Block_idx, self.idx, self.nidx, 
+                        self.idx_dim, self.totDim)=inner.tape[inner.calls]
 
             def permute_recorder(self, P, buffer=None, use_buf=False):
                 #print "in permut recorder"
@@ -349,7 +348,8 @@ def tensor_player(which):
                 #T3= iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
                 if rank3==0:
                     #QSp = self.QSp[0].null()
-                    QSp = [self.QSp[0].null()]
+                    #QSp = [self.QSp[0].null()]
+                    QSp = []
 
                 T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
                 T3.data[:]=0.0

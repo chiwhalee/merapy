@@ -106,10 +106,12 @@ class iTensor(TensorBase):
     T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
     #BUFFER_ON = False
     
-    def __init__(self, rank,  QSp, totQN, order="F",  
+    def __init__(self, rank,  QSp, totQN=None, order="F",  
             buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
         """
-            totQN 决定了张量的变换性质 totQN = id for invariant, other for covariant
+            totQN : 
+                决定了张量的变换性质 totQN = id for invariant, other for covariant
+                default is qn_id 
             QUESTIONG, Q:
                 QSp, totQN应该在init外面copy，还是在里面copy？ copy or not this is a question
                 -a.  这只是个惯例保持一致即可。但从概念上看，似乎应该在外面更好，因为初始化一个张量是一个具体的张量，那么传
@@ -130,37 +132,45 @@ class iTensor(TensorBase):
                 is meanless and dangeous if not copyed.
                 this raise a question: should qsp immutable, permanante or mutalbe?
                 In this way, one only need to construct very fewer distinct QSps,  only reference, no copying
+            How to: 
+                rank-0 tensor. this is conceptially important. 
+                怎样理解它？
+                    it is a scalar 
+                    它既是0阶，又是任意阶 
+                        其实这样并不稀奇，任意的张量，总可以安上 dummy ind, 也是任意阶 
+                        所以，rank 应该有个 strick-rank 这一说，把dummy ind 全去掉
+                how to set its attr?
+                    rank = 0
+                    QSp = []
+                    data = np.ndarray((1,))
+                    问题是 idx 应不应该设？—— 需要. 指标的变化范围就是1 
             
         """
         #comment this only for a little faster
         #TensorBase.__init__(self, rank, None)
-        self.rank = rank
-        self.type_name = ""
-        self.index_order = order
-
+        
+        rank = len(QSp)
+        self.rank = rank 
+        
+        #assert rank == len(QSp), ('aaaaaaaaaaaaaaaaaa\n', rank, len(QSp), QSp) 
+        
+        #NO COPYING CONVENTION
+        self.QSp = QSp  #.copy()
+        self.totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
+          
         self.ndiv = None   #ndiv 实际是把协变反变腿分开 一个(ndiv, rank-ndiv) tensor
         self.use_buf=use_buf
         self.buf_ref = np.array([-1, -1], np.int)
-        self.rank=rank
+        self.type_name = ""
+        self.index_order = order
         
-        #NO COPYING CONVENTION
-        self.totQN = totQN   #.copy()
-        #self.QSp = QSp[:rank]
-        self.QSp = QSp
+        if rank == 0: 
+            self.Dims = np.array((1, ), np.int) 
+        else: 
+            self.Dims= [QSp[i].totDim for  i in xrange(rank)]
 
-        if rank==0:
-            #self.rank = 1
-            self.Dims= np.empty(1, np.int)
-            self.totDim=1
-            self.QSp = QSp[:1]
-            #self.QSp = QSp
-            self.totQN = totQN
-        else:        
-            self.Dims=np.empty(rank, dtype=np.int)
-        self.Dims[0] =1
-        self.Dims= [QSp[i].totDim for  i in xrange(rank)]
-
-        if index_data:
+        if index_data:  
+            #this sets idx, nidx, idx_dim, totDim, Addr_idx, Block_idx 
             self.set_data_entrance(order=order )
 
         #use_buf = False;buffer=None;warnings.warn("not use bufferrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"*100)
@@ -211,44 +221,45 @@ class iTensor(TensorBase):
         
         """
         rank, QSp, totQN = self.rank, self.QSp, self.totQN
-        pTot =1
-        for i in xrange(rank):
-            pTot *= QSp[i].nQN
-        self.idx_dim=pTot
+        rank_1 = rank if rank != 0 else 1 
+       
+        if rank == 0: 
+            #QSp = [symmetry_to_Qsp(totQN.SYMMETRY).null()]   # only use it temporarilly to generate idx
+            QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
+       
+        #self.Dims= [QSp[i].totDim for  i in xrange(rank_1)]
+            
+        temp = 1   
+        for i in xrange(rank_1):
+            temp *= QSp[i].nQN
+        self.idx_dim = temp   # 量子数组合 总数目 
 
         #attention_this_may_be_wrong 在python中  -1对应着最后一个元素，而Fortran中什么也不对应, 所以改成下面的
-        #self.idx=np.array([int(self.idx_dim)]*self.idx_dim,"int")   #-1                
-        self.idx=np.array([int(self.idx_dim)]*self.idx_dim,"int")   #-1                
+        #self.idx=np.array([int(self.idx_dim)]*self.idx_dim, int)   #-1                
+        self.idx=np.ndarray((self.idx_dim, ), int)   #-1                
+        self.idx[: ] = self.idx_dim
+        self.Block_idx=np.ndarray((3, self.idx_dim),dtype=int)
         
+        #iQN[i]用作leg i 上的量子数 计数
+        iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
+        # 实际使用的addr_inx的长度为 self.nidx
+        self.Addr_idx=np.ndarray((rank_1, self.idx_dim),dtype=int)        
+            
         nidx=0
         totDim=0
         
-        #iQN=[0]*self.rank
-        #iQN[i]用作leg i 上的量子数 计数
-        if rank == 0: 
-            iQN = np.zeros(1, dtype="int")
-            self.Addr_idx=np.ndarray((1,self.idx_dim),dtype="int")        
-        else:
-            iQN = np.zeros(self.rank, dtype="int")
-            #iQN 用于给量子数组合编号
-            # 实际使用的addr_inx的长度为 self.nidx
-            self.Addr_idx=np.ndarray((self.rank, self.idx_dim),dtype="int")        
-        
         tQN_r= self.totQN.copy()  # here must copy
         tQN_r.reverse()
-        self.Block_idx=np.ndarray((3, self.idx_dim),dtype="int")
 
-        for p in xrange(pTot):
-            tQN = self.QSp[0].QNs[iQN[0]]
-            #这里计算了总量子数 tQN
+        for p in xrange(self.idx_dim):
+            tQN = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tQN
             
             for i in xrange(1,rank):
-                tQN = tQN+self.QSp[i].QNs[iQN[i]]
-            #判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
+                tQN = tQN+QSp[i].QNs[iQN[i]]   #判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
+            
             if tQN==tQN_r:
-                #q895  why not tQN == totQN?  因为operater- state duality, 从而在操作下变换正好相反？
+                #why not tQN == totQN?  因为operater- state duality, 从而在操作下变换正好相反？
                 #其中包含协变/反变的意味
-                
                 d = 1
                 for i in xrange(rank):
                     d = d*QSp[i].Dims[iQN[i]]
@@ -389,7 +400,7 @@ class iTensor(TensorBase):
         #keys=["rank", "nidx","idx_dim", "Dims","totDim","data"]
         rank = self.rank
         if rank == 0:
-            rank = 1
+            rank = 0
         if keys is None:
             keys=["rank", "type_name", "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
 
@@ -426,6 +437,7 @@ class iTensor(TensorBase):
                 #temp  = repr(self.__dict__[k][:rank]) 
                 temp = str(temp)
             elif k  == "Dims" :
+                pass 
                 temp  = repr(self.__dict__[k][:rank]) 
             elif k == "idx":
                 temp = repr(self.__dict__[k])
@@ -949,9 +961,10 @@ class iTensor(TensorBase):
             QSp = self.QSp[:shift]
             QSp.extend(T2.QSp[div:rank2])
 
-
         if rank3==0:
-            QSp = [self.QSp[0].null()]
+            #print  'qqqqq', QSp
+            #QSp = [self.QSp[0].null()]
+            QSp = []
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
         T3.data[:]=0.0
         
@@ -983,10 +996,12 @@ class iTensor(TensorBase):
                     continue
                 Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in xrange(shift)])
                 
-                iQN3[0] = 1 #!for rank=1
+                #iQN3[0] = 1 #!for rank=1
                 iQN3[0:shift] = iQN1[0:shift]
                 iQN3[shift:rank3] = iQN2[div:rank2]
                 p3=T3.get_position(iQN3[:T3.rank])
+                #print 'tttt', T3.rank, p3, iQN3[:T3.rank] , T3.get_position([])
+                #raise 
                 idx3 = T3.idx[p3]
                 
                 # one frequent error is the IndexError: index (9) out of xrange (0<=index<9) in dimension 1
@@ -1000,9 +1015,7 @@ class iTensor(TensorBase):
                 data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
                 
                 #T3.data[p3] = self.data[p1].dot(T2.data[p2])
-                
                 #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
-                
                 #attention_may_be_not_efficient  这里学要为data3分配内存，能否直接在T3.data上操作？
                 data3=iTensor.mul_temp(data1, data2, alpha, beta)
 
@@ -1247,7 +1260,11 @@ class iTensor(TensorBase):
             msg +=  "\n%s\t %s"%(self.__repr__(keys=['QNs', 'Dims'], fewer=True), 
                     T2.__repr__(keys=['QNs', 'Dims'],fewer=True))
             #raise Exception(msg)
-            print msg
+            #print msg
+            if not err.args: 
+                       err.args=('',)
+            err.args = (err.args[0] + msg,)+err.args[1:]
+           
             raise err
         
 
@@ -3061,6 +3078,32 @@ class test_iTensor(object):
             #print t, t1
             print t.data, t1.data
 
+class Test_iTensor(unittest.TestCase): 
+    def setUp(self): 
+        pass
+    def test_temp(self): 
+        pass
+    
+    def test_rank_zero(self): 
+        print  'aaaaaaaaaaaaaaaaaaaa'
+        #QSp=[QspU1.null()]
+        QSp = []
+        t0 = iTensor(rank=0,  QSp=QSp, totQN=QspU1.QnClass.qn_id())
+        print  t0 #.data 
+    
+    def test_rank_zero_1(self): 
+        V1=[0,1,2,3]
+        V2=[2,3,0,1]
+        qsp = QspZ2.easy_init([1, -1], [2, 2])
+        qq = qsp.copy_many(4)
+        oo = iTensor(4, qq)
+        rho_2 = iTensor(4, qq)
+        #res, legs = oo.contract(rho_2, V1, V2, use_buf=True)  #rho and H_2 fully contracted to a scalar
+        res=oo.contract_core(rho_2, 4, use_buf=True)  #rho and H_2 fully contracted to a scalar
+        res= res.data[0]
+
+        pass 
+
 class performance_iTensor(object):
     pass
     def __init__(self, symmetry):
@@ -3277,9 +3320,9 @@ if __name__== "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #Test_nTensor('test_set_element'), 
-           #Test_nTensor('test_permutation'), 
-           #Test_nTensor('test_contract'), 
+           #Test_iTensor('test_temp'), 
+           Test_iTensor('test_rank_zero'), 
+           #Test_iTensor('test_rank_zero_1'), 
            
         ]
         for a in add_list: 

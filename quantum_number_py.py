@@ -28,7 +28,7 @@ import unittest
 from system_parameter import SystemParam
 import numpy as np
 import warnings
-from decorators import *
+from decorators import decorate_methods, tensor_player 
 
 #__all__=["QuantumNum", "QuantSpace", "QN_idendity", "QSp_null", "QSp_base", "init_System_QSp", "QspU1", "QspZ2", "reset_System_QSp"]
 __all__=["QuantumNum", "QuantSpace", "QuantSpaceBase",  "init_System_QSp", 
@@ -129,8 +129,10 @@ class QnBase():
         for i in qn_list[1: ]: 
             res= res + i
         return res
-        
-
+    
+    def qsp_class(self): 
+        return symmetry_to_Qsp(self.SYMMETRY)
+    
 class QnTravial(QnBase):
     SYMMETRY = "Travial"
     #this may be an issue NUM_OF_SYMM should be 0?
@@ -191,6 +193,7 @@ class QnZ2(QnBase):
     NUM_OF_SYMM = 1
     QNS = (1, -1)   #all the elements in the algebra, 
     QnId = 1   # identity in the algebra
+    
     def __init__(self, value):
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
@@ -994,8 +997,8 @@ def symmetry_to_Qn(symmetry):
     return temp[symmetry]
 
 def symmetry_to_Qsp(symmetry):
-    temp = {"Travial":QspTravial, "Z2":QspZ2, "Z3":QspZ3, "U1":QspU1}
-    return temp[symmetry]
+    
+    return {"Travial":QspTravial, "Z2":QspZ2, "Z3":QspZ3, "U1":QspU1}[symmetry]
 
 symmetry_to_QspClass= symmetry_to_Qsp
 
