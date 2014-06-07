@@ -949,22 +949,38 @@ if 0:
     #        print u
     #        print u.data, 'shape', u.data.shape
     #        print np.where(u.data==0)
+"""
+about __new__: 
+    __new__ is static class method, while __init__ is instance method.
+    __new__ has to create the instance first, so __init__ can initialize it. 
+        which can be a new one (typically that task is delegated to type.__new__), 
+        an existing one (to implement singletons, "recycle" instances from a pool, and so on), 
+        or even one that's not an instance of the class. If __new__ returns an instance of the class (new or existing), __init__ then gets called on it; if __new__ returns an object that's not an instance of the class, then __init__ is not called.    
+    Note that __init__ takes self as parameter. Until you create instance there is no self
+    
+    T.__new__(S, ...) -> a new object with type S, a subtype of T
+"""
 
-
-class nTensor(np.ndarray):
-    def __new__(subtype, shape, dtype=float, buffer=None, offset=0,
+class nTensor(np.ndarray, TensorBase):
+    
+    def __new__(cls, shape, dtype=float, buffer=None, offset=0,
           strides=None, order=None, info=None):
         # Create the ndarray instance of our type, given the usual
         # ndarray input arguments.  This will call the standard
         # ndarray constructor, but return an object of our type.
         # It also triggers a call to InfoArray.__array_finalize__
-        obj = np.ndarray.__new__(subtype, shape, dtype, buffer, offset, strides,
+        obj = np.ndarray.__new__(cls, shape, dtype, buffer, offset, strides,
                          order)
         # set the new 'info' attribute to the value passed
         obj.info = info
         # Finally, we must return the newly created object:
         return obj
-
+    
+    def __init__(self, shape, dtype=float, buffer=None, offset=0,
+          strides=None, order=None, info=None):
+        pass 
+        #TensorBase.__init__(self, self.ndim)
+    
     def __array_finalize__(self, obj):
         # ``self`` is a new object resulting from
         # ndarray.__new__(InfoArray, ...), therefore it only has
@@ -994,7 +1010,18 @@ class nTensor(np.ndarray):
 
 
         
-
+class Test_nTensor(unittest.TestCase): 
+    def setUp(self): 
+        pass
+    
+    def test_temp(self): 
+        a = nTensor((3, 3, 3), int)
+        print(a)
+        print  super(a.__class__) 
+        print type(a[: 2])
+        b = np.ndarray((3, 3, 3))
+        ab = a + b
+        print type(ab)
 
 def test_TensorBase():
     t = TensorBase()
@@ -1010,6 +1037,21 @@ def test_TensorBase():
 
         
 if __name__ == '__main__' : 
-    pass 
 
+
+    if 0: #examine
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           Test_nTensor('test_temp'), 
+           
+        ]
+        for a in add_list: 
+            suite.addTest(a)
+        unittest.TextTestRunner().run(suite)
+       
 
