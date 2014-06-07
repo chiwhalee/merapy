@@ -145,8 +145,8 @@ class iTensor(TensorBase):
         
         #NO COPYING CONVENTION
         self.totQN = totQN   #.copy()
-        self.QSp = QSp[:rank]
-        #self.QSp = QSp
+        #self.QSp = QSp[:rank]
+        self.QSp = QSp
 
         if rank==0:
             #self.rank = 1
@@ -1374,7 +1374,6 @@ class iTensor(TensorBase):
         temp.reverse_qsp(inplace=False)
         return temp
 
-    
     def reverse_qsp(self, inplace=True):
         """
         see iTensor_ReverseQN in f90
@@ -1388,7 +1387,6 @@ class iTensor(TensorBase):
         for n in xrange(self.rank):
             self.QSp[n].reverse()
         self.totQN.reverse()
-            
 
     def dual(self, use_buf=False):
         rank = self.rank
@@ -1400,7 +1398,6 @@ class iTensor(TensorBase):
         res= iTensor(rank, qsp, totqn, use_buf=use_buf)
         res.data[:] = self.data[:]
         return res
-
 
     def to_nTensor(self):
         """
