@@ -141,7 +141,11 @@ class ResultDB(OrderedDict):
             self._db[k] = v
             pass
     
-    def load_S(self, path): 
+    def load_S(self, sh=None, path=None):
+        if sh is not None: 
+            fn = 'N=0-D=%d.pickle'%sh[1]
+            path = '/'.join([self.parpath, fn])
+            
         with open(path, 'rb') as inn: 
             res=pickle.load(inn)
             return res
@@ -987,6 +991,47 @@ class ResultDB(OrderedDict):
             fig=self.plot_entanglement_scaling(num_site=n, sh_max=(12,6), aver=a, log2=1, return_fig=1)
             fig.axes[0].set_title('%s-%s'%(n,a))
     
+    def plot_entanglement_vs_chi(self, sh_min=None, sh_max=None, filter_func=None,  **kwargs): 
+        sh_list = self.get_shape_list(sh_min=sh_min, sh_max=sh_max)
+        data = []
+        not_found = []
+        for sh in sh_list: 
+            ee = self.fetch_easy('entanglement', sh)
+            if ee is None: 
+                not_found.append(sh)
+                continue
+            data.append((sh[1], ee))
+        if filter_func is not None: 
+            data = filter(filter_func, data)
+        if not_found: 
+            print 'rec not found for %s'% not_found
+        x, y = zip(*data)
+        
+        label=kwargs.get('label', '')
+        x = np.log(x)
+        try: 
+            k, b= np.polyfit(x,y, deg=1)
+            #print k, b 
+            c=12*(1./k - 1)**(-2)
+            label  += ' k=%1.2f c=%1.2f'% (k, c)
+            kwargs['label'] = label 
+        except Exception as err: 
+            print err
+       
+        kwargs['return_ax'] = 1
+        marker = kwargs.get('marker', '.')
+        kwargs.update(marker=marker, xlabel='$\\ln(\\chi)$', ylabel='$EE$')
+        fig, ax=self._plot(x, y,  **kwargs)
+        ax.plot(x, k*x+b,)
+
+
+        #ax.set_xscale( 'log')
+        #ax.set_xlim(x[0], x[-1])
+        if kwargs.get('return_ax'): 
+            return fig, ax
+
+        
+    
     def plot_all(self, filed_name_list, sh, **kwargs): 
         fig = kwargs.get('fig')
         name_list= filed_name_list
@@ -1538,14 +1583,17 @@ class TestResultDB(unittest.TestCase):
         self.db = ResultDB(parpath)
         
         parpath_idmrg = '/home/zhli/mps_backup_folder/run-heisbg-long/alpha=2.0'
+        
+    
     def test_temp(self): 
         pass 
         #parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
         parpath =  '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
+        parpath = '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg-lam_guess/alpha=2.3'
         
         db = ResultDB_idmrg(parpath)
-        
-        print db.get_correlation((0, 8))
+        #print db.get_correlation((0, 8))
+        db.plot_entanglement_vs_chi( show_fig=1)
     
     def test_idmrg_get_EE(self): 
         parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'

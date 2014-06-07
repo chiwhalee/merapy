@@ -473,7 +473,6 @@ class Analysis(object):
             
             #alpha_parpath = p1 if p1 is not None else 'alpha=%s/'%a
             alpha_parpath = self.get_backup_dir_name(a)
-            print  'aaaa', alpha_parpath
             A_dir = '/'.join([A_root, alpha_parpath]) 
             B_dir = '/'.join([B_root, alpha_parpath])
             
@@ -644,6 +643,8 @@ class Analysis(object):
         fig=ResultDB._plot.im_func(None, x, y, **kwargs)  
         return fig
     
+    def show_fig(self): 
+        plt.show()
     
     def fig_layout(self, ncol=1, nrow=1,  size=(3.5, 2.5)): 
         return ResultDB.fig_layout.im_func(None, ncol, nrow, size)
@@ -1387,6 +1388,26 @@ class Analysis(object):
         if kwargs.get('return_fig'): 
             return fig
     
+    def plot_entanglement_vs_chi(self, aa=None, **kwargs): 
+        if aa is None: 
+            aa = list(self.alpha_list) 
+        
+        args= kwargs.copy()
+        for a in aa:
+            db=self[a]
+            label = args['label'] if kwargs.has_key('label') else str(a)
+            args.update(return_ax=1, label=label)
+            fig, ax =db.plot_entanglement_vs_chi(  **args)
+            if ax is not None :  #plot succecss
+                args['ax'] = ax
+            if fig is not None : 
+                args['fig'] = fig
+        
+        if kwargs.get('return_fig')   : 
+            return fig 
+            
+            
+            
     def plot_magnetization(self, aa=None, sh=None, **kwargs): 
         if aa is None: 
             aa = list(self.alpha_list)
@@ -1618,8 +1639,9 @@ class Analysis_idmrg(Analysis):
                 result_db_class=None, result_db_args= {}):
         """        
         kwargs.update(algorithm='idmrg', result_db_class=ResultDB_idmrg)
+        #sometimes in ipython, an error: unbound method __init__ ...; this is caused by relaod of ipython
         Analysis.__init__(self, **kwargs)
-        #super(Analysis, self).__init__(**kwargs)
+        #super(Analysis_idmrg, self).__init__(**kwargs)
     
     def get_energy(self, aa, D):
         res=OrderedDict()
@@ -1636,7 +1658,6 @@ class Analysis_idmrg(Analysis):
         return res
     
     def calc_EE(self, S):
-        res=None
         #lam = S['Lambda']
         lam = S['lam']
         U, s, V = np.linalg.svd(lam)
@@ -1645,6 +1666,8 @@ class Analysis_idmrg(Analysis):
         spect2=spect**2
         EE = -np.sum(spect2*np.log(spect2))
         res = EE
+        #import vmps 
+        #vmps.print_vars(vars(), ['lam', 's', 'spect', 'spect2', 'EE'])
         return res 
 
     def measure(self, func, aa, D):
@@ -1653,9 +1676,10 @@ class Analysis_idmrg(Analysis):
         for a in aa:
             db=self[a]
             try:
-                path='/'.join([db.parpath, 'N=0-D=%d.pickle'%D])
+                #path='/'.join([db.parpath, 'N=0-D=%d.pickle'%D])
                 #S=iDMRG.load( path)
-                S= db.load_S(path)
+                #S= db.load_S(path)
+                S= db.load_S(sh=(0, D))
                 val= func.im_func(None, S)
                 res[a]=val
 

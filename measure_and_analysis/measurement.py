@@ -234,6 +234,7 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
             path = '/'.join([parpath, fn])
             dim,  layer = None, None
             shape =  N, D 
+            #iter = S['N']
             iter = -1
             #field = ['correlation']
             corr_param = {}
@@ -312,7 +313,8 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
     elif algorithm == 'idmrg': 
         rdb['version'] = 1.0
         rdb['algorithm'] = 'idmrg'
-        
+        #temp=all_idmrg.config(S)
+        #rdb.update(temp)
         
     rdb.commit(info=1)
     if len(failed_list)>0: 
@@ -497,8 +499,9 @@ if __name__ == '__main__':
    
     if len(sys.argv)>1: 
         from cmd_line_args import parser
-        #parser.add_argument('-w', '--which', nargs='*', default=None)
-        parser.add_argument('-w', '--which', nargs='*', choices=FIELD_NAME_LIST,  default=None)
+        parser.add_argument('-w', '--which', nargs='*', default=None)
+        #some issue with mps algs, temporarily disable choices
+        #parser.add_argument('-w', '--which', nargs='*', choices=FIELD_NAME_LIST,  default=None)
         argcomplete.autocomplete(parser)
         args = parser.parse_args()
         args = vars(args)
