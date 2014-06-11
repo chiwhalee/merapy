@@ -51,6 +51,7 @@ import pprint
 import numpy as np
 
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
+from merapy.utilities import print_vars 
 from merapy.ntensor import TensorBase, nTensor 
 from merapy.quantum_number import *  #QuantumNum, QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy import common_util
@@ -106,45 +107,49 @@ class iTensor(TensorBase):
     T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
     #BUFFER_ON = False
     
-    def __init__(self, rank,  QSp, totQN=None, order="F",  
+    def __init__(self, rank=None, QSp=None, totQN=None, order="F",  
             buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
         """
-            totQN : 
-                决定了张量的变换性质 totQN = id for invariant, other for covariant
-                default is qn_id 
-            QUESTIONG, Q:
-                QSp, totQN应该在init外面copy，还是在里面copy？ copy or not this is a question
-                -a.  这只是个惯例保持一致即可。但从概念上看，似乎应该在外面更好，因为初始化一个张量是一个具体的张量，那么传
-                进来的QSp也应该是某"个"具体的QSp，而非某一"类"QSp。
-                并且，这样做的好处是，方便在init外控制 copy，or reference
+            params: 
+                totQN : 
+                    决定了张量的变换性质 totQN = id for invariant, other for covariant
+                    default is qn_id 
 
-            attention_here here the default ordering of quantum number combination is changed from fortran to C 
-            
-            shallow: 
-                only structure or with data
-            self.Dims[i]:  
-                在leg i 对应的空间维数
-            buf_ref: 
-                buf_ref[0]---which iTensor.T_BUFFER, buf_ref[1]---which tensor in the iTensor.T_BUFFER
-                default -1 means not using iTensor.T_BUFFER
+                attention_here here the default ordering of quantum number combination is changed from fortran to C 
+                
+                shallow: 
+                    only structure or with data
+                self.Dims[i]:  
+                    在leg i 对应的空间维数
+                buf_ref: 
+                    buf_ref[0]---which iTensor.T_BUFFER, buf_ref[1]---which tensor in the iTensor.T_BUFFER
+                    default -1 means not using iTensor.T_BUFFER
             issue:
                 in future, QSp only searve as a way to construct iTensor, forbit it being modified, because modifying qsp alone
                 is meanless and dangeous if not copyed.
                 this raise a question: should qsp immutable, permanante or mutalbe?
                 In this way, one only need to construct very fewer distinct QSps,  only reference, no copying
-            How to: 
-                rank-0 tensor. this is conceptially important. 
-                怎样理解它？
-                    it is a scalar 
-                    它既是0阶，又是任意阶 
-                        其实这样并不稀奇，任意的张量，总可以安上 dummy ind, 也是任意阶 
-                        所以，rank 应该有个 strick-rank 这一说，把dummy ind 全去掉
-                how to set its attr?
-                    rank = 0
-                    QSp = []
-                    data = np.ndarray((1,))
-                    问题是 idx 应不应该设？—— 需要. 指标的变化范围就是1 
-            
+            QUESTION, Q:
+                QSp, totQN应该在init外面copy，还是在里面copy？ copy or not this is a question
+                -a.  这只是个惯例保持一致即可。但从概念上看，似乎应该在外面更好，因为初始化一个张量是一个具体的张量，那么传
+                进来的QSp也应该是某"个"具体的QSp，而非某一"类"QSp。
+                并且，这样做的好处是，方便在init外控制 copy，or reference
+            theory: 
+                the guide line of manipulating symmetric tensor:
+                    is that always do operation first at the block level then in the inner-block level 
+                about rank-0 tensor. 
+                    this is conceptially important. 
+                    怎样理解它？
+                        it is a scalar 
+                        它既是0阶，又是任意阶 
+                            其实这样并不稀奇，任意的张量，总可以安上 dummy ind, 也是任意阶 
+                            所以，rank 应该有个 strick-rank 这一说，把dummy ind 全去掉
+                    how to set its attr?
+                        rank = 0
+                        QSp = []
+                        data = np.ndarray((1,))
+                        问题是 idx 应不应该设？—— 需要. 指标的变化范围就是1 
+                
         """
         #comment this only for a little faster
         #TensorBase.__init__(self, rank, None)
@@ -156,6 +161,7 @@ class iTensor(TensorBase):
         
         #NO COPYING CONVENTION
         self.QSp = QSp  #.copy()
+        #it cant be QSp = [] and totQN = None at the same time 
         self.totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
           
         self.ndiv = None   #ndiv 实际是把协变反变腿分开 一个(ndiv, rank-ndiv) tensor
@@ -243,7 +249,7 @@ class iTensor(TensorBase):
         #iQN[i]用作leg i 上的量子数 计数
         iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
         # 实际使用的addr_inx的长度为 self.nidx
-        self.Addr_idx=np.ndarray((rank_1, self.idx_dim),dtype=int)        
+        self.Addr_idx=np.ndarray((rank_1, self.idx_dim), dtype=int)        
             
         nidx=0
         totDim=0
@@ -279,7 +285,8 @@ class iTensor(TensorBase):
                 self.Block_idx[2, nidx] = p
                 
                 #记录不为0的量子数组合，在所有量子数组合中的位置
-                #Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对没一个iTensor都定义了这个函数
+                #Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 
+                #对每一个iTensor都定义了这个函数
                 #Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
                 self.Addr_idx[0,nidx] = 0 #for rank=0
                 self.Addr_idx[0:rank,nidx] = iQN[0:rank]
@@ -313,6 +320,19 @@ class iTensor(TensorBase):
         self.nidx = nidx
         self.totDim = totDim
     
+    @staticmethod 
+    def example(qsp=None, rank=4, symmetry='Z2'): 
+        """
+            convenient method for testing 
+        """
+        if qsp is not None : 
+            pass
+        else: 
+            cls = symmetry_to_Qsp('Z2')
+            qsp = cls.easy_init( [1, -1], [2, 2]).copy_many(rank)
+        res= iTensor(QSp=qsp)
+        return res
+    
     def unregister(self):
         """
         unregister self from iTensor.T_BUFFER if iTensor.T_BUFFER was used
@@ -334,7 +354,11 @@ class iTensor(TensorBase):
         if self.use_buf and (self.buf_ref[0]!=-1):
             #if iTensor != None:
             iTensor.T_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
-
+    
+    @property
+    def shape(self): 
+        return self.QSp
+        
     @classmethod
     def buff_free(cls):
         for i in xrange(3):
@@ -493,22 +517,30 @@ class iTensor(TensorBase):
     def identity(qsp):
         return iTensor.unit_tensor(2, qsp)
 
-    def get_position(self,iQN):
+    def get_position(self, qn_ind_tuple):
         """
-            iQN: 量子数编号的组合
-            量子数的编号也是用的 前小后大的存储顺序
+            map qn_ind_tuple to an int,  i.e. a rank-dim index to linear index 
+            
+            this func is used in following way: 
+                p3=T3.get_position(iQN3[:T3.rank])
+                idx3 = T3.idx[p3]
+                p3 = T3.Block_idx[0,idx3]
+                data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
+           
             see iTensor_GetPosition in f90
-            Get Position in T, get pos from iQN
+            params: 
+                qn_ind_tuple: 量子数编号的组合
+                量子数的编号也是用的 前小后大的存储顺序
         """
-        if len(iQN)==0: #this is for rank 0 tensor
+        if len(qn_ind_tuple)==0: #this is for rank 0 tensor
             return 0
-        Dims=np.array([self.QSp[i].nQN for i in xrange(self.rank)],"int")
+        Dims=np.array([self.QSp[i].nQN for i in xrange(self.rank)], int)
         #attention: this Dims is not self.Dims
-        p=common_util.matrix_get_position(iQN,Dims)
+        p=common_util.matrix_get_position(qn_ind_tuple, Dims)
         return p
 
     def get_position_rev(self, index_linear):
-        """
+        """ map a ind_linear to a tuple 
             see iTensor_GetPosition_rev
             Get Position in T, get iQN from pos
         
@@ -518,58 +550,59 @@ class iTensor(TensorBase):
         pos=common_util.matrix_get_position_rev(index_linear,Dims)
         return pos
 
-    def set_element(self, qDims, iDims, X):
+    def set_element(self, qn_id_tuple, sub_ind, element):
         """
-            
             see iTensor_SetElement in f90
             params: 
-                qDims: block coordinate, len(qDims)=self.rank
-                    for each i, qDims[i] in xrange(self.Qsp[i].nQN),  对于Z2 symm即[0, 1]
+                qn_id_tuple: block coordinate, len(qn_id_tuple)=self.rank
+                    for each i, qn_id_tuple[i] in xrange(self.Qsp[i].nQN),  
+                    对于Z2 symm 即 [0, 1] 
+                    note 这不是量子数的val,  but numbering  
                     并且这些量子数fuse到一起后 = self.totQN
-                iDims：data coodinate in the block,  len(iDims)=self.rank
-                    for each i, iDims[i] in xrange(self.Qsp[i].Dims), 对于Z2 symm 也是[0, 1] for any i
+                sub_ind：data coodinate in the block,  len(sub_ind)=self.rank
+                    for each i, sub_ind[i] in xrange(self.Qsp[i].Dims), 
+                    对于Z2 symm 也是[0, 1] for any i
             #整个的思路是，先找到block entry，再找data position
         """
         pq = 0; pi=0
         for i in xrange(self.rank-1, 0 , -1):
             #print "iiiii i", i
-            pq = (pq+qDims[i])*self.QSp[i-1].nQN
-            pi = (pi+iDims[i])*self.QSp[i-1].Dims[qDims[i-1]]
-            #print self.QSp[i-1].Dims[qDims[i-1]]
+            pq = (pq+qn_id_tuple[i])*self.QSp[i-1].nQN
+            pi = (pi+sub_ind[i])*self.QSp[i-1].Dims[qn_id_tuple[i-1]]
+            #print self.QSp[i-1].Dims[qn_id_tuple[i-1]]
         
-        pq = pq+qDims[0]
-        pi = pi+iDims[0]
+        pq = pq+qn_id_tuple[0]
+        pi = pi+sub_ind[0]
         temp = self.idx[pq]
         if temp >= self.idx_dim:
-            raise ValueError("error, qdims values not permited")
+            raise ValueError("error, qn_id_tuple values not permited. qn_id_tuple=%s"%qn_id_tuple)
         pidx = self.Block_idx[0, temp]
         block_len = self.Block_idx[1, temp]
         if pi>= block_len:
-            raise ValueError("error, idims values not permited, iDims=%s"%iDims)
+            raise ValueError("error, sub_ind values not permited, sub_ind=%s"%sub_ind)
         #print "ppppqqqq  ", pq, pi,'idx', temp, 'pidx', pidx, pidx + pi 
-        self.data[pidx+pi] = X
+        self.data[pidx+pi] = element 
 
-    def get_element(self, qDims, iDims):
+    def get_element(self, qn_id_tuple, sub_ind):
         """
-        status_1_verified
-        see iTensor_GetElement in f90
+            see iTensor_GetElement in f90
         """
         pq = 0; pi=0
         for i in xrange(self.rank - 1, 0, -1):
-            pq = (pq+qDims[i])*self.QSp[i-1].nQN
-            pi = (pi+iDims[i])*self.QSp[i-1].Dims[qDims[i-1]]
+            pq = (pq+qn_id_tuple[i])*self.QSp[i-1].nQN
+            pi = (pi+sub_ind[i])*self.QSp[i-1].Dims[qn_id_tuple[i-1]]
         
-        pq = pq+qDims[0]
-        pi = pi+iDims[0]  
+        pq = pq+qn_id_tuple[0]
+        pi = pi+sub_ind[0]  
         pidx = self.Block_idx[0,self.idx[pq]]
         temp = self.idx[pq]
         if temp >= self.idx_dim:
-            print "error, qDims values not permited"
+            print "error, qn_id_tuple values not permited"
             return 
         pidx = self.Block_idx[0, temp]
         block_len = self.Block_idx[1, temp]
         if pi>= block_len:
-            print "error,  iDims values not permited"
+            print "error,  sub_ind values not permited"
             return 
         
         X = self.data[pidx+pi]
@@ -662,7 +695,140 @@ class iTensor(TensorBase):
                 return False, k
 
         return True, None
+    
+    @staticmethod 
+    def is_match(qq2, dd2, qq1, dd1, info=1): 
+        """
+            status: 
+                not completed
 
+        """
+        res = True 
+        len2 = len(qq2)
+        len1 = len(qq1)
+        
+        match = [0 for i in range(len(qq2))]
+        i = 0
+        for a, q2 in enumerate(qq2): 
+            if i >= len1: 
+                return False 
+            x = qq1[i]
+            y = dd1[i]
+            j = i 
+            for b in range(j, len1): 
+                i += 1
+                if x.val == q2.val and y <= dd2[a] : 
+                    if info>0: 
+                        #print a, i-1, x, y, q2   
+                        print_vars(vars(), ['a', 'i-1', 'x.val', 'y', 'q2.val'], sep=' ')
+                    #if a != len2-1 or b == len1-1 : 
+                        match[a] = 1
+                        break 
+                else:
+                #if 1: 
+                    if b  == len1-1: 
+                        return False 
+                    x = x + qq1[b+1]
+                    y = y*dd1[b + 1]
+        if info>0: print match 
+        res= all(match)                            
+        return res
+
+    @staticmethod 
+    def is_match_new(qq2, dd2, qq1, dd1, info=1): 
+        """
+             status: 
+                not completed
+       
+        """ 
+        res = True 
+        len2 = len(qq2)
+        len1 = len(qq1)
+        match = [0 for i in range(len(qq2))]
+        
+        id1 = 0
+        id2 = 0
+        iq1 = 0
+        iq2 = 0
+        for i in range(max(len1, len2)): 
+            d1 = dd1[id1]
+            d2 = dd2[id2]
+            q1 = qq1[iq1]
+            q2 = qq2[iq2]
+            if d1 == d2: 
+                if q1.val != q2.val: 
+                    return False 
+            elif d1>d2: 
+                if q1.val == q2.val: 
+                    pass
+                else: 
+                    pass
+            elif d1<d2: 
+                if q1.val == q2.val: 
+                    pass
+                else: 
+                    pass 
+        if info>0: print match 
+        res= all(match)                            
+        return res
+
+    def reshape(self, qsp_new): 
+        """
+            status: 
+                not completed
+            re-indexing tensor like np.reshape 
+            index (or qsp) can be joined or splited 
+            this function is one of the most non-travial one, many improvements needed 
+            index match 应该是个（线性）方程组问题，不能局部地inspect
+            howto: 
+                first reshape the qn second inner block 
+            
+        """
+        raise NotImplemented('')
+        qsp = self.QSp
+        q = qsp[0]
+        for i in qsp[1: ]:  
+            q = q.add(i)
+        p = qsp_new[0]
+        for i in qsp_new[1: ]:  
+            p = p.add(i)
+        assert q == p  
+        
+        qn_cls = qsp[0].QnClass
+        res = iTensor(QSp=qsp_new, totQN=self.totQN)
+        
+        t1 = self
+        t2 = res 
+        rank1 = t1.rank 
+        rank2 = t2.rank 
+        #match_table if to find out corespondence between blocks 
+        match_table = {i: [] for i in range(t2.nidx)}
+        
+        is_match = iTensor.is_match   
+        for i in xrange(t2.nidx): 
+            qn_id_tuple_2 = t2.Addr_idx[:, i]
+            qn_tuple_2 = [t2.QSp[q].QNs[q] for q in qn_id_tuple_2]
+            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
+            #print  qn_tuple_2 
+            for j in xrange(t1.nidx): 
+                qn_id_tuple_1 = t1.Addr_idx[:, j]
+                qn_tuple_1 = [t1.QSp[q].QNs[q] for q in qn_id_tuple_1]
+                dim_tuple_1 = [t1.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_1) ]
+                #if i == 1 and is_match(qn_tuple_2, qn_tuple_1):  
+                #if i == 1 and j == 1 : 
+                if i == 0 and j == 0 : 
+                #if 1: 
+                    print i, j 
+                    print  qn_tuple_2 , dim_tuple_2
+                    print qn_tuple_1 , dim_tuple_1 
+                    print  is_match(qn_tuple_2, dim_tuple_2,  qn_tuple_1, dim_tuple_1)
+                        
+                if is_match(qn_tuple_2, dim_tuple_2,  qn_tuple_1, dim_tuple_1): 
+                    match_table[i].append(j)
+        
+        print  match_table     
+        return res    
+    
     def index_merge_1(self, ind):
         """
             in numpy reshape serves as merge and split of indices of a dense array, I take use of that.
@@ -1460,8 +1626,6 @@ class iTensor(TensorBase):
                     
                     data_coord.append(int(d + data_coord_in_block[i]))
                 
-                    
-                
                 data_pos=Tp.get_position(data_coord)
                 print "\t\t data_coord",data_coord,"data_pos",data_pos,
                 
@@ -1936,6 +2100,12 @@ class iTensor_new(TensorBase):
         #self.nidx = nidx
         #self.totDim = totDim
 
+class Tensor(iTensor, nTensor): 
+    def __new__(cls, qsp, tot_qn=None): 
+        pass 
+    
+    def __init__(self, qsp): 
+        pass 
 
 class iTensorFactory(object):
     """
@@ -2270,6 +2440,7 @@ class iTensorFactory(object):
             sigma_y.data[0:2] = [-1.0,1.0]
             
             s0, sx, sy, sz = sigma_0, sigma_x, sigma_y, sigma_z    
+            I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
 
             if 1:
             #following are not fully verified
@@ -2319,6 +2490,7 @@ class iTensorFactory(object):
             sigma_m=iTensor(rank, qsp, totqn)
             sigma_m.data[:] = [0.0, 0.0, 1.0, 0.0]
             i, z, x, y, p, m = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
+            I, Z, X, Y, P, M = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
             
             if 1:
                 #due to Fortran order,  modified to this
@@ -2375,9 +2547,18 @@ class iTensorFactory(object):
             szz = sigma_z.tensor_prod(sigma_z)
             spm = sigma_p.tensor_prod(sigma_m)
             smp = sigma_m.tensor_prod(sigma_p)
+            
+            I, Z = sigma_0, sigma_z 
         
+        res= vars()
+        temp = ['symmetry', 'rank', 'QSpZ2']
+        for i in temp: 
+            if res.has_key(i): 
+                res.pop(i)
         
-        return vars()
+        return res 
+    
+    pauli_mat = pauli_mat_1site 
     
     def check_pauli_mat(self):
         if self.symmetry  ==  "U1":
@@ -2448,122 +2629,6 @@ class iTensorFactory(object):
             used especially in fermionic mera
         """
         raise NotImplemented
-    
-if 0:
-    class Tensor(iTensor):
-        """
-        thie class is translated fortran, will be removed or replaced
-        """
-        def __init__(self,use_buf=False):
-            """
-            status:completed:uncheck
-            see init_Tensor in f90
-            """
-            self.use_buf=use_buf
-            self.buf_ref = np.array([-1, -1], "int")
-
-
-        def nullify(self, use_buf=False):
-            """
-            see initialize_Tensor in f90
-            """
-            #self.allocated= False 
-            self.shallow= False         
-            self.use_buf = use_buf
-            self.buf_ref[:]=-1  
-
-            #self.max_data_size = 0
-            #self.max_ind_size = 0
-            self.rank = 0
-            self.nidx = 0
-            self.totDim = 0        
-
-            self.idx = None
-            self.Block_idx = None
-            self.Addr_idx = None
-            self.data = None
-
-        def delete(self):
-            """
-            status_0
-            deprecate it?
-
-            """
-
-
-        def shallow_copy_deprecate(self):
-            """
-            see Tensor_ShallowCopy in f90
-            """
-            
-            other = self.copy_struct()
-            other.idx[:] = self.idx[:]
-            other.Block_idx[:, :] = self.Block_idx[:, :]
-            other.Addr_idx[:, :] = self.Addr_idx[:, :]
-            other.data[:] = self.data[:]
-            return other
-
-        @staticmethod 
-        def find_leg(iLeg,  S):
-            """
-            status_1_uncheck
-            see FindLeg in f90
-            FindLeg is to find all the legs that are connected between two tensors
-            应该是找到 腿 iLeg 在哪两个tensor里，存储在 Is[0:2]中
-            returns:
-                Is
-            """
-
-            #Is=2*[None]
-            Is=[]
-            for i in xrange(len(S)):
-                #if InSet[iLeg, S[i]]>0:  
-                if iLeg in S[i]:
-                    #Is[k] = i
-                    Is.append(i)
-                    #k = k+1
-            if len(Is)>2:
-                print "error, see find_leg"
-            return Is
-
-        def random(self ):
-            """
-            status_0
-            以后再处理随机数生成器
-            """
-
-        def str__(self):
-            """
-            print_Tensor in f90
-            status_1
-            """
-
-        def unit_tensor_old(self):
-            """
-            status_1_deprecated,  
-            this is precisely unit_itensor,  so just inhereite from iTensor
-            see UnitTensor in f90
-            """
-            rank = self.rank
-            rank1 = rank//2
-            
-            self.data[:] = 0.0
-            for idx  in xrange(self.nidx):
-                p = self.Block_idx[0,idx]
-                iQN[0:rank] = self.Addr_idx[0:rank, idx]
-                
-                #AllEq = iArrayEq(rank1, iQN[1], iQN[rank1+1])
-                AllEq = np.all(iQN[0:rank1]==iQN[rank1:rank])
-                if  not AllEq:  
-                    continue
-                
-                d=1
-                for i  in xrange(rank1):
-                    d = d*self.QSp[i].Dims[iQN[i]]
-                #Unit_Matrix(self.data[p], d)
-                self.data[p:p + d**2] = np.identity(d).ravel()
-
-#   class Tensor_Link is moved to tensor_network.py
 
 
 class test_iTensor(object):
@@ -3103,6 +3168,17 @@ class Test_iTensor(unittest.TestCase):
         res= res.data[0]
 
         pass 
+    
+    def test_reshape(self): 
+        t = iTensor.example()
+        qsp = [t.QSp[0]*t.QSp[1], t.QSp[2], t.QSp[3]]
+        u=t.reshape(qsp)
+        
+        print  t.QSp[0]
+        print  t.QSp[0].add(t.QSp[1])
+        #print t.Addr_idx 
+        #print u.Addr_idx 
+        #print t.nidx, u.nidx 
 
 class performance_iTensor(object):
     pass
@@ -3321,7 +3397,8 @@ if __name__== "__main__":
         suite = unittest.TestSuite()
         add_list = [
            #Test_iTensor('test_temp'), 
-           Test_iTensor('test_rank_zero'), 
+           Test_iTensor('test_reshape'), 
+           #Test_iTensor('test_rank_zero'), 
            #Test_iTensor('test_rank_zero_1'), 
            
         ]
