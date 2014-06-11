@@ -961,6 +961,113 @@ about __new__:
     T.__new__(S, ...) -> a new object with type S, a subtype of T
 """
 
+
+def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
+    """
+        this func can be completely replaced by np.tensordot
+        the out param is not useful yet
+    """
+    
+    Xsize = X.shape
+    Ysize = Y.shape
+    
+    indXl = range(numindX)
+    indYr = range(numindY)
+    for i in indX:
+        indXl.remove(i)
+    for i in indY:
+        indYr.remove(i)
+    
+    sizeXl = [Xsize[i] for i in indXl]
+    sizeX = [Xsize[i] for i in indX]
+    sizeYr = [Ysize[i] for i in indYr]
+    sizeY = [Ysize[i] for i in indY]
+
+    #names=["sizeXl","sizeX","sizeYr","sizeY","indXl","indYr"]
+    #for n in names: print n, locals()[n] 
+    if 0: 
+        varables= vars()
+        varables.update(Xshape=X.shape, Yshape=Y.shape)
+        msg = """
+        X.shape=%(Xshape)s, Y.shape=%(Yshape)s 
+        sizeX=%(sizeX)s, sizeY=%(sizeY)s
+        indX=%(indX)s, indY=%(indY)s
+        """%varables
+        print msg
+
+    #if np.prod(sizeX) != np.prod(sizeY): 
+    if not np.all(sizeX==sizeY): 
+        varables= vars()
+        varables.update(Xshape=X.shape, Yshape=Y.shape)
+        msg = """
+        error: indX and indY are not of same dimension: 
+        X.shape=%(Xshape)s, Y.shape=%(Yshape)s 
+        sizeX=%(sizeX)s, sizeY=%(sizeY)s
+        indX=%(indX)s, indY=%(indY)s
+        """%varables
+        raise Exception(msg)
+        
+
+    if len(indYr)==0:  # if Y is completely contracted
+        
+        if len(indXl)==0: # if X is also completeley contracted 
+            
+            X=X.transpose(indX)
+            X=X.reshape(-1, np.prod(sizeX))
+            Y=Y.transpose(indY)
+            Y=Y.reshape(np.prod(sizeY), -1)
+            if out is None: 
+                #Z = X.dot(Y) #contract to a scalar 
+                Z = np.dot(X, Y)
+                Zsize = 1
+                return Z#, Zsize
+            else: 
+                np.dot(X, Y, out)
+                return out#, Zsize
+        else:
+            
+            X=X.transpose(indXl+indX)
+            X=X.reshape((np.prod(sizeXl), np.prod(sizeX)))
+            Y=Y.transpose(indY )
+            Y=Y.reshape(np.prod(sizeY), np.prod(sizeYr))
+            Zsize =  sizeXl
+            if out is None: 
+                Z = X.dot(Y)
+                Z=Z.reshape(Zsize)
+                #Z.ind_labels= indXl + indYr
+                return Z
+            else: 
+                np.dot(X, Y, out)
+                res = out.reshape((Zsize, 1)) 
+                #res.ind_labels= indXl + indYr
+                return res
+    
+    #print X.shape, indXl, indX,  indXl + indX
+    X=X.transpose(indXl+indX)
+    X=X.reshape((np.prod(sizeXl), np.prod(sizeX)))
+    Y=Y.transpose(indY+indYr)
+    Y=Y.reshape((np.prod(sizeY),np.prod(sizeYr)))
+    #print X.shape,Y.shape
+
+    Zsize = sizeXl + sizeYr
+    if out is None: 
+        Z = X.dot(Y)
+        Z = Z.reshape(Zsize)
+        #numindX = len(Z.shape)
+        return Z  
+    else: 
+        np.dot(X, Y, out)
+        res = out.reshape(Zsize)
+        #res.ind_labels = indXl + indYr
+        return res
+
+def contract_tensors_new(X, Y, indX, indY): 
+    """
+        a wrapper and better interface for contract_tensors;
+        this will be the standard one in future
+    """
+    return contract_tensors(X, X.ndim, indX, Y, Y.ndim, indY)
+
 class nTensor(np.ndarray, TensorBase):
     
     def __new__(cls, shape, dtype=float, buffer=None, offset=0,
@@ -1008,8 +1115,12 @@ class nTensor(np.ndarray, TensorBase):
         self.info = getattr(obj, 'info', None)
         # We do not need to return anything
 
+    def contract(self, other, ind_list_1, ind_list_2): 
+        """
+            althouth I defined ndarray in contract_tensors func, it returns an instantce of nTensor 
+        """
+        return contract_tensors(self, self.ndim, ind_list_1, other, other.ndim, ind_list_2)
 
-        
 class Test_nTensor(unittest.TestCase): 
     def setUp(self): 
         pass
@@ -1018,10 +1129,14 @@ class Test_nTensor(unittest.TestCase):
         a = nTensor((3, 3, 3), int)
         print(a)
         print  super(a.__class__) 
-        print type(a[: 2])
-        b = np.ndarray((3, 3, 3))
-        ab = a + b
-        print type(ab)
+    
+    def test_contract(self): 
+        a = nTensor((2, 2, 2))
+        b = nTensor((2, 2, 2))
+        c=a.contract(b, [0, 1, 2], [0, 1, 2])
+        print  type(c)
+        
+        
 
 def test_TensorBase():
     t = TensorBase()
@@ -1047,7 +1162,8 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           Test_nTensor('test_temp'), 
+           #Test_nTensor('test_temp'), 
+           Test_nTensor('test_contract'), 
            
         ]
         for a in add_list: 
