@@ -109,6 +109,8 @@ class Graphics():
                     #res.edges[pos][node_id] = edge_id
         return res
     
+    from_dict = init_from_dict
+    
     def set_contract_order(self, order):
         if isinstance(order[0], str): 
             self.contract_order = [self.find_node(n) for n in order]
@@ -550,7 +552,7 @@ class TestGraphics(unittest.TestCase):
 if __name__ == '__main__':        
     
 
-    if 0: 
+    if 1: 
         g=Graphics()
         def set_value():
             g.size=8

@@ -298,6 +298,9 @@ class TensorNetwork(object):
             print Tout.data[:4].round(5),"...", Tout.data[-4:].round(5)
         
         return Tout
+
+    def contract_labeled_tensor_list(self, tlist): 
+        raise NotImplemented('todo') 
     
     @staticmethod
     def make_tensor_link(S, G, trans_invar=0): 

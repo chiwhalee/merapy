@@ -348,6 +348,11 @@ class QuantSpaceBase(object):
         else:
             self._totDim = np.sum(self._dims[:self.nQN])  
             return self._totDim
+    
+    @property
+    def symmetry(self): 
+        return self.QnClass.SYMMETRY
+    
     @property
     def Dims(self):
         return self._dims
@@ -363,6 +368,7 @@ class QuantSpaceBase(object):
         """
         self.nQN = n
         self._dims=np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
+        #self._dims=np.empty(n, int) #MaxQNNum only defined in subclassed
         self._dims[:n] = dims[:n]
         #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
 
@@ -460,7 +466,10 @@ class QuantSpaceBase(object):
             res += k+":\t" + temp +"\n"
 
         return res
-
+    
+    def __mul__(self, other): 
+        return self.add(other)
+    
     @classmethod
     def easy_init(cls, qns, dims):
         """ a slow but easy init """
@@ -710,11 +719,11 @@ class QuantSpaceBase(object):
         return self.add(other)
    
     def add(self, other):
-        """
-            see QSp_Add in f90
+        """ 
             acturally tensorprod of self and other,  though named add
             q571, RefQN is not added!, RefQN[:,:] is arbitrary valued
             RefQN 写起来比较麻烦
+            todo: change the name to prod in future 
         """
         if self.nQN==0:
             return other.copy()    #need copy here?
@@ -1279,6 +1288,11 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
+        q=QnZ2(1)
+        #qsp=QspZ2.easy_init([1, 1, 1], [2, 2, 6])
+        qsp = QspZ2(2, [q, q], [3, 3])
+        #print  q
+        print qsp 
         pass 
     
     def test_old_all(self): 
@@ -1329,7 +1343,7 @@ class TestIt(unittest.TestCase):
    
 if __name__ == "__main__":
         
-    if 1: #examine
+    if 0: #examine
         if 1: 
             from concurrencytest import ConcurrentTestSuite, fork_for_tests
             loader = unittest.TestLoader()
@@ -1350,9 +1364,9 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #TestIt('test_temp'), 
+           TestIt('test_temp'), 
            #TestIt('test_old_all'), 
-           TestIt('test_compare'), 
+           #TestIt('test_compare'), 
         ]
         for a in add_list: 
             suite.addTest(a)

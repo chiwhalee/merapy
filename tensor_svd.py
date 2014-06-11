@@ -56,7 +56,8 @@ class Tensor_svd(object):
             此函数的目的是得到：
                 量子数组合标记 idx 与 它在前后两段 标记p1, p2间的转换关系： 
                     gidx: 
-                        group后的gidx, for Travial in [0]; for Z2 in [0,1]; for U1 in [0,1,2]
+                        group后的gidx, for Travial in [0]; for Z2 in [0,1]; 
+                        for U1 in [0,1,2]
                     cls.QN_Group[0,idx] = gidx   # 在goup后的量子数中的编号
                     cls.QN_Group[1,idx] = p1   #idx 在前一块中的编号
                     cls.QN_Group[2,idx] = p2   #idx 在后一块中的编号            
@@ -304,8 +305,8 @@ class Tensor_svd(object):
         E_size=1024*64
         #lwork = 5*E_size
         
-        #Eg = 1.d100
-        Eg = 1.0
+        
+       
         QSp = [itensor.QSp[i].copy() for i in range(div)]
         if totQN is None:
             totQN = QSp[0].QnClass.qn_id()
@@ -366,10 +367,10 @@ class Tensor_svd(object):
         #print "QSp_Group input is:\n%s"%cls.QSp_Group1
         #print "QSp_Group output is:\n%s"%cls.QSp_Group2
         #print "selected input qn are %s"%qn_list
-        for gidx  in range(cls.QSp_Group1.nQN):
+        for gidx in range(cls.QSp_Group1.nQN):
             #print "ggg", gidx, cls.QSp_Group1.QNs[gidx]
             qn = cls.QSp_Group1.QNs[gidx]  
-            if  qn in qn_list:  
+            if qn in qn_list:  
                 V_buf = cls.get_block1(itensor, gidx)
                 d = V_buf.shape[0]
                 #print 'dddd', d
@@ -387,7 +388,11 @@ class Tensor_svd(object):
                 print ("qn %s not found in qn_list %s, QSp_Group1.QNs are %s"%(qn,  qn_list, cls.QSp_Group1.QNs))
 
         return res
-
+    
+    @classmethod
+    def eigs(cls, itensor): 
+        pass 
+    
     @classmethod
     def get_block(cls, div, target_QN, gidx= -1, need_group=True):
         """ 
@@ -407,6 +412,7 @@ class Tensor_svd(object):
             exit()
         else:
             return cls.get_block1(gidx)
+    
     @classmethod
     def get_block1(cls, itensor, gidx):
         """ 
@@ -470,7 +476,6 @@ class Tensor_svd(object):
 
             #attention_here  fortran order must be used
             itensor.data[p:p+nT*mT] = temp.ravel('F')
-
 
     @classmethod
     def set_block1(cls, itensor, gidx, VV):

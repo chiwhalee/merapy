@@ -193,7 +193,7 @@ class Mera(object):
             temp = temp.add(temp0)
             temp.update(qsp_max = qsp_max)
         #attention_this_may_be_wrong   reflect_symmetrize is not compatible with qsp.add
-        #temp.update(qsp_max = qsp_max)
+        #temp.update(qsp_max=qsp_max)
         temp.reverse()
         QSp_V.append(temp)
         

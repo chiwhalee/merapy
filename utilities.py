@@ -167,6 +167,32 @@ def load(path):
         res = pickle.load(inn)
     return res
 
+def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0):
+    """
+        
+    """
+    if var_name_list is None: 
+        var_name_list = sorted(dic)
+    if show_header: 
+        msg = ''.join(['-'*10, str(var_name_list), '-'*10])
+        print msg 
+    def get_val(x): 
+        #if not '.' in str(x): 
+        if not isinstance(x, str): 
+            res = dic[x]
+        else: 
+            #a, b = x.split('.')
+            #res = dic[a].__getattribute__(b)
+            try: 
+                res= eval(x, dic)
+            except NameError as err: 
+                res= 'Nan'
+        return str(res)
+            
+    #print  '\n'.join([str(i) + ':\n' + str(dic[i])  for i in  var_name_list])
+    print  sep.join([str(i) + sep_key_val + get_val(i)  for i in  var_name_list])
+    #print  sep.join([str(i) + sep_key_val + str(eval(i, dic))  for i in  var_name_list])
+
 
 #replace_graph(x)
 if __name__ == "__main__": 
