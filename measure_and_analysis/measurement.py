@@ -172,11 +172,14 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
     
     if 1: 
         #if isinstance(S, MPS): 
-        if S.__class__.__name__ == 'MPS':                  
-            algorithm = 'mps'
+        #if S.__class__.__name__ == 'MPS':                  
+        #    algorithm = 'mps'
         #elif isinstance(S, np.ndarray): 
-        elif isinstance(S, dict): 
-            algorithm = 'idmrg'
+        if isinstance(S, dict): 
+            if S.has_key('mps'): 
+                algorithm = 'mps'
+            elif S.has_key('A'): 
+                algorithm = 'idmrg'
         else: 
             algorithm = 'mera'
         
@@ -213,7 +216,8 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
         elif algorithm == 'mps': 
             field = ['correlation']
             all_func = all_mps
-            mps = S
+            S = S['mps']  #fuck, this is bad, but I like bad!
+            mps= S 
             db_version = 1.0
             N, D = mps.N, mps.D
             fn = "N=%d-D=%d.pickle"%(N, D)
