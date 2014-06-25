@@ -85,14 +85,23 @@ class ResultDB(OrderedDict):
             if not os.path.exists(parpath):  # these lines are useful, when merge remote db
                 self.create_parpath()
        
-        if not os.path.exists(self.path):  
-            if create_empty_db:     
-                ResultDB.create_empty_db(self.path, use_local_storage) 
-            
-            OrderedDict.__init__(self, {})
-        else: 
+        #if not os.path.exists(self.path):  
+        #    if create_empty_db:     
+        #        ResultDB.create_empty_db(self.path, use_local_storage) 
+        #    OrderedDict.__init__(self, {})
+        #else: 
+        #    db = rpyc_load(self.path, use_local_storage)
+        #    OrderedDict.__init__(self, db)
+        try: 
             db = rpyc_load(self.path, use_local_storage)
-            OrderedDict.__init__(self, db)
+        except IOError as err: 
+            db = {}
+            #print err 
+            if create_empty_db: 
+                ResultDB.create_empty_db(self.path, use_local_storage) 
+        except Exception as err: 
+            raise 
+        OrderedDict.__init__(self, db)   
         
         if algorithm is not None : 
             self['algorithm'] = algorithm
@@ -252,7 +261,7 @@ class ResultDB(OrderedDict):
             res = System.backup_fn_parse(fn)
         return res
 
-    def get_mera_shape_list(self, sh_max=None, sh_min=None): 
+    def get_shape_list(self, sh_max=None, sh_min=None): 
         fn = self.get_fn_list()
         #print 'backup tensor files are %s'%fn
         sh = [self.parse_fn(f) for f in fn]
@@ -264,7 +273,12 @@ class ResultDB(OrderedDict):
         sh.sort()
         return sh
     
-    get_shape_list = get_mera_shape_list  #a shorter name
+    get_mera_shape_list = get_shape_list 
+    
+    def has_shape(self, sh, system_class): 
+        fn = system_class.shape_to_backup_fn.im_func(None, sh)
+        path = '/'.join([self.parpath, fn])
+        return os.path.exists(path)
     
     def get_energy_min_bac(self, sh=None, **kwargs): 
         version = self.get('version')
@@ -877,7 +891,7 @@ class ResultDB(OrderedDict):
             return fig
            
     def plot_entanglement_scaling(self, alpha=None, sh_list=None, sh_min=None, sh_max=None, 
-            log2=False, num_site=None, aver=False, linear_fit=True,  fit_points= None, 
+            log2=False, num_site=None, site_start=0, site_period=1, site_end=None, aver=False, linear_fit=True,  fit_points= None, 
             **kwargs): 
        
         
@@ -888,23 +902,8 @@ class ResultDB(OrderedDict):
             sh_list = self.get_mera_shape_list(sh_max=sh_max, sh_min=sh_min)
             if len(sh_list)==0: 
                 raise
-        if 0: 
-            if fig is None : 
-                fig=plt.figure(figsize=(5,3))
-                ax=fig.add_subplot(111)
-             
-            if len(fig.axes)==0: 
-                ax=fig.add_subplot(111)
-            else:
-                for i in fig.axes: 
-                    if len(i.lines)==0:
-                        ax = i
-                        break
-                #if ax is None: 
-                #    ax = fig.axes[-1]
-                
-            
-        not_found= []
+        
+        not_found = []
         algorithm =  self.get('algorithm') 
         
         for sh in sh_list: 
@@ -913,7 +912,9 @@ class ResultDB(OrderedDict):
                 if rec is None: 
                     not_found.append(sh)
                     continue
-                rec = rec[: len(rec)/2-1]
+                #rec = rec[: len(rec)/2-1]
+                site_end = len(rec)/2-1  if site_end is None else site_end
+                rec = rec[site_start: site_end: site_period]
                 x,y=(zip(*rec))
                 
             else: 
@@ -976,9 +977,11 @@ class ResultDB(OrderedDict):
                     ax.set_xticks(tic)
                     ax.set_xticklabels(tic)
             ax.grid(1)
-
-        if return_fig and 'fig' in locals(): 
+        lll=locals()
+        if return_fig and lll.has_key('fig'): 
             return fig
+        if kwargs.get('return_ax'): 
+            return lll.get('fig'), lll.get('ax')
            
        
     def plot_entanglement_scaling_compare(self, num_site_max=6): 
@@ -1030,8 +1033,6 @@ class ResultDB(OrderedDict):
         if kwargs.get('return_ax'): 
             return fig, ax
 
-        
-    
     def plot_all(self, filed_name_list, sh, **kwargs): 
         fig = kwargs.get('fig')
         name_list= filed_name_list
@@ -1463,13 +1464,35 @@ class ResultDB(OrderedDict):
         os.system(cmd)
         print 'db is backuped: %s'%cmd
 
+class ResultDB_mera(ResultDB): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs.update(algorithm='mera')
+        ResultDB.__init__(self, parpath,  **kwargs)
+    
+    @staticmethod
+    def shape_to_backup_fn(sh,  nqn=None):
+        layer, dim = sh
+        nqn = "5_" if nqn == 5 else "" 
+        layer = "-%dlay"%layer if layer != 3 else ""
+        res= "%(nqn)s%(dim)d%(layer)s.pickle"%vars()
+        return res
+    backup_fn_gen = shape_to_backup_fn 
+    
+
 class ResultDB_vmps(ResultDB): 
-     def __init__(self, parpath,  **kwargs): 
+    def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
         kwargs.update(algorithm='mps')
         ResultDB.__init__(self, parpath,  **kwargs)
-     
-     def get_energy(self, sh): 
+    
+    @staticmethod
+    def shape_to_backup_fn(sh): 
+        N, D = sh
+        res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        return res
+    backup_fn_gen = shape_to_backup_fn 
+    
+    def get_energy(self, sh): 
         
         try:
             path='/'.join([self.parpath, 'N=%d-D=%d.pickle'%(sh[0], sh[1])])
@@ -1489,6 +1512,16 @@ class ResultDB_idmrg(ResultDB):
         kwargs.update(algorithm='idmrg')
         ResultDB.__init__(self, parpath,  **kwargs)
     
+    @staticmethod 
+    def shape_to_backup_fn(sh): 
+        """
+        """
+        N, D = sh
+        res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        return res
+    
+    backup_fn_gen =shape_to_backup_fn 
+   
     def calc_EE(self, S):
         res=None
         #lam = S['Lambda']
@@ -1588,12 +1621,15 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         pass 
         #parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
-        parpath =  '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
-        parpath = '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg-lam_guess/alpha=2.3'
+        parpath =  '/home/zhli/backup_tensor_dir/run-ising/idmrg/h=1.0'
+        parpath = '/home/zhli/backup_tensor_dir/run-long-heisbg/idmrg-lam_guess/alpha=2.3'
         
         db = ResultDB_idmrg(parpath)
         #print db.get_correlation((0, 8))
-        db.plot_entanglement_vs_chi( show_fig=1)
+        #db.plot_entanglement_vs_chi( show_fig=1)
+        from vmps.minimize import VMPS
+        
+        print db.has_shape((0, 4),  VMPS)
     
     def test_idmrg_get_EE(self): 
         parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
