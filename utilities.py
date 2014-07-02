@@ -167,10 +167,16 @@ def load(path):
         res = pickle.load(inn)
     return res
 
+def save(obj, path): 
+    out = open(path, "wb")
+    pickle.dump(obj, out)
+    out.close()
+
 def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0):
     """
         
     """
+    dic['np'] = np  #inject np to the namespace so that it can be evaled 
     if var_name_list is None: 
         var_name_list = sorted(dic)
     if show_header: 
@@ -186,7 +192,7 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0
             try: 
                 res= eval(x, dic)
             except NameError as err: 
-                res= 'Nan'
+                res= 'not defined'
         return str(res)
             
     #print  '\n'.join([str(i) + ':\n' + str(dic[i])  for i in  var_name_list])
