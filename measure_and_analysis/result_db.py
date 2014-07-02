@@ -570,6 +570,7 @@ class ResultDB(OrderedDict):
         
     def get_correlation(self, sh, which='correlation_extra',direct='pm', 
             r_min=None,  r_max=None, period=None, fault_tolerant=1,  info=0): 
+        algorithm = self.get('algorithm')
         if which == 'correlation_mixed' and self.get('algorithm') != 'mps': 
             rec1=self.fetch_easy('correlation_extra', mera_shape=sh, sub_key_list=[direct])
             rec2=self.fetch_easy('correlation', mera_shape=sh, sub_key_list=[direct, 'val'])
@@ -605,8 +606,12 @@ class ResultDB(OrderedDict):
             if rec is None: 
                 return None
             
-            if self.get('algorithm') == 'mps': 
+            if algorithm == 'mps': 
                 rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
+            elif algorithm == 'idmrg' : 
+                #rec = map(lambda x: (x[1]-x[0], rec[x]), rec.iteritems()) 
+                rec = map(lambda k, v: (k[1]-k[0], v), rec.iteritems()) 
+                
             
             x,y=zip(*rec[0:-1:period])
         
@@ -996,6 +1001,7 @@ class ResultDB(OrderedDict):
     
     def plot_entanglement_vs_chi(self, sh_min=None, sh_max=None, filter_func=None,  **kwargs): 
         sh_list = self.get_shape_list(sh_min=sh_min, sh_max=sh_max)
+        #data = [(np.nan, np.nan)]
         data = []
         not_found = []
         for sh in sh_list: 
@@ -1464,6 +1470,9 @@ class ResultDB(OrderedDict):
         os.system(cmd)
         print 'db is backuped: %s'%cmd
 
+    def show_fig(self): 
+        plt.show()
+
 class ResultDB_mera(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
         kwargs.update(algorithm='mera')
@@ -1598,6 +1607,54 @@ class ResultDB_idmrg(ResultDB):
             
         return res
 
+    def plot_entanglement_normalized_vs_chi(self, sh_min=None, sh_max=None, filter_func=None,  **kwargs): 
+        sh_list = self.get_shape_list(sh_min=sh_min, sh_max=sh_max)
+        """
+            only for test use 
+        """
+        #data = [(np.nan, np.nan)]
+        data = []
+        not_found = []
+        for sh in sh_list: 
+            ee = self.fetch_easy('entanglement_normalized', sh)
+            if ee is None: 
+                not_found.append(sh)
+                continue
+            data.append((sh[1], ee))
+        if filter_func is not None: 
+            data = filter(filter_func, data)
+        if not_found: 
+            print 'rec not found for %s'% not_found
+        x, y = zip(*data)
+        
+        label=kwargs.get('label', '')
+        x = np.log(x)
+        try: 
+            k, b= np.polyfit(x,y, deg=1)
+            #print k, b 
+            c=12*(1./k - 1)**(-2)
+            label  += ' k=%1.2f c=%1.2f'% (k, c)
+            kwargs['label'] = label 
+        except Exception as err: 
+            print err
+       
+        kwargs['return_ax'] = 1
+        marker = kwargs.get('marker', '.')
+        kwargs.update(marker=marker, xlabel='$\\ln(\\chi)$', ylabel='$EE$')
+        fig, ax=self._plot(x, y,  **kwargs)
+        ax.plot(x, k*x+b,)
+
+
+        #ax.set_xscale( 'log')
+        #ax.set_xlim(x[0], x[-1])
+        if kwargs.get('return_ax'): 
+            return fig, ax
+
+class ResultDB_idmrg_mcc(ResultDB): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs['version'] = 1.0
+        kwargs.update(algorithm='idmrg-mcc')
+        ResultDB.__init__(self, parpath,  **kwargs)
 
 class TestResultDB(unittest.TestCase): 
     def setUp(self):

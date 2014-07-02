@@ -27,6 +27,7 @@ import merapy.measure_and_analysis.all as all_mera
 import vmps.measure_and_analysis.all as all_mps
 try: 
     import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
+    import vmps.measure_and_analysis.measurement_idmrg_mcc as all_idmrg_mcc
 except ImportError as err: 
     print err 
 
@@ -164,7 +165,25 @@ class Measurement(object):
     #
     #
 
-def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_tolerant=1, **kwargs):
+def measure_decorator(result_db_class=None): 
+    """
+        status: 
+            incomplete
+        complete this in future 
+    """
+    raise NotImplemented
+    def inner(func):
+        def wrapper(*args, **kwargs):
+           
+            res = func(*args, **kwargs)
+            
+
+            return retval
+        return wrapper
+    return inner
+
+def measure_S(S, parpath, which=None, exclude_which=None, force=0, 
+        fault_tolerant=1, **kwargs):
         #db_version = kwargs.get('db_version')
         #dbname = None if db_version is None else ResultDB.DBNAME + '.new'
     use_local_storage =  kwargs.get('use_local_storage', False)
@@ -172,10 +191,10 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
     
     if 1: 
         #if isinstance(S, MPS): 
-        #if S.__class__.__name__ == 'MPS':                  
-        #    algorithm = 'mps'
+        if S.__class__.__name__ == 'MPS':                  
+            algorithm = 'mps'
         #elif isinstance(S, np.ndarray): 
-        if isinstance(S, dict): 
+        elif isinstance(S, dict): 
             if S.has_key('mps'): 
                 algorithm = 'mps'
             elif S.has_key('A'): 
@@ -230,7 +249,10 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
             
         elif algorithm == 'idmrg': 
             field = ['correlation', 'magnetization']
-            all_func = all_idmrg
+            if S.has_key('lam_prev_inv'): 
+                all_func = all_idmrg_mcc
+            else: 
+                all_func = all_idmrg
             A = S['A']
             db_version = 1.0
             N, D = 0, A.shape[0]
@@ -276,11 +298,6 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0, fault_toleran
             msg ='%20s'%('found in db')
         else: 
             try:
-                if 0: 
-                    if algorithm == 'mera':  
-                        res = ff(S=S, **param[w])
-                    else: 
-                        res = ff(mps, **param[w])
                         
                 res = ff(S, **param[w])
                    
@@ -383,8 +400,9 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
                 path = '/'.join([dir, fn])
                 try: 
                     inn = open(path, 'rb')
-                    temp=pickle.load(inn)
-                    S= temp['mps']
+                    #temp=pickle.load(inn)
+                    #S= temp['mps']
+                    S=pickle.load(inn)
                 except IOError as err: 
                     path_not_found.append(path)
                     continue
