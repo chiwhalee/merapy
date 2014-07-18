@@ -131,6 +131,15 @@ class TensorBase(object):
         res= self.copy()
         res.data = self.data + other.data 
         return res
+    
+    def __radd__(self, other):
+        res= self.copy()
+        if isinstance(other, float): 
+            res.data = self.data + other
+        else: 
+            res.data = self.data + other.data 
+        return res
+
 
     def __sub__(self, other):
         res= self.copy()
@@ -138,8 +147,12 @@ class TensorBase(object):
         return res
 
     def __rmul__(self, scalar):
-        self.data *= scalar
-        return self
+        #self.data *= scalar  # this is wrong! 
+        #return self
+        res= self.copy()
+        res.data *= scalar
+        return res 
+    
     
     def __imul__(self, scalar):
         self.data *= scalar
@@ -961,6 +974,34 @@ about __new__:
     T.__new__(S, ...) -> a new object with type S, a subtype of T
 """
 
+def generalized_matrix_multiply(A, B, mul, A_nzb=None, B_nzb=None): 
+    """
+    """
+    M = A.shape[0] 
+    K = A.shape[1]
+    N = B.shape[1]
+    res = np.ndarray((M, N), dtype=np.object)
+    if A_nzb is None: 
+        for i in xrange(M): 
+            for j in xrange(N): 
+                t = 0.0
+                for k in xrange(K): 
+                    a = A[i, k]; b = B[k, j]
+                    if isinstance(a, float) or isinstance(b, float): 
+                        pass
+                    else: 
+                        #t  += updateCleft_new(self.Cl[0, j], A1.conj(), mpo4[1][j, i], A1)
+                        t += mul(a, b) 
+                res[i, j] = t 
+    else: 
+        raise NotImplemented('below is still not satisfactory')
+        res[:, :] = 0.0
+        assert B_nzb is not None 
+        for i, k1 in A_nzb: 
+            for k2, j in B_nzb: 
+                if k1 == k2: 
+                    res[i, j] += mul(A[i, k1],  B[k2, j]) 
+    return res 
 
 def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
     """
@@ -1066,10 +1107,20 @@ def contract_tensors_new(X, Y, indX, indY):
         a wrapper and better interface for contract_tensors;
         this will be the standard one in future
     """
-    return contract_tensors(X, X.ndim, indX, Y, Y.ndim, indY)
+    if not hasattr(X, 'QSp'): 
+        return contract_tensors(X, X.ndim, indX, Y, Y.ndim, indY)
+    else:
+        # transform of function interface 
+        n = X.rank 
+        m = Y.rank 
+        V1 = np.arange(n, dtype=int)
+        V2 = np.arange(n, n + m, dtype=int)
+        a = - np.arange(1, 1 + len(indX))
+        V1[indX] = a
+        V2[indY] = a
+        return X.contract(Y, V1, V2)[0]
 
 class nTensor(np.ndarray, TensorBase):
-    
     def __new__(cls, shape, dtype=float, buffer=None, offset=0,
           strides=None, order=None, info=None):
         # Create the ndarray instance of our type, given the usual
