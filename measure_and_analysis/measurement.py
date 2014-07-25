@@ -12,6 +12,7 @@ from collections import OrderedDict
 import warnings
 
 from merapy.hamiltonian import System
+from merapy.utilities import load 
 #from mera_wigner_crystal import ham_wigner_crystal
 
 #from vmps.mps import MPS
@@ -46,124 +47,7 @@ class Measurement(object):
         self.parpath = os.path.dirname(path)  + '/'
         self.rdb = ResultDB(self.parpath)
 
-### 
 
-    #def measure_S_bac(S, parpath, which=None, exclude_which=None, force=0, fault_tolerant=1, **kwargs):
-    #    #db_version = kwargs.get('db_version')
-    #    #dbname = None if db_version is None else ResultDB.DBNAME + '.new'
-    #    rdb = ResultDB(parpath, dbname=None)
-    #    field = list(FIELD_NAME_LIST)
-    #    
-    #    if isinstance(S, MPS): 
-    #        algorithm = 'mps'
-    #        all_func = all_mps
-    #    else: 
-    #        algorithm = 'mera'
-    #        all_func = all_mera
-    #        all_func.scaling_dim = calc_scaling_dim_2site 
-    #        
-    #    if algorithm == 'mera':  
-    #        if S.model == 'wigner_crystal': 
-    #            db_version = 1.0 
-    #            #rdb['version'] = 1.0
-    #        else: 
-    #            db_version = None
-    #       
-    #        if S.symmetry == 'U1': 
-    #            field.remove('entanglement_brute_force_9')
-    #            field.remove('entanglement_brute_force_9_aver')
-    #    elif algorithm == 'mps': 
-    #        db_version = 1.0
-    #        #field = ['correlation']
-    #    
-    #    which = which if which is not None else [i for i in field]
-    #    
-    #    
-    #    func = {k: all_func.__getattribute__(k) for k in which}
-    #    
-    #    if exclude_which is not None and 0: 
-    #        for e in exclude_which: 
-    #            which.remove(e)
-    #    if exclude_which is not None: which = [i for i  in which if i not in exclude_which]
-    #    
-    #    
-    #    model = S.model
-    #    #direction = 'xx' if model == 'Ising' else 'pm' 
-    #    corr_param = dict(direction=None, force_update=False, distance_max=10**4)
-    #        
-    #    param = {f: {} for f in which}
-    #    param.update(correlation=corr_param)
-    #    func_name_map = {
-    #            'calc_scaling_dim_2site': 'scaling_dim', 
-    #            }
-    #    
-    #    keys = S.key_property()
-    #    dim,  layer = keys['trunc_dim'], keys['num_of_layer']
-    #    iter = S.iter
-    #    
-    #    if db_version is None: 
-    #        k = (dim, layer, iter)
-    #        if not rdb.has_key(k): 
-    #            rdb[k] = OrderedDict()
-    #    else:
-    #        mera_shape = (dim, layer)
-    #   
-    #   
-    #   
-    #   
-    #    #print 'meassuring at %s: '%(k, )
-    #    fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(keys['qns']))
-    #    path = parpath + '/' + fn
-    #    print  'meassuring %s at %s %s'%(path, (dim, layer), iter)
-    #    failed_list = []
-    #    for w in which: 
-    #        f = func[w]
-    #        print '\t%s...   '%w,
-    #        
-    #        w = func_name_map.get(f.__name__, f.__name__)
-    #        if db_version is None: 
-    #            is_found = rdb[k].has_key(w)
-    #        else:
-    #            key_list = [w] + [mera_shape, iter]
-    #            is_found = rdb.has_entry(key_list)
-    #        if is_found and not force: 
-    #            msg ='%20s'%('found in db')
-    #        else: 
-    #            try:
-    #                res=f(S=S, **param[w])
-    #                #res=f(S=S, verbose=False)
-    #                msg='%20s'%('done')
-    #                if kwargs.get('show', False): pprint.pprint(res, indent=1, width=200)
-    #                #if w in ['entanglement_entropy', 'entanglement_spectrum', 'correlation_extra']: 
-    #                if db_version is None: 
-    #                    rdb.put(field_name=w, key=k, res=res, sub_key_list=None)
-    #                else: 
-    #                    rdb.insert(field_name=w, sh=mera_shape, iter=iter, val=res)
-    #                    
-    #            except Exception as err:
-    #                failed_list.append((w, dim, layer, iter, err))
-    #                #print 'eee', err
-    #                msg = '%20s'%('FAILED skip')
-    #                if not fault_tolerant: raise err
-    #        print msg
-    #    
-    #    if 1:
-    #        #db['iter'] = S.iter
-    #        print '\tenergy...     done'
-    #        if db_version is None: 
-    #            rdb[k].update({'energy': S.energy})
-    #        elif db_version == 1.0:
-    #            if not rdb.has_key('energy'): rdb.add_key_list(['energy', mera_shape])
-    #            #db['energy']
-    #            #db['energy'] = S.energy_record
-    #            #rdb.insert(field_name='energy', sh=mera_shape, iter=iter, val=S.energy)
-    #            rdb['energy'][mera_shape] = S.energy_record
-    #        
-    #    rdb.commit(info=1)
-    #    if len(failed_list)>0: 
-    #        print 'failed_list: %s'%failed_list
-    #
-    #
 
 def measure_decorator(result_db_class=None): 
     """
@@ -188,7 +72,7 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
         #dbname = None if db_version is None else ResultDB.DBNAME + '.new'
     use_local_storage =  kwargs.get('use_local_storage', False)
     rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
-    
+    is_converged = True
     if 1: 
         #if isinstance(S, MPS): 
         if S.__class__.__name__ == 'MPS':                  
@@ -248,7 +132,16 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
             corr_param = {}
             
         elif algorithm == 'idmrg': 
-            field = ['correlation', 'magnetization']
+            field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
+                    'entanglement']
+            diff = S.get('energy_diff_2')
+            diff_tol = S.get('energy_diff_tol')
+            if diff is not None and diff_tol is not None : 
+                if not abs(diff) <= abs(diff_tol) and not force: 
+                    is_converged = False 
+                    #print 'state is not converged. not allowing measure. return None'
+                    #return 
+            
             if S.has_key('lam_prev_inv'): 
                 all_func = all_idmrg_mcc
             else: 
@@ -283,6 +176,10 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
     #------------------------  start measureing ----------------------------------------#
     
     print  'meassuring %s at %s %s'%(path, shape, iter)
+    if not is_converged: 
+        print '\tstate is not converged. not allowing measure. return None'
+        return 
+
     failed_list = []
     for w in which: 
         ff = func[w]
@@ -379,48 +276,32 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
                 #sh[1] -= 1  #layer->layer-1
                 sh = list(sh);  sh[1] -= 1
                 fn = System.backup_fn_gen(*sh)
-                path = dir + '/' + fn
-                try: 
-                    S = System.load(path)
-                except IOError as err: 
-                    path_not_found.append(path)
-                    if fault_tolerant: 
-                        continue
-                    else: 
-                        raise
-                except Exception as e: 
-                    path_not_found.append((path, e))
-                    if fault_tolerant: 
-                        continue 
-                    else: 
-                        raise
             elif algorithm == 'mps': 
                 N, D = sh
                 fn = "N=%d-D=%d.pickle"%(N, D)
-                path = '/'.join([dir, fn])
-                try: 
-                    inn = open(path, 'rb')
-                    #temp=pickle.load(inn)
-                    #S= temp['mps']
-                    S=pickle.load(inn)
-                except IOError as err: 
-                    path_not_found.append(path)
-                    continue
-
             elif algorithm == 'idmrg': 
                 N, D = sh
                 fn = "N=%d-D=%d.pickle"%(N, D)
-                path = '/'.join([dir, fn])
-                try: 
-                    inn = open(path, 'rb')
-                    S = pickle.load(inn)
-                    #S= temp['A']
-                except IOError as err: 
-                    path_not_found.append(path)
-                    continue
+            else: 
+                raise 
                 
-
-            #mm.measure_all(S, path, which, exclude_which=exclude_which, force=force, **kwargs)
+            path = '/'.join([dir, fn])
+            try: 
+                #S = System.load(path)
+                S= load(path)
+            except IOError as err: 
+                path_not_found.append(path)
+                if fault_tolerant: 
+                    continue
+                else: 
+                    raise
+            except Exception as e: 
+                path_not_found.append((path, e))
+                if fault_tolerant: 
+                    continue 
+                else: 
+                    raise
+            
             measure_S(S, dir, which, exclude_which=exclude_which, force=force, 
                     fault_tolerant=fault_tolerant, **kwargs)
             
@@ -520,10 +401,12 @@ if __name__ == '__main__':
             args['mera_shape_list'] = mera_shape_list
    
     if len(sys.argv)>1: 
+    #if 0: 
         from cmd_line_args import parser
         parser.add_argument('-w', '--which', nargs='*', default=None)
         #some issue with mps algs, temporarily disable choices
         #parser.add_argument('-w', '--which', nargs='*', choices=FIELD_NAME_LIST,  default=None)
+        
         argcomplete.autocomplete(parser)
         args = parser.parse_args()
         args = vars(args)
@@ -536,7 +419,6 @@ if __name__ == '__main__':
         measure_all( **args )
         
     else: 
-        
         if 0: #examine
             #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
             #unittest.TextTestRunner(verbosity=0).run(suite)    
