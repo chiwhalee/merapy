@@ -1127,7 +1127,7 @@ class Main(object):
             msg += ' exit chiled for %s'%(config.get('model_param'),)
             print msg
             main.stop_player()        
-        return None
+        return main 
     
     @classmethod #@staticmethod 
     def run_many(cls, config_group, num_cpu=None, nproc=None, func=None, parallel=True): 
@@ -1170,7 +1170,7 @@ class Main(object):
     @staticmethod
     def make_grid(*args): 
         grid = itertools.product(*args)
-        return grid
+        return list(grid)  #efficiency doesnt matter,  list is better
     grid = make_grid  # another name
     @staticmethod
     def grid_merger(*args): 
