@@ -134,7 +134,12 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
         elif algorithm == 'idmrg': 
             field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
                     'entanglement']
-            diff = S.get('energy_diff_2')
+            if S.get('which_minimize')=='psi_guess': 
+                diff = S.get('energy_diff_2')
+            elif S.get('which_minimize')=='lam_guess': 
+                diff = S.get('energy_diff')
+            else: 
+                diff = None
             diff_tol = S.get('energy_diff_tol')
             if diff is not None and diff_tol is not None : 
                 if not abs(diff) <= abs(diff_tol) and not force: 
