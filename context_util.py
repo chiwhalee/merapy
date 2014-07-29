@@ -16,6 +16,10 @@ from rpyc.utils.zerodeploy import DeployedServer
 import socket 
 
 
+LOCAL_IP = '222.195.73.70'
+LOCAL_USERNAME = 'zhli' 
+
+
 @contextmanager
 def working_directory(path):
     current_dir = os.getcwd()
@@ -103,8 +107,7 @@ def ssh_connect(hostname):
     """
     
     if hostname in ['QTG-WS1-ubuntu', 'local']: 
-        #ip, user = '210.45.117.30', 'zhli'
-        args= dict(host='210.45.117.30', user='zhli', connect_timeout=100)
+        args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=100)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
         args= dict(host='211.86.151.102', user='zhihuali', connect_timeout=3600*4)
@@ -139,7 +142,6 @@ def rpyc_conn_zerodeploy(hostname):
 def rpyc_conn_local_zerodeploy(): 
     try: 
         get_ip_address()
-        #ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
         ssh = ssh_connect('local')
         server = DeployedServer(ssh)
         conn = server.classic_connect()
@@ -176,7 +178,6 @@ def rpyc_conn(hostname):
         EOFError
     """
     try: 
-        #ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
         ssh = ssh_connect(hostname)
         conn = rpyc.classic.ssh_connect(ssh, 17013)
         yield conn
@@ -199,7 +200,6 @@ def rpyc_conn_local():
         #EOFError:
         get_ip_address()
         
-        #ssh = SshMachine('210.45.117.30', user='zhli', keyfile=None)  
         ssh = ssh_connect('local')
         conn = rpyc.classic.ssh_connect(ssh, 17013)
         yield conn

@@ -399,7 +399,6 @@ if 1:
 
 class Main(object):
     #used in distributed computing 
-    LOCALHOST = '210.45.117.30'   #local is the center !
     LOCALHOSTNAME = 'QTG-WS1-ubuntu'
     
     def __init__(self, system_class=None, mera_class=None, updaters=None, trunc_dim=None, tot_layer=None, unitary_init=None, q_iter=8, q_lay=3, info=0,
@@ -1191,7 +1190,9 @@ class Main(object):
                 fn = self.S.backup_fn_auto()
             remote_path = '/'.join([self.backup_parpath, fn])
             local_path = '/'.join([self.backup_parpath_local, fn]) 
-            local_path = 'zhli@210.45.117.30:' + local_path
+            temp = self.config['LOCAL_USERNAME']  + '@'  + self.config['LOCAL_IP']  + ":"
+            #local_path = 'zhli@210.45.117.30:' + local_path
+            local_path = temp + local_path
             cmd = 'scp %s %s'%(remote_path, local_path)
             msg = 'try to transfer pickle file back to local:  '
             msg += cmd  
@@ -1447,7 +1448,6 @@ class TestMain(unittest.TestCase):
         
         with make_temp_dir() as d1, make_temp_dir() as d2: 
             config['backup_parpath'] = d1
-            #config['backup_parpath_local'] = 'zhli@210.45.117.30:' +  d2
             config['backup_parpath_local'] =   d2
             
             bac = Main.LOCALHOSTNAME

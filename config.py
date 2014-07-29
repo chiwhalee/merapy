@@ -12,6 +12,7 @@ if 1:
     from merapy.finite_site import finite_site, finite_site_u1
     #import merapy.finite_site as finite_site_module
     
+    from merapy.context_util import LOCAL_IP, LOCAL_USERNAME 
   
 import merapy.updaters_binary as upbin
 
@@ -76,7 +77,9 @@ CFG_BASE = {
     'NUM_OF_THREADS':1, 
     #for dist comput
         'hostname': socket.gethostname(), 
-        'LOCALHOSTNAME':'QTG-WS1-ubuntu',  
+        'LOCALHOSTNAME': 'QTG-WS1-ubuntu',  
+        'LOCAL_USERNAME': LOCAL_USERNAME, 
+        'LOCAL_IP': LOCAL_IP, 
         'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
         'BACKUP_BASE_DIR_LOCAL':BACKUP_BASE_DIR_LOCAL,       
 
