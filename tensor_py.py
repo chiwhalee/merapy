@@ -3,27 +3,12 @@
 
 """  
     tensor.f90
-    Improvements:
+    todo: Improvements:
         1. 区分 leg direction
         2. 统一用ndarray 存储
         3. add label for legs
 
     Questions: q:
-        q868: fortran program seems incorrect
-        q763: deallocate, nullify difference?
-        1-a. rank/2  what is rank is odd?
-        2 - a. is nTensor just that normal?
-        3 - a. tBuffer 暂时不管？
-        4.allocated, deallocate 有必要吗
-        5: -a
-            在SUBROUTINE DGEMM ( TRANSA, TRANSB, M, N, K, ALPHA, A, LDA,
-                           B, LDB, BETA, C, LDC )
-            中， A， B， C都是 2D矩阵，而在下面contract中， matrix_multiply(nT1.data, nT2.data, T3.data, 1.0, 0.0)
-            矩阵维数不同， fortran 允许这么做？
-            在unit_nTensor中同样如此
-        6.-a trace means what trace?
-        7. find_leg 具体是什么？
-        8.-a  q144 random， how to deal with?
         9. 所有leg quantum number都相同的话， 可以作为iTensor的标签，而不必要跟leg绑定，
         10. IMPORTANT  iTensor 稀疏存储在 numpy有现成的没有，或者部分用numpy实现，而非
             at least  data 可以用 ndarray存储
@@ -34,12 +19,11 @@
 
     2012-07-13 
     it turns out type nTensor may be completely replaced by class np.ndarray :
-
-    tensor product  --> np.multiply.outer
-    tensor contract  --> np.tensordot
-    exchange index  --> np.swqpaxes  only pairwise
-    get_position  --> ? seems no direct method, but simply use np.arange(totDim,Dims), just yeilds what I need
-    get_position_rev --> np.unravel_index(linear_ind, shape)
+        tensor product  --> np.multiply.outer
+        tensor contract  --> np.tensordot
+        exchange index  --> np.swqpaxes  only pairwise
+        get_position  --> ? seems no direct method, but simply use np.arange(totDim,Dims), just yeilds what I need
+        get_position_rev --> np.unravel_index(linear_ind, shape)
 
 """
 from __future__ import division
@@ -102,6 +86,13 @@ class tBuffer(object):
 
 @decorate_methods(decorator=tensor_player, meth_names=None)
 class iTensor(TensorBase):
+    """
+        todo: 
+            1. 考虑：无论是block index 还是 data index都应该统一改成 C-order 
+            2. 考虑：qsp应该弄成 immutable type,  成为一种 const,  避免copy，提高效率
+            3. consider:  use qn itsef as identification of block directly,  rather than id of qn 
+    
+    """
     num_of_instance = 0
     #T_BUFFER=[tBuffer(size=64, dtype=TensorBase.dtype) for  i in xrange(3)]
     T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
@@ -170,7 +161,7 @@ class iTensor(TensorBase):
         self.type_name = ""
         self.index_order = order
         
-        if rank == 0: 
+        if rank == 0:   #Dims 指的是对应的**dense** tensor 的维数
             self.Dims = np.array((1, ), np.int) 
         else: 
             self.Dims= [QSp[i].totDim for  i in xrange(rank)]
@@ -244,12 +235,12 @@ class iTensor(TensorBase):
         #self.idx=np.array([int(self.idx_dim)]*self.idx_dim, int)   #-1                
         self.idx=np.ndarray((self.idx_dim, ), int)   #-1                
         self.idx[: ] = self.idx_dim
-        self.Block_idx=np.ndarray((3, self.idx_dim),dtype=int)
+        self.Block_idx=np.ndarray((3, self.idx_dim),dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
         
         #iQN[i]用作leg i 上的量子数 计数
         iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
         # 实际使用的addr_inx的长度为 self.nidx
-        self.Addr_idx=np.ndarray((rank_1, self.idx_dim), dtype=int)        
+        self.Addr_idx=np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')        
             
         nidx=0
         totDim=0
@@ -320,17 +311,56 @@ class iTensor(TensorBase):
         self.nidx = nidx
         self.totDim = totDim
     
+    def __getitem__(self, qn_id_tuple): 
+        """
+            status:  not fully tested 
+            
+        """
+        pq = 0     
+        assert len(qn_id_tuple)==self.rank 
+        for i in xrange(self.rank-1, 0 , -1):
+            pq = (pq+qn_id_tuple[i])*self.QSp[i-1].nQN
+        pq = pq+qn_id_tuple[0]
+        temp = self.idx[pq]
+        if temp >= self.idx_dim:
+            raise ValueError("error, qn_id_tuple %s not permited. valid values are \n%s "%(
+                qn_id_tuple, self.Addr_idx))
+        
+        sh = [self.QSp[i].Dims[qn_id_tuple[i]] for i in xrange(self.rank)]
+        self.get_block(temp)
+        return self.get_block(temp), sh 
+    
+    def get_block(self, i): 
+        p = self.Block_idx[0, i]
+        size = self.Block_idx[1, i]
+        data = self.data[p: p + size]
+        return data 
+    
+    def set_block(self, i, data): 
+        p = self.Block_idx[0, i]
+        size = self.Block_idx[1, i]
+        self.data[p: p + size] = data
+    
     @staticmethod 
-    def example(qsp=None, rank=4, symmetry='Z2'): 
+    def example(qsp=None, rank=4, symmetry='Z2', rand_seed=None): 
         """
             convenient method for testing 
         """
         if qsp is not None : 
             pass
-        else: 
-            cls = symmetry_to_Qsp('Z2')
-            qsp = cls.easy_init( [1, -1], [2, 2]).copy_many(rank)
+        else:
+            cls = symmetry_to_Qsp(symmetry)
+            if symmetry == 'Z2' : 
+                qsp = cls.easy_init( [1, -1], [2, 2]).copy_many(rank)
+            elif symmetry == 'U1' : 
+                qsp = cls.easy_init( [0, 1, -1], [2, 1, 1]).copy_many(rank)
+            elif symmetry == 'Travial' : 
+                qsp = cls.easy_init( [1], [5]).copy_many(rank)
+                
         res= iTensor(QSp=qsp)
+        if rand_seed is not None :
+            np.random.seed(rand_seed)
+        res.data[:] = np.random.random(res.data.size)-0.5
         return res
     
     def unregister(self):
@@ -354,10 +384,28 @@ class iTensor(TensorBase):
         if self.use_buf and (self.buf_ref[0]!=-1):
             #if iTensor != None:
             iTensor.T_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
-    
+
     @property
-    def shape(self): 
-        return self.QSp
+    def qsp_class(self): 
+        return self.QSp[0].__class__
+
+    if 1: #for compatable with numpy
+        @property  
+        def shape(self): 
+            return tuple(self.QSp)   #np.shape is a tuple so convert it 
+        
+        @property
+        def size(self): 
+            return self.totDim 
+        
+        @property
+        def ndim(self):  
+            return self.rank 
+        
+        #@property   #this is stupid. only temp use 
+        def ravel(self): 
+            return self.data 
+        
         
     @classmethod
     def buff_free(cls):
@@ -418,7 +466,7 @@ class iTensor(TensorBase):
         other.data[:totDim]=self.data[:totDim]
         return other
 
-    def __repr__(self, keys=None, fewer=0):
+    def __repr__(self, keys=None, fewer=0, show_frame=1):
         """
         """
         #keys=["rank", "nidx","idx_dim", "Dims","totDim","data"]
@@ -474,12 +522,19 @@ class iTensor(TensorBase):
                 temp = repr(self.__dict__[k])
 
             str1 += k+":\t" + temp +"\n" 
-
-        res=str0+ str1 +str2
+        
+        if show_frame: 
+            res=str0+ str1 +str2
+        else: 
+            #res= ''.join(['\n', str1])
+            res= str1 
         return res
     
     def show_data(self): 
-        print self.__repr__(keys=['data'], fewer=0)
+        print self.__repr__(keys=['data'], fewer=0, show_frame=0)
+    
+    def show_struct(self): 
+        print_vars(vars(), ['self.Addr_idx[:,:self.nidx].T', 'self.Block_idx[:,:self.nidx].T', ], sep_key_val='=\n')
         
     @staticmethod
     def unit_tensor(rank, QSp, totQN=None):
@@ -772,7 +827,7 @@ class iTensor(TensorBase):
         res= all(match)                            
         return res
 
-    def reshape(self, qsp_new): 
+    def reshape_bac(self, qsp_new): 
         """
             status: 
                 not completed
@@ -782,9 +837,11 @@ class iTensor(TensorBase):
             index match 应该是个（线性）方程组问题，不能局部地inspect
             howto: 
                 first reshape the qn second inner block 
+                最终是要得到一个映射，从self to other Addr_idx ，Block_idx, 之间的映射关系
+                    如果有merge/split的guidance, Addr_idx 的映射是容易确定的, 满足量子数的约束即可
+                
             
         """
-        raise NotImplemented('')
         qsp = self.QSp
         q = qsp[0]
         for i in qsp[1: ]:  
@@ -807,12 +864,12 @@ class iTensor(TensorBase):
         is_match = iTensor.is_match   
         for i in xrange(t2.nidx): 
             qn_id_tuple_2 = t2.Addr_idx[:, i]
-            qn_tuple_2 = [t2.QSp[q].QNs[q] for q in qn_id_tuple_2]
+            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
             dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
             #print  qn_tuple_2 
             for j in xrange(t1.nidx): 
                 qn_id_tuple_1 = t1.Addr_idx[:, j]
-                qn_tuple_1 = [t1.QSp[q].QNs[q] for q in qn_id_tuple_1]
+                qn_tuple_1 = [t1.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_1)]
                 dim_tuple_1 = [t1.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_1) ]
                 #if i == 1 and is_match(qn_tuple_2, qn_tuple_1):  
                 #if i == 1 and j == 1 : 
@@ -829,6 +886,23 @@ class iTensor(TensorBase):
         print  match_table     
         return res    
     
+    def reshape(self, *qsp_new): 
+        if not hasattr(qsp_new[0], 'QNs'): 
+            qsp_new = qsp_new[0]
+        
+        #check matchable 
+        qsp = self.QSp
+        q = qsp[0]
+        for i in qsp[1: ]:  
+            q = q.add(i)
+        p = qsp_new[0]
+        for i in qsp_new[1: ]:  
+            p = p.add(i)
+        assert q == p  , (q, p)
+        
+        qn_cls = qsp[0].QnClass
+        return iTensor(QSp=qsp_new, totQN=self.totQN, buffer=self.data)
+ 
     def index_merge_1(self, ind):
         """
             in numpy reshape serves as merge and split of indices of a dense array, I take use of that.
@@ -1042,8 +1116,244 @@ class iTensor(TensorBase):
         #print '--mmerge-2 ---'
         return  res
         
-    def index_split(self, ind, new_qsp_list):
-        pass
+    def split_qsp(self, *args):
+        legs_to_split = args[0::2]
+        qq = args[1::2]  # a list of qsp list 
+        qsp = []
+        leg_map = {}
+        qsp_class= self.qsp_class
+        qn_class= qsp_class.QnClass 
+        ii = 0
+        l_prev = -1 
+        for i, l in enumerate(legs_to_split): 
+            if l-l_prev>1: 
+                qsp.extend(self.QSp[l_prev+1:l])
+                ii +=  l-l_prev-1
+            temp = qq[i]
+            qsp.extend(temp)
+            assert self.QSp[l] == qsp_class.prod_many(temp) 
+            length = len(temp)
+            #print 'iii', ii, length
+            leg_map[l] = xrange(ii, ii + length)
+            ii +=  length
+            l_prev = l 
+        qsp.extend(self.QSp[legs_to_split[-1]+1: ])
+        #print_vars(vars(), ['leg_map', 'len(qsp)']); raise 
+        
+        res = iTensor(QSp=qsp)
+        t2 = self
+        t3 = res 
+        for i in range(t2.nidx): 
+            qn_id_tuple_2 = t2.Addr_idx[:t2.rank, i]
+            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
+            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
+            #print 'ddddd 2', dim_tuple_2 
+            data_block_2 = t2.get_block(i)
+            #print '\n', qn_id_tuple_2,': '
+            iii = 0 
+            for j in range(t3.nidx):
+                qn_id_tuple_3 = t3.Addr_idx[:t3.rank, j]
+                qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
+                
+                match = True 
+                for l in legs_to_split: 
+                    if qn_tuple_2[l] != qn_class.sum([qn_tuple_3[_i] for _i in leg_map[l]]): 
+                        match = False 
+                        break 
+                if match:         
+                    dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
+                    #print 'dddd 3', dim_tuple_3 
+                    size = t3.Block_idx[1, j]
+                    #print '\t', qn_id_tuple_3, size, iii 
+                    temp = data_block_2[iii:iii+size]
+                    iii += size  
+                    t3.set_block(j, temp)
+        return  t3         
+        
+    def split_2to3(self, which, qsp_list): 
+        """
+            I dont know how to split in general, 
+            so I first write a simple one. this can be used in mps 
+            which: 
+                which leg to split,  take value in [0, 1]
+        """
+        assert self.rank == 2
+        if which == 0: 
+            qsp = qsp_list+[self.QSp[1]]
+            guide = (0, (0, 1))
+        elif which == 1: 
+            qsp = [self.QSp[0]] + qsp_list
+            guide = (1, (1, 2))
+        assert self.qsp_class.prod_many(qsp_list)==self.QSp[which]
+        t2 = self 
+        t3 = iTensor(QSp=qsp)
+        #print_vars(vars(), ['t2.Addr_idx[:,:t2.nidx].T', 't2.Block_idx[:,:t2.nidx].T', ], sep_key_val='=\n')
+        #print_vars(vars(), ['t3.Addr_idx[:,:t3.nidx].T', 't3.Block_idx[:,:t3.nidx].T', ], sep_key_val='=\n')
+        for i in range(t2.nidx): 
+            qn_id_tuple_2 = t2.Addr_idx[:, i]
+            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
+            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
+            data_block_2 = t2.get_block(i)
+            data_block_2 = data_block_2.reshape(dim_tuple_2, order='F')
+            
+            xx = 0; yy = 0
+            for j in range(t3.nidx):
+                qn_id_tuple_3 = t3.Addr_idx[:, j]
+                qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
+                dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
+                
+                a = guide[0]
+                b, c = guide[1]
+                
+                if qn_tuple_2[a] == qn_tuple_3[b] + qn_tuple_3[c]:   #they match 
+                    if a == 0:  
+                        d0, d1, d2 = dim_tuple_3 
+                        size = t3.Block_idx[1, j]
+                        data = data_block_2[xx:xx+d0*d1, yy:d2].ravel(order='F')
+                        xx += d0*d1  
+                        t3.set_block(j, data)
+                    elif a == 1:  
+                        d0, d1, d2 = dim_tuple_3 
+                        size = t3.Block_idx[1, j]
+                        data = data_block_2[xx:d0, yy:yy+d1*d2].ravel(order='F')
+                        yy += d1*d2  
+                        t3.set_block(j, data)
+                    else: 
+                        raise 
+        return  t3         
+
+    def merge_3to2(self, which): 
+        """
+        
+        """
+        args= [which]
+        
+        qsp_class = self.qsp_class
+        qn_class = qsp_class.QnClass 
+       
+        qsp = [] 
+        leg_map = {}
+        ii = 0  #ii points to legs of res 
+        l_prev =  -1 
+        leg_groups_to_merge = args
+        #for ll in args:
+        for ll in [which]: 
+            l = ll[0]
+            #if l-1>l_prev: 
+            #    qsp.extend(self.QSp[l_prev: l-1])
+            #    ii +=  l-1-l_prev 
+            if l-l_prev>1: 
+                qsp.extend(self.QSp[l_prev+1: l])
+                ii +=  l-l_prev-1 
+            l_prev = ll[-1]
+            leg_map[ii] = xrange(l, l_prev + 1)
+            temp = [self.QSp[l].copy() for l in leg_map[ii]]
+            qsp.append(qsp_class.prod_many(temp))
+            ii += 1 
+        qsp.extend([self.QSp[i].copy() for i in range(args[-1][-1]+1, self.rank)] )
+         
+        #print_vars(vars(), ['leg_map', 'len(qsp)', 'qsp']); raise 
+        
+        res = iTensor(QSp=qsp)
+        t2 = res 
+        t3 = self
+        for i in range(t2.nidx): 
+            qn_id_tuple_2 = t2.Addr_idx[:, i]
+            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
+            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
+            
+            data_block_2 = t2.get_block(i)
+            data_block_2 = data_block_2.reshape(dim_tuple_2, order='F')
+            #print 'ddd', dim_tuple_2
+            print_vars(vars(), ['qn_tuple_2', 'dim_tuple_2'], sep='\t')
+            xx = 0; yy = 0
+            for j in range(t3.nidx):
+                qn_id_tuple_3 = t3.Addr_idx[:, j]
+                qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
+                dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
+                
+                match = True 
+                for l, v in leg_map.iteritems(): 
+                    if qn_tuple_2[l] != qn_class.sum([qn_tuple_3[_i] for _i in leg_map[l]]): 
+                        match = False
+                        break 
+                if match:    
+                    db3 = t3.get_block(j)
+                    if which == (0, 1): 
+                        d0 = dim_tuple_3[0]*dim_tuple_3[1]; d1 = dim_tuple_3[2]
+                    else: 
+                        d0 = dim_tuple_3[0]; d1 = dim_tuple_3[1]*dim_tuple_3[2]; 
+                        
+                    db3 = db3.reshape((d0, d1), order='F')
+                    print_vars(vars(), ['qn_tuple_3', 'dim_tuple_3', 'xx', 'yy', 'd0', 'd1'], sep='\t')
+                    data_block_2[xx:xx+d0, yy:yy+d1] = db3 
+                    if which == (0, 1): 
+                        xx += d0 
+                    else: 
+                        yy += d1   
+        return  t2         
+    
+    def merge_qsp(self, *args): 
+        """
+            args should be list tuples of coningueous legs
+        """
+        
+        qsp_class = self.qsp_class
+        qn_class = qsp_class.QnClass 
+       
+        qsp = [] 
+        leg_map = {}
+        ii = 0  #ii points to legs of res 
+        l_prev =  -1 
+        leg_groups_to_merge = args
+        for ll in args:
+            l = ll[0]
+            #if l-1>l_prev: 
+            #    qsp.extend(self.QSp[l_prev: l-1])
+            #    ii +=  l-1-l_prev 
+            if l-l_prev>1: 
+                qsp.extend(self.QSp[l_prev+1: l])
+                ii +=  l-l_prev-1 
+            l_prev = ll[-1]
+            leg_map[ii] = xrange(l, l_prev + 1)
+            temp = [self.QSp[l].copy() for l in leg_map[ii]]
+            qsp.append(qsp_class.prod_many(temp))
+            ii += 1 
+        qsp.extend([self.QSp[i].copy() for i in range(args[-1][-1]+1, self.rank)] )
+         
+        #print_vars(vars(), ['leg_map', 'len(qsp)', 'qsp']); raise 
+        
+        res = iTensor(QSp=qsp)
+        t2 = res 
+        t3 = self
+        for i in range(t2.nidx): 
+            qn_id_tuple_2 = t2.Addr_idx[:, i]
+            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
+            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
+            #data_block_2 = t2.get_block(i)
+            print '\n', qn_id_tuple_2,': '
+            iii = 0
+            p0 = t2.Block_idx[0, i]
+            for j in range(t3.nidx):
+                qn_id_tuple_3 = t3.Addr_idx[:, j]
+                qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
+                dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
+                
+                match = True 
+                for l, v in leg_map.iteritems(): 
+                    if qn_tuple_2[l] != qn_class.sum([qn_tuple_3[_i] for _i in leg_map[l]]): 
+                        match = False
+                        break 
+                    
+                if match:         
+                    #size = t3.Block_idx[1, j]
+                    data_block = t3.get_block(j)
+                    size = data_block.size 
+                    print '\t', qn_id_tuple_3, size , iii 
+                    iii += size  
+                    t2.data[p0: p0 + size] = data_block 
+                    p0 += size  
+        return  t2         
     
     def permutation(self, P, buffer=None, use_buf=False):
         """
@@ -1102,7 +1412,9 @@ class iTensor(TensorBase):
             #Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation(temp,rank,Dims,P)
 
         return Tp
-
+    
+    transpose = permutation   # compatible with numpy 
+    
     def contract_core(self, T2, div, preserve_qsp=False, data=None, use_buf=False):
         """
         see iTensor_Contraction2 in f90
@@ -1349,8 +1661,8 @@ class iTensor(TensorBase):
                 #msg ="""error, dim of index to be contracted not equal: {pos}""".format(locals())
                 msg ="""error, dim of index to be contracted not equal: 
                     {0.type_name}, {1.type_name}
-                    {V1}, {V2}, {V_1n2}
-                    {0.Dims}, {1.Dims}
+                    ind_label_1={V1}, ind_label_2={V2}, ind_label_1n2={V_1n2}
+                    dims_1={0.Dims}, dims_2={1.Dims}
                     
                     """.format(self, T2, V1=V1, V2=V2, V_1n2=V_1n2)
                 raise Exception(msg)
@@ -1403,12 +1715,13 @@ class iTensor(TensorBase):
                 #print "T2.data: ", T2.data[:4].round(5), "...", T2.data[-4:].round(5)
                 print self.data.round(3)
                 print T2.data.round(3)
-        if 0:
+            
             #to impletement in the future
-            self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
-            T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
+            #self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
+            #T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
         
-        V_1n2, Vp1,Vp2,V3=self.prepare_leg(T2,V1,V2)        
+        V_1n2, Vp1, Vp2, V3 = self.prepare_leg(T2, V1, V2)        
+        
         T1=self
         
         nT1=T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排
@@ -1450,6 +1763,15 @@ class iTensor(TensorBase):
         else:
             return T3, V3
 
+    def dot(self, other): 
+        """
+            mainly for compatible with numpy 
+            multipyly tow rank-2 tensors 
+        """
+        assert self.rank == 2 and other.rank == 2    
+        return self.contract_core(other, div=1)
+        
+    
     def trace(self):
         """
             status_1_uncheck
@@ -1556,6 +1878,19 @@ class iTensor(TensorBase):
         
         temp.reverse_qsp(inplace=False)
         return temp
+    
+    def conj(self): 
+        """
+            ATTENTION: this is very special use in mps algorithm
+            conj the third leg of the A tensor 
+            DO NOT use this in other circumstances!!
+        """
+        assert self.rank == 3  
+        A = self.copy()
+        A.QSp[2].reverse()
+        #A_conj.data = A.data.conj()
+        np.conj(A.data, out=A.data)
+        return A 
 
     def reverse_qsp(self, inplace=True):
         """
@@ -1779,18 +2114,16 @@ class iTensor(TensorBase):
 
     def direct_product(self, T2, order=None, use_buf=False):
         """
-        this function was originally defined under Tensor class, now is moved here
-        see Direct_Product in f90
-        parameters:
-            T1^{I1}_{J1}, T2^{I2}_{J2}
-        returns:
-            T3^{I1I2}_{J1J2}
-            i.e. index(QSp) of T3 is ordered J1, J2, I1, I2 in sequel
+            this function was originally defined under Tensor class, now is moved here
+            see Direct_Product in f90
+            parameters:
+                T1^{I1}_{J1}, T2^{I2}_{J2}
+            returns:
+                T3^{I1I2}_{J1J2}
+                i.e. index(QSp) of T3 is ordered J1, J2, I1, I2 in sequel
 
 
         """
-        
-
         T1=self
         #attention: here the division may be incorrect
         #q: why /2?
@@ -1847,18 +2180,17 @@ class iTensor(TensorBase):
 
         return T3
 
-
     def tensor_prod(self, T2, order="F"):
         return self.direct_product(T2, order)
 
     def matrix_view(self, n=None, order='C', round=None):
         """
-        map rank (n, rank-n) tensor to a 2-d mat. 
-        this method is used for debug or getting a intuitive view of the tensor
+            map rank (n, rank-n) tensor to a 2-d mat. 
+            this method is used for debug or getting a intuitive view of the tensor
 
-        Returns: 2-d array res
+            Returns: 2-d array res
         """
-        if n == None:
+        if n is None:
             n = self.rank//2
         pos= 0
         rank = self.rank
@@ -1878,7 +2210,6 @@ class iTensor(TensorBase):
             for y in xrange(B):
                 pos1 = daaa[y]
                 p = x*A  + y
-                
                 #print 'p', p, x, y
                 idx = self.idx[p]
                 if idx < self.nidx:
@@ -1914,13 +2245,30 @@ class iTensor(TensorBase):
                         else:
                             iQN[i] = 0
                             i = i-1                
+                
                 #kkk= common_util.matrix_get_position_rev(p, ddd)
                 #da = np.prod([self.QSp[i].Dims[kkk[i]] for i in xrange(n)])
         if round is None:
             return res
         else:
             return res.round(round)  
-
+    
+    def matrix_view_rank2_z2(self):
+        """
+            a simple one,  only for test
+        """
+        shape = self.Dims 
+        res = np.zeros(shape)
+        
+        bsh00 = [self.QSp[i].Dims[0] for i in xrange(2)]
+        bsh11 = [self.QSp[i].Dims[1] for i in xrange(2)]
+        data = self.get_block(0)
+        res[: bsh00[0], : bsh00[1]] = data.reshape(bsh00, order='F') 
+        data = self.get_block(1)
+        res[bsh11[0]: , bsh11[1]:] = data.reshape(bsh11, order='F') 
+        #print_vars(vars(), ['res.shape', 'bsh00', 'bsh11', 'res'])
+        return res 
+    
     def is_adjoint_to(self, other, precision=None, out_more=True):
         data1 = self.data
         r = other.rank//2
@@ -1943,7 +2291,21 @@ class iTensor(TensorBase):
     def is_hermite(self, precision=None, out_more=True):
         res= self.is_adjoint_to(self, precision, out_more)
         return res
-
+    
+    def is_close_to(self, other, tol=1e-15): 
+        if other == 0:  #0, 1 for convenience 
+            res = np.allclose(self.data, 0, atol=tol)
+        elif other == 1: 
+            other = iTensor.unit_tensor(self.rank, self.QSp)
+            res= np.allclose(self.data, other.data, atol=tol)
+        else: 
+            res= np.allclose(self.data, other.data, atol=tol)
+        return res 
+            
+        
+            
+            
+    
     if 0:
     #not completely correct
         def is_adjoint_to_2(self, other, precision=None, out_more=True):
@@ -1999,6 +2361,35 @@ class iTensor(TensorBase):
 
     def act_on_qsp(self, qsp): 
         pass
+    
+    def invert_diagonal(self, use_pinv=False, pinv_tol=None): 
+        """
+            only for special use is idmrg 
+            status: not tested 
+        """
+        assert self.rank == 2, "only supprted rank-2 square tensor"  
+        for i in xrange(self.nidx): 
+            qn_id_tuple = self.Addr_idx[:, i]
+            p = self.Block_idx[0, i]
+            size = self.Block_idx[1, i]
+            data = self.data[p: p + size]
+            d = self.QSp[0].Dims[qn_id_tuple[0]]
+            data = data.reshape(d, d)
+            
+            if not use_pinv: 
+                np.fill_diagonal(data, 1./data.diagonal())
+            else: 
+                if pinv_tol is not None : 
+                    __pinv_tol = pinv_tol 
+                else: 
+                    __pinv_tol = float_info.epsilon * np.max(data.diagonal()) * d  
+                data = np.linalg.pinv(data, __pinv_tol)
+            self.data[p: p + size] = data.ravel(order='F')
+    
+    @staticmethod 
+    def from_diagonal(qn_list, data_list): 
+        pass 
+    
     
 class iTensor_new(TensorBase):
     def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
@@ -2126,7 +2517,18 @@ class iTensorFactory(object):
             for i in reverse:
                 qsp[i].reverse()
         return iTensor(rank, qsp, qn)
-
+    
+    @staticmethod
+    def random(qsp): 
+        """
+            create an iTensor whose data is randomized 
+        """
+        res= iTensor(QSp=qsp)
+        #issue:  maybe here need devide total size?
+        n = res.data.size
+        res.data[: ] = np.random.random(n) - 0.5 
+        return res 
+    
     @staticmethod
     def isometry():
         pass
@@ -2491,6 +2893,7 @@ class iTensorFactory(object):
             sigma_m.data[:] = [0.0, 0.0, 1.0, 0.0]
             i, z, x, y, p, m = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
             I, Z, X, Y, P, M = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
+            s0, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
             
             if 1:
                 #due to Fortran order,  modified to this
@@ -2548,13 +2951,13 @@ class iTensorFactory(object):
             spm = sigma_p.tensor_prod(sigma_m)
             smp = sigma_m.tensor_prod(sigma_p)
             
+            s0, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
+            #I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
+            
             I, Z = sigma_0, sigma_z 
         
-        res= vars()
-        temp = ['symmetry', 'rank', 'QSpZ2']
-        for i in temp: 
-            if res.has_key(i): 
-                res.pop(i)
+        temp = vars()
+        res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
         
         return res 
     
@@ -2630,7 +3033,18 @@ class iTensorFactory(object):
         """
         raise NotImplemented
 
-
+    @staticmethod
+    def travial_tensor(rank, symmetry): 
+        """
+            scalar 1 with dummy indices 
+        """
+        qsp_class= symmetry_to_QspClass(symmetry)
+        qsp = [qsp_class.null() for i in xrange(rank)]
+        res= iTensor(QSp=qsp)
+        res.data[0] = 1.0
+        return res 
+        
+        
 class test_iTensor(object):
     def __init__(self, symmetry, dim=None):
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
@@ -2657,7 +3071,6 @@ class test_iTensor(object):
         pickle.dump(self.u.QSp[0].QNs, out)
         out.close()
         exit()
-
 
     @classmethod
     def instance(cls, which="all"):
@@ -3146,9 +3559,22 @@ class test_iTensor(object):
 class Test_iTensor(unittest.TestCase): 
     def setUp(self): 
         pass
-    def test_temp(self): 
-        pass
     
+    def test_temp(self): 
+        q0 = QspZ2.easy_init([1, -1], [8, 8])
+        q1 = QspZ2.easy_init([1, -1], [2, 2])
+        t2 = iTensor(QSp=[q0, q1])
+        t2.data[: ] = np.arange(t2.size)
+        t2.show_data()
+        c2, _= t2.contract(t2, [0, 1], [0, 2])
+        t2_mat=t2.matrix_view(order='F')
+        t2_mat_simple=t2.matrix_view_rank2_z2()
+        
+        print_vars(vars(), ['c2.data', 'c2.matrix_view()',  't2_mat_simple.T.dot(t2_mat_simple)'])
+        #print_vars(vars(), ['t2.matrix_view(order="C")', 't2.matrix_view(order="F")'])
+        
+        #t2.matrix_view_rank2_z2( )
+ 
     def test_rank_zero(self): 
         print  'aaaaaaaaaaaaaaaaaaaa'
         #QSp=[QspU1.null()]
@@ -3169,6 +3595,9 @@ class Test_iTensor(unittest.TestCase):
 
         pass 
     
+    def test_matrix_view(self): 
+        pass 
+    
     def test_reshape(self): 
         t = iTensor.example()
         qsp = [t.QSp[0]*t.QSp[1], t.QSp[2], t.QSp[3]]
@@ -3177,9 +3606,234 @@ class Test_iTensor(unittest.TestCase):
         print  t.QSp[0]
         print  t.QSp[0].add(t.QSp[1])
         #print t.Addr_idx 
-        #print u.Addr_idx 
-        #print t.nidx, u.nidx 
+        
+        print u 
+    
+    def test_split_2to3(self): 
+        if 1:  
+            q0 = QspZ2.easy_init([1, -1], [8, 8])
+            q1 = QspZ2.easy_init([1, -1], [4, 2])
+            t2 = iTensor(QSp=[q0, q1])
+            t2.data[: ] = np.arange(t2.size)
+            t2.show_data()
+            c2, _= t2.contract(t2, [0, 1], [0, 2])
+            print_vars(vars(), ['c2.data', 'c2.matrix_view()',  't2_mat_simple.T.dot(t2_mat_simple)'])
+            
+            qa = QspZ2.easy_init([1, -1], [2, 2])
+            qb = QspZ2.easy_init([1, -1], [2, 2])
+            
+            #t3 = split_2to3(t2, 0, [qa, qb])
+            t3 = t2.split_2to3(0, [qa, qb])
+            c3, _ = t3.contract(t3, [0, 1, 2], [0, 1, 3])
+            c3.show_data()
+            print c2.data
+            print c3.data 
+            self.assertTrue(np.all(c2.data==c3.data))
+        if 1:  
+            q0 = QspZ2.easy_init([1, -1], [2, 5])
+            q1 = QspZ2.easy_init([1, -1], [8, 8])
+            t2 = iTensor(QSp=[q0, q1])
+            t2.data[: ] = np.arange(t2.size)
+            t2.show_data()
+            c2, _= t2.contract(t2, [0, 1], [2, 1])
+            print_vars(vars(), ['c2.data', 'c2.matrix_view()',  't2_mat_simple.T.dot(t2_mat_simple)'])
+            
+            qa = QspZ2.easy_init([1, -1], [2, 2])
+            qb = QspZ2.easy_init([1, -1], [2, 2])
+            
+            t3 = t2.split_2to3(1, [qa, qb])
+            c3, _ = t3.contract(t3, [5, 1, 2], [3, 1, 2])
+            c2.show_data()
+            c3.show_data()
+            self.assertTrue(np.all(c2.data==c3.data))
+    
+    def test_merge_3to2(self): 
+        if 1:  
+            q0 = QspZ2.easy_init([1, -1], [2, 4])
+            q1 = QspZ2.easy_init([1, -1], [2, 3])
+            q2 = QspZ2.easy_init([1, -1], [3, 2])
+            
+            t3 = iTensor(QSp=[q0, q1, q2])
+            t3.data[: ] = np.arange(t3.size)
+            t2 = t3.merge_3to2((0, 1))
+            
+            c3, _ = t3.contract(t3, [0, 1, 2], [0, 1, 3])
+            c2, _= t2.contract(t2, [0, 1], [0, 2])
+            
+            print c2.data
+            print c3.data 
+            self.assertTrue(np.all(c2.data==c3.data))
+          
+        if 0:  
+            q0 = QspZ2.easy_init([1, -1], [2, 5])
+            q1 = QspZ2.easy_init([1, -1], [2, 2])
+            q2 = QspZ2.easy_init([1, -1], [2, 3])
+            t3 = iTensor(QSp=[q0, q1, q2])
+            t3.data[: ] = np.arange(t3.size)
+            c3, _ = t3.contract(t3, [5, 1, 2], [3, 1, 2])
+            
+            t2 = t3.merge_3to2((1, 2))
+            c2, _= t2.contract(t2, [0, 1], [2, 1])
+            c2.show_data()
+            c3.show_data()
+            self.assertTrue(np.all(c2.data==c3.data))
+        
+    def test_split_qsp(self): 
+        if 1: 
+            qa = QspZ2.easy_init([1, -1],  [1, 1])
+            qb = QspZ2.easy_init([1, -1],  [3, 3])
+            qc = QspZ2.easy_init([1, -1],  [2, 2])
+        else:  
+            qa = QspU1.easy_init([0, 1, -1], [2, 1, 1])
+            qb = QspU1.easy_init([ 1, -1], [3, 3])
+            qc = QspU1.easy_init([0, 1, -1], [2, 1, 1])
+        if 1: 
+            t = iTensor(QSp=[qa, qb*qc]) 
+            t.data[:] = np.arange(t.size)
+            tt=t.split_qsp(1, [qb, qc])
+            ttt=t.split_2to3(1, [qb, qc])
+            print t.data 
+            print tt.data 
+            print ttt.data 
+            self.assertTrue(np.all(tt.data==ttt.data))
+        if 1: 
+            t = iTensor(QSp=[qa*qb, qc]) 
+            t.data[:] = np.arange(t.size)
+            tt=t.split_qsp(0, [qa, qb])
+            ttt=t.split_2to3(0, [qa, qb])
+            print t.data 
+            print tt.data 
+            print ttt.data 
+            self.assertTrue(np.all(tt.data==ttt.data))
+        
+    def test_split_qsp_2(self): 
+        #qsp_class= QspZ2 
+        qsp_class= QspU1 
+        q = qsp_class.easy_init([1, -1],  [1, 1])
+        qsp = q.copy_many(6)
+        q0 = qsp_class.prod_many(qsp[: 3])    
+        q1 = qsp_class.prod_many(qsp[3: ])    
+        t = iTensor(QSp=[q0, q1])
+        t.data[: ] = np.arange(t.size)
+        tt = t.split_qsp(0, qsp[: 3], 1, qsp[3: ])
+        print tt.data.tolist()
+        old = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 10.0, 11.0, 12.0, 7.0, 8.0, 9.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0]
+        self.assertTrue(np.all(tt.data==old))
+    
+    def test_split_qsp_by_contract(self): 
+        if 1: 
+            #qa = QspZ2.easy_init([1, -1],  [1, 1])
+            #qb = QspZ2.easy_init([1, -1],  [3, 3])
+            #qc = QspZ2.easy_init([1, -1],  [2, 2])
 
+            #qa = QspZ2.easy_init([1, -1],  [1, 1])
+            #qb = QspZ2.easy_init([1, -1],  [3, 3])
+            #qc = QspZ2.easy_init([1],  [2])       
+            
+            qa = QspZ2.easy_init([1, -1],  [1, 2])
+            qb = QspZ2.easy_init([1, -1],  [3, 3])
+            qc = QspZ2.easy_init([1],  [2])       
+       
+        if 1: 
+            print ' === '*10
+            print ' === '*10
+            t = iTensor(QSp=[qa*qb, qc]) 
+            t.data[:] = np.arange(t.size)
+            
+            def split_qsp_test(self, *args):
+                legs_to_split = args[0::2]
+                qq = args[1::2]  # a list of qsp list 
+                qsp = []; leg_map = {}; qsp_class= self.qsp_class;    qn_class= qsp_class.QnClass 
+                ii = 0
+                l_prev = -1 
+                for i, l in enumerate(legs_to_split): 
+                    if l-l_prev>1: 
+                        qsp.extend(self.QSp[l_prev+1:l])
+                        ii +=  l-l_prev-1
+                    temp = qq[i]
+                    qsp.extend(temp)
+                    assert self.QSp[l] == qsp_class.prod_many(temp) 
+                    length = len(temp)
+                    #print 'iii', ii, length
+                    leg_map[l] = xrange(ii, ii + length)
+                    ii +=  length
+                    l_prev = l 
+                qsp.extend(self.QSp[legs_to_split[-1]+1: ])
+                res = iTensor(QSp=qsp)
+                t2 = self
+                t3 = res 
+                for i in range(t2.nidx): 
+                    qn_id_tuple_2 = t2.Addr_idx[:t2.rank, i]
+                    qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
+                    dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
+                    data_block_2 = t2.get_block(i)
+                    data_block_2 = data_block_2.reshape(dim_tuple_2, order='C').ravel('F')
+                    #print 'ddddd 2', dim_tuple_2 , data_block_2 
+                    #print '\n', qn_id_tuple_2,': '
+                    iii = 0 
+                    for j in range(t3.nidx):
+                        qn_id_tuple_3 = t3.Addr_idx[:t3.rank, j]
+                        qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
+                        
+                        match = True 
+                        for l in legs_to_split: 
+                            if qn_tuple_2[l] != qn_class.sum([qn_tuple_3[_i] for _i in leg_map[l]]): 
+                                match = False 
+                                break 
+                        if match:         
+                            dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
+                            size = t3.Block_idx[1, j]
+                            #print '\t', qn_id_tuple_3, size, iii 
+                            temp = data_block_2[iii:iii+size]
+                            #temp = temp.reshape(dim_tuple_3, order='C').ravel('F')
+                            #print 'dddd 3', dim_tuple_3,  temp 
+                            iii += size  
+                            t3.set_block(j, temp)
+                return  t3         
+        
+            t2=split_qsp_test(t, 0, [qa, qb])
+            #t2=t.split_2to3(0, [qa, qb])
+            
+            xx, _ = t.contract(t, [0, 100], [0, 1000])
+            yy, _ = t2.contract(t2, [0, 1, 100], [0, 1, 1000])
+            t.show_data()
+            t2.show_data()
+            print xx.data 
+            print yy.data  
+            #tm = t.matrix_view()
+            #print_vars(vars(), ['t.matrix_view()', 't2.matrix_view()'], sep_key_val='\n')
+            #print tm.T.dot(tm)
+        
+    
+    def test_merge_qsp(self): 
+        qsp_class= QspZ2 
+        #qsp_class= QspU1 
+        q = qsp_class.easy_init([1, -1],  [2, 2])
+        qsp = q.copy_many(3)
+        t = iTensor(QSp=qsp)
+        t.data[: ] = np.arange(t.size)
+        tt=t.merge_qsp((0, 1))
+        #tt=t.merge_qsp((1, 2))
+        print  t.data
+        print tt.data 
+    
+    def test_merge_qsp_2(self): 
+        qsp_class= QspZ2 
+        #qsp_class= QspU1 
+        q = qsp_class.easy_init([1, -1],  [1, 1])
+        qsp = q.copy_many(6)
+        t = iTensor(QSp=qsp)
+        t.data[: ] = np.arange(t.size)
+        #print q*q*q 
+        tt=t.merge_qsp((0, 1), (2, 3, 4), )
+        t3= tt.split_qsp(0, [q, q], 1, [q, q, q])
+        t4=t3.merge_qsp((0, 1), (2, 3, 4), )
+        print t.data
+        print tt.data 
+        print t3.data 
+        print t4.data 
+    
+    
 class performance_iTensor(object):
     pass
     def __init__(self, symmetry):
@@ -3397,9 +4051,20 @@ if __name__== "__main__":
         suite = unittest.TestSuite()
         add_list = [
            #Test_iTensor('test_temp'), 
-           Test_iTensor('test_reshape'), 
+           #Test_iTensor('test_reshape'), 
            #Test_iTensor('test_rank_zero'), 
            #Test_iTensor('test_rank_zero_1'), 
+           
+           #Test_iTensor('test_matrix_view'), 
+           
+           #Test_iTensor('test_split_2to3'), 
+           #Test_iTensor('test_merge_3to2'), 
+           
+           Test_iTensor('test_split_qsp'), 
+           #Test_iTensor('test_split_qsp_2'), 
+           #Test_iTensor('test_split_qsp_by_contract'), 
+           #Test_iTensor('test_merge_qsp'), 
+           #Test_iTensor('test_merge_qsp_2'), 
            
         ]
         for a in add_list: 
