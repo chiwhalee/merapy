@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-#coding=UTF8
+#coding=utf8
 
 """  
     tensor.f90
@@ -33,6 +33,7 @@ import warnings
 import pickle
 import pprint
 import numpy as np
+import itertools 
 
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy.utilities import print_vars 
@@ -931,6 +932,36 @@ class iTensor(TensorBase):
             here use merge_qsp/split_qsp instead. 
             this is only for convenience and a little bit slow. 
             for production use .merge_qsp and .split_qsp directly 
+            note:
+                运行以下code
+                    from tensor import iTensorFactory 
+                    pau = pauli_mat()
+                    #sx = pau['sx']
+                    sx = np.asarray([[0, 1], [1, 0]])
+                    sxx=np.multiply.outer(sx, sx).transpose([0, 2, 1, 3]).reshape(4, 4)
+                    print sxx 
+                    sx = iTensorFactory.pauli_mat('Z2')['sigma_x']
+                    sxx=sx.direct_product(sx) 
+                    #先reshape，后to_ndarray
+                    print sxx.merge_qsp((0, 1), (2, 3)).to_ndarray(data_order='F').round(5)
+                    #先to_ndarray，后reshape 
+                    print sxx.to_ndarray(data_order='F').reshape(4, 4)
+               输出为 
+                    [[0 0 0 1]
+                     [0 0 1 0]
+                     [0 1 0 0]
+                     [1 0 0 0]]
+                    [[ 0.  1.  0.  0.]
+                     [ 1.  0.  0.  0.]
+                     [ 0.  0.  0.  1.]
+                     [ 0.  0.  1.  0.]]
+                    [[ 0.  0.  0.  1.]
+                     [ 0.  0.  1.  0.]
+                     [ 0.  1.  0.  0.]
+                     [ 1.  0.  0.  0.]]
+               之所以不同，是因为，对称张量的reshape 和 ndarray的reshape 名字相同，但
+               实质有差别， iTensor.reshape 包含了将量子数指标的合并 
+               
         """
         #print_vars(vars(), ['self.QSp', 'qsp_new'])
         if hasattr(qsp_new[0], '__iter__'): 
@@ -1241,7 +1272,8 @@ class iTensor(TensorBase):
         
         #print_vars(vars(), ['leg_map', 'len(qsp)']); raise 
         
-        res = iTensor(QSp=qsp)
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy())
+        
         t2 = self
         t3 = res 
         t3ind = list(xrange(t3.nidx))
@@ -1338,7 +1370,8 @@ class iTensor(TensorBase):
         
         #print_vars(vars(), ['leg_map']); raise 
         
-        res = iTensor(QSp=qsp)
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy())
+        
         t2 = res 
         t3 = self
         t3ind = list(xrange(t3.nidx))
@@ -1410,7 +1443,7 @@ class iTensor(TensorBase):
             which: 
                 which leg to split,  take value in [0, 1]
         """
-        warnings.warn(u"todo: 避免重复比较")
+        warnings.warn("todo: 避免重复比较")
         assert self.rank == 2
         if which == 0: 
             qsp = qsp_list+[self.QSp[1]]
@@ -1420,7 +1453,7 @@ class iTensor(TensorBase):
             guide = (1, (1, 2))
         assert self.qsp_class.prod_many(qsp_list)==self.QSp[which]
         t2 = self 
-        t3 = iTensor(QSp=qsp)
+        t3 = iTensor(QSp=qsp, totQN=self.totQN.copy())
         #print_vars(vars(), ['t2.Addr_idx[:,:t2.nidx].T', 't2.Block_idx[:,:t2.nidx].T', ], sep_key_val='=\n')
         #print_vars(vars(), ['t3.Addr_idx[:,:t3.nidx].T', 't3.Block_idx[:,:t3.nidx].T', ], sep_key_val='=\n')
         for i in range(t2.nidx): 
@@ -1489,7 +1522,7 @@ class iTensor(TensorBase):
          
         #print_vars(vars(), ['leg_map', 'len(qsp)', 'qsp']); raise 
         
-        res = iTensor(QSp=qsp)
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy())
         t2 = res 
         t3 = self
         for i in range(t2.nidx): 
@@ -2140,7 +2173,92 @@ class iTensor(TensorBase):
                 Tp.data[data_pos] = self.data[block_pos_in_data+dat_pos_in_blk]
                 print round(self.data[block_pos_in_data+dat_pos_in_blk],10)
         return Tp
-
+    
+    def to_ndarray(self, data_order='F'): 
+        """
+            converge a symm iTensor instance to a 
+            dense np.ndarray instance 
+            this func should be invaluable in dev and debug 
+            not for production use 
+            note:
+                运行以下code
+                    from tensor import iTensorFactory 
+                    pau = pauli_mat()
+                    #sx = pau['sx']
+                    sx = np.asarray([[0, 1], [1, 0]])
+                    sxx=np.multiply.outer(sx, sx).transpose([0, 2, 1, 3]).reshape(4, 4)
+                    print sxx 
+                    sx = iTensorFactory.pauli_mat('Z2')['sigma_x']
+                    sxx=sx.direct_product(sx) 
+                    #先reshape，后to_ndarray
+                    print sxx.merge_qsp((0, 1), (2, 3)).to_ndarray(data_order='F').round(5)
+                    #先to_ndarray，后reshape 
+                    print sxx.to_ndarray(data_order='F').reshape(4, 4)
+               输出为 
+                    [[0 0 0 1]
+                     [0 0 1 0]
+                     [0 1 0 0]
+                     [1 0 0 0]]
+                    [[ 0.  1.  0.  0.]
+                     [ 1.  0.  0.  0.]
+                     [ 0.  0.  0.  1.]
+                     [ 0.  0.  1.  0.]]
+                    [[ 0.  0.  0.  1.]
+                     [ 0.  0.  1.  0.]
+                     [ 0.  1.  0.  0.]
+                     [ 1.  0.  0.  0.]]
+               之所以不同，是因为，对称张量的reshape 和 ndarray的reshape 名字相同，但
+               实质有差别， iTensor.reshape 包含了将量子数指标的合并 
+            
+        """
+        #res=nTensor(self.rank,self.Dims)
+        #res = np.ndarray(self.Dims, dtype=self.dtype, order=order)
+        res = np.ndarray(self.Dims, dtype=self.dtype) 
+        res[: ] = 0.0 
+        blocks= {}
+       
+        qn_range = [q.nQN for q in self.QSp]
+        #qn_range.reverse()
+        qn_id_tuple_all = itertools.product(*tuple([range(i) for  i in qn_range]) )
+        qn_id_tuple_all = list(qn_id_tuple_all)
+        #print_vars(vars(), ['self.Dims', 'list(qn_id_tuple_all)', 'self.Addr_idx[:self.rank, :]']) 
+        data_blocks= {}
+        for i in range(self.nidx): 
+            #qn_id_tuple_symm.append(self.Addr_idx[:self.rank, i])  
+            temp=self.Addr_idx[:self.rank, i].tolist()  
+            data_blocks[tuple(temp)] = self.get_block(i)
+            
+        start_dicts= {x: {} for x in xrange(self.rank) }
+        for qn_id_tuple in qn_id_tuple_all: 
+            block_origin = np.zeros(self.rank, dtype=int)
+            dim_tuple = [self.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple) ]
+            for k, v in enumerate(qn_id_tuple): 
+                temp = start_dicts[k]
+                if temp.has_key(v): 
+                   block_origin[k] = temp[v]
+                else:
+                    if temp.has_key('totdim'): 
+                        block_origin[k] = temp['totdim']
+                        temp[v] = temp['totdim']
+                        temp['totdim'] += dim_tuple[k] 
+                    else:
+                        block_origin[k] = 0
+                        temp[v] = 0
+                        temp['totdim'] =  dim_tuple[k] 
+            block_end = block_origin + np.asarray(dim_tuple)
+            if data_blocks.has_key(qn_id_tuple): 
+                sl = [slice(block_origin[iii], block_end[iii]) for iii in xrange(self.rank)]
+                res[sl] = data_blocks[qn_id_tuple].reshape(dim_tuple, order=data_order)
+            
+            #print_vars(vars(), ['block_origin', 'block_end'], sep=' ')
+                
+            
+        return res 
+   
+    def from_ndarray(self, array, qsp): 
+        raise NotImplemented('todo: to be implemented')
+        pass 
+    
     def get_nposition(self):
         """
         see iTensor_GetNPosition
@@ -2285,7 +2403,7 @@ class iTensor(TensorBase):
 
         return T3
 
-    def direct_product(self, T2, order=None, use_buf=False):
+    def direct_product(self, T2, order='F', use_buf=False):
         """
             this function was originally defined under Tensor class, now is moved here
             see Direct_Product in f90
@@ -2298,8 +2416,6 @@ class iTensor(TensorBase):
 
         """
         T1=self
-        #attention: here the division may be incorrect
-        #q: why /2?
         rank1 = T1.rank//2
         rank2 = T2.rank//2      
         rank3 = rank1+rank2
@@ -2347,8 +2463,8 @@ class iTensor(TensorBase):
                 pidx3 = T3.Block_idx[0, T3.idx[idx3]]
                     #print 'selffff.idx', T1.idx, T2.idx
                 #Matrix_DirectProduct[T1.data[pidx1], nA, mA, T2.data[pidx2], nB, mB, T3.data[pidx3]]
-                data1 = T1.data[pidx1:pidx1 + nA*mA].reshape((nA, mA), order="F")
-                data2 = T2.data[pidx2:pidx2 + nB*mB].reshape((nB, mB), order="F")                
+                data1 = T1.data[pidx1:pidx1 + nA*mA].reshape((nA, mA), order=order)
+                data2 = T2.data[pidx2:pidx2 + nB*mB].reshape((nB, mB), order=order)                
                 T3.data[pidx3:pidx3 + nA*nB*mA*mB] = common_util.matrix_direct_product(data1, data2).ravel(order="F")
 
         return T3
@@ -3735,31 +3851,28 @@ class Test_iTensor(unittest.TestCase):
     
     def test_temp(self): 
         pass 
-        #from merapy import load 
-        #dic = load('/tmp/vec')
-        #vec, Dl, Dr, d1 = dic['vec'], dic['Dl'], dic['Dr'], dic['d1']
-        #print_vars(vars(), ['vec.QSp', 'Dl', 'Dr', 'd1', 'd1*d1'])
-        #vec.show_data() 
-        #vec = vec.reshape((Dl, Dr, d1) ) 
-        #vec = vec.split_qsp((Dl, Dr, d1) ) 
-        #vec = vec.split_qsp(2, [d1, d1])
-        Dl = QspZ2.easy_init([1, -1], [2, 2])
-        Dr = QspZ2.easy_init([1, -1], [2, 2])
-        d1 = QspZ2.easy_init([1, -1], [1, 1])
- 
-        #iTensor.split_qsp = split_qsp_test
-        if 0:  # pass
-            t = iTensor(QSp=[Dl, d1*d1])
-            t.split_qsp(1, [d1, d1])
-        if 0:  # pass  
-            t = iTensor(QSp=[Dl, Dr])
-            t.split_qsp(1, [d1, d1])
-        if 0:  # pass
-            t = iTensor(QSp=[Dl*Dr, d1*d1])
-            t.split_qsp(1, [d1, d1])
-        if 1: 
-            t = iTensor(QSp=[Dl, Dr, d1*d1]); t.data[: ]=np.arange(t.size)
-            t.split_qsp(2, [d1, d1])
+    
+    def test_to_ndarray(self): 
+        q = QspZ2.easy_init([1, -1], [2, 2])
+        qsp = q.copy_many(2)
+        t = iTensor(QSp=qsp); t.data[: ]=np.arange(t.size)
+        tn=t.to_ndarray()
+        temp=[[ 0,  2,  0,  0,], 
+             [ 1,  3,  0,  0,], 
+             [ 0,  0,  4,  6,], 
+             [ 0,  0,  5,  7,]]
+        self.assertTrue(np.all(tn==np.asarray(temp)))
+        
+        if 0: 
+            pau = iTensorFactory.pauli_mat( 'Z2')
+            temp = ['sx', 'sy', 'sz']
+            for i in temp: 
+                t = pau[i]
+                tn = t.to_ndarray()
+                print i 
+                print tn 
+                print t.matrix_view()
+            
         
     def test_rank_zero(self): 
         print  'aaaaaaaaaaaaaaaaaaaa'
@@ -3783,7 +3896,6 @@ class Test_iTensor(unittest.TestCase):
     
     def test_matrix_view(self): 
         pass 
-    
     
     def test_split_2to3(self): 
         if 1:  
@@ -4224,7 +4336,7 @@ if __name__== "__main__":
                 print syi_mer.matrix_view()
                 print pau2['syi'].matrix_view()
   
-    if 0: #examine
+    if 1: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -4232,7 +4344,8 @@ if __name__== "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           Test_iTensor('test_temp'), 
+           #Test_iTensor('test_temp'), 
+           Test_iTensor('test_to_ndarray'), 
            #Test_iTensor('test_rank_zero'), 
            #Test_iTensor('test_rank_zero_1'), 
            
