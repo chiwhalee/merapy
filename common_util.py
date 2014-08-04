@@ -452,6 +452,7 @@ class test_common():
         print c.round(10)
 
         print np.all(c_out==c_np)
+    
     @staticmethod
     def matrix_multiply_inplace():
         import numpy as np
@@ -552,6 +553,21 @@ class test_common():
 class TestCommon(unittest.TestCase):
     def setUp(self): 
         pass
+    def test_temp(self) : 
+        pass 
+    
+    def test_matrix_svd_1by1(self) : 
+        print matrix_svd.__doc__ 
+        a = np.random.random((1, 1)) 
+        a_orig = a 
+        a_copy = a.copy()
+        print a, id(a)
+        u, s, v=matrix_svd(min(a.shape), a) 
+        print a, id(a)
+        print  a_orig, a_copy
+        print "下面结果会是false，为了提醒 maxtrix_svd 对于1by1 矩阵有问题"
+        self.assertTrue(a_orig[0, 0]==a_copy[0, 0])
+       
     def test_get_num_of_threads(self): 
         set_num_of_threads(5)
         print get_num_of_threads.__doc__
@@ -581,9 +597,16 @@ class TestCommon(unittest.TestCase):
         for i in range(8):
             posrrr=mpgr(i, dims)
             print  'iii', i, posrrr, mgp(posrrr,dims)
-
-
-
+    
+    def test_matrix_svd(self): 
+        print matrix_svd.__doc__ 
+        a = np.random.random((10, 8))
+        u, s, v=matrix_svd(8, a)
+        print  s 
+        U, S, V=np.linalg.svd(a, full_matrices=0)
+        print  S 
+        self.assertTrue(np.allclose(s, S, atol=1e-15))
+    
 if __name__=="__main__":
 
     def test_common_func():
@@ -695,14 +718,22 @@ if __name__=="__main__":
         #test_iShift()
 
 
-    if 1: #examine
+    if 0: #examine
         suite = unittest.TestLoader().loadTestsFromTestCase(TestCommon)
         unittest.TextTestRunner(verbosity=0).run(suite)    
         
     else: 
         suite = unittest.TestSuite()
-        suite.addTest(TestCommon('test_get_num_of_threads'))
-        #suite.addTest(TestMera('test_heisbg'))
+        add_list = [
+            #TestCommon('test_get_num_of_threads'), 
+            #TestCommon('test_temp'), 
+            TestCommon('test_matrix_svd_1by1'), 
+            #TestCommon('test_matrix_svd'), 
+       
+        ]
+        for a in add_list: 
+            suite.addTest(a)
+        
         unittest.TextTestRunner().run(suite)
        
 

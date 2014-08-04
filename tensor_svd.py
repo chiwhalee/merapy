@@ -4,13 +4,17 @@
 import unittest 
 import numpy as np
 import numpy.linalg as linalg
+import scipy 
 from scipy.sparse.linalg import eigs
 
-from tensor import iTensor
+
+from merapy.tensor import iTensor
 #from tensor_py import tensor_player
-from decorators import *
-from quantum_number import * #import QuantSpace
-import common_util
+from merapy.decorators import *
+from merapy.quantum_number import * #import QuantSpace
+from merapy.utilities import print_vars 
+import merapy.common_util as common_util 
+from merapy.utilities import print_vars 
 
 """ 
 issue225: 
@@ -101,6 +105,7 @@ class Tensor_svd(object):
                         class:	QspZ2
                     totDim:	2
                     Dims:	[1 1]
+                    
                 group_legs(u, div=3), where u is a rank 3 ,U1 tensor            
                     self.Addr_idx:
                     [[0 2 1 2 0 1 0]
@@ -246,9 +251,11 @@ class Tensor_svd(object):
         print 'QSp_Group1:\n\t', cls.QSp_Group1.__repr__(exclude=['RefQN', 'QNs', 'nQN'])
         print 'QSp_Group2:\n\t', cls.QSp_Group2.__repr__(exclude=['RefQN', 'QNs', 'nQN'])        
         
-    
     @classmethod
     def svd(cls, itensor, ndiv=None, nSd=None, pr=None):
+        """
+            svd of u*s*v.T =  t, while finally replace t with t = u*v.T
+        """
         div = itensor.ndiv
         if ndiv is not None: 
             div = ndiv
@@ -282,8 +289,148 @@ class Tensor_svd(object):
             cls.set_block1(itensor, gidx, V_buf)
         
         return Sd
+    
+    @classmethod
+    def svd_new(cls, itensor, ndiv=None, nSd=None, pr=None):
+        """
+            the svd above is merely for mera minimization, this one 
+            is the general one 
+            status: not completed 
+        """
+        
+        div = itensor.ndiv
+        if ndiv is not None: 
+            div = ndiv
 
+        cls.group_legs(itensor, div)
+        
+        #QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
+        #QSp[div].reverse()
+        #
+        #U = iTensor(div+1, QSp, tQN)
+        
+        qsp_l = [itensor.QSp[i].copy() for i in range(div)]
+        qsp_r = [itensor.QSp[i].copy() for i in range(div,itensor.rank)]
+        qsp_c = qsp_l[0].__class__.prod_many(qsp_l )
+        qsp_c_rev = qsp_c_rev.copy(); qsp_c_rev.reverse( )
+        U = iTensor(QSp=qsp_l + [qsp_c])
+        S= iTensor(QSp=[qsp_c, qsp_c_rev])
+        V = iTensor( QSp=[qsp_c_rev + qsp_r])
+ 
+        Sd = np.empty(2048, dtype=itensor.dtype)
+        vSd = np.empty(2048, dtype=itensor.dtype)
+        for gidx  in range(cls.QSp_Group1.nQN):
+            V_buf = cls.get_block1(itensor, gidx=gidx)
+            #print 'ggg ', gidx, V_buf
+            nV, mV = V_buf.shape
+            
+            if 1:
+                #issue225
+                u, s, v =common_util.matrix_svd(V_buf)
+            else:
+                # below 2 lines are not needed any more at present, but keep it only for future use
+                u, s, v=scipy.linalg.svd(V_buf, full_matrices=False)
+                V_buf=common_util.matrix_multiply(u,v,1.0,0.0)
 
+            nvSd = min(nV,mV)
+            if pr:
+                print cls.QSp_Group1.QNs[gidx].val, vSd[0:nvSd]
+            if nSd is not None:  
+                Sd[nSd+0:nSd+nvSd] = vSd[0:nvSd]
+                nSd = nSd+nvSd
+            
+            #cls.set_block1(itensor, gidx, V_buf)
+            #the set_block1 below should be defined 
+            cls.set_block1(U, u)
+            cls.set_block1(S, s)
+            cls.set_block1(V, v)
+        
+        return Sd
+    
+    @staticmethod 
+    def svd_rank2(tensor, trunc_dim=10000, full_matrices=False, return_trunc_err=False, 
+        normalize_singular_val=False):     
+        """
+            status: 
+                tested  but not quit thorough 
+            itensor should be prepare into a rank 2 tensor 
+        """
+        tt = tensor  # a shorter name 
+        uu, ss, vv = {}, {}, {}
+        dim = []
+        qns= []
+        for i in range(tt.nidx): 
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            p  = tt.Block_idx[0, i]
+            size  = tt.Block_idx[1, i]
+            assert dl*dr == size, (dl, dr, size) 
+            mat = tt.data[p: p+dl*dr].reshape(dl, dr)
+            if 0:
+                #issue225
+                #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
+                #暂时先不用它，而改用numpy
+                u, s, v = common_util.matrix_svd(min(dl, dr), mat)
+                
+            else:
+                u, s, v=scipy.linalg.svd(mat, full_matrices=False)
+            uu[i] = u
+            ss[i] = s
+            vv[i] = v
+            dim.append(s.size)
+            qn = tt.QSp[1].QNs[qn1]
+            qns.append(qn.copy())
+        
+        #issue:  may happen d = 0, some qn is fully truncated
+        if trunc_dim < np.sum(dim):  
+            temp = np.zeros(np.sum(dim), dtype=float)
+            d0 = 0
+            for i, d in enumerate(dim): 
+                temp[d0: d0 + d] = ss[i]
+                d0 += d
+            
+            temp.sort()
+            temp = temp[: : -1]
+            val_min = temp[trunc_dim]
+            norm = np.linalg.norm(temp[: trunc_dim])
+            #trunc_err = np.sum(temp[trunc_dim: ])
+            trunc_err = 1-norm 
+            
+            for i in range(tt.nidx): 
+                s= ss[i]
+                s= s[np.where(s>val_min)]
+                ss[i] = s/norm 
+                d = s.size 
+                dim[i] = d
+                uu[i] = uu[i][:, :d]
+                vv[i] = vv[i][:d, :]
+        else:
+            trunc_err = 0.0
+        qsp_sr = tt.QSp[0].__class__(len(dim), qns, dim)
+        qsp_sl = qsp_sr.copy(); qsp_sl.reverse()
+        U = iTensor(QSp=[tt.QSp[0], qsp_sr])
+        S = iTensor(QSp=[qsp_sl, qsp_sr])
+        V = iTensor(QSp=[qsp_sl, tt.QSp[1]])
+        
+        #print_vars(vars(), ['U', 'S','V' ])
+        for i in xrange(U.nidx): 
+            p  = U.Block_idx[0, i]
+            size  = U.Block_idx[1, i]
+            mat = U.data[p: p + size] = uu[i].ravel(order='F')
+            
+            p  = V.Block_idx[0, i]
+            size  = V.Block_idx[1, i]
+            mat = V.data[p: p + size] = vv[i].ravel(order='F')
+            
+            p  = S.Block_idx[0, i]
+            size = S.Block_idx[1, i]
+            mat = S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+        if not return_trunc_err:
+            return U, S, V 
+        else:
+            return U, S, V , trunc_err 
+ 
     @classmethod
     def random_unit_tensor(cls,itensor, d):
         itensor.randomize_data()  #here method randomize_data inheriets from TensorBase
@@ -294,7 +441,8 @@ class Tensor_svd(object):
         """
             see iTensor_Eig in f90
             thif func is only used in calc central_charge
-            input:
+            params:
+                totQN:  can be used to select excitation states
             return:
                 Vg: eigen vec of itensor with greatest eigval
                 Eg: eigen energy 
@@ -304,8 +452,6 @@ class Tensor_svd(object):
         cls.group_legs(itensor, div)
         E_size=1024*64
         #lwork = 5*E_size
-        
-        
        
         QSp = [itensor.QSp[i].copy() for i in range(div)]
         if totQN is None:
@@ -336,7 +482,7 @@ class Tensor_svd(object):
             Vg = iTensor(div+1, QSp, tQN)
             Vg.data[:] = 0.0
             
-            for idx  in range(itensor.nidx):
+            for idx in range(itensor.nidx):
                 if cls.QN_Group[0,idx] != gidx:  
                     continue
                 p1 = cls.QN_Group[1,idx]; p2=cls.QN_Group[2,idx]
@@ -357,7 +503,7 @@ class Tensor_svd(object):
             eigenvalue decomposition of sparse tensor
         """
         #tol = 1e-18 if tol is None else tol
-        tol = tol if tol is not None else 1e-18
+        tol = tol if tol is not None else 1e-12
         
         rank = itensor.rank
         div = rank//2
@@ -500,21 +646,21 @@ class Tensor_svd(object):
             itensor.data[p:p+nT*mT] = temp.ravel('F')
 
 
-class test_Tensor_svd():
-    from tensor import  test_iTensor
-    #u,  w, u2234= simple_itensor()
-    #u = test_iTensor.instance("u")
-    #w = test_iTensor.instance("w")
-    u = test_iTensor(symmetry='U1').u
-    def __init__(self, symmetry):
-        from tensor import test_iTensor
-        self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
         pass
-        #self.u = test_iTensor.instance("u")
-        #self.u = test_iTensor(symmetry='Travial').u
-
-    #@classmethod
-    def group_legs(self, rank=3):
+        from tensor import  test_iTensor
+        #u,  w, u2234= simple_itensor()
+        #u = test_iTensor.instance("u")
+        #w = test_iTensor.instance("w")
+        u = test_iTensor(symmetry='U1').u
+        self.u = u 
+        self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry='Z2')
+    
+    def test_temp(self): 
+        pass  
+    
+    def test_group_legs(self, rank=3):
         """
             --- pass 
         """
@@ -522,23 +668,79 @@ class test_Tensor_svd():
 
         Tensor_svd.group_legs(u, 2)
         Tensor_svd.show_group(u)
-    @classmethod
-    def svd(cls):
+        
+    def test_eig(self):
+        rank = 4
+        u = iTensor(rank, self.qsp_base.copy_many(rank), self.qn_identity)
+        u.data[:] = 1.0
+        print "tensor to be eiged", u
+        totqn = self.qn_identity.copy()
+        print "tttt", type(totqn)
+        a, b=Tensor_svd.eig(u, totqn)
+        print "a", a, "b", b
+        pass
+   
+    def test_svd(self):
         """  
             --- not sure
         """
-        u = cls.u.copy()
+        #u = cls.u.copy()
+        u = self.u 
         u.data[:] = 0
         Tensor_svd.svd(u, ndiv=2)
         #u.QSp[0].reverse()
         #u.QSp[1].reverse()
         #u.QSp[2].reverse()
         print u.data.round(5)
-    @classmethod
+    
+    def test_svd_rank2(self): 
+        np.random.seed(1234)
+        t = iTensor.example(rank=2, symmetry='U1')
+        t.data[: ] = np.random.random(t.totDim)
+        U, S, V=Tensor_svd.svd_rank2(t)
+        print S.data 
+        
+        U, S, V = Tensor_svd.svd_rank2(t, trunc_dim=5)
+        print  S.data  
+        data = [ 1.51112271, 0.,0., 0.34817902, 0.35781727, 0.50099513]
+        
+        self.assertTrue(np.allclose(S.data, data, atol=1e-8))
+        print_vars(vars(), ['U.shape', 'V.shape'])
+        
+    def test_svd_rank2_2(self): 
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspU1.easy_init([0, 1, -1], [8, 5, 5])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t1 = t
+        
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspZ2.easy_init([1, -1], [8, 8])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2 ) 
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t2 = t 
+            
+        for t in [t1, t2]: 
+            U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=5)
+            vv=V.dot(V.conjugate(1))
+            uu = U.conjugate(1).dot(U)
+            self.assertTrue(uu.is_close_to(1))
+            self.assertTrue(vv.is_close_to(1))
+            print  S.matrix_view()
+            print  S
+            print  uu.matrix_view().round(10)
+        
     def random_unit_tensor(cls):
-        u = cls.u.copy()
+        u = self.u
         Tensor_svd.random_unit_tensor(u, 2)
         print u.data
+    
     @classmethod
     def random_unit_tensor_large(cls):
         #import os
@@ -550,33 +752,48 @@ class test_Tensor_svd():
         ranku = 8
         u=iTensor(ranku,[QSbase() for i in xrange(ranku)], totQN())
         Tensor_svd.random_unit_tensor(u, 2)
-    
-    def eig(self):
-        rank = 4
-        u = iTensor(rank, self.qsp_base.copy_many(rank), self.qn_identity)
-        u.data[:] = 1.0
-        print "tensor to be eiged", u
-        totqn = self.qn_identity.copy()
-        print "tttt", type(totqn)
-        a, b=Tensor_svd.eig(u, totqn)
-        print "a", a, "b", b
-        pass
-    
-class TestIt(unittest.TestCase): 
-    def setUp(self): 
-        pass
-    
-    def test_svd(self): 
-        pass
+   
     
 if __name__ == "__main__":
-
-    tt = test_Tensor_svd(symmetry="Travial")
-    #tt.group_legs(rank=3)
-    tt.svd()
-    #tt.eig()
-    #tt.random_unit_tensor()
-    #tt.random_unit_tensor_large()
+    if 0: 
+        tt = test_Tensor_svd(symmetry="Travial")
+        #tt.group_legs(rank=3)
+        tt.svd()
+        #tt.eig()
+        #tt.random_unit_tensor()
+        #tt.random_unit_tensor_large()
+    if 0: #examine
+        if 0: 
+            from concurrencytest import ConcurrentTestSuite, fork_for_tests
+            loader = unittest.TestLoader()
+            suite = []
+            for cls in [TestIt]: 
+                temp = loader.loadTestsFromTestCase(cls)
+                suite.append(temp)
+            suite = unittest.TestSuite(suite)
+            
+            suite = ConcurrentTestSuite(suite, fork_for_tests(2))
+            unittest.TextTestRunner(verbosity=0).run(suite)
+        else: 
+                
+            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+            #unittest.TextTestRunner(verbosity=0).run(suite)    
+            TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+            unittest.main()
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           #TestIt('test_temp'), 
+           #TestIt('test_eig'), 
+           #TestIt('test_svd'), 
+           TestIt('test_svd_rank2'), 
+           #TestIt('test_svd_rank2_2'), 
+           #TestIt('test_group_legs'), 
+        ]
+        for a in add_list: 
+            suite.addTest(a)
+        unittest.TextTestRunner().run(suite)
+    
     
 
 
