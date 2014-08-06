@@ -82,6 +82,7 @@ CFG_BASE = {
         'LOCAL_IP': LOCAL_IP, 
         'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
         'BACKUP_BASE_DIR_LOCAL':BACKUP_BASE_DIR_LOCAL,       
+        'register_job': 0, 
 
         'use_local_storage': False,  #store and save to local (local means center, my computer)
        

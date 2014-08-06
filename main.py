@@ -1107,15 +1107,25 @@ class Main(object):
     def run_one(cls, config): 
         schedule = config.get('schedule')
         #schedule = config['run_schedule_args']['schedule']
+        
         main = cls(**config)
         msg = ''
         try: 
-            if schedule is None: 
-                main.run(q_iter=None, backup_parpath=None, resume=0,auto_resume=0 )
-            else: 
-                #main.run_schedule(schedule)
-                main.run_schedule(**config['schedule'])
-            msg += 'RUN ONE COMPLETED.' 
+            if config.get('register_job'): 
+                parpath = config['backup_parpath_local']
+                with rpyc_conn('local', 'service', 17012) as conn:                
+                    status = conn.root.register_job(parpath)
+                    print 'ssssssssssss', status 
+            if status == 'open': 
+                if schedule is None: 
+                    main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
+                else: 
+                    #main.run_schedule(schedule)
+                    main.run_schedule(**config['schedule'])
+                msg += 'RUN ONE COMPLETED.' 
+            elif status== 'locked': 
+                msg += 'JOB EXISTS; EXIT' 
+                
         except KeyboardInterrupt: 
             #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
             msg += 'KeyboardInterrupt captured.' 
@@ -1303,15 +1313,33 @@ class TestMain(unittest.TestCase):
         cfg_heisbg = CFG_HEISBG_BASIC.copy();   cfg_heisbg.update(temp)
         #model_param={"J_NN":1.0, "J_NNN":0.241186}
         #cfg_heisbg['model_param'].update(model_param)
-        if 1:  #test run_schedule
+        #if 1:  #test run_schedule
+        try: 
             os.system('rm ./mera_backup_test_folder/*')    
             os.system('rm 4.pickle')
+        except: 
+            pass 
         
         self.config = cfg_heisbg
     
     def test_temp(self): 
-        pass
-    
+        from merapy.run_ising.config import make_config 
+        import numpy as np 
+        hh = np.arange(0, 2.2, 0.1)
+        #hh = []
+        config_group = []
+        for h in hh: 
+            c = make_config(h, root1= '')
+            c['schedule'].update(mera_shape_min=(4, 4), mera_shape_max=(4, 4), 
+                    q_iter_max = 5, do_measure = 0)
+            c['NUM_OF_THREADS'] = 1
+            config_group.append(c)
+            c['backup_parpath_local'] = '/tmp/sdfjl'
+            c['register_job'] = 1
+            print  c['backup_parpath']
+
+        Main.run_many(config_group, nproc=8)
+
     def test_grid(self): 
         a = [1, 2]
         b = ['a', 'b']

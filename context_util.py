@@ -87,17 +87,17 @@ def make_temp_filename(suffix='', prefix='tmp', dir=None, delete=True):
 
 # back to the normal stdout
 def get_ip_address(): 
-    ip = socket.gethostbyname(socket.gethostname())
-    #print 'ip is %s'%ip 
-    
-    try: 
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("gmail.com",80))
-        #print('ip address is %s'%s.getsockname()[0])
-        ip = s.getsockname()[0] 
-        s.close()
-    except: 
-        print 'get ip address using gmail failed'
+    if 1: 
+        ip = socket.gethostbyname(socket.gethostname())
+    else: 
+        try: 
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("gmail.com", 10))
+            #print('ip address is %s'%s.getsockname()[0])
+            ip = s.getsockname()[0] 
+            s.close()
+        except: 
+            print 'get ip address using gmail failed'
         
     return ip
 
@@ -173,13 +173,18 @@ def rpyc_conn_local_zerodeploy():
         ssh.close()
 
 @contextmanager
-def rpyc_conn(hostname): 
+def rpyc_conn(hostname, conn_type='classic',  port=17013): 
     """
         EOFError
     """
     try: 
         ssh = ssh_connect(hostname)
-        conn = rpyc.classic.ssh_connect(ssh, 17013)
+        if conn_type == 'classic' : 
+            print 'bbbbbbbbbbbbb'
+            conn = rpyc.classic.ssh_connect(ssh, port)
+        elif conn_type == 'service' : 
+            print 'aaaaaaaaaaaaaaaaaaa'
+            conn = rpyc.ssh_connect(ssh, port)
         yield conn
     finally:
         try: 
