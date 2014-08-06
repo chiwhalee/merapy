@@ -18,6 +18,8 @@ from rpyc.utils.server import ThreadedServer
 import rpyc
 from plumbum import SshMachine
 
+from merapy.context_util import rpyc_conn 
+
 class TaskManager(Service):
     """
         POOL def: 
@@ -44,9 +46,9 @@ class TaskManager(Service):
         pool = self.POOL
         job_id = hash(backup_parpath)
         if pool.has_key(job_id): 
-            status= 'locked'
+            status = 'locked'
         else:
-            status= 'open'
+            status = 'open'
             self.POOL[job_id] = {'dir': backup_parpath,  }
             msg = 'job %s is added in POOL'%(job_id) 
             print self.POOL.keys()
@@ -54,8 +56,15 @@ class TaskManager(Service):
         
         return status 
     
+    def exposed_disregister_job(self, job_id): 
+        self.POOL.pop(job_id)
+    
     def exposed_get_pool(self): 
         return self.POOL 
+    
+    def exposed_operate_pool(self, func): 
+        print 'oooooperate'
+        func(self.POOL)
     
     def exposed_test(self, num):     # 对于服务端来说， 只有以"exposed_"打头的方法才能被客户端调用，所以要提供给客户端的方法都得加"exposed_" 
         return 1+num
@@ -69,7 +78,13 @@ class TaskManager(Service):
     def on_disconnect(self):
         msg = 'disconnected'
         print(msg)
-       
+
+def get_pool(): 
+    with rpyc_conn('local', 'service', 17012) as conn: 
+        res = conn.root.get_pool() 
+        return res 
+        
+    
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         port = 0

@@ -1109,6 +1109,7 @@ class Main(object):
         #schedule = config['run_schedule_args']['schedule']
         main = cls(**config)
         msg = ''
+        is_registered = False 
         try: 
             status= 'open'
             if config.get('register_job'): 
@@ -1124,6 +1125,7 @@ class Main(object):
                         main.run_schedule(**config['schedule'])
                     else:   #mps use this 
                         main.run_schedule(schedule)  
+                is_registered = True 
                 msg += 'run one COMPLETED.' 
             elif status== 'locked': 
                 msg += 'job exists' 
@@ -1137,6 +1139,18 @@ class Main(object):
         finally: 
             msg += ' EXIT chiled for %s'%(config.get('model_param'),)
             print msg
+            if is_registered or 1: 
+                parpath = config['backup_parpath_local']
+                with rpyc_conn('local', 'service', 17012) as conn:                
+                    job_id = hash(parpath)
+                    conn.root.disregister_job(job_id)
+                    #def f(pool): 
+                    #    print 'KKKKKKKKKKKKKKKKK'
+                    #    print pool.keys()
+                    #    pool.pop(job_id)
+                    #conn.root.operate_pool(f)
+                    
+               
             main.stop_player()        
         return main 
     

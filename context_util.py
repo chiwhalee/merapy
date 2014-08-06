@@ -183,7 +183,6 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
             print 'bbbbbbbbbbbbb'
             conn = rpyc.classic.ssh_connect(ssh, port)
         elif conn_type == 'service' : 
-            print 'aaaaaaaaaaaaaaaaaaa'
             conn = rpyc.ssh_connect(ssh, port)
         yield conn
     finally:
