@@ -1107,24 +1107,26 @@ class Main(object):
     def run_one(cls, config): 
         schedule = config.get('schedule')
         #schedule = config['run_schedule_args']['schedule']
-        
         main = cls(**config)
         msg = ''
         try: 
+            status= 'open'
             if config.get('register_job'): 
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
                     status = conn.root.register_job(parpath)
-                    print 'ssssssssssss', status 
+                    #print 'ssssssssssss', status 
             if status == 'open': 
                 if schedule is None: 
                     main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
                 else: 
-                    #main.run_schedule(schedule)
-                    main.run_schedule(**config['schedule'])
-                msg += 'RUN ONE COMPLETED.' 
+                    if isinstance(schedule[0], dict):  #mera use this 
+                        main.run_schedule(**config['schedule'])
+                    else:   #mps use this 
+                        main.run_schedule(schedule)  
+                msg += 'run one COMPLETED.' 
             elif status== 'locked': 
-                msg += 'JOB EXISTS; EXIT' 
+                msg += 'job exists' 
                 
         except KeyboardInterrupt: 
             #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
@@ -1133,7 +1135,7 @@ class Main(object):
             print exception
             traceback.print_exc()
         finally: 
-            msg += ' exit chiled for %s'%(config.get('model_param'),)
+            msg += ' EXIT chiled for %s'%(config.get('model_param'),)
             print msg
             main.stop_player()        
         return main 
@@ -1158,6 +1160,7 @@ class Main(object):
                     pool.map(func, config_group)
                 else: 
                     for arg in config_group: 
+                        #print 'aaaaa', arg 
                         pool.apply_async(func,  (arg, ))
                     pool.close()   
                     pool.join()   # the above two lines are needed to prevent main thread exit
