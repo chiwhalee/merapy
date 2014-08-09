@@ -209,6 +209,7 @@ class TensorBase(object):
         res  = pickle.load(inn)
         return res
 
+# DONT DELETE THE OLD nTensor,  MAY STILL NEEDED 
 #below is deprecated,  as it is not quite compatible with np.ndarray; but it may be of use later
 if 0:
     pass 

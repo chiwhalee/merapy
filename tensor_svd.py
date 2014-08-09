@@ -358,7 +358,7 @@ class Tensor_svd(object):
         tt = tensor  # a shorter name 
         uu, ss, vv = {}, {}, {}
         dim = []
-        qns= []
+        qns = []
         for i in range(tt.nidx): 
             qn_id_tuple = tt.Addr_idx[:, i]
             qn0, qn1 = qn_id_tuple
@@ -366,7 +366,7 @@ class Tensor_svd(object):
             p  = tt.Block_idx[0, i]
             size  = tt.Block_idx[1, i]
             assert dl*dr == size, (dl, dr, size) 
-            mat = tt.data[p: p+dl*dr].reshape(dl, dr)
+            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
             if 0:
                 #issue225
                 #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
@@ -395,7 +395,7 @@ class Tensor_svd(object):
             val_min = temp[trunc_dim]
             norm = np.linalg.norm(temp[: trunc_dim])
             #trunc_err = np.sum(temp[trunc_dim: ])
-            trunc_err = 1-norm 
+            trunc_err = 1-norm**2  
             
             for i in range(tt.nidx): 
                 s= ss[i]
@@ -417,15 +417,15 @@ class Tensor_svd(object):
         for i in xrange(U.nidx): 
             p  = U.Block_idx[0, i]
             size  = U.Block_idx[1, i]
-            mat = U.data[p: p + size] = uu[i].ravel(order='F')
+            U.data[p: p + size] = uu[i].ravel(order='F')
             
             p  = V.Block_idx[0, i]
             size  = V.Block_idx[1, i]
-            mat = V.data[p: p + size] = vv[i].ravel(order='F')
+            V.data[p: p + size] = vv[i].ravel(order='F')
             
             p  = S.Block_idx[0, i]
             size = S.Block_idx[1, i]
-            mat = S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+            S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
         if not return_trunc_err:
             return U, S, V 
         else:
@@ -658,7 +658,7 @@ class TestIt(unittest.TestCase):
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry='Z2')
     
     def test_temp(self): 
-        pass  
+        pass 
     
     def test_group_legs(self, rank=3):
         """
@@ -725,17 +725,37 @@ class TestIt(unittest.TestCase):
             data = np.random.random(t.totDim)
             t.data[: ] = data
             t2 = t 
-            
-        for t in [t1, t2]: 
-            U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=5)
-            vv=V.dot(V.conjugate(1))
-            uu = U.conjugate(1).dot(U)
-            self.assertTrue(uu.is_close_to(1))
-            self.assertTrue(vv.is_close_to(1))
-            print  S.matrix_view()
-            print  S
-            print  uu.matrix_view().round(10)
+        if 0:     
+            for t in [t1, t2]: 
+                U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=100)
+                vv=V.dot(V.conjugate(1))
+                uu = U.conjugate(1).dot(U)
+                self.assertTrue(uu.is_close_to(1))
+                self.assertTrue(vv.is_close_to(1))
+                a = U.dot(S).dot(V)
+                #print_vars(vars(), ['a.to_ndarray().shape', 't.to_ndarray().shape'])
+                #print_vars(vars(), ['a.to_ndarray()[:3][:3]', 't.to_ndarray()[:3][:3]'])
+                self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14)) 
         
+        
+        if 1:     
+            for ii, t in enumerate([t1, t2]): 
+            #for t in [t1]: 
+                t.data = t.data/t.norm()
+                U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=12)
+                vv=V.dot(V.conjugate(1))
+                uu = U.conjugate(1).dot(U)
+                self.assertTrue(uu.is_close_to(1))
+                self.assertTrue(vv.is_close_to(1))
+                a = U.dot(S).dot(V)
+                #print_vars(vars(), ['a.to_ndarray().shape', 't.to_ndarray().shape'])
+                #print_vars(vars(), ['a.to_ndarray()[:3][:3]', 't.to_ndarray()[:3][:3]'])
+                #self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14)) 
+                overlap = t.contract(a, [0, 1], [0, 1])[0].data[0]
+                print_vars(vars(), ['t.norm()', 't.to_ndarray().shape', 'overlap'])
+                old = {0:0.996667569187076, 1: 0.99875849173495423}[ii]
+                self.assertAlmostEquals(overlap, old, 12)
+                
     def random_unit_tensor(cls):
         u = self.u
         Tensor_svd.random_unit_tensor(u, 2)
@@ -783,15 +803,15 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #TestIt('test_temp'), 
-           #TestIt('test_eig'), 
-           #TestIt('test_svd'), 
-           TestIt('test_svd_rank2'), 
-           #TestIt('test_svd_rank2_2'), 
-           #TestIt('test_group_legs'), 
+           #'test_temp', 
+           #'test_eig', 
+           #'test_svd', 
+           #'test_svd_rank2', 
+           #'test_svd_rank2_2', 
+           #'test_group_legs', 
         ]
         for a in add_list: 
-            suite.addTest(a)
+            suite.addTest(TestIt(a))
         unittest.TextTestRunner().run(suite)
     
     

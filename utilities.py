@@ -2,6 +2,7 @@
 """
 """
 import numpy as np
+from tempfile import mkdtemp 
 import cPickle as pickle 
 import sys
 import string
@@ -193,6 +194,8 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0
                 res= eval(x, dic)
             except NameError as err: 
                 res= 'not defined'
+            except AttributeError as err: 
+                res= str(err)
         return str(res)
             
     #print  '\n'.join([str(i) + ':\n' + str(dic[i])  for i in  var_name_list])
@@ -200,6 +203,16 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0
     #print  sep.join([str(i) + sep_key_val + str(eval(i, dic))  for i in  var_name_list])
 
 
+def dict_to_object(dic): 
+    class OBJECT:
+        def __init__(self, **entries): 
+            self.__dict__.update(entries)
+        def __repr__(self): 
+            #return '<%s>' % str('\n '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.iteritems()))             
+            return ', '.join(self.__dict__.keys())
+    return OBJECT(**dic)
+    
+    
 #replace_graph(x)
 if __name__ == "__main__": 
     replace_num(x)

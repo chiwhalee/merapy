@@ -34,6 +34,7 @@ import pickle
 import pprint
 import numpy as np
 import itertools 
+import math 
 
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy.utilities import print_vars 
@@ -1976,7 +1977,12 @@ class iTensor(TensorBase):
         """
         assert self.rank == 2 and other.rank == 2    
         return self.contract_core(other, div=1)
-        
+    
+    def norm(self): 
+        a = range(self.rank)
+        b = range(self.rank)
+        temp, _= self.contract(self, a, b)
+        return math.sqrt(temp.data[0])
     
     def trace(self):
         """
