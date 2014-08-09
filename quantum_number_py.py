@@ -10,9 +10,16 @@
         While QspZ2,  QSpU1 etc define a vector space V, which is direct sum decomposition according to the weights: 
         V = \osum_{i}{blablabla...}
     
-    ToDo:
-        todo: 用descriptor
-        todo: MaxQNNum 是fortran的做法，在python中可以改成可变长度的
+    todo:
+        1. 用descriptor
+        2. MaxQNNum 是fortran的做法，在python中可以改成可变长度的
+        3. Qn 和QSp 都应该 弄成 immutable type, 像 integer，tuple那样。
+            mutable type使得不得不 到处都得copy，很麻烦。这是长时间使用的经验感受.
+            imutable 就可一大胆放心、随意第使用.
+            这要求，所有对其的操作都是 not-inplaced 
+            
+        
+        
 
     Qsp
         a Qsp is a (reducible) L-module for lie algebra L
@@ -338,6 +345,22 @@ class QuantSpaceBase(object):
         abstract base class
         so MaxQNNum only defined in subclassed
     """
+        
+    def __init__(self, n, qns, dims):
+        """
+            QSp真正有用的只有 QNs, _dims 两个属性
+            _dims: 每个量子数对应子空间的维数
+        """
+        self.nQN = n
+        self._dims=np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
+        #self._dims=np.empty(n, int) #MaxQNNum only defined in subclassed
+        self._dims[:n] = dims[:n]
+        #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
+
+        #self.QNs= np.ndarray(self.MaxQNNum, np.object)
+        #self.QNs[:n]= qns[:n]
+        self.QNs= qns
+    
     @property
     def totDim(self):
         """
@@ -360,21 +383,6 @@ class QuantSpaceBase(object):
     def Dims(self, new_dims):
         self._dims[:len(new_dims)] = new_dims
         self._totDim = sum(self._dims)
-        
-    def __init__(self, n, qns, dims):
-        """
-            QSp真正有用的只有 QNs, _dims 两个属性
-            _dims: 每个量子数对应子空间的维数
-        """
-        self.nQN = n
-        self._dims=np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
-        #self._dims=np.empty(n, int) #MaxQNNum only defined in subclassed
-        self._dims[:n] = dims[:n]
-        #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
-
-        #self.QNs= np.ndarray(self.MaxQNNum, np.object)
-        #self.QNs[:n]= qns[:n]
-        self.QNs= qns
 
     def __ge__(self, other): 
         if self.QnClass != other.QnClass: 
@@ -415,7 +423,7 @@ class QuantSpaceBase(object):
             return False
         return True
 
-    def __eq__(self,other):
+    def __eq__(self, other):
         """
             improving: in futrue use key_property to implement this
         """
@@ -440,7 +448,7 @@ class QuantSpaceBase(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __repr__(self,exclude=["RefQN"]):
+    def __repr__old(self,exclude=["RefQN"]):
         """ 
        
         """
@@ -467,8 +475,45 @@ class QuantSpaceBase(object):
 
         return res
     
+    def __repr__(self,exclude=["RefQN"]):
+        """ 
+       
+        """
+        keys= ["class", 'nQN', 'QNs', '_dims', 'RefQN']
+        if exclude:
+            for k in exclude:
+                keys.remove(k)
+        res= ""
+        n = self.nQN
+        temp = []
+        for i in range(n): 
+            val = self.QNs[i]._val
+            dim = self._dims[i]
+            s= '[%d]%d'%(val,dim)
+            temp.append(s)
+        res = '+'.join(temp)
+
+        return res
+    
     def __mul__(self, other): 
         return self.add(other)
+    
+    def __div__(self, other): 
+        """
+            q1=QspZ2.easy_init([1, -1], [2, 2])
+            q2=QspZ2.easy_init([1, -1], [1, 3])
+            print  q1*q2   == q1*q1 
+            #they are equal 
+        """
+        msg = 'divide of qsp cant be defined,  as it is not unique. see doc string'
+        raise NotImplemented(msg)
+        
+    
+    def __pow__(self, n): 
+        res= self.__class__.null()
+        for i in range(n): 
+            res= res*self
+        return res 
     
     @classmethod
     def easy_init(cls, qns, dims):
@@ -711,12 +756,6 @@ class QuantSpaceBase(object):
             self._totDim = self.totDim
         self._totDim += d
         return ind
-    
-    def tensor_prod(self, other): 
-        """
-            identical to self.add
-        """
-        return self.add(other)
    
     def add(self, other):
         """ 
@@ -740,6 +779,15 @@ class QuantSpaceBase(object):
                 res.add_to_quant_space(qn, d)
         return res
     
+    tensor_prod = add
+    
+    @staticmethod
+    def prod_many( qsp_list): 
+        q = qsp_list[0]
+        for a in qsp_list[1: ]: 
+            q = q.tensor_prod(a)
+        return q 
+    
     @classmethod
     def null(cls):
         qn_identity = cls.QnClass.qn_id()
@@ -760,7 +808,6 @@ class QuantSpaceBase(object):
             if self.QNs[i]._val == qn._val: 
                 return i
     
-        
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
@@ -810,6 +857,31 @@ class QspZ2(QuantSpaceBase):
         """
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
         self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
+    
+    def __div__(self, other): 
+        """
+            solve this linear eqn of (d0, d1): 
+                d0*b0 + d1*b1 = c0
+                d0*b1 + d1*b0 = c1
+            -->
+                d0*b0*b1 + d1*b1^2 = c0*b1
+                d0*b1*b0 + d1*b0^2 = c1*b0
+            -->
+                d1 = (c0*b1 - c1*b0)/(b1^2 - b0^2)
+                d0 = (c1*b0 - c0*b1)/(b1^2 - b0^2)
+                
+                d0, d1 may be not unique 
+                
+        """
+        raise NotImplemented
+        
+        b0 = other._dims[0]
+        b1 = other._dims[1]
+        
+        c0 = self._dims[0]
+        c1 = self._dims[1]
+        res= self.__class__.easy_init([1, -1], [d0, d1])
+        return res 
 
     @classmethod
     def set_base(cls, dim=None):
@@ -1288,12 +1360,10 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        q=QnZ2(1)
-        #qsp=QspZ2.easy_init([1, 1, 1], [2, 2, 6])
-        qsp = QspZ2(2, [q, q], [3, 3])
-        #print  q
-        print qsp 
-        pass 
+        q1=QspZ2.easy_init([1, -1], [2, 2])
+        q2=QspZ2.easy_init([1, -1], [1, 3])
+        print  q1*q2 
+        print  q1*q1 
     
     def test_old_all(self): 
         for symm in GROUP_NAMES:
@@ -1340,10 +1410,26 @@ class TestIt(unittest.TestCase):
         #print q2  ==   q1 
         self.assertTrue(q1 < q2)
         self.assertTrue(q2 >=  q1)
-   
+  
+    def test_power(self):
+        pass 
+        q = QspZ2.easy_init( [1, -1], [2, 2])
+        print  q
+        print q**2
+        print q*q 
+        self.assertTrue(q**3 == q*q*q) 
+
+        q = QspU1.easy_init( [0, 1, -1], [2, 1, 1])
+        print  q
+        print q**2
+        print q*q 
+        self.assertTrue(q**3 == q*q*q) 
+        print  q**0 
+        
+
 if __name__ == "__main__":
         
-    if 0: #examine
+    if 1: #examine
         if 1: 
             from concurrencytest import ConcurrentTestSuite, fork_for_tests
             loader = unittest.TestLoader()
@@ -1367,6 +1453,7 @@ if __name__ == "__main__":
            TestIt('test_temp'), 
            #TestIt('test_old_all'), 
            #TestIt('test_compare'), 
+           #TestIt('test_power'), 
         ]
         for a in add_list: 
             suite.addTest(a)
