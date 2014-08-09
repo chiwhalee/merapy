@@ -77,6 +77,7 @@ CFG_BASE = {
     'NUM_OF_THREADS':1, 
     #for dist comput
         'hostname': socket.gethostname(), 
+        'pid': os.getpid(), 
         'LOCALHOSTNAME': 'QTG-WS1-ubuntu',  
         'LOCAL_USERNAME': LOCAL_USERNAME, 
         'LOCAL_IP': LOCAL_IP, 

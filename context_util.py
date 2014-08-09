@@ -180,10 +180,11 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
     try: 
         ssh = ssh_connect(hostname)
         if conn_type == 'classic' : 
-            print 'bbbbbbbbbbbbb'
             conn = rpyc.classic.ssh_connect(ssh, port)
         elif conn_type == 'service' : 
-            conn = rpyc.ssh_connect(ssh, port)
+            conn = rpyc.ssh_connect(ssh, port, config={"allow_pickle":True})
+        else: 
+            raise 
         yield conn
     finally:
         try: 

@@ -1115,8 +1115,7 @@ class Main(object):
             if config.get('register_job'): 
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
-                    status = conn.root.register_job(parpath)
-                    #print 'ssssssssssss', status 
+                    status = conn.root.register_job(parpath, config)
             if status == 'open': 
                 if schedule is None: 
                     main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )

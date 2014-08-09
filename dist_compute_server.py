@@ -11,14 +11,18 @@ import cPickle as pickle
 import cloud
 pickle_any = cloud.serialization.cloudpickle
 import os
+import time 
+import datetime 
 
 from collections import OrderedDict
 from rpyc import Service
 from rpyc.utils.server import ThreadedServer
+import threading 
 import rpyc
 from plumbum import SshMachine
 
 from merapy.context_util import rpyc_conn 
+from merapy.utilities import load, save 
 
 class TaskManager(Service):
     """
@@ -36,13 +40,24 @@ class TaskManager(Service):
         #if not os.path.exists(path): 
         #    with open(path, 'wb') as f:
         #        pass
-        print(msg)
+        #print(msg)
+        self._conn._config.update(dict(
+                    allow_all_attrs = True,
+                    allow_pickle = True,
+                    allow_getattr = True,
+                    allow_setattr = True,
+                    allow_delattr = True,
+                    import_custom_exceptions = True,
+                    instantiate_custom_exceptions = True,
+                    instantiate_oldstyle_exceptions = True,
+                ))        
         
-    def exposed_register_job(self, backup_parpath): 
+    def exposed_register_job(self, backup_parpath, config=None): 
         """
             returns: 
                 status: run, completed, failed
         """
+        config = config if config is not None else {}
         pool = self.POOL
         job_id = hash(backup_parpath)
         if pool.has_key(job_id): 
@@ -50,14 +65,18 @@ class TaskManager(Service):
         else:
             status = 'open'
             self.POOL[job_id] = {'dir': backup_parpath,  }
-            msg = 'job %s is added in POOL'%(job_id) 
-            print self.POOL.keys()
-            print msg 
+            print  'job %s is added'%(str(job_id)[-6:], )
+            
+            pool['time_started'] = str(datetime.datetime.now()).split('.')[0]
+            temp = ['hostname', 'pid']
+            for i in temp: 
+                self.POOL[i] = config.get(i)
         
         return status 
     
     def exposed_disregister_job(self, job_id): 
         self.POOL.pop(job_id)
+        print 'job %s is disregisterd'%(str(job_id)[-6:], )
     
     def exposed_get_pool(self): 
         return self.POOL 
@@ -77,43 +96,43 @@ class TaskManager(Service):
     
     def on_disconnect(self):
         msg = 'disconnected'
-        print(msg)
+        #print(msg)
 
-def get_pool(): 
-    with rpyc_conn('local', 'service', 17012) as conn: 
+def get_pool(port=17012): 
+    with rpyc_conn('local', 'service', port) as conn: 
         res = conn.root.get_pool() 
+        res = rpyc.classic.obtain(res) 
         return res 
-        
     
 class TestIt(unittest.TestCase): 
     def setUp(self): 
-        port = 0
-        s = ThreadedServer(TaskManager, port=port, auto_register=False)
-        self.s= s
-        self.s.start()
-       
+        port = 17000
+        server = ThreadedServer(TaskManager, port=port, auto_register=False)
+        self.server = server 
+        t = threading.Thread(target=self.server.start)
+        t.start()
+      
         ssh = SshMachine("localhost", user='zhli')
         #conn = rpyc.classic.ssh_connect(ssh, port)
-        conn = rpyc.ssh_connect(ssh, port)
-        #cResult  = conn.root.test(11000)  # test是服务端的那个以"exposed_"开头的方法 
+        conn = rpyc.ssh_connect(ssh, 17000, config={"allow_pickle":True})
         self.conn = conn 
         self.ssh = ssh 
-      
+        
     def test_temp(self):
         from tempfile import mkdtemp
         for i in range(10): 
-            pass 
+            self.conn.root.register_job(str(i)*10)
+        print get_pool(17000)
+        #print self.conn.root.get_pool()
     
     def tearDown(self): 
-        print 'eeeeeeeeeeeee'
         self.conn.close()
         self.ssh.close()
-        self.s.close()
-        
+        self.server.close()
         
 
 if __name__ == '__main__' : 
-    if 0: 
+    if 1: 
         if 0:
             TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
             unittest.main()
@@ -128,9 +147,10 @@ if __name__ == '__main__' :
 
             unittest.TextTestRunner(verbosity=0).run(suite)
     
-    #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
-    s = ThreadedServer(TaskManager, port=17012, auto_register=False)
-    s.start()
+    if 0: 
+        #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
+        s = ThreadedServer(TaskManager, port=17012, auto_register=False)
+        s.start()
     
 
 
