@@ -13,6 +13,8 @@ pickle_any = cloud.serialization.cloudpickle
 import os
 import time 
 import datetime 
+import pandas as pd 
+from collections import OrderedDict 
 
 from collections import OrderedDict
 from rpyc import Service
@@ -57,22 +59,34 @@ class TaskManager(Service):
             returns: 
                 status: run, completed, failed
         """
-        config = config if config is not None else {}
+        config = rpyc.classic.obtain(config) if config is not None else {}
         pool = self.POOL
         job_id = hash(backup_parpath)
         if pool.has_key(job_id): 
-            status = 'locked'
+            dir_status = 'locked'
         else:
-            status = 'open'
-            self.POOL[job_id] = {'dir': backup_parpath,  }
-            print  'job %s is added'%(str(job_id)[-6:], )
+            dir_status = 'open'
             
-            pool['time_started'] = str(datetime.datetime.now()).split('.')[0]
-            temp = ['hostname', 'pid']
+            job_info = OrderedDict()
+            time_stated = str(datetime.datetime.now()).split('.')[0]
+            backup_parpath = backup_parpath[-30:]
+            status = 'run'
+            #job_info['time_started'] = time_stated 
+            #job_info['backup_parpath'] = backup_parpath
+            temp = ['backup_parpath', 'status', 'time_stated', ]
+            dic = locals()
             for i in temp: 
-                self.POOL[i] = config.get(i)
-        
-        return status 
+                job_info[i] = dic[i]
+            
+            temp = ['job_group_name', 'hostname', 'pid']
+            for i in temp: 
+                job_info[i] = config.get(i)
+            pool[job_id] = job_info 
+            print  'add job %s: %s'%(str(job_id)[-6:], job_info.items())
+        return dir_status 
+    
+    def exposed_update_job(self, job_id, key, val): 
+        self.POOL[job_id][key] = val 
     
     def exposed_disregister_job(self, job_id): 
         self.POOL.pop(job_id)
@@ -119,11 +133,21 @@ class TestIt(unittest.TestCase):
         self.ssh = ssh 
         
     def test_temp(self):
+        pass 
+    def test_register_job(self):
         from tempfile import mkdtemp
-        for i in range(10): 
-            self.conn.root.register_job(str(i)*10)
-        print get_pool(17000)
-        #print self.conn.root.get_pool()
+        for i in range(5): 
+            config = {'pid': i}
+            self.conn.root.register_job(str(i), config=config)
+        pool=get_pool(17000)
+        df = pd.DataFrame(pool)
+        print  df.T  
+    def test_update_job(self): 
+        pass 
+        self.conn.root.update_job(hash('1'), 'status', 'completed')
+        pool=get_pool(17000)
+        df = pd.DataFrame(pool)
+        print  df.T  
     
     def tearDown(self): 
         self.conn.close()
@@ -132,8 +156,8 @@ class TestIt(unittest.TestCase):
         
 
 if __name__ == '__main__' : 
-    if 1: 
-        if 0:
+    if 0: 
+        if 1:
             TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
             unittest.main()
             
@@ -147,7 +171,7 @@ if __name__ == '__main__' :
 
             unittest.TextTestRunner(verbosity=0).run(suite)
     
-    if 0: 
+    else: 
         #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
         s = ThreadedServer(TaskManager, port=17012, auto_register=False)
         s.start()

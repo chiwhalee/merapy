@@ -1110,8 +1110,9 @@ class Main(object):
         main = cls(**config)
         msg = ''
         is_registered = False 
+        job_status = ''
         try: 
-            status= 'open'
+            status = 'open'
             if config.get('register_job'): 
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
@@ -1125,30 +1126,28 @@ class Main(object):
                     else:   #mps use this 
                         main.run_schedule(schedule)  
                 is_registered = True 
+                job_status = 'COMPLETED'
                 msg += 'run one COMPLETED.' 
             elif status== 'locked': 
                 msg += 'job exists' 
                 
         except KeyboardInterrupt: 
             #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
-            msg += 'KeyboardInterrupt captured.' 
+            msg += 'KeyboardInterrupt captured.'
+            job_status = 'FAILED'
         except Exception, exception:
             print exception
             traceback.print_exc()
+            job_status = 'FAILED'
         finally: 
             msg += ' EXIT chiled for %s'%(config.get('model_param'),)
             print msg
-            if is_registered or 1: 
+            if is_registered:  
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
                     job_id = hash(parpath)
-                    conn.root.disregister_job(job_id)
-                    #def f(pool): 
-                    #    print 'KKKKKKKKKKKKKKKKK'
-                    #    print pool.keys()
-                    #    pool.pop(job_id)
-                    #conn.root.operate_pool(f)
-                    
+                    #conn.root.disregister_job(job_id)
+                    conn.root.update_job(job_id, 'status', job_status)
                
             main.stop_player()        
         return main 
