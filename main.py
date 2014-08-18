@@ -1106,6 +1106,7 @@ class Main(object):
     @classmethod
     def run_one(cls, config): 
         schedule = config.get('schedule')
+        pid = os.getpid();  config.update(pid=pid)
         #schedule = config['run_schedule_args']['schedule']
         main = cls(**config)
         msg = ''
