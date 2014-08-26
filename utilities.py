@@ -1,12 +1,15 @@
 #coding=utf8
 """
 """
+import unittest 
 import numpy as np
 from tempfile import mkdtemp 
 import cPickle as pickle 
 import sys
 import string
 import random
+import gzip 
+import zlib 
 
 #__all__=["getch"]
 
@@ -164,14 +167,34 @@ def random_str(size=6, head='', tail=''):
     return res
 
 def load(path):
-    with open(path, 'rb') as inn: 
-        res = pickle.load(inn)
+    with open(path, 'rb') as f:
+        s= f.read()
+        head = s[:10]
+        #print 'oooo', hex(ord(head[0])), ord(head[0])
+        #print 'oooo', hex(ord(head[1]))
+        #print 'hhhh', repr(head)
+        if hex(ord(head[0]))=='0x78' and hex(ord(head[1]))=='0x9c': 
+            msg = 'discompress file ... '
+            s= zlib.decompress(s)
+            msg += 'done' 
+            print msg 
+        res= pickle.loads(s)
     return res
 
-def save(obj, path): 
-    out = open(path, "wb")
-    pickle.dump(obj, out)
-    out.close()
+def save(obj, path, compress=False): 
+    if not compress: 
+        out = open(path, "wb")
+        pickle.dump(obj, out)
+        out.close()
+    else: 
+        with open(path, 'wb') as f:  
+            #pickle.dump(obj, f)
+            s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            msg = 'compressing file ...'
+            z = zlib.compress(s)
+            msg += 'done' 
+            print msg 
+            f.write(z)
 
 def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0):
     """
@@ -212,10 +235,38 @@ def dict_to_object(dic):
             return ', '.join(self.__dict__.keys())
     return OBJECT(**dic)
     
+class TestIt(unittest.TestCase): 
+    def test_temp(self): 
+        pass
     
+    def test_save_load(self): 
+        for i in [0, 1]: 
+            z = {'sda': 3, 'sesdf': 1000000}
+            path = '/tmp/fuckqq'
+            save(z,  path, 1)
+            b = load(path)
+            print 'bbb', b 
+            self.assertEqual(z, b)
+        
+
 #replace_graph(x)
 if __name__ == "__main__": 
     replace_num(x)
+
+    if 0: 
+        unittest.main()
+    else: 
+        suite = unittest.TestSuite()
+        
+        add_list = [
+        'test_save_load', 
+          
+        ]
+        for a in add_list: 
+            suite.addTest(TestIt(a))
+
+        unittest.TextTestRunner().run(suite)
+
 
 
 

@@ -15,6 +15,7 @@ import rpyc
 from rpyc.utils.zerodeploy import DeployedServer
 import socket 
 
+from merapy.utilities import load, save 
 
 LOCAL_IP = '222.195.73.70'
 LOCAL_USERNAME = 'zhli' 
@@ -221,11 +222,12 @@ def rpyc_conn_local():
             print 'ssh connection failed'
             pass
 
-def rpyc_load(path, use_local_storage=False): 
+def rpyc_load(path, use_local_storage=False, compress=False): 
     if not use_local_storage: 
-        inn = open(path, "rb")
-        res = pickle.load(inn)
-        inn.close()
+        #inn = open(path, "rb")
+        #res = pickle.load(inn)
+        #inn.close()
+        res= load(path)
     else:
         if 0: # previouse trials and errors, keep this, from it can better understand rpyc
             if 0: # cannot load,  reason is that inn and load are not in the same namespace    
@@ -260,21 +262,32 @@ def rpyc_load(path, use_local_storage=False):
             
         with rpyc_conn_local() as conn: 
         #with rpyc_conn_local_zerodeploy() as conn:
-            load_local = conn.modules['merapy.context_util'].rpyc_load
+            #load_local = conn.modules['merapy.context_util'].rpyc_load
+            load_local = conn.modules['merapy.utilities'].load 
             res= load_local(path)
             res = rpyc.classic.obtain(res)
     return res
 
-def rpyc_save(path, obj, use_local_storage=False): 
+def rpyc_save(path, obj, use_local_storage=False, compress=False): 
     if not use_local_storage: 
-        out = open(path, "wb")
-        pickle.dump(obj, out)
-        out.close()
+        #out = open(path, "wb")
+        #pickle.dump(obj, out)
+        #out.close()
+        save(obj, path, compress)
     else: 
-        with rpyc_conn_local_zerodeploy() as conn:
-            out = conn.builtin.open(path, 'wb')
-            conn.modules.cPickle.dump(obj, out)
-            out.close()
+        #with rpyc_conn_local_zerodeploy() as conn:
+        #    out = conn.builtin.open(path, 'wb')
+        #    conn.modules.cPickle.dump(obj, out)
+        #    out.close()
+        with rpyc_conn_local() as conn: 
+            save_local = conn.modules['merapy.utilities'].save 
+            #obj1 = rpyc.classic.deliver(conn, obj)
+            save_local(obj, path)
+            
+           
+
+def replace_func(func, conn): 
+    pass 
 
 class DistCompute(object): 
     pass
@@ -284,6 +297,9 @@ class TestIt(unittest.TestCase):
     def setUp(self): 
         pass
     def test_temp(self): 
+        pass
+    
+    def test_save_and_load(self): 
            
         with make_temp_dir() as dd: 
             fn = dd + '/aaa'
@@ -292,7 +308,7 @@ class TestIt(unittest.TestCase):
             a=rpyc_load(fn, use_local_storage=1)
             self.assertTrue(a==obj)
             
-            fn ='/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
+            fn ='/home/zhli/backup_tensor_dir/run-long-heisbg/mera/alpha=2.0/4.pickle' 
             a=rpyc_load(fn, use_local_storage=1)
     
     def xtest_make_temp_dir(self): 
@@ -333,9 +349,10 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           TestIt('test_temp'), 
-           TestIt('test_rpyc_conn_local'), 
-           TestIt('test_rpyc_conn_local_zero'), 
+           #TestIt('test_temp'), 
+           TestIt('test_save_and_load'), 
+           #TestIt('test_rpyc_conn_local'), 
+           #TestIt('test_rpyc_conn_local_zero'), 
         ]
         for a in add_list: 
             suite.addTest(a)
