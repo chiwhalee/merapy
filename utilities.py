@@ -170,10 +170,10 @@ def load(path):
     with open(path, 'rb') as f:
         s= f.read()
         head = s[:10]
-        #print 'oooo', hex(ord(head[0])), ord(head[0])
-        #print 'oooo', hex(ord(head[1]))
+        #print 'oooo', hex(ord(head[0])),  hex(ord(head[1]))
         #print 'hhhh', repr(head)
-        if hex(ord(head[0]))=='0x78' and hex(ord(head[1]))=='0x9c': 
+        #head1 is different compress levels 
+        if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
             msg = 'discompress file ... '
             s= zlib.decompress(s)
             msg += 'done' 
@@ -181,7 +181,7 @@ def load(path):
         res= pickle.loads(s)
     return res
 
-def save(obj, path, compress=False): 
+def save(obj, path, compress=False, compress_level=2): 
     if not compress: 
         out = open(path, "wb")
         pickle.dump(obj, out)
@@ -191,7 +191,7 @@ def save(obj, path, compress=False):
             #pickle.dump(obj, f)
             s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
             msg = 'compressing file ...'
-            z = zlib.compress(s)
+            z = zlib.compress(s, compress_level)
             msg += 'done' 
             print msg 
             f.write(z)
