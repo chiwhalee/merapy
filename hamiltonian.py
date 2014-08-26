@@ -1702,51 +1702,6 @@ class System(object):
 
     @staticmethod
     def load(fn, use_local_storage=False):
-        if 0: 
-            if not use_local_storage: 
-                inn = open(fn, "rb")
-                res = pickle.load(inn)
-                #res = System.update_S(res)
-                inn.close()
-            else:
-                if 0: # previouse trials and errors, keep this, from it can better understand rpyc
-                    if 0: # cannot load,  reason is that inn and load are not in the same namespace    
-                        with rpyc_conn_local() as conn: 
-                            pass
-                            print conn
-                            inn = conn.builtin.open(fn, "rb")
-                            res = None
-                            res = cPickle.load(inn)
-                            inn.close()
-                            res = conn.modules['merapy.hamiltonian'].System.load(fn) 
-                    
-                    if 0: # can load,  but cannot return; reason is that, when conn closed,  S is not available
-                        with rpyc_conn_local() as conn: 
-                            pass
-                            res= None
-                            fn = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
-                            inn = conn.builtin.open(fn, "rb")
-                            res = conn.modules.cPickle.load(inn) 
-                            #res = pickle.load(inn) 
-                            res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
-                            print res
-                            inn.close()
-                    if 0:  #this worked , but below is better 
-                        with rpyc_conn_local() as conn: 
-                            #fn = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
-                            inn = conn.builtin.open(fn, "rb")
-                            res = conn.modules.cPickle.load(inn) 
-                            res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
-                            res = rpyc.classic.obtain(res)
-                            inn.close()
-                    
-                #with rpyc_conn_local() as conn: 
-                with rpyc_conn_local_zerodeploy() as conn: 
-
-                    System_local = conn.modules['merapy.hamiltonian'].System
-                    res= System_local.load(fn)
-                    #res = System_local.update_S(res) 
-                    res = rpyc.classic.obtain(res)
         res= rpyc_load(fn, use_local_storage)    
         res = System.update_S(res)
         
