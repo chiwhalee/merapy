@@ -282,7 +282,7 @@ def rpyc_save(path, obj, use_local_storage=False, compress=False):
         with rpyc_conn_local() as conn: 
             save_local = conn.modules['merapy.utilities'].save 
             #obj1 = rpyc.classic.deliver(conn, obj)
-            save_local(obj, path)
+            save_local(obj, path, compress=compress)
             
            
 
