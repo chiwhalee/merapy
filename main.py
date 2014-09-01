@@ -1118,6 +1118,8 @@ class Main(object):
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
                     status = conn.root.register_job(parpath, config)
+                if status  == 'open' : 
+                    is_registered = True
             if status == 'open': 
                 if schedule is None: 
                     main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
@@ -1126,7 +1128,6 @@ class Main(object):
                         main.run_schedule(**config['schedule'])
                     else:   #mps use this 
                         main.run_schedule(schedule)  
-                is_registered = True 
                 job_status = 'COMPLETED'
                 msg += 'run one COMPLETED.' 
             elif status== 'locked': 
@@ -1160,6 +1161,7 @@ class Main(object):
                 map is used for one unique function, while apply for different functions
                 the former is simple,  while the later is more flexible
         """
+        res= []
         #init_worker = lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
         assert nproc>0, 'nproc=%d'%(nproc, )
         if func is None: 
@@ -1190,7 +1192,8 @@ class Main(object):
                 
         else: 
             for i in config_group: 
-                func(i)
+                res.append(func(i))
+        return res 
     
     @staticmethod
     def make_grid(*args): 

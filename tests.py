@@ -4,6 +4,7 @@
 import unittest
 
 from merapy.run import TestIt as Test_run 
+from merapy.utilities import TestIt as Test_util 
 from merapy.tensor_svd import TestIt as Test_svd 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)
@@ -20,6 +21,7 @@ if 1:  #skip all test_temp
                 if hasattr(v, 'test_temp'): 
                     temp =  unittest.skip("skip test_temp")(getattr(v, 'test_temp')) 
                     setattr(v, 'test_temp', temp)
+
 if 0: 
     unittest.main()
 else: 

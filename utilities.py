@@ -196,7 +196,7 @@ def save(obj, path, compress=False, compress_level=2):
             print msg 
             f.write(z)
 
-def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0):
+def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0, return_str=False):
     """
         
     """
@@ -220,10 +220,12 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0
             except AttributeError as err: 
                 res= str(err)
         return str(res)
-            
-    #print  '\n'.join([str(i) + ':\n' + str(dic[i])  for i in  var_name_list])
-    print  sep.join([str(i) + sep_key_val + get_val(i)  for i in  var_name_list])
-    #print  sep.join([str(i) + sep_key_val + str(eval(i, dic))  for i in  var_name_list])
+    res=  sep.join([str(i) + sep_key_val + get_val(i)  for i in  var_name_list])
+    if not return_str:         
+        print  res
+    else: 
+        return res 
+   
 
 
 def dict_to_object(dic): 
