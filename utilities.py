@@ -194,7 +194,23 @@ def save(obj, path, compress=False, compress_level=2):
         with open(path, 'wb') as f:  
             #pickle.dump(obj, f)
             #s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
-            s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            try: 
+                s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            except Exception as err: 
+                #some diagonostic 
+                #print 'oooooooooooooo', obj.keys()
+                print 'pickling error, diagonstic which value cant be dumped: '
+                print sorted(obj.keys())
+                for k, v in sorted(obj.items()): 
+                    try: 
+                        print k,   
+                        pickle_any.dumps(v)
+                        print '--pass'
+                    except Exception as e: 
+                        print '--fail'
+                        print e
+                    
+                raise err 
             msg = 'compressing file ...'
             z = zlib.compress(s, compress_level)
             msg += 'done' 
