@@ -5,6 +5,8 @@ import unittest
 import numpy as np
 from tempfile import mkdtemp 
 import cPickle as pickle 
+import cloud 
+pickle_any = cloud.serialization.cloudpickle
 import sys
 import string
 import random
@@ -179,17 +181,20 @@ def load(path):
             msg += 'done' 
             print msg 
         res= pickle.loads(s)
+        #res= pickle_any.loads(s)
     return res
 
 def save(obj, path, compress=False, compress_level=2): 
     if not compress: 
         out = open(path, "wb")
-        pickle.dump(obj, out)
+        #pickle.dump(obj, out)
+        pickle_any.dump(obj, out)
         out.close()
     else: 
         with open(path, 'wb') as f:  
             #pickle.dump(obj, f)
-            s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            #s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
             msg = 'compressing file ...'
             z = zlib.compress(s, compress_level)
             msg += 'done' 
