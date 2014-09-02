@@ -1,4 +1,5 @@
-
+#coding=utf8
+#
 import unittest
 import cPickle as pickle
 from contextlib import contextmanager
@@ -260,12 +261,20 @@ def rpyc_load(path, use_local_storage=False, compress=False):
                     res = rpyc.classic.obtain(res)
                     inn.close()
             
-        with rpyc_conn_local() as conn: 
         #with rpyc_conn_local_zerodeploy() as conn:
+            #注意 rpyc_conn_local_zerodeploy 虽然能连接上，但是有限制:
+            #下面的一行  load_local = conn.modules['merapy.utilities'].load 会报错：
+            #ImportError: libifport.so.5: cannot open shared object file: No such file or directory
+            #找不到动态库
+            #故，放弃使用 zero_deploy 
+        with rpyc_conn_local() as conn: 
             #load_local = conn.modules['merapy.context_util'].rpyc_load
             load_local = conn.modules['merapy.utilities'].load 
-            res= load_local(path)
-            res = rpyc.classic.obtain(res)
+            #res = rpyc.classic.obtain(res)
+            #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
+            res= load_local(path, as_str=1)
+        res= pickle.loads(res)
+            
     return res
 
 def rpyc_save(path, obj, use_local_storage=False, compress=False): 
@@ -280,12 +289,14 @@ def rpyc_save(path, obj, use_local_storage=False, compress=False):
         #    conn.modules.cPickle.dump(obj, out)
         #    out.close()
         with rpyc_conn_local() as conn: 
-            save_local = conn.modules['merapy.utilities'].save 
-            #obj1 = rpyc.classic.deliver(conn, obj)
-            save_local(obj, path, compress=compress)
+            #save_local = conn.modules['merapy.utilities'].save 
+            #save_local(obj, path, compress=compress)
+            s=save( obj, path=None, compress=compress, as_str=1)
+            f = conn.builtin.open(path, 'wb')
+            f.write(s)
+            f.close()
             
            
-
 def replace_func(func, conn): 
     pass 
 

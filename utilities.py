@@ -2,6 +2,7 @@
 """
 """
 import unittest 
+import os 
 import numpy as np
 from tempfile import mkdtemp 
 import cPickle as pickle 
@@ -168,7 +169,7 @@ def random_str(size=6, head='', tail=''):
     res=''.join([head, middle, tail])
     return res
 
-def load(path):
+def load(path, as_str=False):
     with open(path, 'rb') as f:
         s= f.read()
         head = s[:10]
@@ -179,43 +180,50 @@ def load(path):
             msg = 'discompress file ... '
             s= zlib.decompress(s)
             msg += 'done' 
-            print msg 
-        res= pickle.loads(s)
+            print msg
+        if as_str: 
+            res= s
+        else: 
+            res= pickle.loads(s)
         #res= pickle_any.loads(s)
     return res
 
-def save(obj, path, compress=False, compress_level=2): 
+def save(obj, path, compress=False, compress_level=2, as_str=False): 
     if not compress: 
-        out = open(path, "wb")
-        #pickle.dump(obj, out)
-        pickle_any.dump(obj, out)
-        out.close()
+        if not as_str: 
+            out = open(path, "wb")
+            #pickle.dump(obj, out)
+            pickle_any.dump(obj, out)
+            out.close()
+        else: 
+            return pickle_any.dumps(obj)
     else: 
-        with open(path, 'wb') as f:  
-            #pickle.dump(obj, f)
-            #s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
-            try: 
-                s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
-            except Exception as err: 
-                #some diagonostic 
-                #print 'oooooooooooooo', obj.keys()
-                print 'pickling error, diagonstic which value cant be dumped: '
-                print sorted(obj.keys())
-                for k, v in sorted(obj.items()): 
-                    try: 
-                        print k,   
-                        pickle_any.dumps(v)
-                        print '--pass'
-                    except Exception as e: 
-                        print '--fail'
-                        print e
-                    
-                raise err 
-            msg = 'compressing file ...'
-            z = zlib.compress(s, compress_level)
-            msg += 'done' 
-            print msg 
-            f.write(z)
+        try: 
+            s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
+        except Exception as err: 
+            print 'pickling error, diagonstic which value cant be dumped: '
+            print sorted(obj.keys())
+            for k, v in sorted(obj.items()): 
+                try: 
+                    print k,   
+                    pickle_any.dumps(v)
+                    print '--pass'
+                except Exception as e: 
+                    print '--fail'
+                    print e
+                
+            raise err 
+        msg = 'compressing file ...'
+        z = zlib.compress(s, compress_level)
+        msg += 'done' 
+        print msg 
+        if not as_str: 
+            with open(path, 'wb') as f:  
+                #pickle.dump(obj, f)
+                #s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
+                f.write(z)
+        else: 
+            return z 
 
 def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0, return_str=False):
     """
@@ -265,11 +273,14 @@ class TestIt(unittest.TestCase):
     def test_save_load(self): 
         for i in [0, 1]: 
             z = {'sda': 3, 'sesdf': 1000000}
-            path = '/tmp/fuckqq'
-            save(z,  path, 1)
+            path = '/tmp/'  +  random_str( )
+            print  'path is ', path 
+            save(z,  path, i)
+            self.assertTrue(os.path.exists(path))
             b = load(path)
             print 'bbb', b 
             self.assertEqual(z, b)
+            os.remove(path)
         
 
 #replace_graph(x)
