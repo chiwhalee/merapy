@@ -174,6 +174,7 @@ def rpyc_conn_local_zerodeploy():
         server.close()
         ssh.close()
 
+
 @contextmanager
 def rpyc_conn(hostname, conn_type='classic',  port=17013): 
     """
@@ -200,6 +201,22 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
         except: 
             print 'ssh connection failed'
             pass
+
+def rpyc_conn_easy(hostname, conn_type='classic',  port=17013): 
+    """
+        EOFError
+    """
+    
+    ssh = ssh_connect(hostname)
+    if conn_type == 'classic' : 
+        conn = rpyc.classic.ssh_connect(ssh, port)
+    elif conn_type == 'service' : 
+        conn = rpyc.ssh_connect(ssh, port, config={"allow_pickle":True})
+    else: 
+        raise 
+    return conn 
+   
+
 
 @contextmanager
 def rpyc_conn_local(): 
