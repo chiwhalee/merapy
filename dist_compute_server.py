@@ -23,10 +23,14 @@ import threading
 import rpyc
 from plumbum import SshMachine
 
-from merapy.context_util import rpyc_conn 
+from merapy.context_util import rpyc_conn , rpyc_conn_easy
 from merapy.utilities import load, save 
 
-class TaskManager(Service):
+path = os.path.abspath(__file__)
+parpath = os.path.dirname(path)
+DB_PATH = '/'.join([parpath, 'TASK_MANAGER.DB.PICKLE']) #'./TASK_MANAGER.DB.PICKLE' 
+
+class TaskServer(Service):
     """
         POOL def: 
             primary key: job_id 
@@ -68,12 +72,12 @@ class TaskManager(Service):
             dir_status = 'open'
             
             job_info = OrderedDict()
-            time_stated = str(datetime.datetime.now()).split('.')[0]
+            time_started = str(datetime.datetime.now()).split('.')[0]
             backup_parpath = backup_parpath[-30:]
             status = 'run'
             #job_info['time_started'] = time_stated 
             #job_info['backup_parpath'] = backup_parpath
-            temp = ['backup_parpath', 'status', 'time_stated', ]
+            temp = ['backup_parpath', 'status', 'time_started', ]
             dic = locals()
             for i in temp: 
                 job_info[i] = dic[i]
@@ -112,16 +116,62 @@ class TaskManager(Service):
         msg = 'disconnected'
         #print(msg)
 
+
+class TaskManager(object): 
+    def __init__(self): 
+        conn = rpyc_conn_easy('local', 'service', 17012)
+        self.conn = conn 
+        self.root = conn.root 
+    
+    def get_pool(self, as_df=1): 
+        res = self.root.get_pool() 
+        res = rpyc.classic.obtain(res) 
+        if as_df: 
+            res=  pd.DataFrame(res).T 
+        return res 
+    
+    def clear_failed_jobs(self): 
+        df = self.get_pool()
+        #df = pd.DataFrame(pool).T 
+        a=df[df['status']=='FAILED']
+        for i in a.index:
+            msg = 'clear %d'%(i)
+            print msg 
+            self.root.disregister_job(i)
+    
+    def disregister_job(self, job_id_list): 
+        for i in job_id_list: 
+            msg = 'disregister %d'%i
+            self.root.disregister_job(i)
+            msg += '  ... done' 
+            print msg 
+            
+    def save(self): 
+        pool = self.get_pool(as_df=0)
+        save(pool, DB_PATH)
+        print 'try to save pool to %s'%(DB_PATH), '   ... succeed'
+    
+    def close(self):
+        self.conn.close()
+        print  'conn closed'
+        
+    def __del__(self): 
+        self.conn.close()
+        
+
 def get_pool(port=17012): 
     with rpyc_conn('local', 'service', port) as conn: 
         res = conn.root.get_pool() 
         res = rpyc.classic.obtain(res) 
         return res 
-    
+
+def clear_failed(): 
+    pass 
+
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         port = 17000
-        server = ThreadedServer(TaskManager, port=port, auto_register=False)
+        server = ThreadedServer(TaskServer, port=port, auto_register=False)
         self.server = server 
         t = threading.Thread(target=self.server.start)
         t.start()
@@ -153,18 +203,18 @@ class TestIt(unittest.TestCase):
         self.conn.close()
         self.ssh.close()
         self.server.close()
-        
+
 
 if __name__ == '__main__' : 
     if 0: 
-        if 1:
+        if 0:
             TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
             unittest.main()
             
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                TestIt('test_temp'), 
+                #TestIt('test_temp'), 
             ]
             for a in add_list: 
                 suite.addTest(a)
@@ -173,7 +223,7 @@ if __name__ == '__main__' :
     
     else: 
         #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
-        s = ThreadedServer(TaskManager, port=17012, auto_register=False)
+        s = ThreadedServer(TaskServer, port=17012, auto_register=False)
         s.start()
     
 
