@@ -169,7 +169,7 @@ def random_str(size=6, head='', tail=''):
     res=''.join([head, middle, tail])
     return res
 
-def load(path, as_str=False):
+def load(path, as_str=False, info=0):
     with open(path, 'rb') as f:
         s= f.read()
         head = s[:10]
@@ -180,7 +180,8 @@ def load(path, as_str=False):
             msg = 'discompress file ... '
             s= zlib.decompress(s)
             msg += 'done' 
-            print msg
+            if info>0: 
+                print msg
         if as_str: 
             res= s
         else: 
@@ -188,7 +189,7 @@ def load(path, as_str=False):
         #res= pickle_any.loads(s)
     return res
 
-def save(obj, path, compress=False, compress_level=2, as_str=False): 
+def save(obj, path, compress=False, compress_level=2, as_str=False, info=0): 
     if not compress: 
         if not as_str: 
             out = open(path, "wb")
@@ -216,7 +217,8 @@ def save(obj, path, compress=False, compress_level=2, as_str=False):
         msg = 'compressing file ...'
         z = zlib.compress(s, compress_level)
         msg += 'done' 
-        print msg 
+        if info>0: 
+            print msg 
         if not as_str: 
             with open(path, 'wb') as f:  
                 #pickle.dump(obj, f)
