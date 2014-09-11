@@ -10,9 +10,12 @@ import pprint
 import cPickle as pickle
 from collections import OrderedDict
 import warnings
+import dispy 
+
 
 from merapy.hamiltonian import System
 from merapy.utilities import load 
+from merapy.context_util import rpyc_load 
 #from mera_wigner_crystal import ham_wigner_crystal
 
 #from vmps.mps import MPS
@@ -66,12 +69,22 @@ def measure_decorator(result_db_class=None):
         return wrapper
     return inner
 
-def measure_S(S, parpath, which=None, exclude_which=None, force=0, 
-        fault_tolerant=1, **kwargs):
-        #db_version = kwargs.get('db_version')
-        #dbname = None if db_version is None else ResultDB.DBNAME + '.new'
+def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
+        fault_tolerant=1, param=None,  field_surfix='', rdb=None, **kwargs):
+    """
+        todo: 
+            parpath should be deprecated, extract it from path instead  
+    """
     use_local_storage =  kwargs.get('use_local_storage', False)
-    rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
+    print 'ssssssssssssssssss', type(S)
+    if S is None: 
+        assert path is not None
+        #S= load(path)
+        S = rpyc_load(path, use_local_storage=use_local_storage)
+        parpath = os.path.dirname(os.path.abspath(path))
+    
+    if rdb is None: 
+        rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
     is_converged = True
     if 1: 
         #if isinstance(S, MPS): 
@@ -133,7 +146,7 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
             
         elif algorithm == 'idmrg': 
             field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
-                    'entanglement']
+                    'entanglement', 'entanglement_spectrum']
             if S.get('which_minimize')=='psi_guess': 
                 diff = S.get('energy_diff_2')
             elif S.get('which_minimize')=='lam_guess': 
@@ -170,9 +183,14 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
     
     func = {i: all_func.__getattribute__(i) for i in which}
     
-        
-    param = {f: {} for f in which}
-    param.update(correlation=corr_param)
+    if param is None:     
+        param = {f: {} for f in which}
+        param.update(correlation=corr_param)
+    else: 
+        for f in which: 
+            if not param.has_key(f):  
+                param[f] = {}
+                
     func_name_map = {
             'calc_scaling_dim_2site': 'scaling_dim', 
             }
@@ -188,29 +206,28 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
     failed_list = []
     for w in which: 
         ff = func[w]
-        print '\t%s...   '%w,
-        
         w = func_name_map.get(ff.__name__, ff.__name__)
+        field_name = w if field_surfix  == ''  else w + '_' +  field_surfix  
+        print '\t%s...   '%field_name,
+        
         if db_version is None: 
-            is_found = rdb[k].has_key(w)
+            is_found = rdb[k].has_key(field_name)
         else:
-            key_list = [w] + [shape, iter]
+            key_list = [field_name] + [shape, iter]
             is_found = rdb.has_entry(key_list)
         if is_found and not force: 
             msg ='%20s'%('found in db')
         else: 
             try:
-                        
                 res = ff(S, **param[w])
-                   
                 msg = '%20s'%('done')
                 if kwargs.get('show', False): 
                     pprint.pprint(res, indent=1, width=200)
                 #if w in ['entanglement_entropy', 'entanglement_spectrum', 'correlation_extra']: 
                 if db_version is None: 
-                    rdb.put(field_name=w, key=k, res=res, sub_key_list=None)
+                    rdb.put(field_name=field_name, key=k, res=res, sub_key_list=None)
                 else: 
-                    rdb.insert(field_name=w, sh=shape, iter=iter, val=res)
+                    rdb.insert(field_name=field_name, sh=shape, iter=iter, val=res)
                     
             except Exception as err:
                 failed_list.append((w, shape, iter, err))
@@ -220,15 +237,11 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
         print msg
     
     if algorithm == 'mera' :
-        #db['iter'] = S.iter
         print '\tenergy...     done'
         if db_version is None: 
             rdb[k].update({'energy': S.energy})
         elif db_version == 1.0:
             if not rdb.has_key('energy'): rdb.add_key_list(['energy', shape])
-            #db['energy']
-            #db['energy'] = S.energy_record
-            #rdb.insert(field_name='energy', sh=shape, iter=iter, val=S.energy)
             rdb['energy'][shape] = S.energy_record
     elif algorithm == 'mps': 
         rdb['version'] = 1.0
@@ -243,10 +256,20 @@ def measure_S(S, parpath, which=None, exclude_which=None, force=0,
     if len(failed_list)>0: 
         print 'failed_list: %s'%failed_list
 
+def measure_it(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
+        fault_tolerant=1, param=None,  field_surfix='', rdb=None ):  
+    """
+        todo: 
+            parpath should be deprecated, extract it from path instead  
+    """
+    print 1 
+
 #now I undertand that, this func in fact realized a decorator for individal measure funcs!!
-def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
-        which=None, exclude_which=None, force=0, 
+def measure_all_bac(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
+        which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
         fault_tolerant=1, recursive=False,  **kwargs): 
+    
+    use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
     __mera_shape_list = mera_shape_list
     if isinstance(which, str): 
@@ -261,7 +284,7 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
             dir_list.extend(temp)
         #print 'recursively found these dirs %s'%(dir_list, )
     aaa = os.path.abspath(dir_list[0])
-    if 'mera' in aaa : 
+    if 'mera' in aaa: 
         algorithm = 'mera'
     elif 'mps' in aaa and 'idmrg' not in aaa: 
         algorithm = 'mps'
@@ -292,7 +315,6 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
                 
             path = '/'.join([dir, fn])
             try: 
-                #S = System.load(path)
                 S= load(path)
             except IOError as err: 
                 path_not_found.append(path)
@@ -307,8 +329,199 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
                 else: 
                     raise
             
-            measure_S(S, dir, which, exclude_which=exclude_which, force=force, 
-                    fault_tolerant=fault_tolerant, **kwargs)
+            measure_S(S, dir, which, exclude_which=exclude_which, param=param, force=force, 
+                    fault_tolerant=fault_tolerant, field_surfix=field_surfix,  **kwargs)
+            
+    if len(path_not_found)>0: 
+        print 'path_not_found is %s'%path_not_found
+
+def make_measure_many_args(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
+        which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
+        fault_tolerant=1, recursive=False,  **kwargs): 
+    
+    use_local_storage = kwargs.get('use_local_storage', False)
+    path_not_found = []
+    __mera_shape_list = mera_shape_list
+    if isinstance(which, str): 
+        which = [which]
+    if isinstance(dir_list, str): 
+        dir_list = [dir_list]
+    if recursive: 
+        dir_list_1 = list(dir_list)
+        dir_list = []
+        for dir in dir_list_1: 
+            temp=mera_backup_dir_finder(root=dir)
+            dir_list.extend(temp)
+        #print 'recursively found these dirs %s'%(dir_list, )
+    aaa = os.path.abspath(dir_list[0])
+    if 'mera' in aaa: 
+        algorithm = 'mera'
+    elif 'mps' in aaa and 'idmrg' not in aaa: 
+        algorithm = 'mps'
+    elif 'idmrg' in aaa:
+        algorithm = 'idmrg'
+    else: 
+        raise
+    
+    path_list = []
+    for dir in dir_list: 
+        #fori d in dim_list: 
+        if mera_shape_list  == 'all': 
+            db = ResultDB(dir, algorithm=algorithm)
+            __mera_shape_list = db.get_mera_shape_list(sh_max=sh_max, sh_min=sh_min)
+        
+        for sh in __mera_shape_list: 
+            if algorithm  == 'mera':  
+                #sh[1] -= 1  #layer->layer-1
+                sh = list(sh);  sh[1] -= 1
+                fn = System.backup_fn_gen(*sh)
+            elif algorithm == 'mps': 
+                N, D = sh
+                fn = "N=%d-D=%d.pickle"%(N, D)
+            elif algorithm == 'idmrg': 
+                N, D = sh
+                fn = "N=%d-D=%d.pickle"%(N, D)
+            else: 
+                raise 
+                
+            path = '/'.join([dir, fn])
+            path_list.append(path)
+    
+    res= []
+    for path in path_list:    
+        if 0: 
+            try: 
+                S= load(path)
+            except IOError as err: 
+                path_not_found.append(path)
+                if fault_tolerant: 
+                    continue
+                else: 
+                    raise
+            except Exception as e: 
+                path_not_found.append((path, e))
+                if fault_tolerant: 
+                    continue 
+                else: 
+                    raise
+        temp = dict(path=path, which=which, exclude_which=exclude_which, 
+            fault_tolerant=fault_tolerant, field_surfix=field_surfix, 
+            force=force, **kwargs)  
+        res.append(temp) 
+    
+    return res 
+
+
+def compute(n):
+    import time, socket
+    n = 3 
+    time.sleep(n)
+    host = socket.gethostname()
+    return (host, n)
+
+def measure_all_new(arg_group): 
+    nodes= ['qtg7501']
+    nodes= ['localhost']
+    
+    #cluster = dispy.JobCluster(measure_S,  nodes=nodes, depends=[])
+    #cluster = dispy.JobCluster(measure_it,  nodes=nodes, depends=[])
+    import merapy
+    import vmps
+    cluster = dispy.JobCluster(compute,  nodes=nodes, depends=[merapy, vmps])
+    #for i in range(10):
+    #    print  'iiiiiiiiiiiiiiiiiiiii', i 
+    #    cluster.submit(i)
+    job_list = []
+    for i, a in enumerate(arg_group): 
+        path = a['path']
+        #job=cluster.submit(( ), **a)
+        #job=cluster.submit((), a)
+        job=cluster.submit(i) 
+        job.id = i
+        job_list.append(job)
+    
+    print len(job_list)
+    for job in job_list:
+        #host, n = job() # waits for job to finish and returns results
+        #print '%s executed job %s at %s with %s' % (host, job.id, job.start_time, n)
+        # other fields of 'job' that may be useful:
+        # job.stdout, job.stderr, job.exception, job.ip_addr, job.end_time
+        print job.stdout, job.stderr , job.id, job.exception  
+    cluster.stats()
+
+
+
+def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
+        which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
+        fault_tolerant=1, recursive=False,  **kwargs): 
+    
+    use_local_storage = kwargs.get('use_local_storage', False)
+    path_not_found = []
+    __mera_shape_list = mera_shape_list
+    if isinstance(which, str): 
+        which = [which]
+    if isinstance(dir_list, str): 
+        dir_list = [dir_list]
+    if recursive: 
+        dir_list_1 = list(dir_list)
+        dir_list = []
+        for dir in dir_list_1: 
+            temp=mera_backup_dir_finder(root=dir)
+            dir_list.extend(temp)
+        #print 'recursively found these dirs %s'%(dir_list, )
+    aaa = os.path.abspath(dir_list[0])
+    if 'mera' in aaa: 
+        algorithm = 'mera'
+    elif 'mps' in aaa and 'idmrg' not in aaa: 
+        algorithm = 'mps'
+    elif 'idmrg' in aaa:
+        algorithm = 'idmrg'
+    else: 
+        raise
+    
+    path_list = []
+    for dir in dir_list: 
+        #fori d in dim_list: 
+        if mera_shape_list  == 'all': 
+            db = ResultDB(dir, algorithm=algorithm)
+            __mera_shape_list = db.get_mera_shape_list(sh_max=sh_max, sh_min=sh_min)
+        
+        for sh in __mera_shape_list: 
+            if algorithm  == 'mera':  
+                #sh[1] -= 1  #layer->layer-1
+                sh = list(sh);  sh[1] -= 1
+                fn = System.backup_fn_gen(*sh)
+            elif algorithm == 'mps': 
+                N, D = sh
+                fn = "N=%d-D=%d.pickle"%(N, D)
+            elif algorithm == 'idmrg': 
+                N, D = sh
+                fn = "N=%d-D=%d.pickle"%(N, D)
+            else: 
+                raise 
+                
+            path = '/'.join([dir, fn])
+            path_list.append(path)
+    
+    for path in path_list:    
+        if 1: 
+            try: 
+                #S= load(path)
+                measure_S(path=path, which=which, exclude_which=exclude_which, param=param, force=force, 
+                        fault_tolerant=fault_tolerant, field_surfix=field_surfix,  **kwargs)
+            except IOError as err: 
+                path_not_found.append(path)
+                if fault_tolerant: 
+                    continue
+                else: 
+                    raise
+            except Exception as e: 
+                path_not_found.append((path, e))
+                if fault_tolerant: 
+                    continue 
+                else: 
+                    raise
+         
             
     if len(path_not_found)>0: 
         print 'path_not_found is %s'%path_not_found
@@ -344,11 +557,10 @@ class TestIt(unittest.TestCase):
     def test_temp(self): 
         pass
         args= self.args
-        dir = '/home/zhli/Documents/mera_backup_tensor/run-long-better/new_run/alpha=1.9'
+        dir = '/home/zhli/backup_tensor_dir/run-long-better/mera/new_run/alpha=1.9'
         args.update(dir_list=[dir], mera_shape_list=[(4, 4)], which=['entanglement_brute_force_6'])
         
         measure_all( **args )
-   
    
     def test_idmrg_correlation(self): 
         args= self.args
@@ -374,6 +586,32 @@ class TestIt(unittest.TestCase):
         args.update(dir_list=[dir],which=which, force=0, mera_shape_list=[(40, 10)])
         #measure_all( **args )
         measure_all( **args )
+    
+    def test_make_measure_many_args(self): 
+        dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=0.0/'
+        res = make_measure_many_args(dir, 'all', which=['energy'])
+        for r in res: 
+            measure_S(**r)
+    
+    def test_measure_all_new(self): 
+        dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=1.0/'
+        res = make_measure_many_args(dir, 'all', 
+                use_local_storage=1, 
+                sh_max=(200, 20), which=['correlation'], force=1)
+        if 0: 
+            from merapy.utilities import save , load 
+            save(res[0], '/tmp/mea_arg')
+            save(measure_S, '/tmp/mea_func')
+            
+            mf = load('/tmp/mea_func')
+            ma = load('/tmp/mea_arg')
+            mf(**ma)
+        
+        if 0: 
+            for r in res[: 2]: 
+                measure_S(**r)
+        if 1: 
+            measure_all_new(res)
     
     def tearDown(self): 
         pass
@@ -432,12 +670,14 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               TestIt('test_temp'), 
-               #TestIt('test_vmps_all'), 
+                #'test_temp', 
+                #'test_vmps_all', 
+                #'test_make_measure_many_args', 
+                'test_measure_all_new', 
         
             ]
             for a in add_list: 
-                suite.addTest(a)
+                suite.addTest(TestIt(a))
             #suite.addTest(TestIt('test_ising'))
             #suite.addTest(TestIt('test_heisbg'))
             unittest.TextTestRunner().run(suite)
