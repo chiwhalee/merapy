@@ -6,6 +6,8 @@
     to fully utilize computational resource, support communication between each hosts
 
 """
+import sys 
+import argparse 
 import unittest 
 import cPickle as pickle
 import cloud
@@ -47,6 +49,7 @@ class TaskServer(Service):
         #    with open(path, 'wb') as f:
         #        pass
         #print(msg)
+        self.backup_path = path 
         self._conn._config.update(dict(
                     allow_all_attrs = True,
                     allow_pickle = True,
@@ -58,14 +61,14 @@ class TaskServer(Service):
                     instantiate_oldstyle_exceptions = True,
                 ))        
         
-    def exposed_register_job(self, backup_parpath, config=None): 
+    def exposed_register_job(self, job_id, config=None, info=1): 
         """
             returns: 
                 status: run, completed, failed
         """
         config = rpyc.classic.obtain(config) if config is not None else {}
         pool = self.POOL
-        job_id = hash(backup_parpath)
+        #job_id = hash(backup_parpath)
         if pool.has_key(job_id): 
             dir_status = 'locked'
         else:
@@ -73,20 +76,18 @@ class TaskServer(Service):
             
             job_info = OrderedDict()
             time_started = str(datetime.datetime.now()).split('.')[0]
-            backup_parpath = backup_parpath[-30:]
             status = 'run'
-            #job_info['time_started'] = time_stated 
-            #job_info['backup_parpath'] = backup_parpath
-            temp = ['backup_parpath', 'status', 'time_started', ]
+            temp = [ 'status', 'time_started']
             dic = locals()
             for i in temp: 
                 job_info[i] = dic[i]
             
-            temp = ['job_group_name', 'hostname', 'pid']
+            temp = ['backup_parpath', 'job_group_name', 'hostname', 'pid']
             for i in temp: 
                 job_info[i] = config.get(i)
             pool[job_id] = job_info 
-            print  'add job %s: %s'%(str(job_id)[-6:], job_info.items())
+            if info>0: 
+                print  'add job %s: %s'%(str(job_id)[-6:], job_info.items())
         return dir_status 
     
     def exposed_update_job(self, job_id, key, val): 
@@ -111,11 +112,24 @@ class TaskServer(Service):
     
     def exposed_save(self): 
         pass
+
+    def exposed_dump_pool(self): 
+        msg = 'try tump pool to %s'%(self.backup_path[-30: ])
+        save(self.POOL, self.backup_path)
+        msg +=  '  ... done' 
+        print msg 
+    
+    def exposed_recover(self): 
+        msg = 'try recover pool from %s'%(self.backup_path[-30: ])
+        temp = load(self.backup_path)
+        self.__class__.POOL = temp 
+        msg +=  '  ... done' 
+        print self.POOL.keys() 
     
     def on_disconnect(self):
         msg = 'disconnected'
         #print(msg)
-
+    
 
 class TaskManager(object): 
     def __init__(self): 
@@ -184,6 +198,7 @@ class TestIt(unittest.TestCase):
         
     def test_temp(self):
         pass 
+    
     def test_register_job(self):
         from tempfile import mkdtemp
         for i in range(5): 
@@ -192,9 +207,43 @@ class TestIt(unittest.TestCase):
         pool=get_pool(17000)
         df = pd.DataFrame(pool)
         print  df.T  
+    
+    def test_register_job_1(self):
+        from vmps.run_ising.config import make_config 
+        from vmps.main import Main 
+        import numpy as np 
+ 
+        hh = np.arange(0.5, 1.0, 0.1)
+
+        dir_sur = ['a']
+        alg_sur = ['', 'lam_guess', 'psi_guess']
+        grid = Main.make_grid(hh, alg_sur[0:1], dir_sur)
+        config_group = []
+
+        for i in grid: 
+            h, asur, dsur = i
+            c = make_config(h, algorithm='idmrg', alg_surfix=asur, root1='', surfix = dsur)
+            c.update(N0=4, NUM_OF_THREADS=1, energy_diff_tol=1e-10)
+            c['which_increase_D'] = 'insert_sites'
+            #c['schedule'] = [4, 8, 12]
+            #c['schedule'] = range(2, 100, 2)
+            c['schedule'] = [4, 10, 20, 40] 
+            #c['backup_parpath'] = None
+            c['num_iter_min'] = 20
+            config_group.append(c)
+            
+        for c in config_group: 
+            id = (hash(c['backup_parpath_local']), 'bbb', 'ccc')
+            print  self.conn.root.register_job(id, c, info=0)
+
     def test_update_job(self): 
-        pass 
-        self.conn.root.update_job(hash('1'), 'status', 'completed')
+        #self.test_register_job()
+        self.conn.root.register_job(1000,  )
+        self.conn.root.update_job(1000, 'status', 'completed')
+        pool=get_pool(17000)
+        df = pd.DataFrame(pool)
+        print  df.T  
+        self.conn.root.update_job(1000, 'status', 'hello')
         pool=get_pool(17000)
         df = pd.DataFrame(pool)
         print  df.T  
@@ -206,7 +255,29 @@ class TestIt(unittest.TestCase):
 
 
 if __name__ == '__main__' : 
-    if 0: 
+    #if 1: 
+    if len(sys.argv)>1: 
+        parser = argparse.ArgumentParser(description='dont know')
+        parser.add_argument('-s', '--start', action='store_true', default=False) 
+        parser.add_argument('-p', '--port', type=int, default=17012)
+        args = parser.parse_args()
+        args = vars(args)
+        port = args['port']
+        if args['start']: 
+            try: 
+                s = ThreadedServer(TaskServer, port=port, auto_register=False)
+                s.start()
+                
+            except KeyboardInterrupt: 
+                msg = 'KeyboardInterrupt captured.'
+                s.dump_pool()
+                sys.exit( )
+            except Exception as err: 
+                print err 
+        
+    else: 
+        #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
+        
         if 0:
             TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
             unittest.main()
@@ -214,17 +285,15 @@ if __name__ == '__main__' :
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                #TestIt('test_temp'), 
+                #'test_temp', 
+                #'test_register_job', 
+                #'test_register_job_1', 
+                'test_update_job', 
             ]
             for a in add_list: 
-                suite.addTest(a)
+                suite.addTest(TestIt(a))
 
             unittest.TextTestRunner(verbosity=0).run(suite)
-    
-    else: 
-        #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
-        s = ThreadedServer(TaskServer, port=17012, auto_register=False)
-        s.start()
     
 
 

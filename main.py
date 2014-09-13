@@ -26,6 +26,7 @@
         
 """
 import time
+import datetime 
 import pprint
 import inspect
 import pickle
@@ -1115,9 +1116,12 @@ class Main(object):
         try: 
             status = 'open'
             if config.get('register_job'): 
-                parpath = config['backup_parpath_local']
+                job_id = config.get('job_id')
+                if job_id is None: 
+                    parpath = config['backup_parpath_local']
+                    job_id = (str(config.get('job_group_name')), hash(parpath))
                 with rpyc_conn('local', 'service', 17012) as conn:                
-                    status = conn.root.register_job(parpath, config)
+                    status = conn.root.register_job(job_id, config)
                 if status  == 'open' : 
                     is_registered = True
             if status == 'open': 
@@ -1147,9 +1151,10 @@ class Main(object):
             if is_registered:  
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
-                    job_id = hash(parpath)
-                    #conn.root.disregister_job(job_id)
+                    print 'iiiiiiiiiiiiiii', job_id 
                     conn.root.update_job(job_id, 'status', job_status)
+                    #end_time = str(datetime.datetime.now()).split('.')[0]
+                    #conn.root.update_job(job_id, 'end_time', end_time)
                
             main.stop_player()        
         return main 
