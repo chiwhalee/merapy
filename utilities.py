@@ -2,6 +2,7 @@
 """
 """
 import unittest 
+import inspect 
 import os 
 import numpy as np
 from tempfile import mkdtemp 
@@ -227,10 +228,16 @@ def save(obj, path, compress=False, compress_level=2, as_str=False, info=0):
         else: 
             return z 
 
-def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0, return_str=False):
+def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', head=None, 
+        show_header=0, return_str=False):
     """
         
     """
+    if head is None: 
+        lineno = inspect.currentframe().f_back.f_lineno
+        frm = inspect.stack()[1]
+        module_name = inspect.getmodule(frm[0]).__name__
+        head = 'print_vars from %s at line %s\n'%(module_name, lineno)
     dic['np'] = np  #inject np to the namespace so that it can be evaled 
     if var_name_list is None: 
         var_name_list = sorted(dic)
@@ -248,10 +255,12 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', show_header=0
                 res= eval(x, dic)
             except NameError as err: 
                 res= 'not defined'
-            except AttributeError as err: 
-                res= str(err)
+            #except AttributeError as err: 
+            except Exception as err: 
+                res='error: ' +  str(err)
         return str(res)
-    res=  sep.join([str(i) + sep_key_val + get_val(i)  for i in  var_name_list])
+    res = head
+    res  +=  sep.join([str(i) + sep_key_val + get_val(i)  for i in  var_name_list])
     if not return_str:         
         print  res
     else: 
