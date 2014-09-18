@@ -3,12 +3,15 @@
 
 """ 
     some math
-        In representation theory, QnZ2, QnU1 etc defined below are in fact the so called 
-        "WEIGHT SPACE" \Lambda={\lambda_1, \lambda_2, ...}. 
-            这些类中的operator实际上给出了 "FUSION RULE"，即给出多个矢量空间的张量积的量子数的运算法则(i.e. define an algebra)
+        In representation theory, QnZ2, QnU1 etc defined below are in fact the
+        so called "WEIGHT SPACE" \Lambda={\lambda_1, \lambda_2, ...}.
+            这些类中的operator实际上给出了 "FUSION
+            RULE"，即给出多个矢量空间的张量积的量子数的运算法则(i.e. define an
+            algebra)
         
-        While QspZ2,  QSpU1 etc define a vector space V, which is direct sum decomposition according to the weights: 
-        V = \osum_{i}{blablabla...}
+        While QspZ2,  QSpU1 etc define a vector space V, which is direct sum
+        decomposition according to the weights: V = \osum_{i}{blablabla...}. 
+        note this osum is ORDERED
     
     todo:
         1. 用descriptor
@@ -31,11 +34,11 @@
     that is to say need not distinguish upper and lower legs
 """
 import unittest 
-
-from system_parameter import SystemParam
 import numpy as np
 import warnings
-from decorators import decorate_methods, tensor_player 
+
+from merapy.decorators import decorate_methods, tensor_player 
+from merapy.utilities import print_vars 
 
 #__all__=["QuantumNum", "QuantSpace", "QN_idendity", "QSp_null", "QSp_base", "init_System_QSp", "QspU1", "QspZ2", "reset_System_QSp"]
 __all__=["QuantumNum", "QuantSpace", "QuantSpaceBase",  "init_System_QSp", 
@@ -707,29 +710,25 @@ class QuantSpaceBase(object):
 
     def has_quant_num(self, qn):
         """
-        status_1_verified
-        see InQuantSpace in f90
-        qn: instance of QuantumNum  or a tuple
+            see InQuantSpace in f90
+            qn: instance of QuantumNum  or a tuple
         
         """
         if self.nQN ==0:  #empty quantum space
             res = -1    # -1 indicates self.nQN=0
             return res
         
-        for i in range(self.nQN):
-            #for a in range(self.QNs[0].NUM_OF_SYMM):
+        for i in xrange(self.nQN):
             if qn == self.QNs[i]:
-                res = i
-                #res = int(np.where(self.QNs==qn)[0][0])
-                #res = self.QNs.index(qn)
-                return res
-            #attention_this_may_be_wrong
-            #这里漏了一句
-        #res= -self.nQN  #-1
-        #in fact the trick here makes the program more complex
-        res= -1
-        #-2 indicates qn is not in self.QNs and self.nQN!=0
+                return i 
+        res = -1
         return res
+    
+    def get_qn_id(self, qn):
+        try:
+            return self.QNs.index(qn)
+        except ValueError:
+            return -1 
 
     def add_to_quant_space(self, qn, d):
         """
@@ -743,8 +742,6 @@ class QuantSpaceBase(object):
         #when qn not in self.QNs
         if i<0:
             i=self.nQN
-            #self.QNs[i].set_val(qn)
-            #self.QNs[i] = qn #self.QnClass(qn)
             self.QNs.append(qn)
 
             self.nQN+=1
@@ -757,7 +754,7 @@ class QuantSpaceBase(object):
         self._totDim += d
         return ind
    
-    def add(self, other):
+    def tensor_prod(self, other):
         """ 
             acturally tensorprod of self and other,  though named add
             q571, RefQN is not added!, RefQN[:,:] is arbitrary valued
@@ -779,7 +776,7 @@ class QuantSpaceBase(object):
                 res.add_to_quant_space(qn, d)
         return res
     
-    tensor_prod = add
+    add = tensor_prod 
     
     @staticmethod
     def prod_many( qsp_list): 
@@ -1199,7 +1196,6 @@ if 0:
         return nd, _dims
 
 
-
 # ====================================================================================== 
 
 class test_qn(object):
@@ -1425,40 +1421,50 @@ class TestIt(unittest.TestCase):
         print q*q 
         self.assertTrue(q**3 == q*q*q) 
         print  q**0 
-        
 
+    def test_tensor_prod(self): 
+        if 0:
+            a = QspU1.easy_init([1, -1], [2, 4])
+            b = QspU1.easy_init([1, -1], [4, 2])
+            c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
+            print_vars(vars(), ['a', 'b', 'c'])
+            print_vars(vars(), ['a*b', 'b*a', 'a*c', 'c*a'])
+            print_vars(vars(), ['(a*b).QNs', '(b*a).QNs', '(a*c).QNs', '(c*a).QNs'])
+        if 0:
+            a = QspU1.easy_init([1, -1], [2, 4])
+            c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
+            print_vars(vars(), ['a', 'b', 'c'])
+            print_vars(vars(), ['(a*b).QNs', '(b*a).QNs', '(a*c).QNs', '(c*a).QNs'])
+
+        if 0:
+            a = QspU1.easy_init([0, 1, 2], [1, 1, 1])
+            print_vars(vars(), ['a', 'a**2', 'a**3'])
+            print a.QNs , type(a.QNs), a.QNs.index(QnU1(2))
+        if 1:
+            a = QspU1.easy_init([1, -1], [2, 4])
+            b = QspU1.easy_init([1, -1], [4, 2])
+            c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
+            print_vars(vars(), ['a*b*c', 'a*(b*c)'])
+            
+
+        
+    
 if __name__ == "__main__":
         
-    if 1: #examine
-        if 1: 
-            from concurrencytest import ConcurrentTestSuite, fork_for_tests
-            loader = unittest.TestLoader()
-            suite = []
-            for cls in [TestIt]: 
-                temp = loader.loadTestsFromTestCase(cls)
-                suite.append(temp)
-            suite = unittest.TestSuite(suite)
-            
-            suite = ConcurrentTestSuite(suite, fork_for_tests(2))
-            unittest.TextTestRunner(verbosity=0).run(suite)
-        else: 
-                
-            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
-            #unittest.TextTestRunner(verbosity=0).run(suite)    
-            TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
-            unittest.main()
+    if 0:
+        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        unittest.main()
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           TestIt('test_temp'), 
-           #TestIt('test_old_all'), 
-           #TestIt('test_compare'), 
-           #TestIt('test_power'), 
+           #'test_temp', 
+           #'test_old_all', 
+           #'test_compare', 
+           #'test_power', 
+           'test_tensor_prod', 
         ]
         for a in add_list: 
-            suite.addTest(a)
-        #suite.addTest(TestIt('test_ising'))
-        #suite.addTest(TestIt('test_heisbg'))
+            suite.addTest(TestIt(a))
         unittest.TextTestRunner().run(suite)
        
 
