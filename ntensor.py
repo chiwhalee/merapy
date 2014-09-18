@@ -8,6 +8,7 @@
 """
 import unittest 
 import numpy as np 
+import cPickle as pickle 
 
 from merapy import crandom
 
@@ -203,6 +204,7 @@ class TensorBase(object):
         out = open(fn, "wb")
         pickle.dump(self, out)
         out.close()
+        
     @staticmethod
     def load(fn):
         inn = open(fn, "rb")
