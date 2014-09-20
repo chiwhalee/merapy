@@ -2247,7 +2247,7 @@ class iTensor(TensorBase):
             conj the third leg of the A tensor 
             DO NOT use this in other circumstances!!
         """
-        assert self.rank == 3  
+        #assert self.rank == 3  
         A = self.copy()
         A.reverse_qsp()
         #A.QSp[0].reverse()  #change third leg 

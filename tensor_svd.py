@@ -349,7 +349,7 @@ class Tensor_svd(object):
         return Sd
 
     @staticmethod 
-    def svd_rank2(tensor, trunc_dim=None, full_matrices=False, return_trunc_err=False, 
+    def svd_rank2(tensor, trunc_dim=None, full_matrices=False, compute_uv=True, return_trunc_err=False, 
         normalize_singular_val=False):  
         trunc_dim = trunc_dim if trunc_dim is not None else 10000
         """
@@ -380,13 +380,18 @@ class Tensor_svd(object):
                 #暂时先不用它，而改用numpy
                 u, s, v = common_util.matrix_svd(min(dl, dr), mat)
             else:
-                u, s, v=scipy.linalg.svd(mat, full_matrices=False)
-            uu[i], ss[i], vv[i] = u, s, v
-            #dim_list.append(s.size)
+                if compute_uv: 
+                    u, s, v=scipy.linalg.svd(mat, full_matrices=False)
+                    uu[i], ss[i], vv[i] = u, s, v
+                else: 
+                    s = scipy.linalg.svd(mat, full_matrices=False, compute_uv=False)
+                    ss[i] = s
+                    
             dim_list[i] = s.size 
-            qn = tt.QSp[1].QNs[qn1]
-            #qn_list.append(qn.copy())
-            qn_list[i] = qn.copy() 
+            qn_list[i] = tt.QSp[1].QNs[qn1].copy()
+        
+        if not compute_uv: 
+            return ss 
         
         #issue:  may happen d = 0, some qn is fully truncated
         if trunc_dim < np.sum(dim_list):  
@@ -430,7 +435,6 @@ class Tensor_svd(object):
                 
         else:
             trunc_err = 0.0
-        
         #qsp_sr = tt.QSp[0].__class__(len(dim_list), qn_list, dim_list)
         qsp_sr = tt.qsp_class(len(qn_list), qn_list, dim_list)
         qsp_sl = qsp_sr.copy(); qsp_sl.reverse()
