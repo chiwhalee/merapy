@@ -19,7 +19,7 @@ from merapy.context_util import redirect
 num_of_instance = 0
 
 
-__all__ = ["decorate_methods", "tensor_player", "set_STATE_end_1", "set_STATE_end_simple", "timer", "profileit"]
+__all__ = ["decorate_methods", "tensor_player", "set_STATE_end_1", "set_STATE_end_simple", "timer", "profileit", 'set_player_state_auto']
 #__all__ = ["decorate_methods", "tensor_player", "set_STATE_end", "set_STATE_end_1", "timer", "profileit"]
 
 """
@@ -872,7 +872,11 @@ def set_STATE_end_simple(iter, q_iter=None, iter0=0, resume=False, power_on=True
         tensor_player.STATE = "stop"
         print "tensor_player is stopped"
 
-def set_STATE_end_1(iter, record_at, stop_at=10000000, verbose=False, power_on=True):
+def set_player_state_auto(iter, record_at, stop_at=10000000, verbose=False, info=0,  power_on=True):
+    """
+        arg verbose will be deprecated 
+        
+    """
     tensor_player.PREV_STATE = tensor_player.STATE
     if power_on:
         if tensor_player.NEXT_STATE is not None:  #NEXT_STATE 就是 手动指定，而非按照下面自动判断STATE, 
@@ -891,30 +895,25 @@ def set_STATE_end_1(iter, record_at, stop_at=10000000, verbose=False, power_on=T
                     msg  += ' but not found. set tensor_player.load_tape=False'
                     tensor_player.load_tape = False
                 print msg 
-            #if verbose:
-            #    print  "\nset player to %s in %dth iter"%(tensor_player.STATE, iter)
             
         elif iter < record_at : #or iter>= stop_at:
             tensor_player.STATE = "stop"
         else:
             tensor_player.STATE = "play"
-            #if verbose:
-            #    print  "\nset player to %s in %dth iter"%(tensor_player.STATE, iter)
-        
-        if tensor_player.PREV_STATE != tensor_player.STATE: 
-            print "STATE of tensor_player is changed from '%s' to '%s'"%(
-                    tensor_player.PREV_STATE, tensor_player.STATE)
-        if tensor_player.PREV_STATE == 'record' and tensor_player.STATE == 'record':   # in very rare curcumstances, this may happen; add this line for robustness
-        #    print 'PREV_STATE and STATE of tensor player are both "record", set tape_full=True in current record'
-        #    tensor_player.tape_full = True
-            print 'attention, PREV_STATE and current STATE of tensor_player are both "record"'
-        
+        if info>-1:  #default display this msg 
+            if tensor_player.PREV_STATE != tensor_player.STATE: 
+                print "STATE of tensor_player is changed from '%s' to '%s'"%(
+                        tensor_player.PREV_STATE, tensor_player.STATE)
+            if tensor_player.PREV_STATE == 'record' and tensor_player.STATE == 'record':   # in very rare curcumstances, this may happen; add this line for robustness
+                print 'attention, PREV_STATE and current STATE of tensor_player are both "record"'
         
     else:
         tensor_player.STATE = "stop"
-        if verbose:
+        if info>0:
             print "tensor_player is stopped"
-    
+
+set_STATE_end_1 = set_player_state_auto 
+
 def change_tape(t, state):
     raise NotImplemented("not completed")
     state_bac = tensor_player.STATE
