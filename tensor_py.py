@@ -2272,7 +2272,7 @@ class iTensor(TensorBase):
             label_u = [-1, 1000]
             #A, _ = self.contract(u, [0, 1, 2], [2, 3],  use_buf=use_buf)
             A, _ = self.contract(u, label, label_u, use_buf=use_buf)
-        elif self.symmetry in ['Z2', 'Travail'] : 
+        elif self.symmetry in ['Z2', 'Travial'] : 
             A = self.copy(use_buf=use_buf)
         else: 
             raise  ValueError('symmetry is %s'% self.symmetry)
