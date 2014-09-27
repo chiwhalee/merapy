@@ -10,14 +10,20 @@ import cPickle as pickle
 from collections import OrderedDict
 from operator import itemgetter
 import matplotlib.pyplot as plt
+import itertools 
 from mpl_toolkits.mplot3d import Axes3D
+import pandas as pd 
+import math 
 
 import importlib
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas
 from scipy.optimize import curve_fit
+from scipy.special import sici
 import unittest
 
+from merapy.utilities import dict_to_object , load 
 from merapy.hamiltonian import System
 from merapy.context_util import rpyc_load, rpyc_save
 
@@ -34,6 +40,21 @@ if 1:
             }
     mpl.rcParams.update(MATPLOTLIBRC)
 
+    from matplotlib.lines import Line2D
+    #print Line2D.marker
+    marker_cycle = itertools.cycle(Line2D.markers)
+    MARKER_LIST = [ 'D', 'o',  'd',  'x', '*','+','^', '>', '.', '<', 'h']
+    MARKER_CYCLE = itertools.cycle(MARKER_LIST)
+    #COLOR_LIST = ['gold', 'hotpink', 'firebrick', 'indianred', 'yellow', 'mistyrose', 'darkolivegreen', 'olive', 'darkseagreen', 'pink', 'tomato', 'lightcoral', 'orangered', 'navajowhite', 'lime', 'palegreen', 'darkslategrey', 'greenyellow', 'burlywood', 'seashell', 'mediumspringgreen', 'fuchsia', 'papayawhip', 'blanchedalmond', 'chartreuse', 'dimgray', 'black', 'peachpuff', 'springgreen', 'aquamarine', 'white', 'orange', 'lightsalmon', 'darkslategray', 'brown', 'ivory', 'dodgerblue', 'peru', 'darkgrey', 'lawngreen', 'chocolate', 'crimson', 'forestgreen', 'slateblue', 'lightseagreen', 'cyan', 'mintcream', 'silver', 'antiquewhite', 'mediumorchid', 'skyblue', 'gray', 'darkturquoise', 'goldenrod', 'darkgreen', 'floralwhite', 'darkviolet', 'darkgray', 'moccasin', 'saddlebrown', 'grey', 'darkslateblue', 'lightskyblue', 'lightpink', 'mediumvioletred', 'slategrey', 'red', 'deeppink', 'limegreen', 'darkmagenta', 'palegoldenrod', 'plum', 'turquoise', 'lightgrey', 'lightgoldenrodyellow', 'darkgoldenrod', 'lavender', 'maroon', 'yellowgreen', 'sandybrown', 'thistle', 'violet', 'navy', 'magenta', 'dimgrey', 'tan', 'rosybrown', 'olivedrab', 'blue', 'lightblue', 'ghostwhite', 'honeydew', 'cornflowerblue', 'linen', 'darkblue', 'powderblue', 'seagreen', 'darkkhaki', 'snow', 'sienna', 'mediumblue', 'royalblue', 'lightcyan', 'green', 'mediumpurple', 'midnightblue', 'cornsilk', 'paleturquoise', 'bisque', 'slategray', 'darkcyan', 'khaki', 'wheat', 'teal', 'darkorchid', 'deepskyblue', 'salmon', 'darkred', 'steelblue', 'palevioletred', 'lightslategray', 'aliceblue', 'lightslategrey', 'lightgreen', 'orchid', 'gainsboro', 'mediumseagreen', 'lightgray', 'mediumturquoise', 'lemonchiffon', 'cadetblue', 'lightyellow', 'lavenderblush', 'coral', 'purple', 'aqua', 'whitesmoke', 'mediumslateblue', 'darkorange', 'mediumaquamarine', 'darksalmon', 'beige', 'blueviolet', 'azure', 'lightsteelblue', 'oldlace']
+    COLOR_LIST = ['gold', 'red', 'green',  'yellow',  'olive',  'pink',
+            'black',  'aquamarine',  'orange',  'brown',  'darkgrey',
+            'silver',   'skyblue', 'gray',   'darkgreen',  'grey',  'violet',
+            'blue', 'darkblue',  'purple',  ]
+    COLOR_CYCLE = itertools.cycle(COLOR_LIST)
+    
+
+__all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
+    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', ]
 
 FIELD_NAME_LIST = [
     'central_charge', 'scaling_dim', 'correlation', 'correlation_extra',  
@@ -150,14 +171,20 @@ class ResultDB(OrderedDict):
             self._db[k] = v
             pass
     
-    def load_S(self, sh=None, path=None):
+    def load_S(self, sh=None, path=None, to_obj=False):
+        """
+            todo: load 时，应该支持 update state 
+        """
         if sh is not None: 
-            fn = 'N=0-D=%d.pickle'%sh[1]
+            fn = 'N=%d-D=%d.pickle'%(sh[0], sh[1])
             path = '/'.join([self.parpath, fn])
             
-        with open(path, 'rb') as inn: 
-            res=pickle.load(inn)
-            return res
+        #with open(path, 'rb') as inn: 
+        #    res=pickle.load(inn)
+        res= load(path)
+        if to_obj: 
+            res= dict_to_object(res)
+        return res
     
     def reload_class(self): 
         module_name =self.__class__.__module__
@@ -188,22 +215,63 @@ class ResultDB(OrderedDict):
             temp = temp[k]
         
         return True
-   
-    def add_key_list(self, key_list, val=None, verbose=0): 
-        temp = self
+
+    def has_shape(self, sh, system_class): 
+        fn = system_class.shape_to_backup_fn.im_func(None, sh)
+        path = '/'.join([self.parpath, fn])
+        return os.path.exists(path)
+
+    #def has_entry(self, field_name, mera_shape, iter): 
+    def has_entry(self, key_list): 
+        #key_list = [field_name, mera_shape, iter]
+        rec = self
+        for t in key_list: 
+            if not rec.has_key(t): 
+                return False
+            else: 
+                rec = rec[t]
+        return True
+
+    @staticmethod 
+    def make_nested_dict(key_list, old_dic=None,  val=None, info=0): 
+        if old_dic is None: 
+            res = OrderedDict()
+        else: 
+            res= old_dic 
+        temp = res 
         for k in key_list[: -1]: 
             if not temp.has_key(k): 
                 temp[k] = OrderedDict()
+            #temp[k] = OrderedDict()
             temp = temp[k]
+        
         last_key = key_list[-1]
         if val is None: 
             temp[last_key] = OrderedDict()
         else: 
             temp[last_key] = val
-        #print self.has_key_list(key_list)
-        #exit()
-        if verbose: 
-            print 'add_key_list %s'%(key_list, )
+        return res 
+    
+    def add_key_list(self, key_list, val=None, verbose=0): 
+        if 1: 
+            temp = self
+            for k in key_list[: -1]: 
+                if not temp.has_key(k): 
+                    temp[k] = OrderedDict()
+                temp = temp[k]
+            last_key = key_list[-1]
+            if val is None: 
+                temp[last_key] = OrderedDict()
+            else: 
+                temp[last_key] = val
+            #print self.has_key_list(key_list)
+            #exit()
+            if verbose: 
+                print 'add_key_list %s'%(key_list, )
+        else:  # replace above with make_nested_dict in future 
+            temp=self.__class__.make_nested_dict(key_list[1: ], val=val)
+            
+            self[key_list[0]] = temp 
                 
     @classmethod
     def create_empty_db(cls, path, use_local_storage=False): 
@@ -225,6 +293,12 @@ class ResultDB(OrderedDict):
             pickle_files= [i for i in pickle_files if 'trans' not in i]
         
         return pickle_files
+    
+    def get_time_serials(self, sh): 
+        s= self.load_S(sh)
+        ts= s['time_serials']
+        ts= pd.DataFrame(ts).T
+        return ts 
     
     @staticmethod
     def parse_fn_del(fn):
@@ -275,10 +349,6 @@ class ResultDB(OrderedDict):
     
     get_mera_shape_list = get_shape_list 
     
-    def has_shape(self, sh, system_class): 
-        fn = system_class.shape_to_backup_fn.im_func(None, sh)
-        path = '/'.join([self.parpath, fn])
-        return os.path.exists(path)
     
     def get_energy_min_bac(self, sh=None, **kwargs): 
         version = self.get('version')
@@ -327,7 +397,13 @@ class ResultDB(OrderedDict):
             
         elif version == 1.0: 
             #self['energy'][sh]
-            raise NotImplemented 
+            sh_list = self.get_shape_list()
+            eng_list = []
+            for sh in sh_list: 
+                eng = self.fetch_easy('energy', sh)
+                if eng is not None : 
+                    eng_list.append(eng)
+            res= min(eng_list)
         
         else: 
             raise
@@ -447,8 +523,6 @@ class ResultDB(OrderedDict):
             if fault_tolerant: 
                 if info>0: 
                     print 'key not found:', err
-                #print 'error in fetch_easy'
-                #print 'keys are', rec.keys()
                 return None
             else:
                 raise
@@ -480,53 +554,61 @@ class ResultDB(OrderedDict):
                     rec = rec[key]
             except: 
                 if fault_tolerant: 
-                    print 'error in fetch_easy'
-                    print 'keys are', rec.keys()
+                    if info>0: 
+                        print 'error in fetch_easy'
+                        print 'existent keys are %s; required key_list is %s'%(rec.keys(), key_list)
+                    return None 
                 else: 
                     raise
         return rec
     
-    def insert(self, field_name, sh, iter, val): 
+    def insert(self, field_name, sh, iter, val, sub_key_list=None): 
         if not self.has_key(field_name): 
             self[field_name] = OrderedDict()
         if not self[field_name].has_key(sh): 
             self[field_name][sh] = OrderedDict()
-        self[field_name][sh][iter] = val
-
+            
+        if sub_key_list is None: 
+            self[field_name][sh][iter] = val
+        else:
+            #self[field_name][sh][iter]  = OrderedDict()
+            #dic=self.__class__.make_nested_dict(
+            #        sub_key_list, old_dic=self[field_name][sh][iter],val=val)
+            #self[field_name][sh][iter] = dic 
+            dic=self.__class__.make_nested_dict(
+                    [iter] + sub_key_list, old_dic=self[field_name][sh],val=val)
+            self[field_name][sh] = dic 
+           
     def put(self, field_name, key, res, sub_key_list=None): 
         self[key].update({field_name:res})
     
-    #def has_entry(self, field_name, mera_shape, iter): 
-    def has_entry(self, key_list): 
-        #key_list = [field_name, mera_shape, iter]
-        rec = self
-        for t in key_list: 
-            if not rec.has_key(t): 
-                return False
-            else: 
-                rec = rec[t]
-        return True
-
+    def rename_field(self, field_name_old, field_name_new): 
+        print 'rename key %s -> %s'%(field_name_old, field_name_new)
+        self[field_name_new] = self[field_name_old]
+        self.pop(field_name_old)
+        self.commit()
+    
     def fit_correlation(self, sh, func_type='power', which='correlation_extra', 
-            direct='pm', r_min=None, r_max=None, plot=0, plot_orig=1, show_label=1, **kwargs): 
-        power_func= lambda x, C, eta: -C*x**eta*(-1)**x
-        #power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(pi*m*x)[0]*(-1)**x
-        power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(m*x)[0]*(-1)**x
-        power_cos_func= lambda x,  C,eta, m, b, k: -C*x**eta*(-1)**x * (b+ np.sin(1.*x/k))   #not usefull, only test
-        def exp_func_1(t, a, b, c):                                                         
-            return a * np.exp(b * t) + c   
-
-        def exp_func_2(t, A, B):                                                         
-            #return A * np.exp(-B * t) 
-            return A * np.exp(- t/B) 
-
-        if func_type == 'power': 
-            func = power_func; 
-        elif func_type == 'exp' : 
-            func = exp_func_2
-        
+            direct='pm', r_min=None, r_max=None, period=None,  plot=0, plot_orig=1, show_label=1, **kwargs): 
         if 1: 
-            xy = self.get_correlation( sh, which, direct=direct, r_min=r_min, r_max=r_max,  period=None)
+            power_func= lambda x, C, eta: -C*x**eta*(-1)**x
+            #power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(pi*m*x)[0]*(-1)**x
+            power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(m*x)[0]*(-1)**x
+            power_cos_func= lambda x,  C,eta, m, b, k: -C*x**eta*(-1)**x * (b+ np.sin(1.*x/k))   #not usefull, only test
+            def exp_func_1(t, a, b, c):                                                         
+                return a * np.exp(b * t) + c   
+
+            def exp_func_2(t, A, B):                                                         
+                #return A * np.exp(-B * t) 
+                return A * np.exp(- t/B) 
+
+            if func_type == 'power': 
+                func = power_func; 
+            elif func_type == 'exp' : 
+                func = exp_func_2
+        if 1: 
+            xy = self.get_correlation(sh, which, direct=direct, 
+                    r_min=r_min, r_max=r_max,  period=period)
             if xy is None: 
                 return None
             else: 
@@ -535,41 +617,32 @@ class ResultDB(OrderedDict):
         if kwargs.get('info'): 
             print 'xxx', x[0], x[-1], len(x)
         x=np.array(x); y=np.array(y);  
-        #if direct == 'pm':  y=y*2;  
         y=np.abs(y)
-            #print x, y; exit()
-        #x, y = self.get_correlation(which=which, direct=direct)
         fit_succeed = 1
         try:
             param,cov = curve_fit(func, x, y)
             if isinstance(cov, float): 
-                #cov = np.ndarray((1, 1)); cov
                 cov = np.array([[cov]])
-            #data.append( (a,) + tuple(param) + tuple(cov.diagonal()))
             
         except Exception as err: 
-            #raise
             print 'fitting faild', err 
-            #error.append((a, err))
             fit_succeed = 0
-            #return None
+      
         if fit_succeed: 
             if plot: 
-          
                 label = '' if not show_label else param[1]
-                fig=self._plot(x, func(x, *param), xscale='log',yscale='log', label=label, return_fig=1, **kwargs)
+                fig=self._plot(x, func(x, *param), xscale='log',yscale='log', 
+                        label=label, return_fig=1, marker=None,  **kwargs)
                 if plot_orig: 
                     if not kwargs.has_key('fig'): kwargs['fig'] = fig
                     fig=self._plot(x, y, xscale='log', yscale='log',   **kwargs)
-            #if return_fig
             return param
        
         else: 
             return None
             
-        
     def get_correlation(self, sh, which='correlation_extra',direct='pm', 
-            r_min=None,  r_max=None, period=None, fault_tolerant=1,  info=0): 
+            r_min=None,  r_max=None, period=None,  field_surfix=None, fault_tolerant=1, info=0): 
         algorithm = self.get('algorithm')
         if which == 'correlation_mixed' and self.get('algorithm') != 'mps': 
             rec1=self.fetch_easy('correlation_extra', mera_shape=sh, sub_key_list=[direct])
@@ -630,7 +703,93 @@ class ResultDB(OrderedDict):
            
                    
         return x, y    
+
+    def get_correaltion_exact(self, r, model_name=None, which='shastry'): 
+        """
+        """
+        #r = r if r is not None else np.array([3**i for i in range(1, 6)])
+        #if which == 'shastry': 
+        if model_name in ['haldane_shastry', 'HS']: 
+            #the exact value is: [(3, -0.044424436468189332), (9, -0.014200837573249929), (27, -0.0046643666206658257), (81, -0.0015470704943921049), (243, -0.00051483226149443202)]
+            pi = np.pi
+            res = 1./(1.0*pi*r)*sici(r*pi)[0]*(-1)**r
+        elif model_name  == 'ising' : 
+            #ref:  Bikas et.al. 1996,  Quantum Ising ... 
+            #only support C^{xx}_{0, r} now 
+            # res for 0<r<20:  [(1, 0.63661977236758138), (2, 0.54037964609246814), (3, 0.48926772236438937), (4, 0.4556470945476353), (5, 0.43107225309972047), (6, 0.41194225211020358), (7, 0.39641407232806986), (8, 0.38342749061536185), (9, 0.37232072902492203), (10, 0.36265500306854692), (11, 0.35412552042367873), (12, 0.34651258246402439), (13, 0.33965298163178659), (14, 0.33342240261115208), (15, 0.32772413252704091), (16, 0.32248156011136442), (17, 0.31763304115495111), (18, 0.3131282920367997), (19, 0.30892579903943168), (20, 0.3049909202249208)] 
+            if 0:  #symblic result,  may be useful later 
+                import sympy
+                r=sympy.symbols('r')
+                pi=sympy.pi 
+                G=lambda r: 2/pi * (-1)**r/(2*r+1)
+                sympy.pretty_print(G(r))
+                G_mat=lambda n: sympy.Matrix(n,n, lambda i,j: G(j-i))
+                G_mat(5)                
+                
+            def corr_ising_xx(n):
+                G_func = lambda j: 2/np.pi * (-1)**j/(2*j+1)
+                x, y = np.meshgrid(np.arange(n), np.arange(n))
+                G_mat = G_func(x-y)
+                res = np.linalg.det(G_mat)
+                return res            
+            if not hasattr(r, '__iter__'):  
+                res = corr_ising_xx(r)
+            else: 
+                f_vec = np.vectorize(corr_ising_xx)
+                res= f_vec(np.asarray(r))
+        else: 
+            raise 
+        
+        return res 
+
+    def _get_Css(self, sh, **kwargs):
+        db = self
+        field = kwargs.get('field', 'correlation')
+        field = kwargs.get('field', field)
+        algorithm=db['algorithm']
+        #field= 'correlation'
+        if algorithm != 'mps':
+            
+            cx = db.fetch_easy(field, mera_shape=sh, sub_key_list=['xx'])
+            cz = db.fetch_easy(field, mera_shape=sh, sub_key_list=['zz'])
+            
+            if cx is None or cz is None:
+                return None
+            rx, cx = zip(*cx.items()); cx=np.asarray(cx)
+            rz, cz = zip(*cz.items()); cz=np.asarray(cz)
+            assert rx==rz
+            r=rx
+            cxz= cx+cz
+            res = OrderedDict(zip(r, cxz.tolist()))
+        else:
+            cx = db.fetch_easy(field, mera_shape=sh, sub_key_list=['xx'])
+            cz = db.fetch_easy(field, mera_shape=sh, sub_key_list=['zz'])
+            if cx is None or cz is None:
+                print cz 
+                return None
+            r0 = [i[0] for i in cx]
+            r1 = [i[1] for i in cx]
+            cx=[i[2] for i in cx]; cx=np.asarray(cx)
+            cz=[i[2] for i in cz]; cz=np.asarray(cz)
+            cxz= cx+cz
+            res = zip(r0, r1, cxz.tolist())
+            
+            pass
+            
+        return res  
+ 
+    def _get_mag(self, sh, **kwargs):
+        site = kwargs.get('site', sh[0]//2)
+        mx = self.fetch_easy('magnetization', sh, ['x', site])
+        mz = self.fetch_easy('magnetization', sh, ['z', site])
+        try:
+            return math.sqrt(abs(mx**2 + mz**2) )
+        except TypeError:
+            return None 
+        except Exception:
+            raise 
     
+
     def delete_rec(self, key): 
         self.pop(key)
         self.commit()
@@ -639,6 +798,17 @@ class ResultDB(OrderedDict):
         os.remove(self.path)
         msg = 'db is removed'
         print(msg)
+    
+    def remove_file(self, sh): 
+        fn=self.__class__.shape_to_backup_fn(sh)
+        path = '/'.join([self.parpath, fn])
+        msg='rm file %s'%(path[-30: ])
+        try: 
+            os.remove(path)
+            msg += '  ... done' 
+        except Exception as err: 
+            msg += '  ... failed. '  +  str(err)
+        print msg 
     
     def dump(self, file=None): 
         print '---'*30
@@ -678,20 +848,26 @@ class ResultDB(OrderedDict):
             print 'merge succeed'
     
     
-    def fig_layout(self, ncol=1, nrow=1,  size=(3.5, 2.5)): 
+    def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
+        if size is None and ncol == 1 and nrow == 1: 
+            size = (4, 3)
+        size= size if size is not None else (3.5, 2.5)
         size = ncol*size[0], nrow*size[1]
         fig = plt.figure(figsize=size)
         iii=0
         for i in range(nrow): 
             for j in range(ncol): 
                 iii+=1
-                fig.add_subplot(nrow, ncol, iii)
+                fig.add_subplot(nrow, ncol, iii, projection=None if dim==2 else '3d')
         fig.tight_layout()
-        return fig
-
+        axes = fig.axes 
+        if len(axes)==1: 
+            axes= axes[0]
+        return fig, axes 
+    
     def _plot(self, x, y, **kwargs): 
         figsize = kwargs.get('figsize')
-        figsize = (3.5, 2.5) if figsize is None else figsize
+        figsize = (4, 3) if figsize is None else figsize
         fig = kwargs.get('fig', None)
         ax = kwargs.get('ax', None)
         
@@ -710,22 +886,31 @@ class ResultDB(OrderedDict):
                         break 
                 if not ax_found: 
                     raise Exception('ax is not defined; examine the layout of fig')
-                    
-        style_default = {
-                'marker':'.', 
-                'label': '', 
-                'color': None, 
-                }    
+        if 1:  
+            line_style = {
+                    'marker':MARKER_CYCLE.next(), 
+                    'markersize': 5, 
+                    'ms': 5,  
+                    'mfc': 'None',  #'w',
+                    #'mec': 'r', 
+                    'mew': 1,  
+                    'label': '', 
+                    #'color': None,   #color默认值不知到应该是什么， 才使其随机变化
+                    'lw': 1,  
+                    }    
+            dic = line_style.copy()
+        else: 
+            line_style = {}
+            dic = {}
         
-        temp = ['marker', 'label', 'color']
-        dic = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
+        temp = line_style.keys()  + ['color']
+        dic_temp = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
+        dic.update(dic_temp)
         
-        if not dic.has_key('label'): 
-            dic['label'] = ''
-        if not dic.has_key('marker'): 
-            dic['marker'] = '.'
-        
-        ax.plot(x, y, **dic)
+            
+        if kwargs.get('yfunc'): 
+            y = kwargs['yfunc'](y)
+        lines = ax.plot(x, y, **dic)
         
         temp = ['xlabel', 'ylabel', 'xlim', 'ylim', 'xscale', 'yscale']
         for t in temp: 
@@ -737,18 +922,183 @@ class ResultDB(OrderedDict):
                     ax.__getattribute__('set_' + t)(tt)
         if kwargs.has_key('title') and ax.is_first_row(): 
             ax.set_title(kwargs.get('title')) 
-        
-        ax.legend(title=kwargs.get('legend_title'))
+            
+        for l in lines:  #line stype   #matploblib 可能有个bug，mfc = 'w', 则 mec总是黑色，和line color 不同，故这里要重新set mec
+            color = l.get_color()
+            l.set_mec(color)
+        #note the position to invoke .legend maters,  it must be placed after line.set_mec,  or else line.set_mec wont change mec in the legend
+        ax.legend(title=kwargs.get('legend_title'), loc=kwargs.get('legend_loc', 0))
         ax.grid(1)
-        if kwargs.get('show_fig') : 
+        
+        if kwargs.get('show_fig'): 
            plt.show() 
         if kwargs.get('return_ax', False): 
             return fig, ax
         else: 
-            #return fig
             return ax.figure
-
-
+    
+    def plot_field_vs_dim(self, field_name, sh_list=None, sh_min=None, sh_max=None, 
+            yfunc=None, sub_key_list=None, rec_getter=None, rec_getter_args=None,    **kwargs): 
+        sub_key_list = sub_key_list if sub_key_list is not None else []
+        info = kwargs.get('info', 0)
+        sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
+        #aa=list(self.alpha_list)
+        not_found=[]
+        data=[]
+        for sh in sh_list:  
+            if rec_getter is None: 
+                rec=self.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
+            else: 
+                rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
+                rec = rec_getter(self, sh, **rec_getter_args)
+            dim = sh[1]
+            if rec is not None:
+                data.append((dim, rec))
+            else:
+                not_found.append(dim)
+        if not_found and info: 
+            print 'not_found is ', not_found
+        #x, y=zip(*data)       
+        data_is_empty = False 
+        try: 
+            x,y=zip(*data)        
+        except ValueError as err: 
+            print err
+            #x, y = np.nan, np.nan 
+            return 
+        
+        if 1:  # some per field specific treatment
+            if field_name == 'energy' and kwargs.get('yscale') and yfunc is None: 
+                y = y -np.min(y)
+        x = np.asarray(x); y=np.asarray(y)
+        if yfunc is not None : 
+            y = yfunc(y)
+        kwargs.update(xlabel='D', ylabel=field_name)
+        fig = self._plot(x, y, **kwargs) 
+        if kwargs.get('return_fig'): 
+            return fig 
+    
+    def plot_field_vs_length(self, field_name, sh, key_list=None,
+            r=None, r_min=None,  r_max=None,  period=1, fit=None, plot_fit=False, 
+            fault_tolerant=1, rec_getter=None, rec_getter_args=None, 
+            info=0, **kwargs): 
+        rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
+        if rec_getter is None: 
+            rec = self.fetch_easy(field_name, mera_shape=sh, sub_key_list=key_list, 
+                    fault_tolerant=fault_tolerant, info=info-1) 
+        else: 
+            rec = rec_getter(self, sh, **rec_getter_args)
+        
+        if rec is None: 
+            return None
+        algorithm = self['algorithm']
+        #if algorithm in ['idmrg', 'mera']: 
+        if algorithm  ==  'idmrg':  
+            rec = rec.items()
+            x, y = zip(*rec)
+        elif algorithm == 'mera' : 
+            x, y = zip(*rec)
+            
+        #elif self['algorithm'] == 'vmps':
+        elif 'mps' in algorithm: 
+            if field_name == 'correlation' : 
+                r0, r1, y = zip(*rec)
+                x = np.array(r1) - np.array(r0)
+            else: 
+                x, y = zip(*rec)
+        else: 
+            raise 
+        if kwargs.get('yfunc'): 
+            y = kwargs['yfunc'](y)
+        
+        if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
+            x = [a[1] for a in x]
+        x = np.array(x); y=np.array(y)
+        if r is None: 
+            if r_min is None: 
+                r_min = x[0]
+            if r_max is None: 
+                r_max = x[-1]
+            temp = np.logical_and(x>=r_min, x<=r_max)
+            if period != 1:  
+                temp = np.logical_and(temp, (x-r_min)%period==0)
+            arg = np.argwhere(temp).ravel()
+        else:
+            arg = []
+            a = 0
+            for _r in r: 
+                ii = 0
+                for _x in x[a:]: 
+                    if _r == _x:
+                        arg.append(a + ii)
+                        #print _r, a + ii   
+                        a = ii 
+                        break 
+                    ii += 1  
+        x = x[arg]
+        y = y[arg]
+        kwargs['return_ax'] = 1
+        fig, ax=self._plot(x, y, **kwargs)
+        if fit: 
+            fit_succeed = 1
+            if fit == 'power' : 
+                func = lambda x, C, eta: -C*x**eta*(-1)**x
+            else: 
+                raise 
+            try:
+                param,cov = curve_fit(func, x, y)
+                if isinstance(cov, float): 
+                    cov = np.array([[cov]])
+            except Exception as err: 
+                print 'fitting faild', err 
+                fit_succeed = 0
+            if fit_succeed:     
+                l = ax.lines[-1]
+                label = l.get_label()
+                label =  ''.join([label, ' %1.2f'%param[1]])
+                l.set_label(label)
+                
+                
+            if plot_fit: 
+                color = l.get_color()
+                if fit_succeed: 
+                    #label = '' if not show_label else param[1]
+                    dic = dict(color=color)
+                    #print 'aaaa', ax.get_legend()
+                    fig=self._plot(x, func(x, *param), #xscale='log',yscale='log', 
+                            return_fig=1, marker=None, ax=ax, **dic) #,  **kwargs)
+        
+        if kwargs.get('return_fig'): 
+            return fig 
+    
+    @staticmethod 
+    def fit_lines(ax, func): 
+        pass 
+        
+        
+    
+    def plot_time_seirials(self, sh=None, attr=None, sh_list=None, **kwargs): 
+        """
+            attr: 
+                'dt_real', 'dt_cpu', 
+        """
+        if sh is None: 
+            sh_list = sh_list if sh_list is not None else self.get_shape_list()
+        else: 
+            sh_list = [sh]
+        count = 0
+        for sh in sh_list: 
+            ts= self.load_S(sh)['time_serials']
+            df = pd.DataFrame(ts).T 
+            #print df.columns 
+            temp = df[attr]
+            x = temp.keys()
+            y = temp.values 
+            kwargs.update(return_ax=1, marker=None)
+            fig, ax=self._plot(range(count, count+y.size), y, **kwargs)
+            kwargs['ax'] = ax 
+            count += y.size  
+    
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
         if layer=='top':
             ll= [sh[1]-2 ] 
@@ -999,8 +1349,9 @@ class ResultDB(OrderedDict):
             fig=self.plot_entanglement_scaling(num_site=n, sh_max=(12,6), aver=a, log2=1, return_fig=1)
             fig.axes[0].set_title('%s-%s'%(n,a))
     
-    def plot_entanglement_vs_chi(self, sh_min=None, sh_max=None, filter_func=None,  **kwargs): 
-        sh_list = self.get_shape_list(sh_min=sh_min, sh_max=sh_max)
+    def plot_entanglement_vs_chi(self,  sh_list=None, sh_min=None, sh_max=None, filter_func=None,  **kwargs): 
+        if sh_list is None: 
+            sh_list = self.get_shape_list(sh_min=sh_min, sh_max=sh_max)
         #data = [(np.nan, np.nan)]
         data = []
         not_found = []
@@ -1032,6 +1383,14 @@ class ResultDB(OrderedDict):
         kwargs.update(marker=marker, xlabel='$\\ln(\\chi)$', ylabel='$EE$')
         fig, ax=self._plot(x, y,  **kwargs)
         ax.plot(x, k*x+b,)
+        
+        #ax.set_xticklabels()
+        #tic = ax.get_xticklabels()
+        #tic = [t.get_text() for t in tic]
+        #print tic 
+        tic= ax.get_xticks().tolist()
+        tic = ['%s\n%d'%(i, math.exp(i)) for i in tic]
+        ax.set_xticklabels(tic)
 
 
         #ax.set_xscale( 'log')
@@ -1061,19 +1420,20 @@ class ResultDB(OrderedDict):
         if hasattr(self, methname): 
             self.__getattribute__(methname)(sh, **kwargs)
     
-    def plot_magnetization(self, sh, shift_y=0, plot_mean=0, **kwargs): 
-        rec=self.fetch_easy('magnetization', sh)
+    def plot_magnetization(self, sh, shift_y=0, sub_key_list=None, plot_mean=0, **kwargs): 
+        rec=self.fetch_easy('magnetization', sh, sub_key_list=sub_key_list)
         if rec is None: 
             return None
         x, y = zip(*rec.items())
         if shift_y: 
             y = np.asarray(y)
             y = (y + 1.0)/2.0
-        fig=self._plot(x, y, **kwargs)
+        kwargs['return_ax'] = 1
+        fig, ax=self._plot(x, y, **kwargs)
         if plot_mean: 
             mean = np.ndarray(len(y))
             mean[: ] = np.mean(y)
-            fig = self._plot(x, mean, fig=fig)
+            fig = self._plot(x, mean, fig=fig, ax=ax)
         
         if kwargs.get('return_fig'): 
             return fig
@@ -1087,7 +1447,7 @@ class ResultDB(OrderedDict):
         #y = (y + 1.0)/2.0
         return y.mean()  
     
-    def plot_correlation(self, sh,  direct='pm', r_min=None, r_max=None, which='correlation_mixed', 
+    def plot_correlation(self, sh,  direct='pm', r_min=None, r_max=None, period=None, which='correlation_mixed', 
             log_scale=1, fit=None, plot_fit=False,   return_fig=0, draw=0, **kwargs): 
         
         if 1: 
@@ -1110,9 +1470,9 @@ class ResultDB(OrderedDict):
         #direct_orig = direct
         #if direct == 'pm': direct = 'xx' 
         sub_key_list = [direct] if which == 'correlation_extra' else [direct, 'val'] 
-        for sh in sh_list: 
-            
+        if period is None: 
             period = 2 if log_scale else 1
+        for sh in sh_list: 
                 
             rec = self.get_correlation(sh, which, direct, r_min=r_min, r_max=r_max, period=period )
             if rec is not None: 
@@ -1137,7 +1497,7 @@ class ResultDB(OrderedDict):
                 #ax.loglog(x, y, marker, label=label)
                 ax.loglog(x, y, marker)
             else: 
-                ax.plot(x, y)
+                ax.plot(x, y, marker)
             
             line = ax.lines[-1]
             color = line.get_color()
@@ -1149,8 +1509,8 @@ class ResultDB(OrderedDict):
                     #line.set_mfc('w')
                     #line.set_markersize(5)
                 res=self.fit_correlation(sh, func_type=fit,  which=which, direct=direct, 
-                        r_min=r_min, r_max=r_max, plot=plot_fit, plot_orig=0, show_label=0, fig=fig, 
-                        color=color)
+                        r_min=r_min, r_max=r_max, period=period,  plot=plot_fit, plot_orig=0, 
+                        show_label=0, ax=ax, fig=fig,  color=color)
                 if res is not None : 
                     #if fit == 'power': 
                     A, eta  = res
@@ -1173,45 +1533,6 @@ class ResultDB(OrderedDict):
         if len(not_found)>0: print 'not_found is ', not_found
         if return_fig: return fig
 
-    def plot_structure_factor_bac(self, sh, direct=None, dist_max=100, show_fig=0, save_fig=1, **kwargs): 
-        fft = np.fft.fft
-        algorithm = self.get('algorithm')
-        if algorithm == 'mps': 
-            name = 'correlation' 
-            direct = 'xx' if direct is None else direct
-        else: 
-            name = 'correlation_extra'
-            direct = 'zz' if direct is None else direct
-        rec = self.fetch_easy(name, sh, sub_key_list=[direct])
-        if rec is None: 
-            print 'rec is None for sh %s, exit'%(sh, )
-            return
-        #print 'rrrrr', rec
-        temp = [i[1] for i in rec]
-        temp = np.array(temp)[: dist_max]
-        sf = fft(temp)
-        
-        fig = kwargs.get('fig')
-        if fig is None: 
-            fig = plt.figure()
-        if len(fig.axes)==0: 
-            ax = fig.add_subplot(111)
-        else:
-            for aa in fig.axes: 
-                if len(aa.lines)==0: 
-                    ax = aa
-                    break 
-            #ax = fig.axes[-1]
-        ax.plot(sf)
-        if kwargs.get('return_fig'): 
-            return fig
-        if save_fig: 
-            fn = 'structure_factor-sh=%s.png'%(tuple(sh), )
-            path = self.parpath +'/' +   fn
-            fig.savefig(path)
-        if show_fig: 
-            plt.show()
-
     def plot_structure_factor(self, sh, direct=None, dist_max=100, show_fig=0, save_fig=1, **kwargs): 
         fft = np.fft.fft
         algorithm = self.get('algorithm')
@@ -1219,11 +1540,17 @@ class ResultDB(OrderedDict):
             name = 'correlation' 
             direct = 'xx' if direct is None else direct
             ind = 2
-        else: 
+        elif algorithm == 'idmrg' : 
+            direct = 'xx' if direct is None else direct
+            ind = 1
+        elif algorithm == 'mera': 
             name = 'correlation_extra'
             direct = 'zz' if direct is None else direct
             ind = 1
+        else: 
+            raise 
         rec = self.fetch_easy(name, sh, sub_key_list=[direct])
+        
         if rec is None: 
             print 'rec is None for sh %s, exit'%(sh, )
             return
@@ -1472,6 +1799,18 @@ class ResultDB(OrderedDict):
 
     def show_fig(self): 
         plt.show()
+    
+    def measure(self, sh, state=None, sh_min=None, sh_max=None, param=None,  which=None, field_surfix='', 
+            exclude_which=None, force=0, fault_tolerant=1, recursive=False,  **kwargs): 
+        from merapy.measure_and_analysis.measurement import measure_S 
+        if state is None: 
+            state = self.load_S(sh)
+        parpath = self.parpath 
+        measure_S(state, parpath, rdb=self, which=which, 
+                field_surfix=field_surfix, param=param, 
+                exclude_which=exclude_which, force=force, 
+            fault_tolerant=fault_tolerant, **kwargs)
+
 
 class ResultDB_mera(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -1502,13 +1841,11 @@ class ResultDB_vmps(ResultDB):
     backup_fn_gen = shape_to_backup_fn 
     
     def get_energy(self, sh): 
-        
         try:
-            path='/'.join([self.parpath, 'N=%d-D=%d.pickle'%(sh[0], sh[1])])
-            S=self.load_S( path)
+            #path='/'.join([self.parpath, 'N=%s-D=%s.pickle'%(sh[0], sh[1])])
+            S=self.load_S( sh)
             #eng=S['energy']
             eng = S['mps'].energy
-
         except:
             raise 
             #print a, path
@@ -1544,7 +1881,6 @@ class ResultDB_idmrg(ResultDB):
         return res 
     
     def get_energy(self, dim): 
-        
         try:
             path='/'.join([self.parpath, 'N=0-D=%d.pickle'%dim])
             S=self.load_S( path)
@@ -1556,10 +1892,11 @@ class ResultDB_idmrg(ResultDB):
         return eng
     
     def get_correlation(self, sh, which='correlation_extra', direct='xx', 
-            r_min=None,  r_max=None, period=None, fault_tolerant=1,  info=0): 
-        
+            r=None, r_min=None, field_surfix=None, r_max=None, period=None, fault_tolerant=1,  info=0): 
 
         which = 'correlation'  #not extra
+        if field_surfix is not None : 
+            which  = '_'.join([which, field_surfix])
         key_list = [direct]
         period = period if period is not None else 2            
         rec = self.fetch_easy(which, mera_shape=sh, sub_key_list=key_list, 
@@ -1569,26 +1906,44 @@ class ResultDB_idmrg(ResultDB):
             return None
        
         rec = rec.items()
-        #rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
-        
-        x,y=zip(*rec[0:-1:period])
+        x, y = zip(*rec)
     
         if direct == 'pm':   
             y=np.array(y);  y=y*2;  
-        
-        x = np.array(x)
-        a = 0
-        b = -1
-        if r_min is not None : 
-            temp = np.where(x>=r_min);  a=temp[0][0]
-        if r_max is not None : 
-            temp = np.where(x<=r_max);  b=temp[0][-1] + 1
-            x = x[a: b]
-            y = y[a: b]
-           
+        if self.get('algorithm')=='idmrg' : 
+            x = [a[1] for a in x]
+        x = np.array(x); y=np.array(y)
+        if r is None: 
+            if r_min is None: 
+                r_min = x[0]
+            if r_max is None: 
+                r_max = x[-1]
+            temp = np.logical_and(x>=r_min, x<=r_max)
+            if period != 1:  
+                temp = np.logical_and(temp, (x-r_min)%period==0)
+            arg = np.argwhere(temp).ravel()
+        else:
+            #arg = np.argwhere()
+            arg = []
+            a = 0
+            for _r in r: 
+                ii = 0
+                for _x in x[a:]: 
+                    if _r == _x:
+                        arg.append(a + ii)
+                        #print _r, a + ii   
+                        a = ii 
+                        break 
+                    ii += 1  
+            #print r
+            #print  x[: 20]
+            #print arg
+            #raise 
+        x = x[arg]
+        y = y[arg]
                    
         return x, y    
-    
+
     def get_EE(self, dim): 
         res=self._measure(self.calc_EE, dim=dim)
         return res
@@ -1676,17 +2031,50 @@ class TestResultDB(unittest.TestCase):
         
     
     def test_temp(self): 
-        pass 
-        #parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
-        parpath =  '/home/zhli/backup_tensor_dir/run-ising/idmrg/h=1.0'
-        parpath = '/home/zhli/backup_tensor_dir/run-long-heisbg/idmrg-lam_guess/alpha=2.3'
         
-        db = ResultDB_idmrg(parpath)
-        #print db.get_correlation((0, 8))
-        #db.plot_entanglement_vs_chi( show_fig=1)
-        from vmps.minimize import VMPS
+        from run_long_sandvik.run_long_affleck.analysis import an_idmrg_lam 
         
-        print db.has_shape((0, 4),  VMPS)
+        from projects_mps.run_long_sandvik.analysis import an_idmrg_lam 
+        xx=an_idmrg_lam.an_main
+        aa=xx.filter_alpha(g=0.0)
+        #xx.set_rdb_dict(aa)
+        #sh_list=xx.get_shape_list_all()
+        fig, ax=xx.fig_layout(size=(5,4))
+        site=1
+        if 1: 
+            xx.plot_field_vs_alpha('magnetization', aa=aa, sh_list=None, 
+                    sh_min=(0, 40),  sh_max=(0, 100),  sub_key_list=['z',site], 
+                                   param_name='alpha', rec_getter=xx.result_db_class._get_mag.im_func, ax=ax)
+            ax.invert_xaxis()              
+        else: 
+            res=xx._plot(range(10), range(10), label='l', mfc=None, mew=2, ms=12,  
+                    mec='r',  ax=ax)    
+            #res=xx._plot(range(10), np.arange(10)*1.2, label='l', ms=12, mfc='None', mec='r',  ax=ax)    
+            #res=xx._plot(range(10), np.arange(10)*1.3, label='l', ms=12, mfc='None', mec='r',  ax=ax)    
+            #ax.legend()
+        xx.show_fig()
+        
+    
+    def test_insert_and_fetch(self): 
+        a = [1, 2, 3, 4]
+        dic=ResultDB.make_nested_dict(a, val='love')
+        a = [1, 2, 3, 5]
+        dic=ResultDB.make_nested_dict(a, dic, val='hate')
+        self.assertEqual(dic[1][2][3][4], 'love')
+        self.assertEqual(dic[1][2][3][5], 'hate')
+        
+        db = ResultDB('/tmp')
+        db.insert( 'xxx', (0, 4), -1, 'love', [1])
+        db.insert( 'xxx', (0, 4), -1, 'hate', [2])
+        print db['xxx'] 
+        rec = db.fetch_easy_new('xxx', (0, 4), [1])
+        self.assertTrue( rec=='love')
+        rec = db.fetch_easy_new('xxx', (0, 4), [2])
+        self.assertTrue( rec=='hate')
+        print ' ========================'
+        rec = db.fetch_easy_new('xxx', (0, 4), [1000])  # 1000 is a wrong key 
+        self.assertTrue(rec is None)
+        
     
     def test_idmrg_get_EE(self): 
         parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
@@ -1786,13 +2174,13 @@ if __name__ == '__main__':
             suite = unittest.TestSuite()
             add_list = [
                TestResultDB('test_temp'), 
+               #TestResultDB('test_insert_and_fetch'), 
+               #TestResultDB('test_add_key_list'), 
                #TestResultDB('test_idmrg_get_EE'), 
   
             ]
             for a in add_list: 
                 suite.addTest(a)
-            #suite.addTest(TestResultDB('test_ising'))
-            #suite.addTest(TestResultDB('test_heisbg'))
             unittest.TextTestRunner().run(suite)
            
           
