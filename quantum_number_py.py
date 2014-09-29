@@ -382,6 +382,7 @@ class QuantSpaceBase(object):
     @property
     def Dims(self):
         return self._dims
+    
     @Dims.setter
     def Dims(self, new_dims):
         self._dims[:len(new_dims)] = new_dims
@@ -534,6 +535,7 @@ class QuantSpaceBase(object):
         see QSp_Reverse in f90"""
         for i in range(self.nQN):
             self.QNs[i].reverse()
+    
     
     #@tensor_player(which="Qsp_copy")
     def copy(self):
@@ -725,10 +727,11 @@ class QuantSpaceBase(object):
         return res
     
     def get_qn_id(self, qn):
-        try:
-            return self.QNs.index(qn)
-        except ValueError:
-            return -1 
+        #try:
+        #    return self.QNs.index(qn)
+        #except ValueError:
+        #    return -1 
+        return self.QNs.index(qn) 
 
     def add_to_quant_space(self, qn, d):
         """

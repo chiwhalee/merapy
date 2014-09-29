@@ -237,7 +237,9 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', head=None,
         lineno = inspect.currentframe().f_back.f_lineno
         frm = inspect.stack()[1]
         module_name = inspect.getmodule(frm[0]).__name__
-        head = 'print_vars from %s at line %s\n'%(module_name, lineno)
+        caller_name =  frm[3] #inspect.stack()[1][3] 
+        head = 'print_vars from %s %s at line %s\n'%(
+                module_name, caller_name, lineno)
     dic['np'] = np  #inject np to the namespace so that it can be evaled 
     if var_name_list is None: 
         var_name_list = sorted(dic)

@@ -463,6 +463,7 @@ class iTensor(TensorBase):
         """
         
         other = self.copy_struct(use_buf=use_buf)
+        other.type_name = self.type_name 
         totDim=self.totDim
         #for large array(size>10^4) slicing is faster than copy
         
@@ -3440,7 +3441,9 @@ class iTensorFactory(object):
         
         temp = vars()
         res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
-        
+        for i in res: 
+            res[i].type_name = i 
+            
         return res 
     
     pauli_mat = pauli_mat_1site 
