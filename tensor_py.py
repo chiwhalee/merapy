@@ -149,6 +149,7 @@ class iTensor(TensorBase):
         
         rank = len(QSp)
         self.rank = rank 
+        self.ind_labels = None 
         
         #assert rank == len(QSp), ('aaaaaaaaaaaaaaaaaa\n', rank, len(QSp), QSp) 
         
@@ -498,7 +499,7 @@ class iTensor(TensorBase):
         if rank == 0:
             rank = 0
         if keys is None:
-            keys=["rank", "type_name", "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
+            keys=["rank", "type_name", 'ind_labels', "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
 
         str0="----Begin iTensor----------------------------------------------\n"
 
@@ -2029,7 +2030,7 @@ class iTensor(TensorBase):
                 l = l+1
         return V_1n2, Vp1, Vp2, V3 
 
-    def contract(self,T2, V1, V2, order_final=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, info=0):
+    def contract(self,T2, V1, V2, order_final=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
         """
             see Tensor_Contraction2 in f90
             V1,2,3 are arrays (maps) 张量指标 —> 自然数。用自然数来标记所有张量的指标
@@ -2105,7 +2106,9 @@ class iTensor(TensorBase):
             raise 
         
 
-        T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
+        #T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
+        if track_name: 
+            T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
         T3.ind_labels= V3
         
         if info>0: 
