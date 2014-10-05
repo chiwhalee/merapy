@@ -52,6 +52,7 @@ uname=os.uname()[1]
 if uname in ['QTG-WS1-ubuntu']: 
     import pp
 
+from merapy.utilities import print_vars
 from merapy.context_util import (make_temp_dir, rpyc_conn_local, 
         rpyc_conn_local_zerodeploy, rpyc_conn, rpyc_conn_zerodeploy)
 from merapy.quantum_number import *
@@ -1128,7 +1129,9 @@ class Main(object):
                 if schedule is None: 
                     main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
                 else: 
-                    if isinstance(schedule[0], dict):  #mera use this 
+                    #print_vars(vars(),  ['schedule']); raise 
+                    #if isinstance(schedule[0], dict):  #mera use this 
+                    if config['algorithm']== 'mera':  
                         main.run_schedule(**config['schedule'])
                     else:   #mps use this 
                         main.run_schedule(schedule)  
