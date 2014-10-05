@@ -37,6 +37,7 @@ import unittest
 import numpy as np
 import warnings
 
+from merapy.utilities import print_vars
 from merapy.decorators import decorate_methods, tensor_player 
 from merapy.utilities import print_vars 
 
@@ -808,6 +809,37 @@ class QuantSpaceBase(object):
             if self.QNs[i]._val == qn._val: 
                 return i
     
+    def expand_totdim(self, totdim): 
+        qns = self.QNs
+        qns = [q.val for q in qns]
+        dims = self.Dims[:self.nQN].copy() 
+        if 0: 
+            n = totdim/self.totDim
+            residual = totdim%self.totDim 
+            print_vars(vars(),  ['qns', 'dims', 'self.totDim', 'n'])
+            dims *= n 
+            #residual = totdim-()
+            if residual>0: 
+                #for i, j in enumerate(xrange(totdim-dim.size)): 
+                for i in xrange(residual):
+                    print_vars(vars(),  ['residual', 'i'])
+                    dims[i] += 1
+        
+        ratial = dims/float(self.totDim)
+        #print_vars(vars(),  ['ratial'])
+        dims = totdim * ratial
+        dims= dims.astype(int)
+        diff = np.sum(dims)-totdim
+        if diff >0 or diff >self.nQN: 
+            raise
+        else: 
+            for i in xrange(-diff): 
+                dims[i] += 1 
+        
+        res= self.__class__.easy_init(qns, dims)
+        return res 
+                
+                
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
@@ -969,7 +1001,6 @@ class QspZ3(QuantSpaceBase):
             qsp_max2.update()
         #return qsp_max, qsp_max2
         return qsp_max
-
 
 class QspU1(QuantSpaceBase):
     #MaxQNNum shouldn't to small, because two qn can fuse into a new qn so that nQN can increase MaxQNNum is related to max rank of tensors in the tensor net
@@ -1359,10 +1390,11 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        q1=QspZ2.easy_init([1, -1], [2, 2])
-        q2=QspZ2.easy_init([1, -1], [1, 3])
-        print  q1*q2 
-        print  q1*q1 
+        q=QspZ2.easy_init([1, -1], [2, 3])
+        qe = q.expand_totdim(11)
+        print_vars(vars(),  ['qe'])
+        self.assertTrue(qe==QspZ2.easy_init([1, -1], [5, 6]))
+      
     
     def test_old_all(self): 
         for symm in GROUP_NAMES:
@@ -1449,7 +1481,17 @@ class TestIt(unittest.TestCase):
             c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
             print_vars(vars(), ['a*b*c', 'a*(b*c)'])
             
+    def test_expand_totdim(self): 
+        if 1: 
+            q=QspZ2.easy_init([1, -1], [2, 3])
+            qe = q.expand_totdim(11)
+            print_vars(vars(),  ['qe'])
+            self.assertTrue(qe==QspZ2.easy_init([1, -1], [5, 6]))
 
+        q=QspU1.easy_init([0, 1, -1], [4, 2, 3])
+        qe = q.expand_totdim(26)
+        print_vars(vars(),  ['qe'])
+        self.assertTrue(qe==QspU1.easy_init([0, 1, -1], [12, 6, 8]))
         
     
 if __name__ == "__main__":
@@ -1464,7 +1506,8 @@ if __name__ == "__main__":
            #'test_old_all', 
            #'test_compare', 
            #'test_power', 
-           'test_tensor_prod', 
+           #'test_tensor_prod', 
+           'test_expand_totdim', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

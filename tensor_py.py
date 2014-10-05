@@ -2806,8 +2806,11 @@ class iTensor(TensorBase):
 
     def expand(self, QSp):
         """
-        not tested
+            这个函数目前只支持 self.QSp 量子数数目  和 QSp量子数数目相等的情况
+            否则会报错
         """
+        for i in xrange(self.rank): 
+            assert self.QSp[i] <=  QSp[i], (self.QSp[i], QSp[i])
         rank = self.rank
         T2 = iTensor(rank, QSp, self.totQN.copy())
         T2.data[:] = 0.0
@@ -4050,15 +4053,19 @@ class Test_iTensor(unittest.TestCase):
     
     def test_temp(self): 
         pass 
-        from merapy import load 
-        A = load('/tmp/A')
-        print_vars(vars(), ['A.shape', 'A.data.flags'])
-        #A.permutation([0, 2, 1])
-        #for i in range(A.nidx): 
-        #    print(i)
-        #    print(A.get_block(i).flags)
-    
-    
+        q1 = QspU1.easy_init([1, -1], [2, 2])
+        #q2 = QspU1.easy_init([0, 1, -1], [0, 2, 2])
+        q2 = QspU1.easy_init([ 1, -1], [ 2, 2])
+        A = iTensor.example([q1, q2] )
+        A.show_data()
+        if 1: 
+            q3 = QspU1.easy_init([1, -1], [2, 2])
+            q4 = QspU1.easy_init([0, 1, -1], [4, 2, 2])
+            #q4 = QspU1.easy_init([ 1, -1], [4, 5])
+            #q4 = QspU1.easy_init([ 1, -1, 2, -2], [4, 5, 1, 1])
+            B=A.expand([q3, q4])
+            B.show_data()
+        
     def test_to_ndarray(self): 
         q = QspZ2.easy_init([1, -1], [2, 2])
         qsp = q.copy_many(2)
