@@ -7,6 +7,7 @@ import numpy.linalg as linalg
 import scipy 
 from scipy.sparse.linalg import eigs
 from collections import OrderedDict 
+import warnings 
 
 
 from merapy.tensor import iTensor
@@ -25,8 +26,7 @@ issue225:
     and there would be NOT converge error
 """
 
-
-print "call dsyev what is lwork? in common4py.f90 this value may be improper"
+warnings.warn("call dsyev what is lwork? in common4py.f90 this value may be improper")
 
 class Tensor_svd(object):
     """
@@ -349,14 +349,14 @@ class Tensor_svd(object):
         return Sd
 
     @staticmethod 
-    def svd_rank2(tensor, trunc_dim=None, full_matrices=False, compute_uv=True, return_trunc_err=False, 
+    def svd_rank2_old(tensor, trunc_dim=None, full_matrices=False, compute_uv=True, return_trunc_err=False, 
         normalize_singular_val=False):  
-        trunc_dim = trunc_dim if trunc_dim is not None else 10000
         """
             status: 
                 tested  but not quit thorough 
             itensor should be prepare into a rank 2 tensor 
         """
+        trunc_dim = trunc_dim if trunc_dim is not None else 10000
         num_blocks= tensor.nidx 
         tt = tensor  # a shorter name 
         #uu, ss, vv = {}, {}, {}   #把每个block 分别做svd，记录在此, 最终由这些构造结果张量
@@ -459,6 +459,134 @@ class Tensor_svd(object):
             
             p  = S.Block_idx[0, i]
             size = S.Block_idx[1, i]
+            S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+        if not return_trunc_err:
+            return U, S, V 
+        else:
+            return U, S, V , trunc_err 
+    
+    #SORT_BUFFER = np.ndarray(3*2000) # support at most 2000 singular values  
+    
+    @staticmethod 
+    def svd_rank2(tensor, trunc_dim=None, full_matrices=False, compute_uv=True, return_trunc_err=False, 
+        normalize_singular_val=False):  
+        """
+            status: 
+                tested  but not quit thorough 
+            itensor should be prepare into a rank 2 tensor 
+        """
+        trunc_dim = trunc_dim if trunc_dim is not None else 10000
+        num_blocks= tensor.nidx 
+        tt = tensor  # a shorter name 
+        #uu, ss, vv = {}, {}, {}   #把每个block 分别做svd，记录在此, 最终由这些构造结果张量
+        #dim_list = []
+        uu = np.ndarray(num_blocks, dtype=np.object)
+        ss = np.ndarray(num_blocks, dtype=np.object)
+        vv = np.ndarray(num_blocks, dtype=np.object)
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        qn_list = np.ndarray(num_blocks, dtype=np.object)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            p  = tt.Block_idx[0, i]
+            size  = tt.Block_idx[1, i]
+            assert dl*dr == size, (dl, dr, size) 
+            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+            if 0:
+                #issue225 #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
+                #暂时先不用它，而改用numpy
+                u, s, v = common_util.matrix_svd(min(dl, dr), mat)
+            else:
+                if compute_uv: 
+                    u, s, v=scipy.linalg.svd(mat, full_matrices=False)
+                    uu[i], ss[i], vv[i] = u, s, v
+                else: 
+                    s = scipy.linalg.svd(mat, full_matrices=False, compute_uv=False)
+                    ss[i] = s
+                    
+            dim_list[i] = s.size 
+            qn_list[i] = tt.QSp[1].QNs[qn1].copy()
+        
+        if not compute_uv: 
+            return ss 
+        
+        #issue:  may happen d = 0, some qn is fully truncated
+        if trunc_dim < np.sum(dim_list):  
+            #把ss中的奇异值 连接起来用temp 这一ndarray存储
+            temp = np.zeros((3, np.sum(dim_list)), dtype=float)
+            d0 = 0
+            for i, d in enumerate(dim_list): 
+                temp[0, d0: d0 + d] = ss[i]
+                temp[1, d0: d0 + d] = i
+                #temp[2, d0: d0 + d] = np.arange(d0, d0 + d, dtype=int)
+                temp[2, d0: d0 + d] = np.arange(d, dtype=int)
+                d0 += d
+            
+            arg = temp[0].argsort()
+            arg_large = arg[-1:-trunc_dim-1:-1]
+            arg_small = arg[: trunc_dim]
+            
+            temp = temp[:, arg_large]
+            #norm = np.linalg.norm(temp[: trunc_dim])
+            norm = np.linalg.norm(temp[0])
+            trunc_err = 1-norm**2  
+            #print 'ttt\n', temp 
+            
+            zero_list = []
+            for i in range(tt.nidx): 
+                ind = np.where(temp[1]==float(i))[0]
+                if ind.size>0: 
+                    ind = ind[-1]
+                    last = int(temp[2][ind]) + 1 
+                    #truncate vecs, and normalize singular values 
+                    ss[i] = ss[i][: last]
+                    ss[i] *= 1./norm 
+                    dim_list[i] = last 
+                    uu[i] = uu[i][:, :last]
+                    vv[i] = vv[i][:last, :]
+                else: 
+                    zero_list.append(i)
+                #print_vars(vars(),  ['i', 'ind', 'last'], head='', sep='  ')
+            
+            index = range(num_blocks)
+            if zero_list: 
+                for i in zero_list: 
+                    index.remove(i)
+                qn_list = qn_list[index]
+                dim_list = dim_list[index]
+                uu = uu[index]
+                vv = vv[index]
+                ss = ss[index]
+            #print_vars(vars(),  ['zero_list', 'dim_list'])
+                
+        else:
+            trunc_err = 0.0
+        #qsp_sr = tt.QSp[0].__class__(len(dim_list), qn_list, dim_list)
+        qsp_sr = tt.qsp_class(len(qn_list), qn_list, dim_list)
+        qsp_sl = qsp_sr.copy(); qsp_sl.reverse()
+        U = iTensor(QSp=[tt.QSp[0], qsp_sr])
+        S = iTensor(QSp=[qsp_sl, qsp_sr])
+        V = iTensor(QSp=[qsp_sl, tt.QSp[1]])
+        
+        #print_vars(vars(), ['U', ])
+        for i in xrange(U.nidx): 
+            p  = U.Block_idx[0, i]
+            size  = U.Block_idx[1, i]
+            #print_vars(vars(), ['i', 'size', 'uu[i].size', 'vv[i].size', 'ss[i].size',  'len(uu)', 
+            #    'U.QSp[0].QNs[i]',
+            #    'U.QSp[1].QNs[i]', 
+            #    ], sep=' ')
+            U.data[p: p + size] = uu[i].ravel(order='F')
+            
+            p  = V.Block_idx[0, i]
+            size  = V.Block_idx[1, i]
+            V.data[p: p + size] = vv[i].ravel(order='F')
+            
+            p  = S.Block_idx[0, i]
+            size = S.Block_idx[1, i]
+            #print_vars(vars(),  ['ss[i].shape', 'size'])
             S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
         if not return_trunc_err:
             return U, S, V 
@@ -693,24 +821,44 @@ class TestIt(unittest.TestCase):
     
     def test_temp(self): 
         if 1: 
-            from merapy import QspU1 
-            np.set_printoptions(14 )
             np.random.seed(1234)
-            q = QspU1.easy_init([0, 1, -1, 2, -2], [4, 2, 2, 1, 1])
-            #q = QspU1.easy_init([0, 1, -1, ], [4, 2, 2, ])
-            #qsp = q.copy_many(2, reverse=[1])
+            qsp = QspU1.easy_init([0, 1, -1, 2, -2], [8, 5, 5, 1, 5])
+            #qsp = QspU1.easy_init([0, 1, -1, ], [8, 5, 5, ]) 
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t1 = t
+        
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspZ2.easy_init([1, -1], [8, 8])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2 ) 
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t2 = t
             
-            q1 = q.copy()
-            q2 = q ; q2.reverse()
-            
-            t = iTensor.example(qsp=[q1, q2], rank=2, symmetry='U1')
-            t.data[: ] = np.random.random(t.totDim)
-            U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=7)
-            #print_vars(vars(), ['t.shape', 'U.shape', 'S.shape', 'V.shape', 'repr(V.data)', 'S.data']) 
-            V_old = np.array([-0.4847991142639 ,  0.23290875129277, -0.044051212802  , -0.48705950022753, -0.8724290630502 , -0.00866150155038, -0.59494397532567,  0.34460444158915,  0.60174128416965, -0.41687471531714,  0.25664922044225, -0.79742830145878, -0.62198761202164,  0.78302708158251, -0.78302708158251, -0.62198761202164, -0.68010581731849, -0.7331139592516 ,  1.              ])
-            self.assertTrue(np.allclose(V.data, V_old, atol=1e-12))
-            print 'test svd_rank2 for cases qn of dim=0 is removed  -- pass'
-    
+        if 1:     
+            #for ii, t in enumerate([t1, t2]): 
+            for ii, t in enumerate([t1]): 
+                t.data = t.data/t.norm()
+                U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=9)
+                print 'ttt', U 
+                vv=V.dot(V.conjugate(1))
+                uu = U.conjugate(1).dot(U)
+                self.assertTrue(uu.is_close_to(1))
+                self.assertTrue(vv.is_close_to(1))
+                a = U.dot(S).dot(V)
+                #print_vars(vars(), ['a.to_ndarray().shape', 't.to_ndarray().shape'])
+                #print_vars(vars(), ['a.to_ndarray()[:3][:3]', 't.to_ndarray()[:3][:3]'])
+                #self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14)) 
+                overlap = t.contract(a, [0, 1], [0, 1])[0].data[0]
+                #print_vars(vars(), ['t.norm()', 't.to_ndarray().shape', 'overlap'])
+                old = {0:0.96904496136089668, 1: 0.99202622859714307}[ii]
+                self.assertAlmostEquals(overlap, old, 12)
+            print 'test svd_rank2 by calc overlap --- pass'
+
     def test_group_legs(self, rank=3):
         """
             --- pass 
@@ -877,11 +1025,11 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_temp', 
+           'test_temp', 
            #'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
-           'test_svd_rank2_2', 
+           #'test_svd_rank2_2', 
            #'test_group_legs', 
         ]
         for a in add_list: 
