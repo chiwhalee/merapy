@@ -11,6 +11,7 @@ import numpy as np
 import cPickle as pickle 
 
 from merapy import crandom
+from merapy.utilities import print_vars
 
 class TensorBase(object):
     """
@@ -1017,10 +1018,12 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
     
     indXl = range(numindX)
     indYr = range(numindY)
+    #print_vars(vars(),  ['indX'])
     for i in indX:
         indXl.remove(i)
     for i in indY:
         indYr.remove(i)
+        
     
     sizeXl = [Xsize[i] for i in indXl]
     sizeX = [Xsize[i] for i in indX]
@@ -1121,6 +1124,7 @@ def contract_tensors_new(X, Y, indX, indY):
         a = - np.arange(1, 1 + len(indX))
         V1[indX] = a
         V2[indY] = a
+        #return X.contract(Y, V1, V2, use_buf=True)[0]
         return X.contract(Y, V1, V2)[0]
 
 class nTensor(np.ndarray, TensorBase):

@@ -228,7 +228,7 @@ def save(obj, path, compress=False, compress_level=2, as_str=False, info=0):
         else: 
             return z 
 
-def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', head=None, 
+def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=', 
         show_header=0, return_str=False):
     """
         
@@ -262,7 +262,7 @@ def print_vars(dic, var_name_list=None, sep='\n', sep_key_val='=', head=None,
                 res='error: ' +  str(err)
         return str(res)
     res = head
-    res  +=  sep.join([str(i) + sep_key_val + get_val(i)  for i in  var_name_list])
+    res  +=  sep.join([str(i) + key_val_sep + get_val(i)  for i in  var_name_list])
     if not return_str:         
         print  res
     else: 

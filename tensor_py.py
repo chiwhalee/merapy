@@ -348,8 +348,7 @@ class iTensor(TensorBase):
     def get_block(self, i): 
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
-        data = self.data[p: p + size]
-        return data 
+        return self.data[p: p + size] 
     
     def get_block_shape(self, i):
         qn_id_tuple = self.Addr_idx[:, i]
