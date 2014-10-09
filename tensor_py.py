@@ -100,7 +100,7 @@ class iTensor(TensorBase):
     T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
     #BUFFER_ON = False
     
-    def __init__(self, rank=None, QSp=None, totQN=None, order="F",  
+    def __init__(self, rank=None, QSp=None, totQN=None, order="F", dtype=float, 
             buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
         """
             params: 
@@ -180,7 +180,7 @@ class iTensor(TensorBase):
             elif use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
                 buffer = self.buffer_assign(data_size=self.totDim)
             
-            self.data = np.ndarray(self.totDim, buffer=buffer, dtype=self.dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
+            self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
 
     def buffer_assign(self, data_size, n=None):
         """
@@ -428,6 +428,11 @@ class iTensor(TensorBase):
         #@property   #this is stupid. only temp use 
         def ravel(self): 
             return self.data 
+        
+        @property
+        def T(self): 
+            assert self.rank == 2 
+            return self.transpose([1, 0])
         
         
     @classmethod
