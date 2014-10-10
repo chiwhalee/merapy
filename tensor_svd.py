@@ -554,7 +554,10 @@ class Tensor_svd(object):
             qn_list[i] = tt.QSp[1].QNs[qn1].copy()
         
         if not compute_uv: 
-            return ss 
+            spect = {}
+            for i in xrange(num_blocks): 
+                spect[qn_list[i].val] = ss[i]
+            return spect 
         
         #issue: may happen d = 0, some qn is fully truncated
         totdim = np.sum(dim_list)
