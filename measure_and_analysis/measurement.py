@@ -11,11 +11,13 @@ import cPickle as pickle
 from collections import OrderedDict
 import warnings
 import dispy 
-
+from  multiprocessing import Process
+import tempfile 
 
 from merapy.hamiltonian import System
 from merapy.utilities import load 
 from merapy.context_util import rpyc_load 
+#from merapy.brokest import queue 
 #from mera_wigner_crystal import ham_wigner_crystal
 
 #from vmps.mps import MPS
@@ -25,6 +27,7 @@ if 0:
     from merapy.measure_and_analysis.scaling_dimension import calc_scaling_dim_2site as scaling_dim
     from merapy.measure_and_analysis.magnetization import magnetization
 #import merapy.measure_and_analysis.all as all_mera
+from merapy.utilities import print_vars
 import merapy.measure_and_analysis as mmm 
 import merapy as kkk 
 import merapy.measure_and_analysis.all as all_mera
@@ -51,7 +54,6 @@ class Measurement(object):
         self.rdb = ResultDB(self.parpath)
 
 
-
 def measure_decorator(result_db_class=None): 
     """
         status: 
@@ -76,7 +78,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             parpath should be deprecated, extract it from path instead  
     """
     use_local_storage =  kwargs.get('use_local_storage', False)
-    print 'ssssssssssssssssss', type(S)
     if S is None: 
         assert path is not None
         #S= load(path)
@@ -136,6 +137,8 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             mps= S 
             db_version = 1.0
             N, D = mps.N, mps.D
+            if mps.symmetry is not None : 
+                D = mps.bond_dim_max 
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
             dim,  layer = None, None
@@ -165,8 +168,14 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             else: 
                 all_func = all_idmrg
             A = S['A']
+            symm = None if isinstance(A, np.ndarray) else A.symmetry 
             db_version = 1.0
-            N, D = 0, A.shape[0]
+            #N, D = 0, A.shape[0]
+            N = 0
+            if symm is None: 
+                D = A.shape[0]
+            else: 
+                D = A.shape[0].totDim 
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
             dim,  layer = None, None
@@ -256,13 +265,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     if len(failed_list)>0: 
         print 'failed_list: %s'%failed_list
 
-def measure_it(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
-        fault_tolerant=1, param=None,  field_surfix='', rdb=None ):  
-    """
-        todo: 
-            parpath should be deprecated, extract it from path instead  
-    """
-    print 1 
 
 #now I undertand that, this func in fact realized a decorator for individal measure funcs!!
 def measure_all_bac(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
@@ -335,13 +337,12 @@ def measure_all_bac(dir_list, mera_shape_list, sh_min=None, sh_max=None,
     if len(path_not_found)>0: 
         print 'path_not_found is %s'%path_not_found
 
-def make_measure_many_args(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
+def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,  
         which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
         fault_tolerant=1, recursive=False,  **kwargs): 
-    
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
-    __mera_shape_list = mera_shape_list
+    __sh_list = sh_list
     if isinstance(which, str): 
         which = [which]
     if isinstance(dir_list, str): 
@@ -366,11 +367,11 @@ def make_measure_many_args(dir_list, mera_shape_list, sh_min=None, sh_max=None,
     path_list = []
     for dir in dir_list: 
         #fori d in dim_list: 
-        if mera_shape_list  == 'all': 
+        if sh_list  == 'all': 
             db = ResultDB(dir, algorithm=algorithm)
-            __mera_shape_list = db.get_mera_shape_list(sh_max=sh_max, sh_min=sh_min)
+            __sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
         
-        for sh in __mera_shape_list: 
+        for sh in __sh_list: 
             if algorithm  == 'mera':  
                 #sh[1] -= 1  #layer->layer-1
                 sh = list(sh);  sh[1] -= 1
@@ -411,7 +412,6 @@ def make_measure_many_args(dir_list, mera_shape_list, sh_min=None, sh_max=None,
     
     return res 
 
-
 def compute(n):
     import time, socket
     n = 3 
@@ -449,7 +449,17 @@ def measure_all_new(arg_group):
         print job.stdout, job.stderr , job.id, job.exception  
     cluster.stats()
 
-
+def measure_all_by_brokest(arg_group): 
+    #for server_port in server_ports:
+    #    Process(target=server, args=(server_port,)).start()
+    from mypy.brokest.brokest import queue 
+    Process( )
+    for i in arg_group: 
+        print  i['path']
+        #print queue(measure_S, args=tuple(), kwargs=i, host='222.195.73.191', port=90900)
+        #print queue(measure_S, args=tuple(), kwargs=i, host='210.45.121.30', port=90900)
+        print queue(measure_S, args=tuple(), kwargs=i, host='127.0.0.1', port=90900)
+        
 
 def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
         which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
@@ -587,6 +597,22 @@ class TestIt(unittest.TestCase):
         #measure_all( **args )
         measure_all( **args )
     
+    def test_idmrg_all(self): 
+        if 0: 
+            args = self.args
+            dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
+            which = None
+            args.update(dir_list=[dir], which=which, force=0, mera_shape_list=[(40, 10)])
+            #measure_all( **args )
+            measure_all( **args )
+        dir = tempfile.mkdtemp()
+        from vmps.idmrg_mcc import iDMRG_mcc 
+        i=iDMRG_mcc.example(model_name='ising', symmetry='Z2', backup_parpath=dir, 
+                pinv_tol=1e-15, do_measure=0)
+        i.minimize()
+        path = '/'.join([dir, 'N=0-D=4.pickle'])
+        measure_S(path=path, which=['correlation'], fault_tolerant=0)
+         
     def test_make_measure_many_args(self): 
         dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=0.0/'
         res = make_measure_many_args(dir, 'all', which=['energy'])
@@ -613,6 +639,15 @@ class TestIt(unittest.TestCase):
         if 1: 
             measure_all_new(res)
     
+    def test_measure_all_by_brokest(self): 
+        dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=1.0/'
+        args= make_measure_many_args(dir, 'all', 
+                use_local_storage=1, 
+                sh_max=(200, 20), which=['correlation'], force=1)
+        
+        measure_all_by_brokest(args[2: 10])
+        #measure_S(**args[2])
+        
     def tearDown(self): 
         pass
     
@@ -672,14 +707,14 @@ if __name__ == '__main__':
             add_list = [
                 #'test_temp', 
                 #'test_vmps_all', 
+                'test_idmrg_all', 
                 #'test_make_measure_many_args', 
-                'test_measure_all_new', 
+                #'test_measure_all_new', 
+                #'test_measure_all_by_brokest'
         
             ]
             for a in add_list: 
                 suite.addTest(TestIt(a))
-            #suite.addTest(TestIt('test_ising'))
-            #suite.addTest(TestIt('test_heisbg'))
             unittest.TextTestRunner().run(suite)
            
     
