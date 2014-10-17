@@ -574,14 +574,13 @@ class Tensor_svd(object):
             
             arg = temp[0].argsort()
             arg_large = arg[-1:-trunc_dim-1:-1]
-            arg_small = arg[: trunc_dim]
+            #arg_small = arg[: trunc_dim]
             
             temp = temp[:, arg_large]
             
-            #norm = np.linalg.norm(temp[: trunc_dim])
+            #issue: 这里没必要求norm，再 **2啊，直接求平方和即可, 有空改一下
             norm = np.linalg.norm(temp[0])
             trunc_err = 1-norm**2  
-            #print 'ttt\n', temp 
             
             empty_list = []
             for i in range(tt.nidx): 
@@ -643,7 +642,7 @@ class Tensor_svd(object):
             return U, S, V , trunc_err 
     
     @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, trunc_which=None):
+    def eig_rank2(tensor, trunc_dim=None, trunc_which=None, return_trunc_err=False):
         """
             为了在mps中 对角化密度矩阵 而写此函数
             exact diagonalizetion of a rank-2 symmetric tensor 
@@ -690,14 +689,19 @@ class Tensor_svd(object):
                 temp[1][d0: d0 + d] = i
                 temp[2][d0: d0 + d] = np.arange(d, dtype=int)
                 d0 += d
-            
             arg = temp[0].argsort()
             arg_large = arg[-1:-trunc_dim-1:-1]
-            arg_small = arg[: trunc_dim]
+            #print_vars(vars(),  ['temp[0][arg]'], '')
+            #print_vars(vars(),  ['temp[0][arg_large]'], '')
             #print_vars(vars(),  ['temp'], head='before trunc', key_val_sep='\n')
             for i in xrange(3): 
                 temp[i] = temp[i][arg_large]
-            val_largest = temp[0]
+            
+            #print_vars(vars(),  ['np.sum(temp[0])'], '')
+            #norm = np.linalg.norm(temp[0])
+            trunc_err = 1-np.sum(temp[0])#**2    no squre !
+                
+            #val_largest = temp[0]
             #print_vars(vars(),  ['temp'], head='after trunc', key_val_sep='\n')
             empty_list = []
             for i in xrange(len(dim_list)): 
@@ -722,6 +726,7 @@ class Tensor_svd(object):
                 VEC = VEC[index]
         else: 
             dim_list_trun = dim_list 
+            trunc_err = np.nan 
         if trunc_which == 'left': 
             qn_list_l = qn_list_l[index]
             q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_trun)
@@ -741,8 +746,10 @@ class Tensor_svd(object):
             size  = res.Block_idx[1, i]
             #print_vars(vars(),  ['size', 'VEC[i].shape'])
             res.data[p: p + size] = VEC[i].ravel(order='F')
-            
-        return res 
+        if return_trunc_err: 
+            return res,  trunc_err
+        else: 
+            return res 
     
     @classmethod
     def random_unit_tensor(cls,itensor, d):
@@ -972,7 +979,21 @@ class TestIt(unittest.TestCase):
     
     def test_temp(self): 
         pass 
-    
+        np.set_printoptions(precision=3)
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspU1.easy_init([0, 1, -1, 2, -2] , [4, 2, 3, 2, 2])
+            #qsp = QspU1.easy_init([0, 1, -1] , [4, 2, 3])
+            #qsp = QspU1.easy_init([0, 1, -1, ], [8, 5, 5, ]) 
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+        trunc_dim  = 1 
+        #for trunc_dim in [1, 5, 20, 10000]: 
+        for trunc_dim in [5]: 
+            tt, err = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim, trunc_which='right', return_trunc_err=1) 
+            print_vars(vars(),  ['trunc_dim', 'err'])
         
     def test_group_legs(self, rank=3):
         """
@@ -1171,12 +1192,12 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_temp', 
+           'test_temp', 
            #'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
-           'test_eig_rank2', 
+           #'test_eig_rank2', 
            #'test_group_legs', 
         ]
         for a in add_list: 
