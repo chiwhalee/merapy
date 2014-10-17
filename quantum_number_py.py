@@ -521,15 +521,15 @@ class QuantSpaceBase(object):
         return res 
     
     @classmethod
-    def easy_init(cls, qns, dims):
+    def easy_init(cls, qns=None, dims=None):
         """ a slow but easy init """
         n = len(qns)
-        if cls.QnClass.SYMMETRY == 'Travial':
+        symm =  cls.QnClass.SYMMETRY 
+        if symm== 'Travial':
             qns1 = None
         else:
             qns1 = [cls.QnClass(i) for i in qns]
-        res = cls(n=n, qns=qns1, dims=dims)
-        return res
+        return cls(n=n, qns=qns1, dims=dims) 
 
     def reverse(self):
         """
@@ -1010,6 +1010,16 @@ class QspU1(QuantSpaceBase):
         """
         """
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
+    
+    @classmethod
+    def easy_init(cls, qns=None, dims=None):
+        """ a slow but easy init """
+        n = len(dims)
+        assert dims is not None 
+        if qns is None: 
+            qns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7][: len(dims)]
+        qns1 = [cls.QnClass(i) for i in qns]
+        return cls(n=n, qns=qns1, dims=dims)
 
     @classmethod
     def set_base(cls, dim=None):
@@ -1390,10 +1400,8 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        q=QspZ2.easy_init([1, -1], [2, 3])
-        qe = q.expand_totdim(11)
-        print_vars(vars(),  ['qe'])
-        self.assertTrue(qe==QspZ2.easy_init([1, -1], [5, 6]))
+        q = QspU1.easy_init(None, [2, 1, 1])
+        print(q)
       
     
     def test_old_all(self): 
@@ -1502,12 +1510,12 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_temp', 
+           'test_temp', 
            #'test_old_all', 
            #'test_compare', 
            #'test_power', 
            #'test_tensor_prod', 
-           'test_expand_totdim', 
+           #'test_expand_totdim', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

@@ -4057,18 +4057,10 @@ class Test_iTensor(unittest.TestCase):
     
     def test_temp(self): 
         pass 
-        q1 = QspU1.easy_init([1, -1], [2, 2])
-        #q2 = QspU1.easy_init([0, 1, -1], [0, 2, 2])
-        q2 = QspU1.easy_init([ 1, -1], [ 2, 2])
-        A = iTensor.example([q1, q2] )
-        A.show_data()
-        if 1: 
-            q3 = QspU1.easy_init([1, -1], [2, 2])
-            q4 = QspU1.easy_init([0, 1, -1], [4, 2, 2])
-            #q4 = QspU1.easy_init([ 1, -1], [4, 5])
-            #q4 = QspU1.easy_init([ 1, -1, 2, -2], [4, 5, 1, 1])
-            B=A.expand([q3, q4])
-            B.show_data()
+        t = iTensor.example()
+        from merapy.utilities import save
+        
+        save(t, '/tmp/ttt' )
         
     def test_to_ndarray(self): 
         q = QspZ2.easy_init([1, -1], [2, 2])

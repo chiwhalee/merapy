@@ -1108,7 +1108,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
         #res.ind_labels = indXl + indYr
         return res
 
-def contract_tensors_new(X, Y, indX, indY): 
+def contract_tensors_new(X, Y, indX, indY, use_buff=False): 
     """
         a wrapper and better interface for contract_tensors;
         this will be the standard one in future
@@ -1124,8 +1124,7 @@ def contract_tensors_new(X, Y, indX, indY):
         a = - np.arange(1, 1 + len(indX))
         V1[indX] = a
         V2[indY] = a
-        #return X.contract(Y, V1, V2, use_buf=True)[0]
-        return X.contract(Y, V1, V2)[0]
+        return X.contract(Y, V1, V2, use_buf=use_buff)[0]
 
 class nTensor(np.ndarray, TensorBase):
     def __new__(cls, shape, dtype=float, buffer=None, offset=0,
