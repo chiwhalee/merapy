@@ -142,7 +142,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
             dim,  layer = None, None
-            shape =  mps.N, mps.D  
+            shape =  N,  D
             iter = -1
             #field = ['correlation']
             corr_param = {}
