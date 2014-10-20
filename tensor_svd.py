@@ -642,7 +642,7 @@ class Tensor_svd(object):
             return U, S, V , trunc_err 
     
     @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, trunc_which=None, return_trunc_err=False):
+    def eig_rank2(tensor, trunc_dim=None, trunc_which=None, return_trunc_err=False, use_buff=False):
         """
             为了在mps中 对角化密度矩阵 而写此函数
             exact diagonalizetion of a rank-2 symmetric tensor 
@@ -738,7 +738,7 @@ class Tensor_svd(object):
             q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
             q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trun)
         
-        res = iTensor(QSp=[q1, q2])
+        res = iTensor(QSp=[q1, q2], use_buf=use_buff)
         #print_vars(vars(),  ['res.shape', 'empty_list', 'dim_list'], '')
         
         for i in xrange(res.nidx): 
