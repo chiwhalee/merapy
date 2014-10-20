@@ -356,8 +356,8 @@ class QuantSpaceBase(object):
             _dims: 每个量子数对应子空间的维数
         """
         self.nQN = n
-        self._dims=np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
-        #self._dims=np.empty(n, int) #MaxQNNum only defined in subclassed
+        self._dims=np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
+        #self._dims=np.empty(n, int) 
         self._dims[:n] = dims[:n]
         #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
 
@@ -573,7 +573,7 @@ class QuantSpaceBase(object):
         calculate totDim, RefQN
         see QSp_update in f90
         """
-        D_Max0 = np.ndarray(self.MaxQNNum,"int")
+        D_Max0 = np.ndarray(self.MaxQNNum, int)
         D_Max0[:]=10000000   
 
         #temp=self.__class__.__call__()
@@ -1004,7 +1004,7 @@ class QspZ3(QuantSpaceBase):
 
 class QspU1(QuantSpaceBase):
     #MaxQNNum shouldn't to small, because two qn can fuse into a new qn so that nQN can increase MaxQNNum is related to max rank of tensors in the tensor net
-    MaxQNNum = 15
+    MaxQNNum = 30 
     QnClass = QnU1
     def __init__(self, n, qns, dims, RefQN=None):
         """
