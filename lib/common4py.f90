@@ -533,25 +533,47 @@ subroutine Matrix_Multiply(n,l,m, A,B,C,alpha,beta)
 end subroutine Matrix_Multiply
 
 
-subroutine Matrix_eigen_vector(nV, A, E)
+subroutine Matrix_eigen_vector_bac(nV, A, E)
       integer nV
       real*8 A(nV,nV)
 !f2py intent(inout):: A
       integer,parameter:: E_size=1024*64
       integer:: lwork, info
       !real*8:: E(E_size)
-      real*8:: E(E_size)
+      real*8:: E(nV)
 !f2py intent(inout):: E
       
       !real*8:: work(5*E_size)
       !lwork = 5*E_size
-
-      real*8:: work(5*E_size)
-      lwork = 5*E_size
+    
+      !lzh:  issue: I dont understand how to set lwork, and work 
+      real*8:: work(5*nV)
+      !lwork = 5*E_size
+      lwork = 5*nV
 
       call dsyev('V', 'U', nV, A, nV, E, work, lwork, info)   
 
-end subroutine Matrix_eigen_vector
+end subroutine Matrix_eigen_vector_bac 
+
+
+subroutine Matrix_eigen_vector(nV, A, E)
+      integer nV
+      real*8 A(nV,nV)
+!f2py intent(inout):: A
+      integer:: lwork, info
+      real*8:: E(nV)
+!f2py intent(inout):: E
+      
+      !integer,parameter:: E_size=1024*64
+      !real*8:: work(5*E_size)
+      !lwork = 5*E_size
+      !lzh:  issue: I dont understand how to set lwork, and work 
+      real*8:: work(6*nV)
+      lwork = 6*nV
+
+      call dsyev('V', 'U', nV, A, nV, E, work, lwork, info)   
+
+    end subroutine Matrix_eigen_vector
 
 
 

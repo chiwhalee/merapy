@@ -8,6 +8,7 @@ import scipy
 from scipy.sparse.linalg import eigs
 from collections import OrderedDict 
 import warnings 
+from math import sqrt 
 
 
 from merapy.tensor import iTensor
@@ -666,8 +667,7 @@ class Tensor_svd(object):
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
             mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            #issue:  65536 may be too large and slow 
-            val = np.ndarray(65536, order='F')
+            val = np.empty(dl, order='F')
             common_util.matrix_eigen_vector(mat, val) 
             VAL[i] = val[: dl] 
             VEC[i] = mat
@@ -770,8 +770,6 @@ class Tensor_svd(object):
         rank = itensor.rank
         div = rank//2
         cls.group_legs(itensor, div)
-        E_size=1024*64
-        #lwork = 5*E_size
        
         QSp = [itensor.QSp[i].copy() for i in range(div)]
         if totQN is None:
@@ -779,17 +777,21 @@ class Tensor_svd(object):
         QSp.append(QSp[0].null())
         tQN = QSp[0].QNs[0].qn_id()
 
-        #E = np.empty(E_size)
-        E = np.ndarray(E_size, order="F")
-        pos = np.empty(div+1, np.int)
+        #E_size_max = 1024*64
+        #E_size_max = 10000
+        #E = np.empty(E_size_max, order='F')
+        #E = np.ndarray(E_size_max, order="F")
+        pos = np.empty(div+1, int)
  
         for gidx  in range(cls.QSp_Group1.nQN):
             #print "ggg", gidx, 
             if  cls.QSp_Group1.QNs[gidx] !=  totQN:  
                 continue
             V_buf = cls.get_block1(itensor, gidx)
-            
-            common_util.matrix_eigen_vector(V_buf, E)
+            print V_buf.size 
+            esize = int(sqrt(V_buf.size))
+            E = np.empty(esize, order='F')
+            common_util.matrix_eigen_vector(V_buf, E[: esize])
             #E, V_buf = np.linalg.eig(V_buf)
             #need sort !!!
             #print E[:3]/2.0
@@ -1172,28 +1174,16 @@ if __name__ == "__main__":
         #tt.random_unit_tensor()
         #tt.random_unit_tensor_large()
     if 0: #examine
-        if 0: 
-            from concurrencytest import ConcurrentTestSuite, fork_for_tests
-            loader = unittest.TestLoader()
-            suite = []
-            for cls in [TestIt]: 
-                temp = loader.loadTestsFromTestCase(cls)
-                suite.append(temp)
-            suite = unittest.TestSuite(suite)
-            
-            suite = ConcurrentTestSuite(suite, fork_for_tests(2))
-            unittest.TextTestRunner(verbosity=0).run(suite)
-        else: 
                 
-            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
-            #unittest.TextTestRunner(verbosity=0).run(suite)    
-            TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
-            unittest.main()
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        unittest.main()
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           'test_temp', 
-           #'test_eig', 
+           #'test_temp', 
+           'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 

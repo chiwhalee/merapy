@@ -402,11 +402,11 @@ def tensor_player(which):
 
             def contract_core_player_bac(self, T2, div, data=None, use_buf=False):
                 """
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
+                    see iTensor_Contraction2 in f90
+                    把T1，和T2的非零block 如果量子数组合相等则收缩
+                    locals:
+                        div: num. of legs to be contracted for each tensor
+                        buffer: use buffer to save data of T3
                 """
                 #import tensor_py
                 #iTensor = tensor_py.iTensor

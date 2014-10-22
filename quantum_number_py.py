@@ -1004,6 +1004,7 @@ class QspZ3(QuantSpaceBase):
 
 class QspU1(QuantSpaceBase):
     #MaxQNNum shouldn't to small, because two qn can fuse into a new qn so that nQN can increase MaxQNNum is related to max rank of tensors in the tensor net
+    #issue: 数目太多慢，太少不够，需要改进
     MaxQNNum = 30 
     QnClass = QnU1
     def __init__(self, n, qns, dims, RefQN=None):
