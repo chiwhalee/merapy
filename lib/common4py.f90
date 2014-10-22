@@ -651,15 +651,16 @@ end function Matrix_Trace
 !!$ shift one dimension array 
 !!$ A(1:n-i+1) = A(i:n)
 !!$ A(n-i:) = b
-subroutine iShift(n,A,i,b)
-   implicit none
-   integer n,i, b, A(n)
-!f2py intent(inout):: A
-   integer X(n)
-   X=EOSHIFT(A, shift=i, boundary=b)
-   A=X
-end subroutine iShift
-
+!lzh:  EOSHIFT 在老版本的ifort上有bug，干脆把整个函数注释掉
+!subroutine iShift(n,A,i,b)
+!   implicit none
+!   integer n,i, b, A(n)
+!!f2py intent(inout):: A
+!   integer X(n)
+!   X=EOSHIFT(A, shift=i, boundary=b)
+!   A=X
+!end subroutine iShift
+ 
 subroutine Set_Matrix(nA,mA,A, nB,mB,B, x,y, forward)
 !this maybe replaced by some numpy methods
 ! 把B塞到A中, 起始坐标为x, y; 或反过来
