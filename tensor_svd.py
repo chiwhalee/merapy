@@ -20,14 +20,17 @@ import merapy.common_util as common_util
 from merapy.utilities import print_vars 
 
 """ 
-issue225: 
-    error occor when use ifort compiled matrix_svd_unitilize and matrix size is too large.
-    I use scipy.linalg.svd instead of matrix_svd_unitilize. 
-    but I am not sure whether scipy.linalg.svd is as fast as fortran code
-    and there would be NOT converge error
+    issue225: 
+        error occor when use ifort compiled matrix_svd_unitilize and matrix size is too large.
+        I use scipy.linalg.svd instead of matrix_svd_unitilize. 
+        but I am not sure whether scipy.linalg.svd is as fast as fortran code
+        and there would be NOT converge error
+        
+    issue: 
+        matrix_eigen_vector should take use of work param 
+        
 """
 
-warnings.warn("call dsyev what is lwork? in common4py.f90 this value may be improper")
 
 class Tensor_svd(object):
     """

@@ -176,6 +176,7 @@ def load(path, as_str=False, info=0):
         head = s[:10]
         #print 'oooo', hex(ord(head[0])),  hex(ord(head[1]))
         #print 'hhhh', repr(head)
+        assert len(head)>2 
         #head1 is different compress levels 
         if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
             msg = 'discompress file ... '

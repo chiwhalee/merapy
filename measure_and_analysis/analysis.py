@@ -36,7 +36,9 @@ from merapy.utilities import print_vars
 
 from merapy.measure_and_analysis.result_db import (ResultDB, 
         ResultDB_mera, ResultDB_idmrg, ResultDB_vmps)
-from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE)
+from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE, 
+        AnalysisTools, 
+        )
 
 import matplotlib as mpl
 mpl.rcParams.update(MATPLOTLIBRC)
@@ -83,9 +85,25 @@ class OrderedDictLazy(OrderedDict):
         OrderedDict.update(self, other)
 
 class AlphaList(list): 
-    pass 
+    def __init__(alpha_list, param_list=None): 
+        pass 
+    
+    def identify_param(self, aa): 
+        temp = zip(*aa)
+        # 这么做需要保证aa只有一个轴是不同的
+        i = None   # some times aa is empty 
+        for i in xrange(len(temp)): 
+            if len(set(temp[i]))>1: 
+                break 
+        if i is not None : 
+            param_name = self.param_list[i]
+            param_name_id = i 
+        else: 
+            param_name = None 
+            param_name_id = None 
+        return param_name, param_name_id 
 
-class Analysis(object):
+class Analysis(AnalysisTools):
     """
     """
     REMOTE_HOST = 'zhihuali@211.86.151.102:'
@@ -275,7 +293,6 @@ class Analysis(object):
         x1 = list(set(x1)); x1.sort(); x1=np.array(x1)
         x2 = list(set(x2)); x2.sort(); x2=np.array(x2)
         return x1, x2
-        
     
     def scan_backup_dir(self, root='./'): 
         """     
@@ -298,7 +315,7 @@ class Analysis(object):
        
         return alpha_parpath_dic
     
-    def scan_alpha(self, root='./', surfix='', signiture=None, info=0): 
+    def scan_alpha(self, root=None, surfix='', signiture=None, info=0): 
         """
             a valid backup_parpath name is like
                     a=1.0-b=2.0 
@@ -309,6 +326,11 @@ class Analysis(object):
                     
                 
         """
+        if root is None: 
+            if self.local_root is not None : 
+                root = self.local_root
+            else: 
+                root = './'
         dir_list = os.listdir(root)
         if info>1: 
             print 'dir_list is', dir_list
@@ -320,6 +342,8 @@ class Analysis(object):
                     xx = xx.split('=')[1]
                     if 'm' == xx[0]:  #change 'm' to minus sign
                         xx = '-'  + xx[1: ]
+                else: 
+                    return xx   # xx is surfix 
                 try: 
                     res=float(xx)
                     #res=(float(xx), )   #todo:  make alpha always a tuple 
@@ -340,9 +364,7 @@ class Analysis(object):
                     
                     if surfix != '': 
                         alpha = str(alpha) + '-' +  surfix
-                    #alpha_list.append(alpha)
                     alpha_parpath_dict[alpha] =  '/'.join([root, name])
-                    #alpha_parpath_dict[alpha] = os.path.abspath( name)
             
             res= alpha_parpath_dict
         
@@ -388,7 +410,7 @@ class Analysis(object):
             self.sub_analysis.append(name)
     
     def set_rdb_dict(self, alpha_list=None, create_empty_db=1, 
-            db_version=None, algorithm=None, info=1):        
+            db_version=None, algorithm=None, info=0):        
         if 1: 
             module_name = self.result_db_class.__module__
             module = importlib.import_module(module_name)
@@ -432,7 +454,6 @@ class Analysis(object):
         if info>0: 
             msg = 'parpath found are %s'%(dic, )
             print(msg)
-
         
         self.alpha_list_all = dic.keys()
         self.alpha_list_all.sort()
@@ -583,9 +604,13 @@ class Analysis(object):
         if 1: #extract dir surfix 
             temp = map(lambda x: x[-1] if isinstance(x[-1], str) else '', alpha_list)
             surfix_list = list(set(temp))
+            if '' in surfix_list: 
+                surfix_list.remove('')
             surfix_list.sort()
             msg += ''.join([tab, 'surfix_list: \n']) 
             msg += ''.join([tab, '\t', str(surfix_list), '\n'])
+            self.surfix_list = surfix_list
+            
                 
         print msg 
         if recursive: 
@@ -609,7 +634,6 @@ class Analysis(object):
             print 'keys %s are not in self.alpha_parpath_dict'%aa_bad
             #warnings.warn('keys %s are not in self.alpha_parpath_dict'%aa_bad)
         return aa
-    
             
     def fetch_many(self, field_name, aa, sh): 
         aa_dic = self.preprocess_alpha_list(aa)
@@ -722,8 +746,8 @@ class Analysis(object):
             sh_min = (N, 0)
             sh_max = (N, np.inf)
         if D is not None: 
-            sh_min = (0, D)
-            sh_max = (np.inf, D)
+            sh_min = (sh_min[0], D)
+            sh_max = (sh_max[0], D)
         if sh_max is not None : 
             sh_list_max=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh_list_max)
         if sh_min is not None : 
@@ -1031,6 +1055,25 @@ class Analysis(object):
             if field_name == 'entanglement': 
                 field_name += '_entropy' 
         
+        if param_name is None: 
+            if 0: 
+                # 这么做需要保证aa只有一个轴是不同的
+                temp = zip(*aa)
+                i = None   # some times aa is empty 
+                for i in xrange(len(temp)): 
+                    if len(set(temp[i]))>1: 
+                        break 
+                if i is not None : 
+                    param_name = self.param_list[i]
+                    param_name_id = i 
+                else: 
+                    param_name = None 
+                    param_name_id = None 
+            else: 
+                param_name, param_id = AlphaList.identify_param.im_func(self, aa)
+        else: 
+            param_name_id = self.param_list.index(param_name)
+            
         kwargs_orig = kwargs.copy()
         not_found=[]
         for sh in sh_list: 
@@ -1038,7 +1081,6 @@ class Analysis(object):
             data=[]
             for a in aa:
                 if alpha_db_map.has_key(a): 
-                    #print 'aaa', a 
                     db = alpha_db_map[a]
                 else: 
                     db=self[a]
@@ -1047,13 +1089,16 @@ class Analysis(object):
                 else: 
                     rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
                     rec = rec_getter(db, sh, **rec_getter_args)
-                   
+                
+                #if param_name is not None : 
+                #    a1 = a[self.param_list.index(param_name)]
+                a1 = a[param_name_id]
                 if rec is not None:
-                    if param_name is not None : 
-                        a = a[self.param_list.index(param_name)]
-                    data.append((a, rec))
+                    data.append((a1, rec))
                 else:
+                    data.append((a1, np.nan))
                     not_found.append(a)
+                    
             if not_found and info>0: 
                 print 'not_found is ', not_found
             
@@ -1065,12 +1110,13 @@ class Analysis(object):
             x = np.asarray(x); y=np.asarray(y)
             label = kwargs_orig.get('label', str(sh))
             marker = kwargs_orig.get('marker', MARKER_CYCLE.next())
-            kwargs.update(ylabel=field_name,  return_ax=1, label=label, maker=marker)
+            kwargs.update(ylabel=field_name, return_ax=1, label=label, 
+                    maker=marker, xlabel='$%s$'%param_name)
             fig, ax = self._plot(x, y, **kwargs) 
             
             kwargs['fig'] = fig 
             kwargs['ax'] = ax
-
+            
         if kwargs.get('return_fig'): 
             return fig 
     
@@ -2199,6 +2245,19 @@ class Analysis(object):
             res=self._fit_correlation_noplot(func, aa, sh, func_type=func_type)
         return res
 
+    def fit_lines(ax, func=None, fit_range=None):
+        for l in ax.lines:
+            l.set_linewidth(0)
+        lines=list(ax.lines)
+        for l in lines:
+            pass
+        l.set_linewidth
+    
+    
+    @staticmethod 
+    def fit_curve(x, y, func, fit_range=None): 
+        param, cov = curve_fit(func, x, y)    
+        
     def reload_class(self, info=1): 
         module_name =self.__class__.__module__
         #print module_name
@@ -2285,7 +2344,7 @@ class Analysis_idmrg(Analysis):
         res=self.measure(self.calc_EE, aa, D=D)
         return res
 
-    def calc_fidelity(self,aa,sh, which='fidelity_direct', eigs_tol=None, 
+    def calc_fidelity(self,aa, sh, which='fidelity_direct', eigs_tol=None, 
             save_to=None, force=0, fault_tolerant=1, info=0):
         if save_to is not None and not force: 
             res= self.load(save_to)

@@ -189,6 +189,8 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
         else: 
             raise 
         yield conn
+    except Exception as err: 
+        print err 
     finally:
         try: 
             conn.close()
