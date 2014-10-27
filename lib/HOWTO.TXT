@@ -1,7 +1,12 @@
 
 1. 如果报错 找不到 -lpython2.7.so 
-    可以把 python2.7.so copy 到当前文件夹，在f2py 增加参数 -L. 
-    或者也有其他方法，把python2.7.so 后面加个后缀，并在lib链接，具体怎么做我忘了
+    方法a.
+        可以把 python2.7.so copy 到当前文件夹，在f2py 增加参数 -L. 
+    方法b.
+        ln -s path-to/libpython2.7.so /usr/local/lib 
+    方法c.
+        或者也有其他方法，把python2.7.so 后面加个后缀，具体怎么做我忘了
+    
 
 2. 在 common4py.f90 iShift 函数中调用了 EOSHIFT
     这个函数在比如2011版本的ifort中有bug，用f2py 编译时会出现 catastropic error

@@ -550,7 +550,7 @@ subroutine Matrix_eigen_vector_bac(nV, A, E)
       real*8:: work(5*nV)
       !lwork = 5*E_size
       lwork = 5*nV
-
+      !issue: should take use of work to speed up 
       call dsyev('V', 'U', nV, A, nV, E, work, lwork, info)   
 
 end subroutine Matrix_eigen_vector_bac 
