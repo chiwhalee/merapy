@@ -31,10 +31,12 @@ from merapy.utilities import print_vars
 import merapy.measure_and_analysis as mmm 
 import merapy as kkk 
 import merapy.measure_and_analysis.all as all_mera
-import vmps.measure_and_analysis.all as all_mps
+
 try: 
     import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
     import vmps.measure_and_analysis.measurement_idmrg_mcc as all_idmrg_mcc
+    import vmps.measure_and_analysis.measurement_vmps as all_mps 
+    #import vmps.measure_and_analysis.all as all_mps
 except ImportError as err: 
     print err 
 
@@ -131,10 +133,12 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             corr_param = dict(direction=None, force_update=False, distance_max=10**4)
         
         elif algorithm == 'mps': 
-            field = ['correlation']
+            #field = ['energy', 'correlation']
+            field = all_mps.DEFAULT_FIELD_LISt 
             all_func = all_mps
-            S = S['mps']  #fuck, this is bad, but I like bad!
-            mps= S 
+            #S = S['mps']  #fuck, this is bad, but I like bad!
+            #mps= S 
+            mps= S['mps']
             db_version = 1.0
             N, D = mps.N, mps.D
             if mps.symmetry is not None : 
@@ -264,7 +268,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     rdb.commit(info=1)
     if len(failed_list)>0: 
         print 'failed_list: %s'%failed_list
-
 
 #now I undertand that, this func in fact realized a decorator for individal measure funcs!!
 def measure_all_bac(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
@@ -457,13 +460,13 @@ def measure_all_by_brokest(arg_group):
     for i in arg_group: 
         print  i['path']
         #print queue(measure_S, args=tuple(), kwargs=i, host='222.195.73.191', port=90900)
-        #print queue(measure_S, args=tuple(), kwargs=i, host='210.45.121.30', port=90900)
-        print queue(measure_S, args=tuple(), kwargs=i, host='127.0.0.1', port=90900)
+        print queue(measure_S, args=tuple(), kwargs=i, host='210.45.121.30', port=90900)
+        #print queue(measure_S, args=tuple(), kwargs=i, host='127.0.0.1', port=90900)
         
 
 def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
         which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
-        fault_tolerant=1, recursive=False,  **kwargs): 
+        fault_tolerant=1, algorithm=None,  recursive=False,  **kwargs): 
     
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
@@ -480,14 +483,15 @@ def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,
             dir_list.extend(temp)
         #print 'recursively found these dirs %s'%(dir_list, )
     aaa = os.path.abspath(dir_list[0])
-    if 'mera' in aaa: 
-        algorithm = 'mera'
-    elif 'mps' in aaa and 'idmrg' not in aaa: 
-        algorithm = 'mps'
-    elif 'idmrg' in aaa:
-        algorithm = 'idmrg'
-    else: 
-        raise
+    if algorithm is None: 
+        if 'mera' in aaa: 
+            algorithm = 'mera'
+        elif 'mps' in aaa and 'idmrg' not in aaa: 
+            algorithm = 'mps'
+        elif 'idmrg' in aaa:
+            algorithm = 'idmrg'
+        else: 
+            raise
     
     path_list = []
     for dir in dir_list: 
@@ -589,11 +593,14 @@ class TestIt(unittest.TestCase):
         measure_all( **args )
     
     def test_vmps_all(self): 
-        args = self.args
-        dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
-        #which=['energy'],
-        which = None
-        args.update(dir_list=[dir],which=which, force=0, mera_shape_list=[(40, 10)])
+        from vmps.minimize import VMPS 
+        v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath='temp')
+        v.minimize()
+        dir = v.backup_parpath
+        args = self.args.copy()
+        which = ['variance', 'energy', 'entanglement_entropy', 'magnetization']
+        args.update(dir_list=[dir],which=which, force=0, show=0, 
+                algorithm='mps', mera_shape_list='all')
         #measure_all( **args )
         measure_all( **args )
     
@@ -706,8 +713,8 @@ if __name__ == '__main__':
             suite = unittest.TestSuite()
             add_list = [
                 #'test_temp', 
-                #'test_vmps_all', 
-                'test_idmrg_all', 
+                'test_vmps_all', 
+                #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
                 #'test_measure_all_new', 
                 #'test_measure_all_by_brokest'
