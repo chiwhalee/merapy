@@ -261,9 +261,14 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
             #except AttributeError as err: 
             except Exception as err: 
                 res='error: ' +  str(err)
-        return str(res)
+        if isinstance(res, str):   # only print a str 
+            return  str(res)
+        else: 
+            return  str(x) + key_val_sep + str(res)
+            
+    
     res = head
-    res  +=  sep.join([str(i) + key_val_sep + get_val(i)  for i in  var_name_list])
+    res  +=  sep.join([ get_val(i)  for i in  var_name_list])
     if not return_str:         
         print  res
     else: 

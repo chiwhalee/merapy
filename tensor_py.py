@@ -1368,6 +1368,11 @@ class iTensor(TensorBase):
         return  res
 
     def split_qsp(self, *args):
+        """
+            example: 
+            
+                t.split_qsp(1, [qb, qc], 3, [qe, qf, qg])
+        """
         legs_to_split = args[0::2]
         qq = args[1::2]  # a list of qsp list 
         qsp = []
@@ -1419,7 +1424,6 @@ class iTensor(TensorBase):
             for j in t3ind: 
                 qn_id_tuple_3 = t3.Addr_idx[:t3.rank, j]
                 qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
-                
                 match = True 
                 #for l in legs_to_split: 
                 for l in leg_map: 
@@ -4056,11 +4060,15 @@ class Test_iTensor(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        pass 
-        t = iTensor.example()
-        from merapy.utilities import save
-        
-        save(t, '/tmp/ttt' )
+        if 1: 
+            qa = QspU1.easy_init([ 1, -1], [2, 1])
+            qb = QspU1.easy_init([ 1, -1], [3, 3])
+        if 1: 
+            t = iTensor(QSp=[qa, qb]) 
+            t.data[:] = np.arange(t.size)
+            null = t.qsp_class.null() 
+            tt = t.split_qsp(1, [qb, null])
+            
         
     def test_to_ndarray(self): 
         q = QspZ2.easy_init([1, -1], [2, 2])

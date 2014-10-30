@@ -539,22 +539,14 @@ class QuantSpaceBase(object):
     
     
     #@tensor_player(which="Qsp_copy")
-    def copy(self):
-        #using __class__ to compatible with both Z2 and U1
-        #other=self.__class__.__init__(self)
-        #other=self.__class__.__call__()
+    def copy(self, reverse=False):
         qns= [q.copy() for q in self.QNs[:self.nQN]]
         other=self.__class__(n=self.nQN, qns=qns, dims=self._dims)
-        #other.nQN = self.nQN
         other._totDim = self.totDim
         if hasattr(self, "RefQN"):
             other.RefQN=self.RefQN.copy()
-        
-        #nqn=self.nQN
-        #other.QNs[:nqn]=[self.QNs[i].copy() for i in range(nqn)]
-        #other.QNs=self.QNs.copy()
-        #other._dims=self._dims.copy()
-        #other.Addr=self.Addr.copy()
+        if reverse: 
+            other.reverse()
         return other
     
     def copy_from(self, other):

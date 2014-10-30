@@ -5,7 +5,9 @@ import unittest
 
 from merapy.run import TestIt as Test_run 
 from merapy.utilities import TestIt as Test_util 
+from merapy.context_util import TestIt as Test_context 
 from merapy.tensor_svd import TestIt as Test_svd 
+from merapy.common_util import TestCommon 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)
 #python -m unittest discover --pattern=*.py

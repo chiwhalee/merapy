@@ -1149,7 +1149,7 @@ class Main(object):
             traceback.print_exc()
             job_status = 'FAILED'
         finally: 
-            msg += ' EXIT chiled for %s'%(config.get('model_param'),)
+            msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
             print msg
             if is_registered:  
                 parpath = config['backup_parpath_local']
@@ -1163,7 +1163,7 @@ class Main(object):
         return main 
     
     @classmethod #@staticmethod 
-    def run_many(cls, config_group, num_cpu=None, nproc=None, func=None, parallel=True): 
+    def run_many(cls, config_group, nproc=None, func=None, parallel=True): 
         """
             How to about multiprocessing: 
                 map is used for one unique function, while apply for different functions
@@ -1171,12 +1171,27 @@ class Main(object):
         """
         res= []
         #init_worker = lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
-        assert nproc>0, 'nproc=%d'%(nproc, )
         if func is None: 
             func = cls.run_one
         
         if parallel:
-            nproc = nproc if nproc is not None else len(config_group)
+            #nproc = nproc if nproc is not None else len(config_group)
+            if nproc is None: 
+                hostname = socket.gethostname()
+                nt = config_group[0]['NUM_OF_THREADS']
+                ncpu_tot = psutil.NUM_CPUS 
+                if 'node' in hostname: 
+                    nproc = ncpu_tot
+                elif 'qtg' in hostname: 
+                    nproc = ncpu_tot//nt
+                elif hostname == Main.LOCALHOSTNAME: 
+                    nproc = 2
+                else: 
+                    warnings.warn('unfamiliar hostname %s'%(hostname, ))
+                    nproc = ncpu_tot
+                assert nproc>0, 'nproc=%d'%(nproc, )
+                print 'nproc is auto set to %d'%(nproc, )
+                
             try: 
                 pool = Pool(processes=nproc, initializer=None)
                 if 0: 
@@ -1530,17 +1545,20 @@ if __name__=="__main__":
        
     else:
         suite = unittest.TestSuite()
-        
-        #suite.addTest(TestMain('test_run'))
-        suite.addTest(TestMain('test_temp'))
-        #suite.addTest(TestMain('test_run_scale_invar'))
-        #suite.addTest(TestMain('test_run_schedule'))
-        #suite.addTest(TestMain('test_make_dir'))
-        #suite.addTest(TestMain('test_run_on_remote'))
-        #suite.addTest(TestMain('test_resume_func'))
-        #suite.addTest(TestMain('test_transfer_pickle_file'))
-        #suite.addTest(TestMain('test_set_num_of_threads_1'))
-        #suite.addTest(TestMain('test_run_many'))
+        add_list = [
+        #'test_temp',
+        #'test_run',
+        #'test_run_scale_invar',
+        #'test_run_schedule',
+        #'test_make_dir',
+        #'test_run_on_remote',
+        #'test_resume_func',
+        #'test_transfer_pickle_file',
+        #'test_set_num_of_threads_1',
+        'test_run_many',
+                ]
+        for a in add_list: 
+            suite.addTest(TestMain(a))
         
         unittest.TextTestRunner().run(suite)
        
