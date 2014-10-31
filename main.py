@@ -1176,14 +1176,14 @@ class Main(object):
         
         if parallel:
             #nproc = nproc if nproc is not None else len(config_group)
-            if nproc is None: 
+            if nproc is None:   #setting default values of nproc of each machine. this assume NUM_OF_THREADS is uniform for each process
                 hostname = socket.gethostname()
                 nt = config_group[0]['NUM_OF_THREADS']
                 ncpu_tot = psutil.NUM_CPUS 
                 if 'node' in hostname: 
-                    nproc = ncpu_tot
+                    nproc = ncpu_tot//nt 
                 elif 'qtg' in hostname: 
-                    nproc = ncpu_tot//nt
+                    nproc = ncpu_tot/2//nt
                 elif hostname == Main.LOCALHOSTNAME: 
                     nproc = 2
                 else: 
