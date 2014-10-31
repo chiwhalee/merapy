@@ -1188,8 +1188,10 @@ class Main(object):
                     nproc = 2
                 else: 
                     warnings.warn('unfamiliar hostname %s'%(hostname, ))
-                    nproc = ncpu_tot
+                    nproc = ncpu_tot/2//nt 
                 assert nproc>0, 'nproc=%d'%(nproc, )
+                
+                nproc = min(nproc, 12)
                 print 'nproc is auto set to %d'%(nproc, )
                 
             try: 
