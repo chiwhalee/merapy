@@ -1180,7 +1180,8 @@ class Main(object):
                 hostname = socket.gethostname()
                 nt = config_group[0]['NUM_OF_THREADS']
                 ncpu_tot = psutil.NUM_CPUS 
-                if 'node' in hostname: 
+                if 'node' in hostname:
+                    ncpu_tot = min(ncpu_tot, 12)
                     nproc = ncpu_tot//nt 
                 elif 'qtg' in hostname: 
                     nproc = ncpu_tot/2//nt
