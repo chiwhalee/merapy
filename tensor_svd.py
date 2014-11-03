@@ -646,7 +646,8 @@ class Tensor_svd(object):
             return U, S, V , trunc_err 
     
     @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, trunc_which=None, return_trunc_err=False, use_buff=False):
+    def eig_rank2(tensor, trunc_dim=None, trunc_which=None, 
+            return_trunc_err=False, return_val=False,  use_buff=False):
         """
             为了在mps中 对角化密度矩阵 而写此函数
             exact diagonalizetion of a rank-2 symmetric tensor 
@@ -727,6 +728,8 @@ class Tensor_svd(object):
                 #dim_list = dim_list[index]
                 dim_list_trun = dim_list_trun[index]
                 VEC = VEC[index]
+                if return_val: 
+                    VAL = VAL[index]
         else: 
             dim_list_trun = dim_list 
             trunc_err = np.nan 
@@ -747,13 +750,22 @@ class Tensor_svd(object):
         for i in xrange(res.nidx): 
             p  = res.Block_idx[0, i]
             size  = res.Block_idx[1, i]
-            #print_vars(vars(),  ['size', 'VEC[i].shape'])
             res.data[p: p + size] = VEC[i].ravel(order='F')
-        if return_trunc_err: 
-            return res,  trunc_err
+            
+        if return_val: 
+            if trunc_which == 'right' : 
+                val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff)
+            else:
+                val_mat = iTensor(QSp=[q1.copy(), q1.copy(reverse=1)], use_buf=use_buff)
+            for i in xrange(val_mat.nidx): 
+                p  = val_mat.Block_idx[0, i]
+                size  = val_mat.Block_idx[1, i]
+                #print_vars(vars(),  ['size', 'VAL[i].shape'])
+                val_mat.data[p: p + size] = np.diag(VAL[i]).ravel(order='F')
         else: 
-            return res 
-    
+            val_mat = None 
+        return {'vec_mat': res, 'val_mat': val_mat, 'trunc_err': trunc_err}    
+        
     @classmethod
     def random_unit_tensor(cls,itensor, d):
         itensor.randomize_data()  #here method randomize_data inheriets from TensorBase
@@ -994,11 +1006,11 @@ class TestIt(unittest.TestCase):
             t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
             data = np.random.random(t.totDim)
             t.data[: ] = data
-        trunc_dim  = 1 
-        #for trunc_dim in [1, 5, 20, 10000]: 
-        for trunc_dim in [5]: 
-            tt, err = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim, trunc_which='right', return_trunc_err=1) 
-            print_vars(vars(),  ['trunc_dim', 'err'])
+            
+        temp = Tensor_svd.eig_rank2(t, trunc_dim=5, trunc_which='left', return_val=1) 
+        tt = temp['vec_mat']
+        tt.show_data()
+                
         
     def test_group_legs(self, rank=3):
         """
@@ -1151,7 +1163,9 @@ class TestIt(unittest.TestCase):
         for trunc_dim in [1, 5, 20, 10000]: 
             if 1: 
                 print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
-                tt = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim, trunc_which='right') 
+                temp = Tensor_svd.eig_rank2(t, 
+                        trunc_dim=trunc_dim, trunc_which='right', return_val=1) 
+                tt = temp['vec_mat']
                 tt.show_data()
                 print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
                 print_vars(vars(),  ['tt.shape'])
@@ -1160,7 +1174,8 @@ class TestIt(unittest.TestCase):
                 
             if 1: 
                 print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
-                tt = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim, trunc_which='left') 
+                temp = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim, trunc_which='left') 
+                tt = temp['vec_mat']
                 tt.show_data()
                 print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
                 print_vars(vars(),  ['tt.shape'])
