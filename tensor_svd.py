@@ -698,12 +698,12 @@ class Tensor_svd(object):
             #print_vars(vars(),  ['temp[0][arg]'], '')
             #print_vars(vars(),  ['temp[0][arg_large]'], '')
             #print_vars(vars(),  ['temp'], head='before trunc', key_val_sep='\n')
+            
+            sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
             for i in xrange(3): 
                 temp[i] = temp[i][arg_large]
             
-            #print_vars(vars(),  ['np.sum(temp[0])'], '')
-            #norm = np.linalg.norm(temp[0])
-            trunc_err = 1-np.sum(temp[0])#**2    no squre !
+            trunc_err = 1-np.sum(temp[0])/sum_tot  #**2    no squre !
                 
             #val_largest = temp[0]
             #print_vars(vars(),  ['temp'], head='after trunc', key_val_sep='\n')
@@ -1159,6 +1159,12 @@ class TestIt(unittest.TestCase):
             t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
             data = np.random.random(t.totDim)
             t.data[: ] = data
+        if 1: 
+            temp = Tensor_svd.eig_rank2(t, 
+                    trunc_dim=10, trunc_which='right', return_val=1) 
+            print_vars(vars(),  ['temp["trunc_err"]'])
+            self.assertAlmostEqual(temp['trunc_err'], -0.146845010382, 12)
+            
         trunc_dim  = 1 
         for trunc_dim in [1, 5, 20, 10000]: 
             if 1: 
@@ -1201,11 +1207,11 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         add_list = [
            #'test_temp', 
-           'test_eig', 
+           #'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
-           #'test_eig_rank2', 
+           'test_eig_rank2', 
            #'test_group_legs', 
         ]
         for a in add_list: 
