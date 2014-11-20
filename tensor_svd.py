@@ -695,18 +695,14 @@ class Tensor_svd(object):
                 d0 += d
             arg = temp[0].argsort()
             arg_large = arg[-1:-trunc_dim-1:-1]
-            #print_vars(vars(),  ['temp[0][arg]'], '')
-            #print_vars(vars(),  ['temp[0][arg_large]'], '')
-            #print_vars(vars(),  ['temp'], head='before trunc', key_val_sep='\n')
-            
+                   
             sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
             for i in xrange(3): 
                 temp[i] = temp[i][arg_large]
             
-            trunc_err = 1-np.sum(temp[0])/sum_tot  #**2    no squre !
+            trunc_err = 1-np.sum(temp[0])/sum_tot  
+            #trunc_err = 1-np.sum(temp[0])
                 
-            #val_largest = temp[0]
-            #print_vars(vars(),  ['temp'], head='after trunc', key_val_sep='\n')
             empty_list = []
             for i in xrange(len(dim_list)): 
                 #ii = float(i)

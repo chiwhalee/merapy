@@ -1764,6 +1764,7 @@ class iTensor(TensorBase):
 
         return Tp
     
+    #def transpose 
     transpose = permutation   # compatible with numpy 
     
     def contract_core(self, T2, div, preserve_qsp=False, data=None, use_buf=False):
@@ -2272,6 +2273,16 @@ class iTensor(TensorBase):
     def conj_new(self, i, use_buf=False): 
         """
             the correct way to reverse the direction of legs of iTensor 
+            #improve: it is better to only provide a u tensor, that is enough 
+            
+            note: 
+                it seems that not every itensor can do conj_new, that is
+                because not able to construct for rank2-dual-tensor for any
+                qsp. see note of diagonal_tensor_rank2. 
+                
+                this also depends on whether change totqn after conj_new
+                
+                so this func is not very complete
         """
         #assert self.rank == 3  
 
@@ -2290,6 +2301,9 @@ class iTensor(TensorBase):
             raise  ValueError('symmetry is %s'% self.symmetry)
             
         np.conj(A.data, out=A.data)
+        if i != self.rank-1:  #need re-order the legs 
+           temp = range(i) + [A.rank-1] + range(i, self.rank-1)
+           A  = A.transpose(temp) 
         return A 
 
     def reverse_qsp(self, inplace=True):
@@ -3021,6 +3035,13 @@ class iTensorFactory(object):
     
     @staticmethod
     def diagonal_tensor_rank2(qsp): 
+        """
+            not any qsp can make diagonal_tensor_rank2
+            the condision is for each qn and -qn in the QNs, their dim
+            must equal.
+            e.g.  q = QspU1.easy_init([0, 1, -1], [2, 3, 3]) will do
+            while  q = QspU1.easy_init([0, 1, -1], [2, 3, 5]) will raise 
+        """
         res= iTensor(QSp=qsp.copy_many(2))
         for i in xrange(res.nidx): 
             sh=res.get_block_shape(i) 
@@ -3028,7 +3049,6 @@ class iTensorFactory(object):
             temp = np.identity(d, dtype=res.dtype).ravel()            
             res.set_block(i, temp)
         return res 
-    
     
     @staticmethod
     def V111_1():
@@ -4060,16 +4080,15 @@ class Test_iTensor(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        if 1: 
-            qa = QspU1.easy_init([ 1, -1], [2, 1])
-            qb = QspU1.easy_init([ 1, -1], [3, 3])
-        if 1: 
-            t = iTensor(QSp=[qa, qb]) 
-            t.data[:] = np.arange(t.size)
-            null = t.qsp_class.null() 
-            tt = t.split_qsp(1, [qb, null])
-            
-        
+        q = QspU1.easy_init([2, 0, -2], [2, 5, 3])
+        print_vars(vars(),  ['q', 'q.copy(reverse=1)'])
+        t=iTensorFactory.diagonal_tensor_rank2(q)
+            #0 [2 0]3*2: 0
+            #1 [1 1]5*5: 0
+            #2 [0 2]2*3: 0        
+        #print_vars(vars(),  ['t'])
+        pass  
+    
     def test_to_ndarray(self): 
         q = QspZ2.easy_init([1, -1], [2, 2])
         qsp = q.copy_many(2)
@@ -4090,7 +4109,6 @@ class Test_iTensor(unittest.TestCase):
                 print i 
                 print tn 
                 print t.matrix_view()
-            
         
     def test_rank_zero(self): 
         print  'aaaaaaaaaaaaaaaaaaaa'
@@ -4247,7 +4265,6 @@ class Test_iTensor(unittest.TestCase):
             t = iTensor(QSp=[qa*qb]) 
             t.split_qsp(0, t.QSp+[t.qsp_class.null()])
             t.reshape(t.QSp + [t.qsp_class.null()] )
-            
         
     def test_split_qsp_2(self): 
         #qsp_class= QspZ2 
@@ -4425,6 +4442,27 @@ class Test_iTensor(unittest.TestCase):
                 ])
             C = B.reshape(Dl*d, Dr*d)
             C = B.merge_qsp((0, 1), (2, 3))
+    
+    def test_conj_new(self): 
+        #t = iTensor.example(symmetry='U1')
+        np.random.seed(1234)
+        a = QspU1.easy_init([1, -1], [1, 1])
+        b = QspU1.easy_init([0, 1, -1], [1, 2, 2])
+        c = QspU1.easy_init([0, 1, -1], [1, 3, 3])
+        t = iTensor(QSp=[a, b, c])
+        t.data = np.random.random(t.size)
+        
+        t1=t.conj_new(2)
+        t1_old = np.array([ 0.19151945,  0.62210877,  0.43772774,  0.78535858,  0.80187218, 0.95813935,  0.87593263,  0.77997581,  0.27259261,  0.27646426])
+        print_vars(vars(),  ['t.shape', 't1.shape', 'repr(t1.data)', ]) 
+        self.assertTrue(np.allclose(t1.data, t1_old, atol=1e-8))
+        #res_old = array([ 0.8980255 ,  0.3927732 ,  0.06395552,  0.37972657,  0.23755964, 0.84733446])
+        
+        t1=t.conj_new(0)
+        print_vars(vars(),  ['t.shape', 't1.shape', 'repr(t1.data)', ]) 
+        t1_old = np.array([ 0.19151945,  0.62210877,  0.43772774,  0.78535858,  0.77997581, 0.27259261,  0.27646426,  0.80187218,  0.95813935,  0.87593263])
+        self.assertTrue(np.allclose(t1.data, t1_old, atol=1e-8))
+    
         
 class Test_iTensorFactory(unittest.TestCase): 
     def test_temp(self): 
@@ -4670,6 +4708,8 @@ if __name__== "__main__":
            #'test_merge_qsp_by_contract', 
            #'test_reshape', 
            #'test_reshape_u1', 
+           
+           #'test_conj_new', 
         ]
         add_list_iTF = [
             #'test_diagonal_tensor_rank2', 
