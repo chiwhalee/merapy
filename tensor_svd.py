@@ -788,10 +788,6 @@ class Tensor_svd(object):
         QSp.append(QSp[0].null())
         tQN = QSp[0].QNs[0].qn_id()
 
-        #E_size_max = 1024*64
-        #E_size_max = 10000
-        #E = np.empty(E_size_max, order='F')
-        #E = np.ndarray(E_size_max, order="F")
         pos = np.empty(div+1, int)
  
         for gidx  in range(cls.QSp_Group1.nQN):
@@ -799,7 +795,6 @@ class Tensor_svd(object):
             if  cls.QSp_Group1.QNs[gidx] !=  totQN:  
                 continue
             V_buf = cls.get_block1(itensor, gidx)
-            print V_buf.size 
             esize = int(sqrt(V_buf.size))
             E = np.empty(esize, order='F')
             common_util.matrix_eigen_vector(V_buf, E[: esize])
