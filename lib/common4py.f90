@@ -46,7 +46,9 @@ subroutine contract_core_player_fort(data1, data2, data3, totDim1,totDim2, totDi
     do i = 1, num_rec 
  
         !call Matrix_Multiply_inplace(Dim1, Dimc, Dim2, matrix1(p1), matrix2(p2), matrix3(p3), alpha, beta)
-        call Matrix_Multiply_inplace(rec(i,4), rec(i,6), rec(i,5), matrix1(rec(i,1) + 1), matrix2(rec(i,2) + 1), matrix3(rec(i,3) + 1), alpha, beta)
+        !change new line so that older comiler like gfortran can pass 
+        call Matrix_Multiply_inplace(rec(i,4), rec(i,6), rec(i,5), matrix1(rec(i,1) + 1), & 
+          matrix2(rec(i,2) + 1), matrix3(rec(i,3) + 1), alpha, beta)
         !call Matrix_Multiply_inplace(rec(i,4), rec(i,6), rec(i,5), matrix1(rec(i,1)), matrix2(rec(i,2)), matrix3(rec(i,3)), alpha, beta)
      end do
 end subroutine contract_core_player_fort
@@ -318,7 +320,7 @@ subroutine contract_core_player_fort_paralell_reduction_1(data1, data2, data3, t
         !real*8, pointer:: matrix11(:), matrix22(:), matrix33(:)
         real*8, pointer:: matrix11, matrix22, matrix33
         real*8, pointer:: matrix_temp(:)
-        logical:: alloced
+        logical::  alloced = .False.
         
         !this line may be not needed, since reduction default is 0        
         data3 = 0.d0
@@ -340,7 +342,8 @@ subroutine contract_core_player_fort_paralell_reduction_1(data1, data2, data3, t
             Dim2 = rec(i, 5)
             Dimc = rec(i, 6)
             if (d12<Dim1*Dim2) alloced=.False.
-            if(not(alloced)) then
+            !if(not(alloced)) then
+            if(.not.alloced) then
                 allocate(matrix_temp(Dim1*Dim2))
                 alloced = .true.
             end if

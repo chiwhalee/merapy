@@ -3,8 +3,9 @@
 #f2py -c dsaupd.f -m dsaupd -L/usr/lib/blas/atlas:/usr/lib/lapack/atlas
 #-llapack -lblas -larpack
 
-f2py -c -m array_permutation_64 array_permutation4py.f90 --fcompiler=gfortran
-f2py -c -m common_64 common4py.f90  -llapack -lblas  --fcompiler=gfortran
-f2py -c -m random_64 random4py.f90 --fcompiler=gfortran
+f2py -c -m array_permutation_64_gfort array_permutation4py.f90 --fcompiler=gfortran
+#f2py -c -m common_64_gfort common4py.f90  -llapack -lblas  --fcompiler=gfortran
+f2py -c -m common_64_gfort common4py.f90  -llapack -lblas  --f90flags="-openmp" --fcompiler=gfortran
+f2py -c -m random_64_gfort random4py.f90 --fcompiler=gfortran
 
 
