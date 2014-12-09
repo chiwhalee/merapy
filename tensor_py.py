@@ -96,8 +96,9 @@ class iTensor(TensorBase):
     
     """
     num_of_instance = 0
-    #T_BUFFER=[tBuffer(size=64, dtype=TensorBase.dtype) for  i in xrange(3)]
-    T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
+    #issue:  these buffer may not compatible with complex type 
+    #T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
+    T_BUFFER=[tBuffer(size=100, dtype=float) for  i in xrange(4)]
     #BUFFER_ON = False
     
     def __init__(self, rank=None, QSp=None, totQN=None, order="F", dtype=float, 
@@ -150,6 +151,7 @@ class iTensor(TensorBase):
         rank = len(QSp)
         self.rank = rank 
         self.ind_labels = None 
+        self.dtype = dtype 
         
         #assert rank == len(QSp), ('aaaaaaaaaaaaaaaaaa\n', rank, len(QSp), QSp) 
         
@@ -357,11 +359,12 @@ class iTensor(TensorBase):
     def set_block(self, i, data): 
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
-        #print 'ssss', size , data.shape 
         self.data[p: p + size] = data
+        #print_vars(vars(),  ['"remove assertion"'], ' ')
+        #assert self.data.dtype == data.dtype  
     
     @staticmethod 
-    def example(qsp=None, rank=4, symmetry='Z2', rand_seed=None): 
+    def example(qsp=None, rank=4, symmetry='Z2', dtype=float, rand_seed=None): 
         """
             convenient method for testing 
         """
@@ -376,10 +379,15 @@ class iTensor(TensorBase):
             elif symmetry == 'Travial' : 
                 qsp = cls.easy_init( [1], [5]).copy_many(rank)
                 
-        res= iTensor(QSp=qsp)
+        res= iTensor(QSp=qsp, dtype=dtype)
         if rand_seed is not None :
             np.random.seed(rand_seed)
-        res.data[:] = np.random.random(res.data.size)-0.5
+        if dtype == float:  
+            res.data[:] = np.random.random(res.data.size)-0.5
+        elif dtype == complex: 
+            res.data[:] = np.random.random(res.data.size)- 1j* np.random.random(res.data.size)
+        else: 
+            raise 
         return res
     
     def unregister(self):
@@ -446,7 +454,8 @@ class iTensor(TensorBase):
         """
         QSp= [q.copy() for q in self.QSp]
         totQN = self.totQN.copy()
-        other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, use_buf=use_buf)
+        other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, dtype=self.dtype, use_buf=use_buf)
+        #other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, use_buf=use_buf)
         return other
 
     def copy_struct_new(self, other=None, use_buf=False):
@@ -471,14 +480,7 @@ class iTensor(TensorBase):
         other.type_name = self.type_name 
         totDim=self.totDim
         #for large array(size>10^4) slicing is faster than copy
-        
         other.data[:totDim]=self.data[:totDim]
-        #print "cccc", 
-        #try:
-        #    other.data[:totDim]=self.data[:totDim]
-        #except:
-        #    msg = "%d\n%d\n%s"%(totDim, other.totDim, other)
-        #    raise Exception(msg)
         return other
 
     def copy_new(self, buffer=None, use_buf=False):
@@ -1403,8 +1405,8 @@ class iTensor(TensorBase):
         
         #print_vars(vars(), ['leg_map', 'len(qsp)']); raise 
         
-        res = iTensor(QSp=qsp, totQN=self.totQN.copy())
-        
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
+        #print_vars(vars(),  ['self.data.dtype'], '', '  ')
         t2 = self
         t3 = res 
         t3ind = list(xrange(t3.nidx))
@@ -1500,7 +1502,7 @@ class iTensor(TensorBase):
         
         #print_vars(vars(), ['leg_map']); raise 
         
-        res = iTensor(QSp=qsp, totQN=self.totQN.copy())
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
         
         t2 = res 
         t3 = self
@@ -1712,7 +1714,7 @@ class iTensor(TensorBase):
             QSp=[self.QSp[P[i]] for i in xrange(rank)]
             totQN = self.totQN
 
-        Tp=iTensor(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
+        Tp=iTensor(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
         #Tp.data[:] = 0.0
 
         pos=np.empty(self.rank, "int")
@@ -1782,7 +1784,6 @@ class iTensor(TensorBase):
         rank3=rank1+rank2-div-div
         tQN = self.totQN+T2.totQN
         shift = rank1-div
-
         #copy is needless conceptially
         if 0:       #copy is more robust, while no copy is faster
             QSp = [self.QSp[i].copy() for i in xrange(shift)]
@@ -1795,7 +1796,9 @@ class iTensor(TensorBase):
             #print  'qqqqq', QSp
             #QSp = [self.QSp[0].null()]
             QSp = []
-        T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
+        
+        dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+        T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
         T3.data[:]=0.0
         
         #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
@@ -1812,6 +1815,8 @@ class iTensor(TensorBase):
             p2 = T2.Block_idx[0,idx2]
             
             Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div, rank2)])
+            if div == rank2: 
+                Dim2 = 1 
             Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div)])
             
             for idx1 in xrange(self.nidx):
@@ -1825,6 +1830,8 @@ class iTensor(TensorBase):
                     #如果量子数组合相等则收缩
                     continue
                 Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in xrange(shift)])
+                if shift == 0: 
+                    Dim1 = 1   #when shift = 1.0,  np.prod yields 1.0, should be converted to int 
                 
                 #iQN3[0] = 1 #!for rank=1
                 iQN3[0:shift] = iQN1[0:shift]
@@ -1840,14 +1847,13 @@ class iTensor(TensorBase):
                 #print get_local(dic, temp)
 
                 p3 = T3.Block_idx[0,idx3]
-                
                 data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                 data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
                 
                 #T3.data[p3] = self.data[p1].dot(T2.data[p2])
                 #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
                 #attention_may_be_not_efficient  这里学要为data3分配内存，能否直接在T3.data上操作？
-                data3=iTensor.mul_temp(data1, data2, alpha, beta)
+                data3=iTensor.mul_temp(data1, data2, alpha, beta, dtype=dtype)
 
                 #T3.data[p3:p3+Dim1*Dim2]=data3.ravel()[:]
                 T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
@@ -1858,7 +1864,7 @@ class iTensor(TensorBase):
                 #t3data = numexpr.evaluate("t3data + data3")
                 #print "iii",p3, data3, idx2, idx1,iQN1[:4],iQN2[:4],iQN3[:4] #,T3.data[:5].round(4)
                 #print "iii",p3, data3, idx2, idx1,iQN1[:4],iQN2[:4],iQN3[:4] #,T3.data[:5].round(4)
-
+        
         return T3
 
     def contract_core_new(self, T2, div, data=None, use_buf=False):
@@ -1960,9 +1966,12 @@ class iTensor(TensorBase):
         return T3
 
     @staticmethod
-    def mul_temp(data1, data2, alpha, beta):
+    def mul_temp(data1, data2, alpha, beta, dtype=float):
         """ only for profiling"""
-        return common_util.matrix_multiply(data1, data2, alpha, beta) 
+        if dtype == float:  
+            return common_util.matrix_multiply(data1, data2, alpha, beta) 
+        else: 
+            return common_util.matrix_multiply_complex(data1, data2, alpha, beta) 
     
     def prepare_leg(self,T2, V1, V2, info=0):
         if not isinstance(V1, np.ndarray):
@@ -1984,8 +1993,8 @@ class iTensor(TensorBase):
         k=0
         l=0
         
-        Vp1=np.empty(self.rank,'i')
-        Vp2=np.empty(T2.rank,'i')
+        Vp1=np.empty(self.rank, int)
+        Vp2=np.empty(T2.rank, int)
 
         #below calculate Vp1, Vp2
         for i  in xrange(self.rank):
@@ -2005,7 +2014,9 @@ class iTensor(TensorBase):
             Vp1[k] = pos
              
             k = k+1  #注意这里k接着上面的值了
-            if self.Dims[pos] != T2.Dims[pos2]:
+            #print_vars(vars(),  ['"in tensor_py"', 'pos', 'pos2', 'type(pos)', 'type(pos2)',  'pos.ndim', 'pos2.ndim'], '', ' ')
+            #if self.Dims[pos] != T2.Dims[pos2]:
+            if self.Dims[pos[0]] != T2.Dims[pos2[0]]:
                 #raise Exception("Error, size of contract tensor does not match, V1=%s, V2=%s\nself=%s\nT2=%s"%(V1, V2, self, T2))
                 #msg ="""error, dim of index to be contracted not equal: %s, %s, 
                 #\n V1=%s, V2=%s, self.Dims=%s, T2.Dims=%s"""%(
@@ -2021,7 +2032,6 @@ class iTensor(TensorBase):
         
         k=0
         for i  in xrange(len(V_1n2)):
-            #pos=V2.index(V_1n2[i])
             pos=np.where(V2==V_1n2[i])[0]
             Vp2[k] = pos
             k = k+1
@@ -2037,6 +2047,7 @@ class iTensor(TensorBase):
                 V3[l] = V2[i]  #T3 V3 来自T2 V2的外腿
                 k = k+1
                 l = l+1
+        
         return V_1n2, Vp1, Vp2, V3 
 
     def contract(self,T2, V1, V2, order_final=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
@@ -3800,13 +3811,6 @@ class test_iTensor(object):
         print W.get_element([1, 1, 0], [0, 1, 0])  #result is supposed to be 3.0
         print W.get_element([1, 1, 0], [0, 0, 1])  #result is supposed to be 4.0
     
-    def test_permutation1():
-        u=simple_itensor()[0]
-        print u.matrix_view(2)
-        u1 = u.permutation([1, 0, 2, 3])
-        u2 = u.permutation([0, 1, 3, 2])
-        print "\n", u1.matrix_view(2)
-        print "\n", u2.matrix_view(2)
 
     @classmethod
     def permutation_buffon(cls):
@@ -3819,8 +3823,6 @@ class test_iTensor(object):
         u2 = u.permutation([0, 1, 3, 2])
         print "\n", u1.matrix_view(2)
         print "\n", u2.matrix_view(2)
-
-
 
     @classmethod 
     def unit_tensor(cls):
@@ -4080,14 +4082,26 @@ class Test_iTensor(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        q = QspU1.easy_init([2, 0, -2], [2, 5, 3])
-        print_vars(vars(),  ['q', 'q.copy(reverse=1)'])
-        t=iTensorFactory.diagonal_tensor_rank2(q)
-            #0 [2 0]3*2: 0
-            #1 [1 1]5*5: 0
-            #2 [0 2]2*3: 0        
-        #print_vars(vars(),  ['t'])
-        pass  
+        if 0: 
+            t = iTensor.example(dtype=complex)
+            print_vars(vars(),  ['t'])
+            tc, _=t.contract(t, [1, 2, 3, 4], [4, 3, 2, 1])
+            print_vars(vars(),  ['tc.data.dtype'])
+        
+        if 1: 
+            t = iTensor.example(rank=2, dtype=complex)
+            tc=t.contract_core(t, 1) 
+            print_vars(vars(),  ['tc.data.dtype', 't.to_ndarray()', 'tc.to_ndarray()'], '', ' ')
+    
+    def test_permutation(self): 
+        t = iTensor.example()
+        t.permutation([2, 1, 0, 3])
+        
+        #complex dtype 
+        t = iTensor.example(rank=2, dtype=complex)
+        tp=t.permutation([1, 0])
+        np.set_printoptions(4)
+        print_vars(vars(),  ['t.to_ndarray()', 'tp.to_ndarray()'], '', ' ')
     
     def test_to_ndarray(self): 
         q = QspZ2.easy_init([1, -1], [2, 2])
@@ -4574,7 +4588,7 @@ class performance_iTensor(object):
 
 
 if __name__== "__main__":
-    warnings.filterwarnings("ignore")
+    #warnings.filterwarnings("ignore")
     if 0: 
         if 0: 
             ti = test_iTensor("Z2", 4)
@@ -4691,6 +4705,7 @@ if __name__== "__main__":
         suite = unittest.TestSuite()
         add_list_iTensor = [
            'test_temp', 
+           #'test_permutation', 
            #'test_to_ndarray', 
            #'test_rank_zero', 
            #'test_rank_zero_1', 

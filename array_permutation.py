@@ -16,6 +16,7 @@ import platform
 import warnings
 import unittest
 import socket
+from merapy.utilities import print_vars
 
 hostname = socket.gethostname()
 
@@ -30,6 +31,7 @@ try:
     else:
         from merapy.lib.array_permutation_64_ifort import (
                array_permutation_fort_parallel , 
+               array_permutation_fort_parallel_complex, 
                #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
                #but it is not thoroughly tested against too mainy cases
                permute_player_fort_parallel_dynamic as permute_player_fort  
@@ -81,7 +83,6 @@ def array_permutation(a, rank, Dims, order, out=None):
     else: 
         array_permutation_fort_parallel(rank, Dims_, order_, a, out)
         
-
 #@profile  
 def array_permutation_inplace(a, rank, Dims, order, b):
     """  
@@ -107,10 +108,12 @@ def array_permutation_inplace(a, rank, Dims, order, b):
 
     #b=np.ndarray(a.size, dtype=a.dtype)
     #b=np.ndarray(a.size,dtype=a.dtype, buffer=out_buff)
-    array_permutation_fort_parallel(rank, Dims_, order_, a, b)
-    
-
-
+    #print_vars(vars(),  ['a.dtype', 'b.dtype'], sep=' ')
+    if a.dtype == float:  
+        array_permutation_fort_parallel(rank, Dims_, order_, a, b)
+    else: 
+        array_permutation_fort_parallel_complex(rank, Dims_, order_, a, b)
+        
 def array_permutation_C(a, rank, Dims, order, index_start=0):
     """
     make array_permutation work for C order 
@@ -259,6 +262,23 @@ def array_permutation_1(rank, Dims,order, totDim,A, B):
 class Test_array_permute(unittest.TestCase): 
     def setUp(self): 
         pass
+    
+    def test_temp(self): 
+        pass 
+    
+    def test_array_permutation_inplace(self): 
+        print array_permutation_fort_parallel.__doc__ 
+        print array_permutation_fort_parallel_complex.__doc__ 
+        a = np.random.random((3, 4, 2, 3))
+        b = 1j*np.random.random((3, 4, 2, 3))
+        out = np.ndarray((3, 4, 2, 3), dtype=float, order='F').ravel()
+        array_permutation_inplace(a, 4, [3, 4, 2, 3], [0, 2, 1, 3], out)
+        
+        #test complext dtype 
+        ab = a + b 
+        out_c = np.ndarray((3, 4, 2, 3), dtype=complex, order='F').ravel()
+        array_permutation_inplace(ab, 4, [3, 4, 2, 3], [0, 2, 1, 3], out_c)
+        
     
     def test_0(self):
         """
@@ -524,11 +544,12 @@ class Test_array_permute(unittest.TestCase):
 if __name__ == "__main__":
 
     
-    if 1: 
+    if 0: 
         unittest.main()
     else: 
         suite = unittest.TestSuite()
         
+        suite.addTest(Test_array_permute('test_temp'))
         #suite.addTest(Test_array_permute('test_0'))
         #suite.addTest(Test_array_permute('test_1'))
         #suite.addTest(Test_array_permute('test_2'))

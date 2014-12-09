@@ -526,31 +526,8 @@ class TestCommon(unittest.TestCase):
     def setUp(self): 
         pass
     def test_temp(self) : 
-        #from scipy.linalg import eig
-        eig = np.linalg.eig 
-        print matrix_eigen_vector.__doc__
-        n =  5
-        vec = np.ndarray(5, order="F")
-        #vec = np.asfortranarray(vec)
-        a = np.random.random((n, n))
-        b = np.random.random((n, n))
-        a = a + a.T
-        b[:, :] = a
-        a = np.asfortranarray(a)
-        
-        matrix_eigen_vector(a, vec)
-
-        print "a", a, vec[:n]
-
-        print "compare with np =========="
-        val, vec=eig(b)
-        print val
-        print vec
-
-
-
-
-        pass
+        #print array_permutation_fort_parallel.__doc__ 
+        print matrix_multiply_complex.__doc__ 
 
     
     def test_matrix_svd_1by1(self) : 
@@ -626,11 +603,40 @@ class TestCommon(unittest.TestCase):
         val, vec=eig(b)
         print val
         print vec
-
-
-
-
-        pass
+        
+    def test_matrix_multiply(self):
+        
+        if 1: 
+            print matrix_multiply.__doc__
+            #attention must reshape it to 2D
+            m=15;  n= 20 
+            a=np.arange(m,dtype='d').reshape((3,5))
+            b=np.arange(n,dtype='d').reshape((5,4))
+            c=np.empty(1,dtype='d')
+            #c_out=matrix_multiply(a,b,c,1.0,0.0)
+            c_out=matrix_multiply(a,b,1.0,0.0)
+            c_np=a.dot(b)
+            print c_out.round(10), "\n"
+            print c_np, "\n"
+            self.assertTrue(np.all(c_out==c_np))
+        
+        if 1:  #dtype = complex 
+            print matrix_multiply_complex.__doc__
+            #attention must reshape it to 2D
+            m=15; n= 20 
+            a=np.arange(m,dtype=complex).reshape((3,5))   +  1j
+            b=np.arange(n,dtype=complex).reshape((5,4))  +  1j 
+            #a=np.arange(m,dtype=float).reshape((3,5))
+            #b=np.arange(n,dtype=float).reshape((5,4)) 
+            c=np.empty(1,dtype=complex)
+            #c_out=matrix_multiply(a,b,c,1.0,0.0)
+            c_out=matrix_multiply_complex(a,b,1.0,0.0)
+            c_np=a.dot(b)
+            print c_out.round(10), "\n"
+            print c_np, "\n"
+            print c.round(10)
+            self.assertTrue(np.all(c_out==c_np))
+        
 
 
 if __name__=="__main__":
@@ -675,28 +681,6 @@ if __name__=="__main__":
             #print c.shape
         #test_matrix_direct_product()
 
-        def test_matrix_multiply():
-            print matrix_multiply.__doc__
-            print "test matrix_multiply  --- pass"
-            #a=np.arange(3*4,dtype='d').reshape((3,4))
-            #b=np.arange(4*5,dtype='d').reshape((4,5))
-            #c=np.empty((3,5),dtype='d')
-            
-            #attention must reshape it to 2D
-            m=100
-            a=np.arange(m,dtype='d').reshape((20,5))
-            n= 50
-            b=np.arange(n,dtype='d').reshape((5,10))
-            c=np.empty(1,dtype='d')
-            #c_out=matrix_multiply(a,b,c,1.0,0.0)
-            c_out=matrix_multiply(a,b,1.0,0.0)
-            c_np=a.dot(b)
-            print c_out.round(10), "\n"
-            print c_np, "\n"
-            print c.round(10)
-
-            print np.all(c_out==c_np)
-        #test_matrix_multiply()
 
         def test_matrix_trace():
             """ ---pass """
@@ -752,10 +736,11 @@ if __name__=="__main__":
         suite = unittest.TestSuite()
         add_list = [
             #'test_temp', 
+            'test_matrix_multiply', 
             #'test_get_num_of_threads', 
             #'test_matrix_svd_1by1', 
             #'test_matrix_svd', 
-            'test_matrix_eigen_vector', 
+            #'test_matrix_eigen_vector', 
         ]
         for a in add_list: 
             suite.addTest(TestCommon(a))

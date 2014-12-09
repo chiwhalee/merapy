@@ -90,6 +90,102 @@ subroutine Array_Permutation_fort_parallel(rank, Dims, order_, totDim, A,B)
 end subroutine Array_Permutation_fort_parallel
 
 
+subroutine Array_Permutation_fort_parallel_complex(rank, Dims, order_, totDim, A,B)
+    ! Array_Permutation_fort_parallel for complex dtypes 
+    ! rank是腿的个数，
+    !Dims是每条腿的维度，
+    !order是permutation的次序，
+    !A,B是存放数据的array, 
+    !totDim是总维度(各条腿维度之积，fortran子程序需要指定array的长度）
+
+       implicit none
+       integer:: rank, Dims(32), order_(32), totDim
+       !!real*8,intent(IN):: A(totDim)
+       !!real*8,intent(inout)::B(totDim)
+       complex*16,intent(IN):: A(totDim)
+       complex*16,intent(inout)::B(totDim)
+!f2py intent(inout) :: B
+       integer p, q, idx(32), order(32), rorder(32)
+       integer nDims(32), nidx(32)
+       integer strides(32), rstrides(32)
+       integer ntotDim, inc
+       integer i,j, np, p1,p2, pp, res
+       integer nths, nth
+       integer, external:: OMP_GET_NUM_THREADS, OMP_GET_THREAD_NUM
+       character*128 fmt
+       !these are added by lzh, to make it compatible with python index which
+       !starts at 0
+       do i = 1, rank
+            order(i)=order_(i) + 1
+       end do
+       
+       ntotDim = 1
+       do i = 1, rank
+          ntotDim = ntotDim*Dims(i)
+          nDims(i) = Dims(order(i))
+          rorder(order(i)) = i
+       end do
+       if (ntotDim.ne.totDim) then 
+           print *, 'error in ArrayPermutation, size not match'
+           print *, "ntotDim", ntotDim, "totDim", totDim
+           stop
+        end if
+       
+       strides = 1
+       do i = 1, rank
+          do j = 1, rorder(i)-1
+             strides(i) = strides(i)*nDims(j)
+          end do
+          rstrides(i) = (Dims(i)-1)*strides(i)
+       end do
+!!$   write(fmt,*) "(2(I5,1x,'| '),", rank, "(1x,I5), ' | ',", &
+!!$        rank, "(1x,I5), ' | ', 200(1x,I5))"
+!$OMP PARALLEL private(p,q,i,np,inc,idx,p1,p2,pp,res)   
+       nths = OMP_GET_NUM_THREADS()
+       nth = OMP_GET_THREAD_NUM()
+       
+       np = totDim/nths
+       p1 = nth*np+1
+       p2 = (nth+1)*np
+       if (nth.eq.nths-1) p2 = totDim
+       
+       pp = p1-1
+       do i = 1, rank-1
+          res = pp/Dims(i)
+          idx(i) = pp-res*Dims(i)+1      
+          pp = res
+       end do
+       idx(rank) = pp+1   
+       
+       q = idx(order(rank))-1
+       do i = rank-1, 1, -1
+          q = nDims(i)*q+idx(order(i))-1
+       end do
+       q = q+1
+       
+       do p = p1, p2
+          B(q) = A(p)
+          
+          inc = 1
+          i = 1
+          do while ((inc.eq.1).and.(i.le.rank))
+             idx(i) = idx(i)+1
+             if (idx(i).le.Dims(i)) then
+                q = q+strides(i)
+                inc = 0            
+             else
+                q = q-rstrides(i)
+                idx(i) = 1
+                i = i+1            
+             end if
+          end do
+       end do
+!$OMP END PARALLEL   
+end subroutine Array_Permutation_fort_parallel_complex
+
+
+
+
 subroutine Array_Permutation_fort(rank, Dims, order_, totDim, A,B)
        implicit none
        integer,intent(IN):: rank, Dims(32), order_(32), totDim

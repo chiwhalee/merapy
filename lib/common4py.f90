@@ -522,18 +522,30 @@ end subroutine Matrix_Multiply_inplace
 subroutine Matrix_Multiply(n,l,m, A,B,C,alpha,beta)
     !use params
     !attention_omitted_something  seems params is not used at all
-   implicit none
-   integer n,l,m
-   real*8 A(n,l), B(l,m), C(n, m)
+    implicit none
+    integer n,l,m
+    real*8 A(n,l), B(l,m), C(n, m)
 !f2py intent(out):: C
-   real*8 :: alpha,beta
+    real*8 :: alpha,beta
 
 !!$   C=matmul(A,B)
 !see http://www.math.utah.edu/software/lapack/lapack-blas/zgemm.html
-   !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-   call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-   
+    !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+    call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
 end subroutine Matrix_Multiply
+
+subroutine Matrix_Multiply_complex(n,l,m, A,B,C,alpha,beta)
+    implicit none
+    integer n,l,m
+    complex*16 A(n,l), B(l,m), C(n, m)
+!f2py intent(out):: C
+    real*8 :: alpha,beta
+
+!!$   C=matmul(A,B)
+!see http://www.math.utah.edu/software/lapack/lapack-blas/zgemm.html
+    !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+    call zgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+end subroutine Matrix_Multiply_complex 
 
 
 subroutine Matrix_eigen_vector_bac(nV, A, E)
