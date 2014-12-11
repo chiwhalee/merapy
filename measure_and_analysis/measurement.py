@@ -10,7 +10,10 @@ import pprint
 import cPickle as pickle
 from collections import OrderedDict
 import warnings
-import dispy 
+try: 
+    import dispy 
+except: 
+    warnings.warn('not able to import dispy')
 from  multiprocessing import Process
 import tempfile 
 
@@ -88,7 +91,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     
     if rdb is None: 
         rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
-    is_converged = True
+    allow_measure = True
     if 1: 
         #if isinstance(S, MPS): 
         if S.__class__.__name__ == 'MPS':                  
@@ -154,19 +157,26 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         elif algorithm == 'idmrg': 
             field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
                     'entanglement', 'entanglement_spectrum']
-            if S.get('which_minimize')=='psi_guess': 
-                diff = S.get('energy_diff_2')
-            elif S.get('which_minimize')=='lam_guess': 
-                diff = S.get('energy_diff')
-            else: 
-                diff = None
-            diff_tol = S.get('energy_diff_tol')
-            if diff is not None and diff_tol is not None : 
-                if not abs(diff) <= abs(diff_tol) and not force: 
-                    is_converged = False 
-                    #print 'state is not converged. not allowing measure. return None'
-                    #return 
-            
+            if 0: 
+                if S.get('which_minimize')=='psi_guess': 
+                    diff = S.get('energy_diff_2')
+                elif S.get('which_minimize')=='lam_guess': 
+                    diff = S.get('energy_diff')
+                else: 
+                    diff = None
+                diff_tol = S.get('energy_diff_tol')
+                if diff is not None and diff_tol is not None : 
+                    if not abs(diff) <= abs(diff_tol):   
+                        allow_measure = False 
+                        #print 'state is not converged. not allowing measure. return None'
+                        #return 
+            if 1: 
+                c1 = S.get('converge_count')
+                c2 = S.get('converge_count_lim')
+                if c1 is not None  and c2 is not None: 
+                    if not c1 >= c2:  
+                        allow_measure = False 
+                
             if S.has_key('lam_prev_inv'): 
                 all_func = all_idmrg_mcc
             else: 
@@ -212,7 +222,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     #------------------------  start measureing ----------------------------------------#
     
     print  'meassuring %s at %s %s'%(path, shape, iter)
-    if not is_converged: 
+    if not allow_measure and not force: 
         print '\tstate is not converged. not allowing measure. return None'
         return 
 
@@ -452,16 +462,20 @@ def measure_all_new(arg_group):
         print job.stdout, job.stderr , job.id, job.exception  
     cluster.stats()
 
-def measure_all_by_brokest(arg_group): 
+def measure_all_by_brokest(arg_group, host=None): 
     #for server_port in server_ports:
     #    Process(target=server, args=(server_port,)).start()
     from mypy.brokest.brokest import queue 
-    Process( )
+    if host is None: 
+        host = '222.195.73.191'
+        host = '127.0.0.1'
+        host = '210.45.121.30' 
+        
     for i in arg_group: 
         print  i['path']
-        #print queue(measure_S, args=tuple(), kwargs=i, host='222.195.73.191', port=90900)
-        print queue(measure_S, args=tuple(), kwargs=i, host='210.45.121.30', port=90900)
-        #print queue(measure_S, args=tuple(), kwargs=i, host='127.0.0.1', port=90900)
+        #print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
+        print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
+        #print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
         
 
 def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
@@ -569,11 +583,16 @@ class TestIt(unittest.TestCase):
         self.args= args 
     
     def test_temp(self): 
-        pass
-        args= self.args
-        dir = '/home/zhli/backup_tensor_dir/run-long-better/mera/new_run/alpha=1.9'
-        args.update(dir_list=[dir], mera_shape_list=[(4, 4)], which=['entanglement_brute_force_6'])
-        
+        from vmps.minimize import VMPS 
+        #v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath='temp')
+        #v.minimize()
+        dir = '/tmp/tmpKQIJ3R/'
+        args = self.args.copy()
+        #which = ['variance', 'energy', 'entanglement_entropy', 'magnetization']
+        which = ['correlation']
+        args.update(dir_list=[dir],which=which, force=0, show=0, 
+                algorithm='mps', mera_shape_list='all')
+        #measure_all( **args )
         measure_all( **args )
    
     def test_idmrg_correlation(self): 
@@ -712,8 +731,8 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                #'test_temp', 
-                'test_vmps_all', 
+                'test_temp', 
+                #'test_vmps_all', 
                 #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
                 #'test_measure_all_new', 
