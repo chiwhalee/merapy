@@ -77,7 +77,7 @@ def measure_decorator(result_db_class=None):
     return inner
 
 def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
-        fault_tolerant=1, param=None,  field_surfix='', rdb=None, **kwargs):
+        fault_tolerant=1, param=None, check_convergence=True, field_surfix='', rdb=None, **kwargs):
     """
         todo: 
             parpath should be deprecated, extract it from path instead  
@@ -170,7 +170,8 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
                         allow_measure = False 
                         #print 'state is not converged. not allowing measure. return None'
                         #return 
-            if 1: 
+            
+            if check_convergence: 
                 c1 = S.get('converge_count')
                 c2 = S.get('converge_count_lim')
                 if c1 is not None  and c2 is not None: 
