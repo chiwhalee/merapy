@@ -23,7 +23,8 @@ from scipy.optimize import curve_fit
 from scipy.special import sici
 import unittest
 
-from merapy.utilities import dict_to_object , load 
+
+from merapy.utilities import dict_to_object , load , print_vars
 from merapy.hamiltonian import System
 from merapy.context_util import rpyc_load, rpyc_save
 
@@ -67,10 +68,148 @@ FIELD_NAME_LIST = [
     #'entanglement_brute_force_9_aver' , 
     ]
 
+class AnalysisTools(object): 
+    """
+        an abstract base calss 
+    """
+    
+    
+    def filter_array(self, x, x_min=None, x_max=None, period=None, x1=None) :  
+        r = x1 
+        if r is None: 
+            if x_min is None: 
+                x_min = x[0]
+            if x_max is None: 
+                x_max = x[-1]
+            temp = np.logical_and(x>=x_min, x<=x_max)
+            #if period != 1:
+            if period is not None: 
+                #print_vars(vars(),  ['x-x_min', '(x-x_min)%period'])
+                temp = np.logical_and(temp, (x-x_min)%period==0)
+            arg = np.argwhere(temp).ravel()
+        else:
+            #arg = np.argwhere()
+            arg = []
+            a = 0
+            for _r in r: 
+                ii = 0
+                for _x in x[a:]: 
+                    if _r == _x:
+                        arg.append(a + ii)
+                        #print _r, a + ii   
+                        a = ii 
+                        break 
+                    ii += 1  
+        return arg 
+    
+    def fit_line(self, line, func=None, x_min=None, x_max=None, period=None, x1=None):
+        x, y = line.get_data()
+        x=x.astype(float); y=y.astype(float)
+        arg = self.filter_array(x, x_min, x_max, period, x1)
+        x = x[arg]
+        y = y[arg]
+        if func == 'EE' : 
+            func = lambda x, c, a: c/6.*np.log(x) + a
+        if func == 'power' : 
+            func = lambda x, k, eta: k*x**(eta)
+            
+        param, cov = curve_fit(func, x, y)
+        #y_fit = func(x, **param.tolist())
+        y_fit = func(x, *param)
+        res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
+        return res 
+
+    def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
+        if size is None and ncol == 1 and nrow == 1: 
+            size = (4, 3)
+        size= size if size is not None else (3.5, 2.5)
+        size = ncol*size[0], nrow*size[1]
+        fig = plt.figure(figsize=size)
+        iii=0
+        for i in range(nrow): 
+            for j in range(ncol): 
+                iii+=1
+                fig.add_subplot(nrow, ncol, iii, projection=None if dim==2 else '3d')
+        fig.tight_layout()
+        axes = fig.axes 
+        if len(axes)==1: 
+            axes= axes[0]
+        return fig, axes 
+
+    def add_ax(self, fig): 
+        n = len(fig.axes)
+        fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
+        #fig.set_figwidth(10)
+        for i, ax in enumerate(fig.axes): 
+            ax.change_geometry(1, n+1, i+1)
+            #ax=fig.add_subplot(122)
+        ax = fig.add_subplot(1, n + 1, n + 1)
+        return ax 
+        
+    def plot_alpha_2d(self, aa=None, rotate=False, **kwargs):
+        aa = aa if aa is not None  else self.alpha_list 
+        n = len(self.param_list)
+        aa = [a[: n] for a in aa]
+        x, y = zip(*aa)
+        xlabel = self.param_list[0]
+        ylabel = self.param_list[1]
+        #kwargs= kwargs.copy()
+        if rotate: 
+            temp = x
+            x = y; y = temp 
+            temp = xlabel
+            xlabel = ylabel; ylabel = temp 
+        #kwargs.update(lw=0, xlabel=xlabel, ylabel=ylabel, marker=kwargs_orig.get('marker'), 'x')
+        args=dict(lw=0, xlabel=xlabel, ylabel=ylabel, marker='x')
+        args.update(kwargs)
+        self._plot(x, y, **args)
+    
+    def find_lines_min(self, ax, add_text=False, font_dict=None): 
+        temp=[]        
+        fd = {'color': 'r', 'size': 14} 
+        if font_dict is not None: 
+            fd.update(font_dict)
+        for l in ax.lines:
+            x, y= l.get_data()
+            min_ind =y.argmin()
+            min_location = x[min_ind]
+            min_val = y[min_ind]
+            if add_text: 
+                ax.text(min_location, min_val, min_location, fontdict=fd,  )
+            temp.append((l.get_label(), round(min_location,2), min_val))
+        if temp: 
+            labels, loc, val= zip(*temp)
+        else: 
+            labels, loc, val = None, None, None 
+        return labels, loc, val 
+    
+    def find_lines_extreme(self, ax, which='max', add_text=False, font_dict=None): 
+        temp=[]        
+        fd = {'color': 'r', 'size': 14} 
+        if font_dict is not None: 
+            fd.update(font_dict)
+        for l in ax.lines:
+            x, y= l.get_data()
+            if which == 'max' : 
+                min_ind =y.argmax()
+            else: 
+                min_ind =y.argmin()
+            min_location = x[min_ind]
+            min_val = y[min_ind]
+            if add_text: 
+                ax.text(min_location, min_val, min_location, fontdict=fd,  )
+            temp.append((l.get_label(), round(min_location,2), min_val))
+        if temp: 
+            labels, loc, val= zip(*temp)
+        else: 
+            labels, loc, val = None, None, None 
+        return labels, loc, val 
+    
+        
 
 #class ResultDB_Utills
 
-class ResultDB(OrderedDict): 
+class ResultDB(OrderedDict, AnalysisTools): 
     """
         a DB to store measurement results 
         
@@ -284,62 +423,54 @@ class ResultDB(OrderedDict):
         rpyc_save(path, db, use_local_storage=use_local_storage)
         print 'ResultDB %s has been created'%path
     
-    def get_fn_list(self):
-        nlist = os.listdir(self.parpath)
-        #print nlist
+    def get_fn_list(self, dir=None):
+        dir = dir if dir is not None else self.parpath
+        nlist = os.listdir(dir) 
         pickle_files = [i for i in nlist if "pickle" == i.split('.')[-1]]
-        #print "all pickle files under specified path are %s"%pickle_files
-        if not self.get('algorithm')=='mps': 
-            pickle_files= [i for i in pickle_files if 'trans' not in i]
+        #if not self.get('algorithm')=='mps': 
+        #    pickle_files= [i for i in pickle_files if 'trans' not in i]
         
         return pickle_files
     
-    def get_time_serials(self, sh): 
-        s= self.load_S(sh)
-        ts= s['time_serials']
-        ts= pd.DataFrame(ts).T
-        return ts 
-    
-    @staticmethod
-    def parse_fn_del(fn):
-        nqn = None
-        if "transition" in fn or 'transtion' in fn: #'12-transition.pickle'
-            dim = "0"
-        elif "_" in fn:  #like "5_13.pickle or 5_13-4lay.pickle"
-            dim = fn.split("-")[0].split("_")[1].split(".")[0]
-            nqn = fn.split("-")[0].split("_")[0]
-        else:
-            if "lay" in fn: #"like "8-4lay.pickle""
-                dim = fn.split("-")[0]
-            else:   
-                 #like "8.pickle"
-                dim = fn.split(".")[0]
-        
-        i = fn.find("lay")
-        layer = fn[i-1] if i>0 else "3"
-        
-        #return eval(dim), eval(layer) + 1  #  layer= mera.num_of_layer large than actual layer by 1 
-        if nqn is None : 
-            return eval(dim), eval(layer) + 1  #  layer= mera.num_of_layer large than actual layer by 1 
+    def get_time_serials(self, sh, attr_name=None, info=0, force=0): 
+        #rec = self.fetch_easy('time_serials', sh)
+        #if rec is not None: 
+        if self.has_key('time_serials'): 
+            ts = self['time_serials'].get(sh)
         else: 
-            return eval(dim), eval(layer) + 1, eval(nqn)#  layer= mera.num_of_layer large than actual layer by 1 
-
+            self['time_serials'] = {}
+            ts= None 
+        if ts is None or force : 
+            s= self.load_S(sh)
+            ts= s['time_serials']
+            ts = pd.DataFrame(ts).T
+            #self.insert('time_serials', sh, iter=-1, val=ts)
+            self['time_serials'][sh] = ts 
+            self.commit()
+        res = ts 
+        if attr_name is not None: 
+            res = ts['attr_name']
+        return res 
+    
     def parse_fn(self, fn):
-        if self.get('algorithm') in ['mps', 'idmrg']: 
-            ND=fn.split('.')[0]
-            N, D = ND.split('-')
-            N = N.split('=')[1]; N=eval(N)
-            D = D.split('=')[1]; D=eval(D)
-            res = N, D
-        else:     
-            res = System.backup_fn_parse(fn)
-        return res
+        ND=fn.split('.')[0]
+        N, D = ND.split('-')
+        N = N.split('=')[1]; N=eval(N)
+        D = D.split('=')[1]; D=eval(D)
+        return N, D 
 
-    def get_shape_list(self, sh_max=None, sh_min=None): 
+    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None): 
         fn = self.get_fn_list()
         #print 'backup tensor files are %s'%fn
         sh = [self.parse_fn(f) for f in fn]
         #print sh; exit()
+        if N is not None:
+            sh_min = (N, 0)
+            sh_max = (N, np.inf)
+        if D is not None: 
+            sh_min = (0, D)
+            sh_max = (np.inf, D)
+        
         if sh_max is not None : 
             sh=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh)
         if sh_min is not None : 
@@ -746,6 +877,7 @@ class ResultDB(OrderedDict):
         db = self
         field = kwargs.get('field', 'correlation')
         field = kwargs.get('field', field)
+        info = kwargs.get('info', 0)
         algorithm=db['algorithm']
         #field= 'correlation'
         if algorithm != 'mps':
@@ -765,7 +897,8 @@ class ResultDB(OrderedDict):
             cx = db.fetch_easy(field, mera_shape=sh, sub_key_list=['xx'])
             cz = db.fetch_easy(field, mera_shape=sh, sub_key_list=['zz'])
             if cx is None or cz is None:
-                print cz 
+                if info>0: 
+                    print 'eiher cx or cz is None, so return None '
                 return None
             r0 = [i[0] for i in cx]
             r1 = [i[1] for i in cx]
@@ -789,7 +922,6 @@ class ResultDB(OrderedDict):
         except Exception:
             raise 
     
-
     def delete_rec(self, key): 
         self.pop(key)
         self.commit()
@@ -799,7 +931,7 @@ class ResultDB(OrderedDict):
         msg = 'db is removed'
         print(msg)
     
-    def remove_file(self, sh): 
+    def delete_file(self, sh): 
         fn=self.__class__.shape_to_backup_fn(sh)
         path = '/'.join([self.parpath, fn])
         msg='rm file %s'%(path[-30: ])
@@ -848,28 +980,12 @@ class ResultDB(OrderedDict):
             print 'merge succeed'
     
     
-    def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
-        if size is None and ncol == 1 and nrow == 1: 
-            size = (4, 3)
-        size= size if size is not None else (3.5, 2.5)
-        size = ncol*size[0], nrow*size[1]
-        fig = plt.figure(figsize=size)
-        iii=0
-        for i in range(nrow): 
-            for j in range(ncol): 
-                iii+=1
-                fig.add_subplot(nrow, ncol, iii, projection=None if dim==2 else '3d')
-        fig.tight_layout()
-        axes = fig.axes 
-        if len(axes)==1: 
-            axes= axes[0]
-        return fig, axes 
-    
     def _plot(self, x, y, **kwargs): 
         figsize = kwargs.get('figsize')
         figsize = (4, 3) if figsize is None else figsize
         fig = kwargs.get('fig', None)
         ax = kwargs.get('ax', None)
+        fig_type = kwargs.get('fig_type')
         
         if fig is None and ax is None: 
             fig=plt.figure(figsize=figsize)
@@ -910,7 +1026,12 @@ class ResultDB(OrderedDict):
             
         if kwargs.get('yfunc'): 
             y = kwargs['yfunc'](y)
-        lines = ax.plot(x, y, **dic)
+        if fig_type is None: 
+            lines = ax.plot(x, y, **dic)
+        elif fig_type == 'scatter' : 
+            lines = ax.scatter(x, y, **dic)
+        else: 
+            raise 
         
         temp = ['xlabel', 'ylabel', 'xlim', 'ylim', 'xscale', 'yscale']
         for t in temp: 
@@ -920,7 +1041,8 @@ class ResultDB(OrderedDict):
                     ax.__getattribute__('set_' + t)(*tt)
                 else: 
                     ax.__getattribute__('set_' + t)(tt)
-        if kwargs.has_key('title') and ax.is_first_row(): 
+        #if kwargs.has_key('title') and ax.is_first_row(): 
+        if kwargs.has_key('title'):   
             ax.set_title(kwargs.get('title')) 
             
         for l in lines:  #line stype   #matploblib 可能有个bug，mfc = 'w', 则 mec总是黑色，和line color 不同，故这里要重新set mec
@@ -1001,7 +1123,8 @@ class ResultDB(OrderedDict):
             
         #elif self['algorithm'] == 'vmps':
         elif 'mps' in algorithm: 
-            if field_name == 'correlation' : 
+            #if field_name == 'correlation' : 
+            if field_name in ['correlation', 'correlation_bond'] : 
                 r0, r1, y = zip(*rec)
                 x = np.array(r1) - np.array(r0)
             else: 
@@ -1064,18 +1187,54 @@ class ResultDB(OrderedDict):
                 if fit_succeed: 
                     #label = '' if not show_label else param[1]
                     dic = dict(color=color)
-                    #print 'aaaa', ax.get_legend()
+                    
                     fig=self._plot(x, func(x, *param), #xscale='log',yscale='log', 
                             return_fig=1, marker=None, ax=ax, **dic) #,  **kwargs)
         
         if kwargs.get('return_fig'): 
             return fig 
     
-    @staticmethod 
-    def fit_lines(ax, func): 
-        pass 
+    def plot_field_vs_iter(self, attr_name, sh, x_min=None, x_max=None, period=None, sh_min=None, sh_max=None, 
+            yfunc=None, sub_key_list=None, rec_getter=None, rec_getter_args=None,    **kwargs): 
+        db = self
+        sub_key_list = sub_key_list if sub_key_list is not None else []
+        fault_tolerant = kwargs.get('fault_tolerant', 1)
+        info = kwargs.get('info', 0)
+        #sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
+        #aa=list(self.alpha_list)
+        not_found=[]
+        data=[]
+        try:
+            ts=db.get_time_serials(sh)#[:100]
+            x=ts.N.values.astype(int)
+            #y=ts.EE.values.astype(float)
+            y=ts[attr_name].values.astype(float)
+            if x_min or x_max or period:
+                arg = db.filter_array(x, x_min, x_max, period)
+                x=x[arg]
+                y=y[arg]
+        except Exception as err:
+            if fault_tolerant: 
+                print err 
+                return 
+            else: 
+                print sh, self.parpath 
+                raise 
+ 
+        if not_found and info: 
+            print 'not_found is ', not_found
+        #x, y=zip(*data)       
         
-        
+        #if 1:  # some per field specific treatment
+        #    if attr_name == 'energy' and kwargs.get('yscale') and yfunc is None: 
+        #        y = y -np.min(y)
+        #x = np.asarray(x); y=np.asarray(y)
+        if yfunc is not None : 
+            y = yfunc(y)
+        kwargs.update(xlabel='N', ylabel=attr_name)
+        fig = self._plot(x, y, **kwargs) 
+        if kwargs.get('return_fig'): 
+            return fig 
     
     def plot_time_seirials(self, sh=None, attr=None, sh_list=None, **kwargs): 
         """
@@ -1098,6 +1257,13 @@ class ResultDB(OrderedDict):
             fig, ax=self._plot(range(count, count+y.size), y, **kwargs)
             kwargs['ax'] = ax 
             count += y.size  
+    
+    
+    @staticmethod 
+    def fit_lines(ax, func): 
+        pass 
+        
+    
     
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
         if layer=='top':
@@ -1337,7 +1503,6 @@ class ResultDB(OrderedDict):
             return fig
         if kwargs.get('return_ax'): 
             return lll.get('fig'), lll.get('ax')
-           
        
     def plot_entanglement_scaling_compare(self, num_site_max=6): 
         """
@@ -1826,6 +1991,9 @@ class ResultDB_mera(ResultDB):
         return res
     backup_fn_gen = shape_to_backup_fn 
     
+    def parse_fn(self, fn):
+        return System.backup_fn_parse(fn)
+    
 
 class ResultDB_vmps(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -2032,27 +2200,20 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         
-        from run_long_sandvik.run_long_affleck.analysis import an_idmrg_lam 
-        
         from projects_mps.run_long_sandvik.analysis import an_idmrg_lam 
-        xx=an_idmrg_lam.an_main
-        aa=xx.filter_alpha(g=0.0)
-        #xx.set_rdb_dict(aa)
-        #sh_list=xx.get_shape_list_all()
-        fig, ax=xx.fig_layout(size=(5,4))
-        site=1
-        if 1: 
-            xx.plot_field_vs_alpha('magnetization', aa=aa, sh_list=None, 
-                    sh_min=(0, 40),  sh_max=(0, 100),  sub_key_list=['z',site], 
-                                   param_name='alpha', rec_getter=xx.result_db_class._get_mag.im_func, ax=ax)
-            ax.invert_xaxis()              
-        else: 
-            res=xx._plot(range(10), range(10), label='l', mfc=None, mew=2, ms=12,  
-                    mec='r',  ax=ax)    
-            #res=xx._plot(range(10), np.arange(10)*1.2, label='l', ms=12, mfc='None', mec='r',  ax=ax)    
-            #res=xx._plot(range(10), np.arange(10)*1.3, label='l', ms=12, mfc='None', mec='r',  ax=ax)    
-            #ax.legend()
-        xx.show_fig()
+
+
+        #aa= [(a, 0.) for a in [3.0, 2.5,  2.3, 2.1,  1.9, 1.8, 1.7, 1.5, 1.4,  1.0, 0.5]]
+        a = np.arange(10)
+        b=ResultDB.filter_array.im_func(None, a, x_min=3, period=4)
+        print_vars(vars(),  ['a', 'b'])
+        xx=an_idmrg_lam.an_test.an_start_from_largeD_symm
+        db= xx[(1.5, 1.0, 'D%d'%(100))]
+        ts=db.get_time_serials((0, 100))
+        a = ts['N'].values[: 50]
+        b=xx.filter_array(a, x_min=None, period=5)  
+        print_vars(vars(),  ['a', 'b'])
+
         
     
     def test_insert_and_fetch(self): 
