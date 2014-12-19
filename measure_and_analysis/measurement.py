@@ -144,7 +144,8 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             mps= S['mps']
             db_version = 1.0
             N, D = mps.N, mps.D
-            if mps.symmetry is not None : 
+            #if mps.symmetry is not None : 
+            if hasattr(mps, 'symmetry'):  
                 D = mps.bond_dim_max 
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
@@ -463,20 +464,27 @@ def measure_all_new(arg_group):
         print job.stdout, job.stderr , job.id, job.exception  
     cluster.stats()
 
-def measure_all_by_brokest(arg_group, host=None): 
-    #for server_port in server_ports:
-    #    Process(target=server, args=(server_port,)).start()
-    from mypy.brokest.brokest import queue 
+def measure_all_by_brokest(arg_group,  host=None, servers=None): 
+    
+    servers = servers if servers is not None  else []
+    from mypy.brokest.brokest import queue, run_many 
     if host is None: 
         host = '222.195.73.191'
         host = '127.0.0.1'
         host = '210.45.121.30' 
+    if 0: 
+        for i in arg_group: 
+            print  i['path']
+            print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
+    
+    else:  
+        if servers is None: 
+            servers= [('210.45.121.242', 90900), ('210.45.121.30', 90900)]
+        tasks = []
+        for i in arg_group: 
+            tasks.append((measure_S, ( ), i))
         
-    for i in arg_group: 
-        print  i['path']
-        #print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
-        print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
-        #print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
+        run_many(tasks, servers)        
         
 
 def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
