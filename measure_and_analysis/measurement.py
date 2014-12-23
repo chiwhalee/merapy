@@ -17,6 +17,7 @@ except:
 from  multiprocessing import Process
 import tempfile 
 
+from merapy.common_util import set_num_of_threads 
 from merapy.hamiltonian import System
 from merapy.utilities import load 
 from merapy.context_util import rpyc_load 
@@ -77,11 +78,14 @@ def measure_decorator(result_db_class=None):
     return inner
 
 def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
-        fault_tolerant=1, param=None, check_convergence=True, field_surfix='', rdb=None, **kwargs):
+        fault_tolerant=1, num_of_threads=None,  param=None, check_convergence=True, field_surfix='', 
+        rdb=None, **kwargs):
     """
         todo: 
             parpath should be deprecated, extract it from path instead  
     """
+    if num_of_threads is not None:  
+        set_num_of_threads(num_of_threads)
     use_local_storage =  kwargs.get('use_local_storage', False)
     if S is None: 
         assert path is not None
@@ -186,19 +190,13 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             A = S['A']
             symm = None if isinstance(A, np.ndarray) else A.symmetry 
             db_version = 1.0
-            #N, D = 0, A.shape[0]
             N = 0
-            if symm is None: 
-                D = A.shape[0]
-            else: 
-                D = A.shape[0].totDim 
+            #D = A.shape[0] if symm is None else A.shape[0].totDim 
+            D = S.get('trunc_dim')
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
-            dim,  layer = None, None
             shape =  N, D 
-            #iter = S['N']
             iter = -1
-            #field = ['correlation']
             corr_param = {}
    
     which = which if which is not None else field 
@@ -465,7 +463,6 @@ def measure_all_new(arg_group):
     cluster.stats()
 
 def measure_all_by_brokest(arg_group,  host=None, servers=None): 
-    
     servers = servers if servers is not None  else []
     from mypy.brokest.brokest import queue, run_many 
     if host is None: 
@@ -485,7 +482,6 @@ def measure_all_by_brokest(arg_group,  host=None, servers=None):
             tasks.append((measure_S, ( ), i))
         
         run_many(tasks, servers)        
-        
 
 def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
         which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
