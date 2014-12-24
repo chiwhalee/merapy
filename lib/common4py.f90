@@ -53,6 +53,37 @@ subroutine contract_core_player_fort(data1, data2, data3, totDim1,totDim2, totDi
      end do
 end subroutine contract_core_player_fort
 
+subroutine contract_core_player_fort_complex(data1, data2, data3, totDim1,totDim2, totDim3, rec, num_rec)
+    !version for complex dtype 
+    !USE data_buffer
+    integer  totDim1, totDim2, totDim3, num_rec
+    integer rec(num_rec, 6)
+    integer p1, p2, p3, Dim1, Dimc, Dim2
+    complex*16, target:: data1(totDim1), data2(totDim2), data3(totDim3)
+!f2py intent(inout):: data3
+    !real*8:: alpha,beta
+    complex*16:: alpha,beta
+    complex*16, pointer:: matrix1(:), matrix2(:), matrix3(:)
+
+    !rec(:, 1:3)=rec(:, 1:3) + 1
+       
+    data3 = (0.d0, 0.d0)
+    matrix1 => data1
+    matrix2 => data2
+    matrix3 => data3
+    !print "('T%data=', 200(1x,',', E10.4))", data3(:)
+    alpha = (1.d0, 0.d0); beta=(1.d0, 0.d0)
+    do i = 1, num_rec 
+ 
+        !call Matrix_Multiply_inplace(Dim1, Dimc, Dim2, matrix1(p1), matrix2(p2), matrix3(p3), alpha, beta)
+        !change new line so that older comiler like gfortran can pass 
+        call matrix_multiply_inplace_complex(rec(i,4), rec(i,6), rec(i,5), matrix1(rec(i,1) + 1), & 
+        matrix2(rec(i,2) + 1), matrix3(rec(i,3) + 1), alpha, beta)
+        !call Matrix_Multiply_inplace(rec(i,4), rec(i,6), rec(i,5), matrix1(rec(i,1)), matrix2(rec(i,2)), matrix3(rec(i,3)), alpha, beta)
+     end do
+end subroutine contract_core_player_fort_complex
+
+
 !MODULE data_buffer
 !    real*8, pointer:: matrix_buf(:)
 !    integer:: allocateddd
@@ -502,21 +533,30 @@ subroutine Matrix_Get_Position_rev(p, rank, pos, Dims)
 end subroutine Matrix_Get_Position_rev
 
 subroutine Matrix_Multiply_inplace(n,l,m, A,B,C,alpha,beta)
-    !use params
-    !attention_omitted_something  seems params is not used at all
-   implicit none
-   integer n,l,m
-   real*8 A(n,l), B(l,m)
-   real*8,intent(inout)::C(n,m)
-!f2py intent(out):: C
-   real*8 :: alpha,beta
+    implicit none
+    integer n,l,m
+    real*8 A(n,l), B(l,m)
+    real*8,intent(inout)::C(n,m)
+!f2py intent(out):: C      
+    real*8 :: alpha,beta
+!!$   C=matmul(A,B)
+    !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+    call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+end subroutine Matrix_Multiply_inplace
+
+subroutine matrix_multiply_inplace_complex(n,l,m, A,B,C,alpha,beta)
+    implicit none
+    integer n,l,m
+    complex*16 A(n,l), B(l,m)
+    complex*16,intent(inout)::C(n,m)
+!f2py intent(out):: C      
+    !real*8 :: alpha,beta
+    complex*16 :: alpha,beta
 
 !!$   C=matmul(A,B)
-!see http://www.math.utah.edu/software/lapack/lapack-blas/zgemm.html
-   !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-   call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-   
-end subroutine Matrix_Multiply_inplace
+    !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+    call zgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
+end subroutine matrix_multiply_inplace_complex
 
 
 subroutine Matrix_Multiply(n,l,m, A,B,C,alpha,beta)
@@ -529,7 +569,6 @@ subroutine Matrix_Multiply(n,l,m, A,B,C,alpha,beta)
     real*8 :: alpha,beta
 
 !!$   C=matmul(A,B)
-!see http://www.math.utah.edu/software/lapack/lapack-blas/zgemm.html
     !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
     call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
 end subroutine Matrix_Multiply
@@ -542,7 +581,6 @@ subroutine Matrix_Multiply_complex(n,l,m, A,B,C,alpha,beta)
     real*8 :: alpha,beta
 
 !!$   C=matmul(A,B)
-!see http://www.math.utah.edu/software/lapack/lapack-blas/zgemm.html
     !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
     call zgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
 end subroutine Matrix_Multiply_complex 
@@ -589,27 +627,6 @@ subroutine Matrix_eigen_vector(nV, A, E)
       call dsyev('V', 'U', nV, A, nV, E, work, lwork, info)   
 
     end subroutine Matrix_eigen_vector
-
-
-
-
-subroutine Matrix_Multiply_inplace_del(n,l,m, A,B,C,alpha,beta)
-    !use params
-    !attention_omitted_something  seems params is not used at all
-   implicit none
-   integer n,l,m
-   real*8 A(n,l), B(l,m)
-   real*8 C(n,m)
-!f2py intent(inout):: C
-   real*8 :: alpha,beta
-
-!!$   C=matmul(A,B)
-!see http://www.math.utah.edu/software/lapack/lapack-blas/zgemm.html
-   !call XGEMM('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-   call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-   
-end subroutine Matrix_Multiply_inplace_del
-
 
 
 subroutine Matrix_SVD(m,n, min_mn, A, U, S, VT)

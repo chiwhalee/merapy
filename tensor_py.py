@@ -1856,7 +1856,7 @@ class iTensor(TensorBase):
                 data3=iTensor.mul_temp(data1, data2, alpha, beta, dtype=dtype)
 
                 #T3.data[p3:p3+Dim1*Dim2]=data3.ravel()[:]
-                T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
+                T3.data[p3:p3+Dim1*Dim2] += data3.ravel('F')[:]   #attention_here  fortran order
                 
                 #t3data = T3.data[p3:p3+Dim1*Dim2] 
                 #data3 = data3.ravel("F")
@@ -1935,14 +1935,8 @@ class iTensor(TensorBase):
                 #data3 = np.ndarray(Dim1*Dim2, order="F")
                 data3 = np.ndarray((Dim1, Dim2), order="F")
                 common_util.matrix_multiply_inplace(data1, data2, data3, alpha=1.0, beta=1.0) 
-                
-                
                 #common_util.matrix_multiply_inplace(data1, data2, T3.data[p3:p3+Dim1*Dim2], alpha=1.0, beta=1.0) 
-                
 
-
-
-                
                 #T3.data[p3] = self.data[p1].dot(T2.data[p2])
                 
                 #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
@@ -3781,7 +3775,6 @@ class test_iTensor(object):
                     common_util.contract_core_player_fort_parallel
 
         for i in xrange(5):
-            
             rank = 4
             set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
             qsp = self.qsp_base.copy_many(rank)
@@ -4083,16 +4076,46 @@ class Test_iTensor(unittest.TestCase):
     
     def test_temp(self): 
         if 0: 
-            t = iTensor.example(dtype=complex)
-            print_vars(vars(),  ['t'])
-            tc, _=t.contract(t, [1, 2, 3, 4], [4, 3, 2, 1])
-            print_vars(vars(),  ['tc.data.dtype'])
-        
+            n = 5 
+            for i in xrange(n):
+                print_vars(vars(),  ['i'], '', ' ')
+                set_STATE_end_1(iter=i, record_at=0, stop_at=n, power_on=True) 
+                u = iTensor.example(rank=2, dtype=complex)
+                #u = iTensor.example(rank=2, dtype=float)
+                #u.contract_core(u, 2)
+                up = u.permutation([1, 0])
+                print_vars(vars(),  ['u.dtype', 'up.dtype'], '', ' ')
+            tensor_player.STATE = 'stop'
+            upp = up.permutation([1, 0])
+            np.set_printoptions(4)
+            print_vars(vars(),  ['u.to_ndarray()', 'up.to_ndarray()', 'upp.to_ndarray()'], key_val_sep='\n')
+            self.assertTrue(np.allclose(upp.data, u.data ))
         if 1: 
-            t = iTensor.example(rank=2, dtype=complex)
-            tc=t.contract_core(t, 1) 
-            print_vars(vars(),  ['tc.data.dtype', 't.to_ndarray()', 'tc.to_ndarray()'], '', ' ')
+            n = 5 
+            for i in xrange(n):
+                print_vars(vars(),  ['i'], '', ' ')
+                set_STATE_end_1(iter=i, record_at=0, stop_at=n, power_on=True) 
+                u = iTensor.example(rank=2, symmetry='Z2', dtype=complex, rand_seed=1234)
+                #u = iTensor.example(rank=2, dtype=float)
+                up = u.dot(u)
+                
+            if 1: 
+                tensor_player.STATE = 'stop'
+                upp = u.dot(u)
+                np.set_printoptions(4)
+                print_vars(vars(),  ['u.to_ndarray()', 'upp.to_ndarray()', 'up.to_ndarray()'], key_val_sep='\n')
+                self.assertTrue(np.allclose(upp.data, up.data ))
+                
     
+    def test_tensor_player(self): 
+        for i in xrange(10):
+            print_vars(vars(),  ['i'], '', ' ')
+            rank = 4
+            set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+            u = iTensor.example()
+            #u.contract_core(u, 2)
+            u.permutation([1, 3, 2, 0])
+           
     def test_permutation(self): 
         t = iTensor.example()
         t.permutation([2, 1, 0, 3])
@@ -4705,6 +4728,7 @@ if __name__== "__main__":
         suite = unittest.TestSuite()
         add_list_iTensor = [
            'test_temp', 
+           #'test_tensor_player', 
            #'test_permutation', 
            #'test_to_ndarray', 
            #'test_rank_zero', 

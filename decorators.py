@@ -1,5 +1,6 @@
 #coding=utf8
 import os, sys
+import unittest 
 import cPickle as pickle
 import cProfile 
 import numpy as np
@@ -109,7 +110,10 @@ def tensor_player(which):
         if 1:   #define recorder and player
             def init_recorder(self, rank,  QSp, totQN, order="F",  
                     buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
-
+                """
+                    这种做法有些过于激进, 更安全的是下面的 data_entrance_recorder/player 
+                
+                """
                 func(self, rank,  QSp, totQN, order="F",  
                     buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, shallow=shallow)
                 
@@ -131,16 +135,16 @@ def tensor_player(which):
                 
                 self.buf_ref = np.array([-1, -1], np.int)
                 
+                #print 'ssss', self.dtype 
                 if has_data:
                     if use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
                         buffer = self.buffer_assign(data_size=self.totDim)
                     self.data = np.ndarray(self.totDim, buffer=buffer, dtype=self.dtype, order="C")
 
             def data_entrance_recorder(self, order="F"):
-                
                 rank, QSp, totQN = self.rank, self.QSp, self.totQN
                 rank_1 = rank if rank != 0 else 1 
-               
+                
                 if rank == 0: 
                     QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
                
@@ -243,8 +247,7 @@ def tensor_player(which):
                     totQN = self.totQN.copy()
 
                 #Tp=iTensor(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
-                Tp=self.__class__(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
-                
+                Tp=self.__class__(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
                 pos=np.empty(self.rank,"int")
                 Dims=np.empty(self.rank,"int")
 
@@ -290,7 +293,7 @@ def tensor_player(which):
                 return Tp
 
             def permute_player_bac(self, P, buffer=None, use_buf=False):
-                #print "iiin permute_player_bac"
+                
                 rank = self.rank
                 #permute QSp, QNs
                 if 0:
@@ -300,19 +303,24 @@ def tensor_player(which):
                     QSp=[self.QSp[P[i]] for i in xrange(rank)]
                     totQN = self.totQN
                 
-                #Tp=iTensor(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
-                Tp=self.__class__(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
+                #Tp=self.__class__(rank, QSp, totQN,  buffer=buffer, use_buf=use_buf)
+                Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
+                #print 'ssss', Tp.dtype, self.dtype 
                 
                 nidx, tape_ind, tape_dim, tape_ord = inner.tape[inner.calls]
-                array_permutation.permute_player_fort(self.rank, 
-                            tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
+                if self.dtype == float: 
+                    array_permutation.permute_player_fort(self.rank, 
+                                tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
+                else:  #complex 
+                    array_permutation.complex_permute_player_fort(self.rank, 
+                                tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
 
                 return Tp
 
             #@profile
             def permute_player(self, P, buffer=None, use_buf=False):
-                Tp=self.__class__(rank=None, QSp=None, totQN=None, buffer=buffer, use_buf=use_buf)
                 #since __init__ has been decorated, just do in following way                
+                Tp=self.__class__(rank=None, QSp=None, totQN=None, buffer=buffer, use_buf=use_buf)
                 
                 nidx, tape_ind, tape_dim, tape_ord = inner.tape[inner.calls]
                 array_permutation.permute_player_fort(self.rank, 
@@ -322,11 +330,11 @@ def tensor_player(which):
             
             def contract_core_recorder(self, T2, div, data=None, use_buf=False):
                 """
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
+                    see iTensor_Contraction2 in f90
+                    把T1，和T2的非零block 如果量子数组合相等则收缩
+                    locals:
+                        div: num. of legs to be contracted for each tensor
+                        buffer: use buffer to save data of T3
                 """
                 
                 #contract_record_1 = {}
@@ -351,7 +359,9 @@ def tensor_player(which):
                     #QSp = [self.QSp[0].null()]
                     QSp = []
 
-                T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
+                dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+                
+                T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf, dtype=dtype)
                 T3.data[:]=0.0
                 
                 nidx3 = 0
@@ -392,9 +402,8 @@ def tensor_player(which):
                 
 
                         data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
-                        data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
-                        #data3=iTensor.mul_temp(data1, data2, alpha, beta)
-                        data3=self.__class__.mul_temp(data1, data2, alpha, beta)
+                        data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F') 
+                        data3=self.__class__.mul_temp(data1, data2, alpha, beta, dtype=dtype)
                         T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
                 
                 inner.tape[inner.calls] = contract_record_1[:ind_count, :], ind_count
@@ -408,37 +417,38 @@ def tensor_player(which):
                         div: num. of legs to be contracted for each tensor
                         buffer: use buffer to save data of T3
                 """
-                #import tensor_py
-                #iTensor = tensor_py.iTensor
-                
                 rank1 = self.rank
-                rank2=T2.rank
-                rank3=rank1+rank2-div-div
+                rank2 = T2.rank
+                rank3 = rank1+rank2-div-div
                 tQN = self.totQN+T2.totQN
                 shift = rank1-div
                 
                 QSp = self.QSp[:shift]
                 QSp.extend(T2.QSp[div:rank2])
                 
-                #T3= iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
                 if rank3==0:
-                    #QSp = self.QSp[0].null()
                     QSp = [self.QSp[0].null()]
-                T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
+                    
+                dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+                T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
                 rec, num_rec = inner.tape[inner.calls]
-                common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                if dtype == float:  
+                    common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                else: 
+                    common_util.contract_core_player_fort_complex(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                    #common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                    
                 return T3
             
             #@profile
             def contract_core_player(self, T2, div, data=None, use_buf=False):
                 """
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
+                    see iTensor_Contraction2 in f90
+                    把T1，和T2的非零block 如果量子数组合相等则收缩
+                    locals:
+                        div: num. of legs to be contracted for each tensor
+                        buffer: use buffer to save data of T3
                 """
-                #T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
                 T3 = self.__class__(rank=None, QSp=None, totQN=None, buffer=data, use_buf=use_buf)
                 
                 rec, num_rec = inner.tape[inner.calls]
@@ -1063,27 +1073,98 @@ def func(x, y=2):
     res= a + x + y
     return res
 
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
+        pass 
+    def test_temp(self): 
+        pass 
+    def test_timer_count(self): 
+        pass 
+    
+        #@profileit(fn="profile.tmp")
+        @count
+        def func(x, y):
+            return x**2+ y
+        
+        class A:
+            @timer
+            @count
+            def __init__(self, x,z,  y=3):
+                self.x = x + z
+                print "x", x*y
 
+        for i in range(4):
+            func(i, i)
+            print num_of_instance
 
+        A(5, 22);A(6, 2)
+
+        #print tensor_player.STATE
+
+    def test_tensor_player(self): 
+        from tensor_py import iTensor 
+        t = iTensor.example(dtype=complex)
+        print t.transpose([0, 2, 1, 3])
+        tensor_player.STATE = 'stop'
+        tensor_player.PREV_STATE = 'stop'
+        print iTensor.permutation 
+        #it seems not able to test tensor_player within THIS modeule itself !!!
+        for i in range(10): 
+            #set_player_state_auto(iter=i, record_at=0, info=-1)    
+            #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+            pass 
+        for i in xrange(50):
+            #print_vars(vars(),  ['i'], '', ' ')
+            rank = 4
+            #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+      
+            u = iTensor.example()
+            u.data[:] = xrange(u.data.size)
+            v=u.contract_core(u, 2)
+           
+            
+    
 
 if __name__ == "__main__":
-    #@profileit(fn="profile.tmp")
-    @count
-    def func(x, y):
-        return x**2+ y
-    
-    class A:
-        @timer
+    if 0: 
+        #@profileit(fn="profile.tmp")
         @count
-        def __init__(self, x,z,  y=3):
-            self.x = x + z
-            print "x", x*y
+        def func(x, y):
+            return x**2+ y
+        
+        class A:
+            @timer
+            @count
+            def __init__(self, x,z,  y=3):
+                self.x = x + z
+                print "x", x*y
 
-    for i in range(4):
-        func(i, i)
-        print num_of_instance
+        for i in range(4):
+            func(i, i)
+            print num_of_instance
 
-    A(5, 22);A(6, 2)
+        A(5, 22);A(6, 2)
 
-    #print tensor_player.STATE
+        #print tensor_player.STATE
+
+
+    #warnings.filterwarnings('ignore')
+    if 0:
+        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+            
+        'test_temp', 
+        #'test_tensor_player', 
+        #'test_timer_count', 
+        ]
+        for a in add_list: 
+            suite.addTest(TestIt(a))
+
+        unittest.TextTestRunner(verbosity=0).run(suite)
+
+        
 

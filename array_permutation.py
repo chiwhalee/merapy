@@ -34,7 +34,8 @@ try:
                array_permutation_fort_parallel_complex, 
                #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
                #but it is not thoroughly tested against too mainy cases
-               permute_player_fort_parallel_dynamic as permute_player_fort  
+               permute_player_fort_parallel_dynamic as permute_player_fort, 
+               complex_permute_player_fort_parallel_dynamic as complex_permute_player_fort
                 )
 
 except ImportError:
@@ -76,13 +77,22 @@ def array_permutation(a, rank, Dims, order, out=None):
     order_[:rank]=order[:rank]
     
     if out is None: 
+        
         out = np.ndarray(a.size, dtype=a.dtype)
         #out = np.ndarray(a.size,dtype=a.dtype, buffer=out_buff)
-        array_permutation_fort_parallel(rank, Dims_, order_, a, out)
+        if a.dtype == float: 
+            array_permutation_fort_parallel(rank, Dims_, order_, a, out)
+        else: 
+            array_permutation_fort_parallel_complex(rank, Dims_, order_, a, out)
+            
         return out 
     else: 
-        array_permutation_fort_parallel(rank, Dims_, order_, a, out)
-        
+        if a.dtype == float: 
+            array_permutation_fort_parallel(rank, Dims_, order_, a, out)
+        else: 
+            array_permutation_fort_parallel_complex(rank, Dims_, order_, a, out)
+
+
 #@profile  
 def array_permutation_inplace(a, rank, Dims, order, b):
     """  

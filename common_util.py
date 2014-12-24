@@ -7,6 +7,7 @@ q:
 import os, unittest
 import cPickle as pickle
 import numpy as np
+from scipy import linalg
 import platform
 import socket
 #import matplotlib.pyplot as plt
@@ -451,32 +452,6 @@ class test_common():
 
         print np.all(c_out==c_np)
     
-    @staticmethod
-    def matrix_multiply_inplace():
-        import numpy as np
-        from scipy import linalg
-        print matrix_multiply_inplace.__doc__
-        print "test matrix_multiply  --- pass"
-        #a=np.arange(3*4,dtype='d').reshape((3,4))
-        #b=np.arange(4*5,dtype='d').reshape((4,5))
-        #c=np.empty((3,5),dtype='d')
-        
-        #attention must reshape it to 2D
-        m=1
-        k=5
-        n=1
-        a=np.arange(m*k,dtype='d').reshape((m,k),order="F")
-        b=np.arange(n*k,dtype='d').reshape((k,n),order="F")
-        
-        Cin=np.empty((m,n),order="F")
-        
-        print Cin[:]
-        matrix_multiply_inplace(a, b,Cin,1.0,0.0  )  #,3,3,1)
-        c_np=a.dot(b)
-        print c_np[:], "\n"
-        print Cin[:]
-
-        print np.all(Cin==c_np)
 
     @staticmethod
     def matrix_multiply_inplace_1():
@@ -605,7 +580,6 @@ class TestCommon(unittest.TestCase):
         print vec
         
     def test_matrix_multiply(self):
-        
         if 1: 
             print matrix_multiply.__doc__
             #attention must reshape it to 2D
@@ -637,6 +611,42 @@ class TestCommon(unittest.TestCase):
             print c.round(10)
             self.assertTrue(np.all(c_out==c_np))
         
+    def test_matrix_multiply_inplace(self):
+        print matrix_multiply_inplace.__doc__
+        if 1:  
+            #attention must reshape it to 2D
+            m=3
+            k=5
+            n=8
+            a=np.arange(m*k,dtype='d').reshape((m,k),order="F")
+            b=np.arange(n*k,dtype='d').reshape((k,n),order="F")
+            
+            Cin=np.empty((m,n),order="F")
+            
+            
+            matrix_multiply_inplace(a, b,Cin,1.0,0.0  )  #,3,3,1)
+            c_np=a.dot(b)
+            print Cin[:]
+            self.assertTrue(np.all(Cin==c_np))
+        
+        if 1:  #inplace version   
+            #attention must reshape it to 2D
+            print matrix_multiply_inplace_complex.__doc__
+            m=7
+            k=5
+            n=3
+            a=np.arange(m*k,dtype=complex).reshape((m,k),order="F")
+            a += 1j*a  
+            b=np.arange(n*k,dtype=complex).reshape((k,n),order="F")
+            b  += -0.5j*b  
+            
+            Cin=np.empty((m,n),order="F", dtype=complex)
+            
+            matrix_multiply_inplace_complex(a, b,Cin,1.0 + 0j, 0.0  )  #,3,3,1)
+            c_np=a.dot(b)
+            print Cin[:]
+
+            self.assertTrue(np.all(Cin==c_np))
 
 
 if __name__=="__main__":
@@ -736,7 +746,8 @@ if __name__=="__main__":
         suite = unittest.TestSuite()
         add_list = [
             #'test_temp', 
-            'test_matrix_multiply', 
+            #'test_matrix_multiply', 
+            'test_matrix_multiply_inplace', 
             #'test_get_num_of_threads', 
             #'test_matrix_svd_1by1', 
             #'test_matrix_svd', 
