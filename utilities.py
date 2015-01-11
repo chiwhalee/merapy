@@ -7,13 +7,17 @@ import os
 import numpy as np
 from tempfile import mkdtemp 
 import cPickle as pickle 
-import cloud 
-pickle_any = cloud.serialization.cloudpickle
+import warnings 
 import sys
 import string
 import random
 import gzip 
 import zlib 
+try: 
+    import cloud 
+    pickle_any = cloud.serialization.cloudpickle
+except ImportError as err: 
+    warnings.warn(str(err))
 
 #__all__=["getch"]
 

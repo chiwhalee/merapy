@@ -90,8 +90,14 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     if S is None: 
         assert path is not None
         #S= load(path)
-        S = rpyc_load(path, use_local_storage=use_local_storage)
-        parpath = os.path.dirname(os.path.abspath(path))
+        try: 
+            S = rpyc_load(path, use_local_storage=use_local_storage)
+            parpath = os.path.dirname(os.path.abspath(path))
+        except IOError as err: 
+            if fault_tolerant: 
+                return 
+            else: 
+                raise 
     
     if rdb is None: 
         rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
@@ -269,6 +275,11 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     elif algorithm == 'mps': 
         rdb['version'] = 1.0
         rdb['algorithm'] = 'mps'
+        dmax=rdb.get_dim_max_for_N(shape[0])
+        dmax = max(dmax, shape[1])
+        rdb['dim_max'] = dmax 
+        print_vars(vars(),  ['dmax'])
+        
     elif algorithm == 'idmrg': 
         rdb['version'] = 1.0
         rdb['algorithm'] = 'idmrg'
@@ -352,7 +363,7 @@ def measure_all_bac(dir_list, mera_shape_list, sh_min=None, sh_max=None,
 
 def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,  
         which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
-        fault_tolerant=1, recursive=False,  **kwargs): 
+        fault_tolerant=1, algorithm=None,  recursive=False,  **kwargs): 
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
     __sh_list = sh_list
@@ -368,14 +379,15 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
             dir_list.extend(temp)
         #print 'recursively found these dirs %s'%(dir_list, )
     aaa = os.path.abspath(dir_list[0])
-    if 'mera' in aaa: 
-        algorithm = 'mera'
-    elif 'mps' in aaa and 'idmrg' not in aaa: 
-        algorithm = 'mps'
-    elif 'idmrg' in aaa:
-        algorithm = 'idmrg'
-    else: 
-        raise
+    if algorithm is None: 
+        if 'mera' in aaa: 
+            algorithm = 'mera'
+        elif 'mps' in aaa and 'idmrg' not in aaa: 
+            algorithm = 'mps'
+        elif 'idmrg' in aaa:
+            algorithm = 'idmrg'
+        else: 
+            raise
     
     path_list = []
     for dir in dir_list: 
@@ -432,7 +444,7 @@ def compute(n):
     host = socket.gethostname()
     return (host, n)
 
-def measure_all_new(arg_group): 
+def measure_all_by_dispy(arg_group): 
     nodes= ['qtg7501']
     nodes= ['localhost']
     
@@ -463,13 +475,14 @@ def measure_all_new(arg_group):
     cluster.stats()
 
 def measure_all_by_brokest(arg_group,  host=None, servers=None): 
+    warnings.warn('deprecate this. use run_many directly instead ')
     servers = servers if servers is not None  else []
     from mypy.brokest.brokest import queue, run_many 
-    if host is None: 
-        host = '222.195.73.191'
-        host = '127.0.0.1'
-        host = '210.45.121.30' 
-    if 0: 
+    if 0:  #single server  
+        if host is None: 
+            host = '222.195.73.191'
+            host = '127.0.0.1'
+            host = '210.45.121.30' 
         for i in arg_group: 
             print  i['path']
             print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
@@ -483,81 +496,21 @@ def measure_all_by_brokest(arg_group,  host=None, servers=None):
         
         run_many(tasks, servers)        
 
-def measure_all(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
-        which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
-        fault_tolerant=1, algorithm=None,  recursive=False,  **kwargs): 
-    
-    use_local_storage = kwargs.get('use_local_storage', False)
-    path_not_found = []
-    __mera_shape_list = mera_shape_list
-    if isinstance(which, str): 
-        which = [which]
-    if isinstance(dir_list, str): 
-        dir_list = [dir_list]
-    if recursive: 
-        dir_list_1 = list(dir_list)
-        dir_list = []
-        for dir in dir_list_1: 
-            temp=mera_backup_dir_finder(root=dir)
-            dir_list.extend(temp)
-        #print 'recursively found these dirs %s'%(dir_list, )
-    aaa = os.path.abspath(dir_list[0])
-    if algorithm is None: 
-        if 'mera' in aaa: 
-            algorithm = 'mera'
-        elif 'mps' in aaa and 'idmrg' not in aaa: 
-            algorithm = 'mps'
-        elif 'idmrg' in aaa:
-            algorithm = 'idmrg'
-        else: 
-            raise
-    
-    path_list = []
-    for dir in dir_list: 
-        #fori d in dim_list: 
-        if mera_shape_list  == 'all': 
-            db = ResultDB(dir, algorithm=algorithm)
-            __mera_shape_list = db.get_mera_shape_list(sh_max=sh_max, sh_min=sh_min)
-        
-        for sh in __mera_shape_list: 
-            if algorithm  == 'mera':  
-                #sh[1] -= 1  #layer->layer-1
-                sh = list(sh);  sh[1] -= 1
-                fn = System.backup_fn_gen(*sh)
-            elif algorithm == 'mps': 
-                N, D = sh
-                fn = "N=%d-D=%d.pickle"%(N, D)
-            elif algorithm == 'idmrg': 
-                N, D = sh
-                fn = "N=%d-D=%d.pickle"%(N, D)
-            else: 
-                raise 
-                
-            path = '/'.join([dir, fn])
-            path_list.append(path)
-    
-    for path in path_list:    
-        if 1: 
-            try: 
-                #S= load(path)
-                measure_S(path=path, which=which, exclude_which=exclude_which, param=param, force=force, 
-                        fault_tolerant=fault_tolerant, field_surfix=field_surfix,  **kwargs)
-            except IOError as err: 
-                path_not_found.append(path)
-                if fault_tolerant: 
-                    continue
-                else: 
-                    raise
-            except Exception as e: 
-                path_not_found.append((path, e))
-                if fault_tolerant: 
-                    continue 
-                else: 
-                    raise
-         
+ 
+def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **kwargs): 
+    arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
+    if not use_dist_comp: 
+        for i in arg_group: 
+            measure_S(**i)
+    else: 
+        from mypy.brokest.brokest import queue, run_many 
+        if servers is None: 
+            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in ['node93', 'node97', 'node99', 'node98', 'node96']]
+            servers=[('qtg7502', 90900),  ('qtg7501', 90900) ]
+            servers.extend(sugon_list)
             
-    if len(path_not_found)>0: 
-        print 'path_not_found is %s'%path_not_found
+        tasks = [(measure_S, (), i) for i in arg_group] 
+        run_many(tasks, servers, info=kwargs.get('info', 1))
 
 def mera_backup_dir_finder(root): 
     res=[]
@@ -588,10 +541,15 @@ class TestIt(unittest.TestCase):
         self.args= args 
     
     def test_temp(self): 
+        pass 
+    
+    def test_measure_all(self): 
         from vmps.minimize import VMPS 
-        #v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath='temp')
-        #v.minimize()
-        dir = '/tmp/tmpKQIJ3R/'
+        dir = tempfile.mkdtemp()
+        
+        v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath=dir)
+        v.minimize()
+       
         args = self.args.copy()
         #which = ['variance', 'energy', 'entanglement_entropy', 'magnetization']
         which = ['correlation']
@@ -650,7 +608,7 @@ class TestIt(unittest.TestCase):
         for r in res: 
             measure_S(**r)
     
-    def test_measure_all_new(self): 
+    def test_measure_all_by_dispy(self): 
         dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=1.0/'
         res = make_measure_many_args(dir, 'all', 
                 use_local_storage=1, 
@@ -668,7 +626,7 @@ class TestIt(unittest.TestCase):
             for r in res[: 2]: 
                 measure_S(**r)
         if 1: 
-            measure_all_new(res)
+            measure_all_by_dispy(res)
     
     def test_measure_all_by_brokest(self): 
         dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=1.0/'
@@ -736,11 +694,12 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                'test_temp', 
-                #'test_vmps_all', 
+                #'test_temp', 
+                #'test_measure_all', 
+                'test_vmps_all', 
                 #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
-                #'test_measure_all_new', 
+                #'test_measure_all_by_dispy', 
                 #'test_measure_all_by_brokest'
         
             ]
