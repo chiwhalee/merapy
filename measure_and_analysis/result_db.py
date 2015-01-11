@@ -108,17 +108,48 @@ class AnalysisTools(object):
         arg = self.filter_array(x, x_min, x_max, period, x1)
         x = x[arg]
         y = y[arg]
-        if func == 'EE' : 
-            func = lambda x, c, a: c/6.*np.log(x) + a
-        if func == 'power' : 
-            func = lambda x, k, eta: k*x**(eta)
+        #if func == 'EE' or func == 'EE_vs_L' : 
+        if isinstance(func, str): 
+            if func == 'EE_vs_L' : 
+                func = lambda x, c, a: c/6.*np.log(x) + a
+            elif func == 'EE_vs_D' : 
+                #c=12*(1./k - 1)**(-2); k=1/(math.sqrt(12/c) + 1)
+                #func = lambda x, c, a:  1/(math.sqrt(12/c) + 1)*np.log(x) + a 
+                func = lambda x, k, a: k*np.log(x) + a 
+            elif func == 'power' : 
+                func = lambda x, k, eta: k*x**(eta)
             
         param, cov = curve_fit(func, x, y)
         #y_fit = func(x, **param.tolist())
         y_fit = func(x, *param)
         res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
         return res 
-
+    
+    def fit_lines_many(self, ax, func=None, which_lines=None, add_text=False, **kwargs): 
+        ll = list(ax.lines)
+        which_lines = range(len(ll)) if which_lines is None else which_lines 
+        #for l in ax.lines[:len(aa)]:
+        temp = []
+        fit_line_args= ['x_min', 'x_max', 'period', 'x1']
+        fit_line_args= {a: kwargs.get(a) for a in fit_line_args}
+        for i, l in enumerate(ll): 
+            if not i in which_lines: 
+                continue 
+            #res=xx.fit_line(l, func, x_min=40, x_max=400)
+            res=self.fit_line(l, func, **fit_line_args) 
+            a=eval(l.get_label())#[0]
+            #k, b= res['param']
+            k = res['param'][0]
+            if add_text: 
+                if func == 'EE_vs_D' : 
+                    k = 12*(1./k - 1)**(-2)  #central charge 
+                label = ' '.join([l.get_label(), '%s'%str(k)[:4]]) 
+                l.set_label(label)
+            temp.append((a, round(k, 2)))
+            _=self._plot.im_func(None, res['x'], res['y'], 
+                    ax=ax, color=l.get_color(), label='', marker=None)        
+        return temp 
+    
     def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
         if size is None and ncol == 1 and nrow == 1: 
             size = (4, 3)
@@ -136,21 +167,29 @@ class AnalysisTools(object):
             axes= axes[0]
         return fig, axes 
 
-    def add_ax(self, fig): 
+    def add_ax(self, fig, direct='h'): 
         n = len(fig.axes)
-        fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
-        #fig.set_figwidth(10)
-        for i, ax in enumerate(fig.axes): 
-            ax.change_geometry(1, n+1, i+1)
-            #ax=fig.add_subplot(122)
-        ax = fig.add_subplot(1, n + 1, n + 1)
+        if direct == 'h' : 
+            fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
+            for i, ax in enumerate(fig.axes): 
+                ax.change_geometry(1, n+1, i+1)
+            ax = fig.add_subplot(1, n + 1, n + 1)
+        elif direct == 'v' : 
+            fig.set_figheight(fig.get_figheight()*(n + 1.)/n)
+            for i, ax in enumerate(fig.axes): 
+                ax.change_geometry(n+1, 1, i+1)
+            ax = fig.add_subplot(n+1, 1, n + 1)
+        
         return ax 
         
     def plot_alpha_2d(self, aa=None, rotate=False, **kwargs):
         aa = aa if aa is not None  else self.alpha_list 
         n = len(self.param_list)
-        aa = [a[: n] for a in aa]
-        x, y = zip(*aa)
+        if len(aa)>0: 
+            aa = [a[: n] for a in aa]
+            x, y = zip(*aa)
+        else: 
+            x, y = np.nan, np.nan 
         xlabel = self.param_list[0]
         ylabel = self.param_list[1]
         #kwargs= kwargs.copy()
@@ -183,7 +222,7 @@ class AnalysisTools(object):
             labels, loc, val = None, None, None 
         return labels, loc, val 
     
-    def find_lines_extreme(self, ax, which='max', add_text=False, font_dict=None): 
+    def find_lines_extreme(self, ax, which='max', add_text=False, font_dict=None, rounding=2): 
         temp=[]        
         fd = {'color': 'r', 'size': 14} 
         if font_dict is not None: 
@@ -191,14 +230,16 @@ class AnalysisTools(object):
         for l in ax.lines:
             x, y= l.get_data()
             if which == 'max' : 
-                min_ind =y.argmax()
+                #min_ind =y.argmax()
+                min_ind =np.nanargmax(y)
             else: 
-                min_ind =y.argmin()
+                #min_ind =y.argmin()
+                min_ind =np.nanargmin(y)
             min_location = x[min_ind]
             min_val = y[min_ind]
             if add_text: 
                 ax.text(min_location, min_val, min_location, fontdict=fd,  )
-            temp.append((l.get_label(), round(min_location,2), min_val))
+            temp.append((l.get_label(), round(min_location, rounding), min_val))
         if temp: 
             labels, loc, val= zip(*temp)
         else: 
@@ -480,6 +521,27 @@ class ResultDB(OrderedDict, AnalysisTools):
     
     get_mera_shape_list = get_shape_list 
     
+    def get_dim_max_for_N(self, N, update_db=False, force=False,  info=0): 
+        #if self.has_key('dim_max'): 
+        #if self.has_key_list(['dim_max', 'N'])
+        #    return self['dim_max']['N']
+        try: 
+            if force: 
+                raise KeyError 
+            return self['dim_max'][N]
+        except KeyError: 
+            temp=self.get_shape_list(N=N)
+            if len(temp)>0:  
+                D = max(temp)[1] 
+            else: 
+                D = 0 
+            if update_db: 
+                if not self.has_key('dim_max'): 
+                    self['dim_max'] = {}
+                self['dim_max'][N] = D
+                self.commit(info=info)
+            return D 
+    
     
     def get_energy_min_bac(self, sh=None, **kwargs): 
         version = self.get('version')
@@ -646,6 +708,9 @@ class ResultDB(OrderedDict, AnalysisTools):
         """
             fetch_easy for version 1.0
         """
+        if mera_shape[1] == 'max' : 
+            mera_shape = mera_shape[0], self['dim_max'][mera_shape[0]]
+        
         try: 
             rec = self[field_name][mera_shape]
             key = next(reversed(rec))  #last iter step
@@ -1020,6 +1085,9 @@ class ResultDB(OrderedDict, AnalysisTools):
             dic = {}
         
         temp = line_style.keys()  + ['color']
+        if kwargs.get('label') and kwargs.get('label_surfix'): 
+            kwargs['label'] = '-'.join([str(kwargs['label']), kwargs['label_surfix']])
+            
         dic_temp = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
         dic.update(dic_temp)
         
@@ -1263,8 +1331,6 @@ class ResultDB(OrderedDict, AnalysisTools):
     def fit_lines(ax, func): 
         pass 
         
-    
-    
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
         if layer=='top':
             ll= [sh[1]-2 ] 
@@ -1312,7 +1378,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         if kwargs.get('show_fig'): 
             plt.show()
    
-    
     def plot_entanglement_scaling_old(self, alpha=None, sh_list=None, sh_min=None, sh_max=None, 
             log2=False, num_site=None, aver=False, linear_fit=True,  fit_points= None, 
             **kwargs): 
