@@ -4,6 +4,7 @@
 
 import argparse, argcomplete
 import os, sys
+import warnings 
 import pprint
 from tabulate import tabulate
 import cPickle as pickle
@@ -102,30 +103,39 @@ class AnalysisTools(object):
                     ii += 1  
         return arg 
     
-    def fit_line(self, line, func=None, x_min=None, x_max=None, period=None, x1=None):
-        x, y = line.get_data()
-        x=x.astype(float); y=y.astype(float)
-        arg = self.filter_array(x, x_min, x_max, period, x1)
-        x = x[arg]
-        y = y[arg]
-        #if func == 'EE' or func == 'EE_vs_L' : 
+    @staticmethod 
+    def fit_curve(x, y, func, fit_range=None): 
+        """
+            just a wrapper 
+        """
+        
         if isinstance(func, str): 
             if func == 'EE_vs_L' : 
                 func = lambda x, c, a: c/6.*np.log(x) + a
-            elif func == 'EE_vs_D' : 
+            elif func  == 'EE_vs_D': 
                 #c=12*(1./k - 1)**(-2); k=1/(math.sqrt(12/c) + 1)
                 #func = lambda x, c, a:  1/(math.sqrt(12/c) + 1)*np.log(x) + a 
                 func = lambda x, k, a: k*np.log(x) + a 
             elif func == 'power' : 
                 func = lambda x, k, eta: k*x**(eta)
+        param, cov = curve_fit(func, x, y)    
+       
+        return func, param, cov 
+    
+    def fit_line(self, line, func=None, x_min=None, x_max=None, period=None, x1=None):
+        x, y = line.get_data()
+        x = x.astype(float); y=y.astype(float)
+        arg = self.filter_array(x, x_min, x_max, period, x1)
+        x = x[arg]
+        y = y[arg]
             
-        param, cov = curve_fit(func, x, y)
-        #y_fit = func(x, **param.tolist())
-        y_fit = func(x, *param)
+        #param, cov = curve_fit(func, x, y)
+        func_, param, cov = self.__class__.fit_curve(x, y, func)
+        y_fit = func_(x, *param)
         res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
         return res 
     
-    def fit_lines_many(self, ax, func=None, which_lines=None, add_text=False, **kwargs): 
+    def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  add_text=False, fault_tol=True,  **kwargs): 
         ll = list(ax.lines)
         which_lines = range(len(ll)) if which_lines is None else which_lines 
         #for l in ax.lines[:len(aa)]:
@@ -135,19 +145,30 @@ class AnalysisTools(object):
         for i, l in enumerate(ll): 
             if not i in which_lines: 
                 continue 
-            #res=xx.fit_line(l, func, x_min=40, x_max=400)
-            res=self.fit_line(l, func, **fit_line_args) 
+            
             a=eval(l.get_label())#[0]
-            #k, b= res['param']
-            k = res['param'][0]
+            try: 
+                res=self.fit_line(l, func, **fit_line_args) 
+                #k, b= res['param']
+                k = res['param'][0]
+            except Exception as err: 
+                k = np.nan 
+                if fault_tol: 
+                    warnings.warn(str(err))
+                else: 
+                    raise 
+                
             if add_text: 
                 if func == 'EE_vs_D' : 
                     k = 12*(1./k - 1)**(-2)  #central charge 
-                label = ' '.join([l.get_label(), '%s'%str(k)[:4]]) 
+                #label = ' '.join([l.get_label(), '%s'%str(k)[:4]]) 
+                label = ' '.join([l.get_label(), '%1.2f'%k])
                 l.set_label(label)
-            temp.append((a, round(k, 2)))
-            _=self._plot.im_func(None, res['x'], res['y'], 
-                    ax=ax, color=l.get_color(), label='', marker=None)        
+            #temp.append((a, round(k, 2)))
+            temp.append((a, k))
+            if plot_fit: 
+                _ = self._plot.im_func(None, res['x'], res['y'], 
+                        ax=ax, color=l.get_color(), label='', marker=None)        
         return temp 
     
     def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
@@ -1199,12 +1220,12 @@ class ResultDB(OrderedDict, AnalysisTools):
                 x, y = zip(*rec)
         else: 
             raise 
-        if kwargs.get('yfunc'): 
-            y = kwargs['yfunc'](y)
         
         if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
             x = [a[1] for a in x]
         x = np.array(x); y=np.array(y)
+        if kwargs.get('yfunc'): 
+            y = kwargs['yfunc'](y)
         if r is None: 
             if r_min is None: 
                 r_min = x[0]
@@ -1263,18 +1284,21 @@ class ResultDB(OrderedDict, AnalysisTools):
             return fig 
     
     def plot_field_vs_iter(self, attr_name, sh, x_min=None, x_max=None, period=None, sh_min=None, sh_max=None, 
-            yfunc=None, sub_key_list=None, rec_getter=None, rec_getter_args=None,    **kwargs): 
+            xfunc=None, yfunc=None,  sub_key_list=None, rec_getter=None, fault_tol=True,  rec_getter_args=None,    **kwargs): 
         db = self
         sub_key_list = sub_key_list if sub_key_list is not None else []
-        fault_tolerant = kwargs.get('fault_tolerant', 1)
+        
         info = kwargs.get('info', 0)
         #sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
         #aa=list(self.alpha_list)
-        not_found=[]
+        
         data=[]
         try:
             ts=db.get_time_serials(sh)#[:100]
-            x=ts.N.values.astype(int)
+            if hasattr(ts, 'N'):  # idmrg 
+                x=ts.N.values.astype(int)
+            else: 
+                x =  ts.index.astype(int) 
             #y=ts.EE.values.astype(float)
             y=ts[attr_name].values.astype(float)
             if x_min or x_max or period:
@@ -1282,15 +1306,14 @@ class ResultDB(OrderedDict, AnalysisTools):
                 x=x[arg]
                 y=y[arg]
         except Exception as err:
-            if fault_tolerant: 
-                print err 
+            if fault_tol: 
+                if info>0: 
+                    print err 
                 return 
             else: 
                 print sh, self.parpath 
                 raise 
- 
-        if not_found and info: 
-            print 'not_found is ', not_found
+
         #x, y=zip(*data)       
         
         #if 1:  # some per field specific treatment
@@ -1299,6 +1322,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         #x = np.asarray(x); y=np.asarray(y)
         if yfunc is not None : 
             y = yfunc(y)
+        if xfunc is not None: 
+            x = xfunc(x)
         kwargs.update(xlabel='N', ylabel=attr_name)
         fig = self._plot(x, y, **kwargs) 
         if kwargs.get('return_fig'): 

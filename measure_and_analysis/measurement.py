@@ -98,6 +98,12 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
                 return 
             else: 
                 raise 
+        except Exception as err:  # 比如 pickle file danmaged, exist but still cant load 
+            if fault_tolerant: 
+                warnings.warn('error'  + str(err))
+                return 
+            else: 
+                raise 
     
     if rdb is None: 
         rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
@@ -277,7 +283,9 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         rdb['algorithm'] = 'mps'
         dmax=rdb.get_dim_max_for_N(shape[0])
         dmax = max(dmax, shape[1])
-        rdb['dim_max'] = dmax 
+        if not rdb.has_key('dim_max'): 
+            rdb['dim_max'] = {}
+        rdb['dim_max'][shape[0]] = dmax 
         print_vars(vars(),  ['dmax'])
         
     elif algorithm == 'idmrg': 
