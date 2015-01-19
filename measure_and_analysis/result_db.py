@@ -188,7 +188,11 @@ class AnalysisTools(object):
             axes= axes[0]
         return fig, axes 
 
-    def add_ax(self, fig, direct='h'): 
+    def add_ax(self, fig=None, direct='h'): 
+        if fig is None: 
+            fig, ax=self.fig_layout()
+            return ax 
+            
         n = len(fig.axes)
         if direct == 'h' : 
             fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
@@ -267,8 +271,6 @@ class AnalysisTools(object):
             labels, loc, val = None, None, None 
         return labels, loc, val 
     
-        
-
 #class ResultDB_Utills
 
 class ResultDB(OrderedDict, AnalysisTools): 
@@ -287,6 +289,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         
     """
     DBNAME = 'RESULT.pickle.db'   #fix the name of db
+    AUTO_UPDATE = True 
+    VERSION = 1.0 
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
             use_local_storage=False, create_empty_db=False,  upgrade=0):
         """
@@ -300,8 +304,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         self.path = '/'.join([parpath , dbname])
         
         #self.inited = False  
-        self.version = version
-        self.upgrade = upgrade
        
         if 0: 
             if not os.path.exists(parpath):  # these lines are useful, when merge remote db
@@ -327,14 +329,31 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         if algorithm is not None : 
             self['algorithm'] = algorithm
-        version = self.version if self.version is not None else self.get('version')
-        self.version = version
-        self['version'] = version
-        if version  == 1.0: 
+        
+        #if 0:
+        #    self.version = version
+        #    self.upgrade = upgrade
+        #   
+        #    version = self.version if self.version is not None else self.get('version')
+        #    self.version = version
+        #    self['version'] = version
+         
+        if not self.has_key('version'): 
+            self['version'] = self.VERSION 
+
+        if self['version'] >= 1.0:  
             self.fetch_easy = self.fetch_easy_new
-        if self.upgrade: 
-            if self.get('version') != 1.0 and dbname != self.dbname + '.new': 
-                self.upgrade()
+
+        if 0: 
+            if upgrade:   #this will be deprecated 
+                if self.get('version') <= 1.0 and dbname != self.dbname + '.new': 
+                    self.upgrade_db()
+                    
+        elif self.AUTO_UPDATE:
+            
+            if self['version']<self.VERSION: 
+                print 'update_db_structure ... '
+                self.update_db_structure()
     
     def __repr__(self): 
         return self.keys()
@@ -1207,17 +1226,23 @@ class ResultDB(OrderedDict, AnalysisTools):
         if algorithm  ==  'idmrg':  
             rec = rec.items()
             x, y = zip(*rec)
+        
         elif algorithm == 'mera' : 
             x, y = zip(*rec)
             
-        #elif self['algorithm'] == 'vmps':
-        elif 'mps' in algorithm: 
-            #if field_name == 'correlation' : 
+        elif 'mps' in algorithm:   #elif self['algorithm'] == 'vmps':
             if field_name in ['correlation', 'correlation_bond'] : 
-                r0, r1, y = zip(*rec)
-                x = np.array(r1) - np.array(r0)
+                if 0:   #version 1.0 
+                    r0, r1, y = zip(*rec)
+                    x = np.array(r1) - np.array(r0)
+                else: 
+                    x, y = zip(*rec)
+                    r0 = key_list[-1]
+                    x = np.asarray(x)
+                    x -= r0 
             else: 
                 x, y = zip(*rec)
+                
         else: 
             raise 
         
@@ -1350,7 +1375,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             fig, ax=self._plot(range(count, count+y.size), y, **kwargs)
             kwargs['ax'] = ax 
             count += y.size  
-    
     
     @staticmethod 
     def fit_lines(ax, func): 
@@ -2009,7 +2033,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                 print 'rec not found for sh = %s'%(sh, )
         print tabulate(data, headers=['']+[str(i) for i in [0,0,0,0,0,1,1,1,2]], tablefmt='simple')
 
-    def upgrade(self): 
+    def upgrade_db(self): 
         #field_list = ['central_charge', 'scaling_dim', 'correlation', 'correlation_extra', 'entanglement_entropy', 'entanglement_spectrum', 'magnetization', 'entanglement_brute_force_6', 'energy']
         if 0: 
             print self.__version__; exit()
@@ -2086,8 +2110,9 @@ class ResultDB_mera(ResultDB):
     
 
 class ResultDB_vmps(ResultDB): 
+    VERSION = 1.01 
     def __init__(self, parpath,  **kwargs): 
-        kwargs['version'] = 1.0
+        #kwargs['version'] = 1.0    #version should det
         kwargs.update(algorithm='mps')
         ResultDB.__init__(self, parpath,  **kwargs)
     
@@ -2108,7 +2133,34 @@ class ResultDB_vmps(ResultDB):
             raise 
             #print a, path
         return eng
-  
+    
+    def update_db_structure(self): 
+        pass 
+        if self['version'] == 1.0:   
+            def update_correlation(db):
+                if db['version']==1.0:
+                    ss= db.get_shape_list()
+                    for sh in ss: 
+                        rec=db.fetch_easy('correlation', sh)
+                        if rec is None: 
+                            continue 
+                        db.insert('correlation_bac_v1.0', sh, -1, rec)
+                        rec_new=OrderedDict()
+                        for dir in rec.keys():
+                            temp=rec[dir]
+                            rec_new[dir]=OrderedDict()
+                            x0, x1,y=zip(*temp)
+                            r=zip(x0, x1)
+                            r=map(lambda x:x[1]-x[0], r)
+                            
+                            r0=x0[0]
+                            rec_new[dir][r0]=zip(x1, y)
+
+                        db.insert('correlation', sh, -1, rec_new)
+                    db['version']=1.01
+                    db.commit(info=1)    
+            update_correlation(self)
+                
 
 class ResultDB_idmrg(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -2126,7 +2178,7 @@ class ResultDB_idmrg(ResultDB):
     
     backup_fn_gen =shape_to_backup_fn 
    
-    def calc_EE(self, S):
+    def calc_EE_del(self, S):
         res=None
         #lam = S['Lambda']
         lam = S['lam']
@@ -2138,6 +2190,47 @@ class ResultDB_idmrg(ResultDB):
         res = EE
         return res 
     
+    def calc_correlation(self, sh, direct,  r_list=None, info=0):
+        """
+            this is a temporary workaround 
+        """
+        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
+        r_list = [] if r_list is None else r_list 
+        res_old = self['correlation'][sh][-1][direct]
+        r_old = res_old.keys()
+        r_list = set(r_list)-set(r_old)
+        
+        if len(r_list)>0: 
+            state = self.load_S(sh)
+            temp=func(state, [direct], r_list=[r[1] for r in r_list])
+        
+            res_old.update(temp[direct])
+            res_new = OrderedDict(sorted(res_old.items()))
+            self['correlation'][sh][-1][direct] = res_new 
+            
+            self.commit(info=info)
+        
+    def calc_correlation_bond(self, sh,  r_list=None, info=0):
+        """
+            this is a temporary workaround 
+        """
+        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation_bond  as func 
+        from merapy.common_util import set_num_of_threads 
+        set_num_of_threads(4) 
+        r_list = [] if r_list is None else r_list 
+        res_old = self['correlation_bond'][sh][-1]
+        r_old = res_old.keys()
+        r_list = set(r_list)-set(r_old)
+        
+        if len(r_list)>0: 
+            state = self.load_S(sh)
+            temp=func(state, r_list=[r[1] for r in r_list])
+        
+            res_old.update(temp)
+            res_new = OrderedDict(sorted(res_old.items()))
+            self['correlation_bond'][sh][-1] = res_new 
+            self.commit(info=info)
+ 
     def get_energy(self, dim): 
         try:
             path='/'.join([self.parpath, 'N=0-D=%d.pickle'%dim])
@@ -2283,28 +2376,20 @@ class TestResultDB(unittest.TestCase):
         which='fit_correlation'
         args['which'] = which
         parpath = args['dir'] 
-        self.db = ResultDB(parpath)
-        
         parpath_idmrg = '/home/zhli/mps_backup_folder/run-heisbg-long/alpha=2.0'
+        if 0: 
+            self.db = ResultDB(parpath)
         
     
     def test_temp(self): 
         
-        from projects_mps.run_long_sandvik.analysis import an_idmrg_lam 
-
-
-        #aa= [(a, 0.) for a in [3.0, 2.5,  2.3, 2.1,  1.9, 1.8, 1.7, 1.5, 1.4,  1.0, 0.5]]
-        a = np.arange(10)
-        b=ResultDB.filter_array.im_func(None, a, x_min=3, period=4)
-        print_vars(vars(),  ['a', 'b'])
-        xx=an_idmrg_lam.an_test.an_start_from_largeD_symm
-        db= xx[(1.5, 1.0, 'D%d'%(100))]
-        ts=db.get_time_serials((0, 100))
-        a = ts['N'].values[: 50]
-        b=xx.filter_array(a, x_min=None, period=5)  
-        print_vars(vars(),  ['a', 'b'])
-
-        
+        from projects_mps.run_long_sandvik.analysis import an_vmps 
+        xx = an_vmps.an_main_symm 
+        dir = xx.alpha_parpath_dict[1.3,  0.8]
+        print_vars(vars(),  ['dir'])
+        db = ResultDB_vmps(dir)
+        print_vars(vars(),  ['db'])
+        print db['version']
     
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]

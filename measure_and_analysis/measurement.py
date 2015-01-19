@@ -44,7 +44,7 @@ try:
 except ImportError as err: 
     print err 
 
-from merapy.measure_and_analysis.result_db import ResultDB, FIELD_NAME_LIST
+from merapy.measure_and_analysis.result_db import ResultDB, ResultDB_vmps, ResultDB_mera, ResultDB_idmrg, FIELD_NAME_LIST
 from merapy.decorators import timer
 
 
@@ -105,8 +105,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             else: 
                 raise 
     
-    if rdb is None: 
-        rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
+    
     allow_measure = True
     if 1: 
         #if isinstance(S, MPS): 
@@ -126,7 +125,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             all_func = all_mera
             if S.model == 'wigner_crystal': 
                 db_version = 1.0 
-                #rdb['version'] = 1.0
             else: 
                 db_version = None
            
@@ -146,11 +144,13 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             if db_version is None: 
                 k = (dim, layer, iter)
                 if not rdb.has_key(k): 
+                    raise NotImplemented   #后来修改了，不支持，需要再修改
                     rdb[k] = OrderedDict()
             
             shape = (dim, layer)
             corr_param = dict(direction=None, force_update=False, distance_max=10**4)
-        
+            rdb_class= ResultDB_mera 
+            
         elif algorithm == 'mps': 
             #field = ['energy', 'correlation']
             field = all_mps.DEFAULT_FIELD_LISt 
@@ -170,6 +170,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             iter = -1
             #field = ['correlation']
             corr_param = {}
+            rdb_class= ResultDB_vmps
             
         elif algorithm == 'idmrg': 
             field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
@@ -210,7 +211,8 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             shape =  N, D 
             iter = -1
             corr_param = {}
-   
+            rdb_class= ResultDB_idmrg 
+            
     which = which if which is not None else field 
     if exclude_which is not None: 
         print  'exlude this from measure_S: ', exclude_which
@@ -229,7 +231,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     func_name_map = {
             'calc_scaling_dim_2site': 'scaling_dim', 
             }
-    
    
     #------------------------  start measureing ----------------------------------------#
     
@@ -238,6 +239,11 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         print '\tstate is not converged. not allowing measure. return None'
         return 
 
+    if rdb is None: 
+        #rdb = ResultDB(parpath, dbname=None, version=db_version, use_local_storage=use_local_storage)
+        #rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
+        rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+        
     failed_list = []
     for w in which: 
         ff = func[w]
@@ -275,11 +281,11 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         print '\tenergy...     done'
         if db_version is None: 
             rdb[k].update({'energy': S.energy})
-        elif db_version == 1.0:
+        elif db_version >= 1.0:
             if not rdb.has_key('energy'): rdb.add_key_list(['energy', shape])
             rdb['energy'][shape] = S.energy_record
     elif algorithm == 'mps': 
-        rdb['version'] = 1.0
+        #rdb['version'] = db_version 
         rdb['algorithm'] = 'mps'
         dmax=rdb.get_dim_max_for_N(shape[0])
         dmax = max(dmax, shape[1])
@@ -289,7 +295,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         print_vars(vars(),  ['dmax'])
         
     elif algorithm == 'idmrg': 
-        rdb['version'] = 1.0
+        #rdb['version'] = db_version 
         rdb['algorithm'] = 'idmrg'
         #temp=all_idmrg.config(S)
         #rdb.update(temp)
@@ -482,28 +488,6 @@ def measure_all_by_dispy(arg_group):
         print job.stdout, job.stderr , job.id, job.exception  
     cluster.stats()
 
-def measure_all_by_brokest(arg_group,  host=None, servers=None): 
-    warnings.warn('deprecate this. use run_many directly instead ')
-    servers = servers if servers is not None  else []
-    from mypy.brokest.brokest import queue, run_many 
-    if 0:  #single server  
-        if host is None: 
-            host = '222.195.73.191'
-            host = '127.0.0.1'
-            host = '210.45.121.30' 
-        for i in arg_group: 
-            print  i['path']
-            print queue(measure_S, args=tuple(), kwargs=i, host=host, port=90900)
-    
-    else:  
-        if servers is None: 
-            servers= [('210.45.121.242', 90900), ('210.45.121.30', 90900)]
-        tasks = []
-        for i in arg_group: 
-            tasks.append((measure_S, ( ), i))
-        
-        run_many(tasks, servers)        
-
  
 def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **kwargs): 
     arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
@@ -513,8 +497,9 @@ def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **
     else: 
         from mypy.brokest.brokest import queue, run_many 
         if servers is None: 
-            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in ['node93', 'node97', 'node99', 'node98', 'node96']]
-            servers=[('qtg7502', 90900),  ('qtg7501', 90900) ]
+            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
+                    ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
+            servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
             servers.extend(sugon_list)
             
         tasks = [(measure_S, (), i) for i in arg_group] 
@@ -584,7 +569,7 @@ class TestIt(unittest.TestCase):
     
     def test_vmps_all(self): 
         from vmps.minimize import VMPS 
-        v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath='temp')
+        v = VMPS.example(N=20, D=5, model_name='ising', backup_parpath='temp')
         v.minimize()
         dir = v.backup_parpath
         args = self.args.copy()
@@ -593,6 +578,8 @@ class TestIt(unittest.TestCase):
                 algorithm='mps', mera_shape_list='all')
         #measure_all( **args )
         measure_all( **args )
+        db = ResultDB_vmps(dir)
+        print_vars(vars(),  ['db'])
     
     def test_idmrg_all(self): 
         if 0: 
@@ -636,14 +623,6 @@ class TestIt(unittest.TestCase):
         if 1: 
             measure_all_by_dispy(res)
     
-    def test_measure_all_by_brokest(self): 
-        dir = '/home/zhli/backup_tensor_dir/run-ising/vmps/main/h=1.0/'
-        args= make_measure_many_args(dir, 'all', 
-                use_local_storage=1, 
-                sh_max=(200, 20), which=['correlation'], force=1)
-        
-        measure_all_by_brokest(args[2: 10])
-        #measure_S(**args[2])
         
     def tearDown(self): 
         pass
@@ -708,7 +687,6 @@ if __name__ == '__main__':
                 #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
                 #'test_measure_all_by_dispy', 
-                #'test_measure_all_by_brokest'
         
             ]
             for a in add_list: 
