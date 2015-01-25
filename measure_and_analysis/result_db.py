@@ -118,6 +118,10 @@ class AnalysisTools(object):
                 func = lambda x, k, a: k*np.log(x) + a 
             elif func == 'power' : 
                 func = lambda x, k, eta: k*x**(eta)
+        if not isinstance(x, np.ndarray): 
+            x = np.asarray(x)
+        if not isinstance(y, np.ndarray): 
+            y = np.asarray(y)
         param, cov = curve_fit(func, x, y)    
        
         return func, param, cov 
@@ -350,7 +354,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                     self.upgrade_db()
                     
         elif self.AUTO_UPDATE:
-            
             if self['version']<self.VERSION: 
                 print 'update_db_structure ... '
                 self.update_db_structure()
@@ -749,7 +752,7 @@ class ResultDB(OrderedDict, AnalysisTools):
             fetch_easy for version 1.0
         """
         if mera_shape[1] == 'max' : 
-            mera_shape = mera_shape[0], self['dim_max'][mera_shape[0]]
+            mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
         
         try: 
             rec = self[field_name][mera_shape]
@@ -877,68 +880,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         else: 
             return None
             
-    def get_correlation(self, sh, which='correlation_extra',direct='pm', 
-            r_min=None,  r_max=None, period=None,  field_surfix=None, fault_tolerant=1, info=0): 
-        algorithm = self.get('algorithm')
-        if which == 'correlation_mixed' and self.get('algorithm') != 'mps': 
-            rec1=self.fetch_easy('correlation_extra', mera_shape=sh, sub_key_list=[direct])
-            rec2=self.fetch_easy('correlation', mera_shape=sh, sub_key_list=[direct, 'val'])
-            if rec1 is None  or rec2 is None: 
-                #not_found.append(sh)
-                return None
-            if 0:    
-                if log_scale: 
-                    x1, y1=zip(*rec1[0:-1:2])
-                else: 
-                    x1, y1 = zip(*rec1);  
-            period  = period if period is not None else 2
-            x1, y1=zip(*rec1[0:-1:period])
-            x2, y2 = zip(*rec2)
-            x1 = np.array(x1);    x2 = np.array(x2);  
-            y1 = np.array(y1);    y2 = np.array(y2);  
-            x1_max = np.max(x1);  temp = np.where(x2>x1_max) 
-            x = np.append(x1, x2[temp])
-            y = np.append(y1, y2[temp])
-        else: 
-            if which == 'correlation': 
-                key_list = [direct, 'val'] 
-                period  = period if period is not None else 1                
-            elif which == 'correlation_extra': 
-                key_list = [direct] 
-                period  = period if period is not None else 2            
-            if self.get('algorithm') == 'mps': 
-                which = 'correlation'  #not extra
-                key_list = [direct]
-                period = period if period is not None else 2            
-            rec = self.fetch_easy(which, mera_shape=sh, sub_key_list=key_list, 
-                    fault_tolerant=fault_tolerant, info=info-1) 
-            if rec is None: 
-                return None
-            
-            if algorithm == 'mps': 
-                rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
-            elif algorithm == 'idmrg' : 
-                #rec = map(lambda x: (x[1]-x[0], rec[x]), rec.iteritems()) 
-                rec = map(lambda k, v: (k[1]-k[0], v), rec.iteritems()) 
-                
-            
-            x,y=zip(*rec[0:-1:period])
-        
-        if direct == 'pm':   
-            y=np.array(y);  y=y*2;  
-        
-        x = np.array(x)
-        a = 0
-        b = -1
-        if r_min is not None : 
-            temp = np.where(x>=r_min);  a=temp[0][0]
-        if r_max is not None : 
-            temp = np.where(x<=r_max);  b=temp[0][-1] + 1
-            x = x[a: b]
-            y = y[a: b]
-           
-                   
-        return x, y    
 
     def get_correaltion_exact(self, r, model_name=None, which='shastry'): 
         """
@@ -1208,7 +1149,54 @@ class ResultDB(OrderedDict, AnalysisTools):
         if kwargs.get('return_fig'): 
             return fig 
     
-    def plot_field_vs_length(self, field_name, sh, key_list=None,
+    def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, data=None, xfunc=None, yfunc=None, rec_getter=None,  **kwargs): 
+        if 1: 
+            sub_key_list = sub_key_list if sub_key_list is not None else []
+            info = kwargs.get('info', 0)
+            #sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
+            #aa=list(self.alpha_list)
+            not_found=[]
+            if data is None:  
+                data=[]
+                for sh in sh_list:  
+                    if rec_getter is None: 
+                        rec=self.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
+                    else: 
+                        rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
+                        rec = rec_getter(self, sh, **rec_getter_args)
+                    size = sh[0]
+                    if rec is not None:
+                        data.append((size, rec))
+                    else:
+                        not_found.append(size)
+            
+            try: 
+                x,y=zip(*data)        
+                x = np.asarray(x)
+                x = 1./x 
+            except ValueError as err: 
+                print err
+                #x, y = np.nan, np.nan 
+                return 
+        
+        if yfunc is not None : 
+            y = yfunc(y)
+        
+        #xx.fit_lines_many(ax, lambda k,c, x : k*x+c, add_text=1, plot_fit=0)
+        kwargs.update(xlabel='1/N', ylabel=field_name, return_ax=1)
+        fig, ax = self._plot(x, y, **kwargs) 
+        
+        tic= ax.get_xticks().tolist()[1:]
+        tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
+        _ = ax.set_xticklabels([0]+tic)    
+        
+        #ax.set_xlim(0, 0.05); 
+        #ax.set_ylim(0)
+        
+        if kwargs.get('return_fig'): 
+            return fig 
+    
+    def plot_field_vs_position(self, field_name, sh, key_list=None,
             r=None, r_min=None,  r_max=None,  period=1, fit=None, plot_fit=False, 
             fault_tolerant=1, rec_getter=None, rec_getter_args=None, 
             info=0, **kwargs): 
@@ -1307,6 +1295,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         if kwargs.get('return_fig'): 
             return fig 
+    
+    plot_field_vs_length = plot_field_vs_position
     
     def plot_field_vs_iter(self, attr_name, sh, x_min=None, x_max=None, period=None, sh_min=None, sh_max=None, 
             xfunc=None, yfunc=None,  sub_key_list=None, rec_getter=None, fault_tol=True,  rec_getter_args=None,    **kwargs): 
@@ -2095,7 +2085,8 @@ class ResultDB_mera(ResultDB):
     def __init__(self, parpath,  **kwargs): 
         kwargs.update(algorithm='mera')
         ResultDB.__init__(self, parpath,  **kwargs)
-    
+
+
     @staticmethod
     def shape_to_backup_fn(sh,  nqn=None):
         layer, dim = sh
@@ -2108,9 +2099,72 @@ class ResultDB_mera(ResultDB):
     def parse_fn(self, fn):
         return System.backup_fn_parse(fn)
     
+    def get_correlation(self, sh, which='correlation_extra', direct='pm', 
+            r_min=None,  r_max=None, period=None,  field_surfix=None, fault_tolerant=1, info=0): 
+        algorithm = self.get('algorithm')
+        if which == 'correlation_mixed' and self.get('algorithm') != 'mps': 
+            rec1=self.fetch_easy('correlation_extra', mera_shape=sh, sub_key_list=[direct])
+            rec2=self.fetch_easy('correlation', mera_shape=sh, sub_key_list=[direct, 'val'])
+            if rec1 is None  or rec2 is None: 
+                #not_found.append(sh)
+                return None
+            period  = period if period is not None else 2
+            x1, y1=zip(*rec1[0:-1:period])
+            x2, y2 = zip(*rec2)
+            x1 = np.array(x1);    x2 = np.array(x2);  
+            y1 = np.array(y1);    y2 = np.array(y2);  
+            x1_max = np.max(x1);  temp = np.where(x2>x1_max) 
+            x = np.append(x1, x2[temp])
+            y = np.append(y1, y2[temp])
+        else: 
+            if which == 'correlation': 
+                key_list = [direct, 'val'] 
+                period  = period if period is not None else 1                
+            elif which == 'correlation_extra': 
+                key_list = [direct] 
+                period  = period if period is not None else 2            
+            if self.get('algorithm') == 'mps': 
+                which = 'correlation'  #not extra
+                key_list = [direct]
+                period = period if period is not None else 2            
+            rec = self.fetch_easy(which, mera_shape=sh, sub_key_list=key_list, 
+                    fault_tolerant=fault_tolerant, info=info-1) 
+            if rec is None: 
+                return None
+            
+            if algorithm == 'mps': 
+                #rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
+                x, y = zip(*rec)
+                r0 = key_list[-1]
+                x = np.asarray(x)
+                x -= r0 
+                
+            elif algorithm == 'idmrg' : 
+                #rec = map(lambda x: (x[1]-x[0], rec[x]), rec.iteritems()) 
+                rec = map(lambda k, v: (k[1]-k[0], v), rec.iteritems()) 
+                
+            
+            x,y=zip(*rec[0:-1:period])
+        
+        if direct == 'pm':   
+            y=np.array(y);  y=y*2;  
+        
+        x = np.array(x)
+        a = 0
+        b = -1
+        if r_min is not None : 
+            temp = np.where(x>=r_min);  a=temp[0][0]
+        if r_max is not None : 
+            temp = np.where(x<=r_max);  b=temp[0][-1] + 1
+            x = x[a: b]
+            y = y[a: b]
+           
+                   
+        return x, y    
+    
 
 class ResultDB_vmps(ResultDB): 
-    VERSION = 1.01 
+    VERSION = 1.02 
     def __init__(self, parpath,  **kwargs): 
         #kwargs['version'] = 1.0    #version should det
         kwargs.update(algorithm='mps')
@@ -2136,7 +2190,7 @@ class ResultDB_vmps(ResultDB):
     
     def update_db_structure(self): 
         pass 
-        if self['version'] == 1.0:   
+        if self['version'] < 1.01:   
             def update_correlation(db):
                 if db['version']==1.0:
                     ss= db.get_shape_list()
@@ -2160,7 +2214,56 @@ class ResultDB_vmps(ResultDB):
                     db['version']=1.01
                     db.commit(info=1)    
             update_correlation(self)
+        
+        if self['version'] <  1.02: 
+            sh_list = self.get_shape_list()
+            for sh in sh_list: 
+                N = sh[0]
+                self.get_dim_max_for_N(N)  
+            self['version'] = 1.02
+            self.commit(info=1)
+        
+    def get_correlation(self, sh, key_list=None, 
+            r_min=None,  r_max=None, period=None,  field_surfix=None, fault_tolerant=1, info=0): 
+        algorithm = self.get('algorithm')
+        
+        if 1: 
+            if self.get('algorithm') == 'mps': 
                 
+                period = period if period is not None else 2            
+            rec = self.fetch_easy('correlation', mera_shape=sh, sub_key_list=key_list, 
+                    fault_tolerant=fault_tolerant, info=info-1) 
+            if rec is None: 
+                return None
+            
+            if algorithm == 'mps': 
+                #rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
+                x, y = zip(*rec)
+                r0 = key_list[-1]
+                x = np.asarray(x)
+                x -= r0 
+                
+            elif algorithm == 'idmrg' : 
+                #rec = map(lambda x: (x[1]-x[0], rec[x]), rec.iteritems()) 
+                rec = map(lambda k, v: (k[1]-k[0], v), rec.iteritems()) 
+            
+            x, y=zip(*rec[0:-1:period])
+        
+        if key_list[0] == 'pm':   
+            y=np.array(y);  y=y*2;  
+        
+        x = np.array(x)
+        a = 0
+        b = -1
+        if r_min is not None : 
+            temp = np.where(x>=r_min);  a=temp[0][0]
+        if r_max is not None : 
+            temp = np.where(x<=r_max);  b=temp[0][-1] + 1
+            x = x[a: b]
+            y = y[a: b]
+                   
+        return x, y    
+
 
 class ResultDB_idmrg(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -2242,13 +2345,13 @@ class ResultDB_idmrg(ResultDB):
             #print a, path
         return eng
     
-    def get_correlation(self, sh, which='correlation_extra', direct='xx', 
+    def get_correlation(self, sh, key_list=None, 
             r=None, r_min=None, field_surfix=None, r_max=None, period=None, fault_tolerant=1,  info=0): 
 
         which = 'correlation'  #not extra
         if field_surfix is not None : 
             which  = '_'.join([which, field_surfix])
-        key_list = [direct]
+        key_list = ['zz'] if key_list is None else key_list 
         period = period if period is not None else 2            
         rec = self.fetch_easy(which, mera_shape=sh, sub_key_list=key_list, 
                 fault_tolerant=fault_tolerant, info=info-1) 
@@ -2259,7 +2362,7 @@ class ResultDB_idmrg(ResultDB):
         rec = rec.items()
         x, y = zip(*rec)
     
-        if direct == 'pm':   
+        if key_list[0] == 'pm':   
             y=np.array(y);  y=y*2;  
         if self.get('algorithm')=='idmrg' : 
             x = [a[1] for a in x]
@@ -2286,10 +2389,7 @@ class ResultDB_idmrg(ResultDB):
                         a = ii 
                         break 
                     ii += 1  
-            #print r
-            #print  x[: 20]
-            #print arg
-            #raise 
+     
         x = x[arg]
         y = y[arg]
                    
@@ -2382,15 +2482,24 @@ class TestResultDB(unittest.TestCase):
         
     
     def test_temp(self): 
-        
+        print '*'*80
         from projects_mps.run_long_sandvik.analysis import an_vmps 
-        xx = an_vmps.an_main_symm 
-        dir = xx.alpha_parpath_dict[1.3,  0.8]
-        print_vars(vars(),  ['dir'])
-        db = ResultDB_vmps(dir)
-        print_vars(vars(),  ['db'])
-        print db['version']
-    
+        xx=an_vmps.an_main_symm
+        if 1:
+            fig, ax=xx.fig_layout()
+            aa=xx.filter_alpha()
+            
+            sh=(60, 'max')
+            sub_key_list=['EE',sh[0]//2, 1]
+            xx.plot_field_vs_alpha_3d('entanglement_entropy', aa, sh=sh, sub_key_list=sub_key_list, #make_up='v',  
+                                    clim=(0,3),  xparam='g', yparam='alpha', ax=ax, fault_tolerant=0, info=0)
+            fig.delaxes(fig.axes[1])
+            ax.invert_yaxis()
+
+        db = xx[1.0, 0.9]
+        print_vars(vars(),  ['db["dim_max"]'])
+        xx.show_fig()
+
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
         dic=ResultDB.make_nested_dict(a, val='love')
