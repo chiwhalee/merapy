@@ -78,8 +78,8 @@ def measure_decorator(result_db_class=None):
     return inner
 
 def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
-        fault_tolerant=1, num_of_threads=None,  param=None, check_convergence=True, field_surfix='', 
-        rdb=None, **kwargs):
+        fault_tolerant=1, num_of_threads=None,  param=None, check_convergence=True, 
+        field_surfix='', rdb=None, **kwargs):
     """
         todo: 
             parpath should be deprecated, extract it from path instead  
@@ -104,7 +104,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
                 return 
             else: 
                 raise 
-    
     
     allow_measure = True
     if 1: 
@@ -214,6 +213,8 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             rdb_class= ResultDB_idmrg 
             
     which = which if which is not None else field 
+    if isinstance(which, str): 
+        which = [which]
     if exclude_which is not None: 
         print  'exlude this from measure_S: ', exclude_which
         which = [i for i  in which if i not in exclude_which]
@@ -222,7 +223,9 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     
     if param is None:     
         param = {f: {} for f in which}
+        corr_param.update(param.get('correlation', {}))
         param.update(correlation=corr_param)
+        
     else: 
         for f in which: 
             if not param.has_key(f):  
@@ -285,17 +288,19 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             if not rdb.has_key('energy'): rdb.add_key_list(['energy', shape])
             rdb['energy'][shape] = S.energy_record
     elif algorithm == 'mps': 
-        #rdb['version'] = db_version 
+       
         rdb['algorithm'] = 'mps'
-        dmax=rdb.get_dim_max_for_N(shape[0])
-        dmax = max(dmax, shape[1])
         if not rdb.has_key('dim_max'): 
             rdb['dim_max'] = {}
+        if rdb.has_key_list(['dim_max', shape[0]]): 
+            dmax = rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
+            dmax = max(dmax, shape[1])
+        else: 
+            dmax = shape[1]
         rdb['dim_max'][shape[0]] = dmax 
-        print_vars(vars(),  ['dmax'])
         
     elif algorithm == 'idmrg': 
-        #rdb['version'] = db_version 
+        
         rdb['algorithm'] = 'idmrg'
         #temp=all_idmrg.config(S)
         #rdb.update(temp)
@@ -304,80 +309,9 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     if len(failed_list)>0: 
         print 'failed_list: %s'%failed_list
 
-#now I undertand that, this func in fact realized a decorator for individal measure funcs!!
-def measure_all_bac(dir_list, mera_shape_list, sh_min=None, sh_max=None,  
-        which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
-        fault_tolerant=1, recursive=False,  **kwargs): 
-    
-    use_local_storage = kwargs.get('use_local_storage', False)
-    path_not_found = []
-    __mera_shape_list = mera_shape_list
-    if isinstance(which, str): 
-        which = [which]
-    if isinstance(dir_list, str): 
-        dir_list = [dir_list]
-    if recursive: 
-        dir_list_1 = list(dir_list)
-        dir_list = []
-        for dir in dir_list_1: 
-            temp=mera_backup_dir_finder(root=dir)
-            dir_list.extend(temp)
-        #print 'recursively found these dirs %s'%(dir_list, )
-    aaa = os.path.abspath(dir_list[0])
-    if 'mera' in aaa: 
-        algorithm = 'mera'
-    elif 'mps' in aaa and 'idmrg' not in aaa: 
-        algorithm = 'mps'
-    elif 'idmrg' in aaa:
-        algorithm = 'idmrg'
-    else: 
-        raise
-    
-    for dir in dir_list: 
-        #fori d in dim_list: 
-        if mera_shape_list  == 'all': 
-            db = ResultDB(dir, algorithm=algorithm)
-            __mera_shape_list = db.get_mera_shape_list(sh_max=sh_max, sh_min=sh_min)
-        
-        for sh in __mera_shape_list: 
-            if algorithm  == 'mera':  
-                #sh[1] -= 1  #layer->layer-1
-                sh = list(sh);  sh[1] -= 1
-                fn = System.backup_fn_gen(*sh)
-            elif algorithm == 'mps': 
-                N, D = sh
-                fn = "N=%d-D=%d.pickle"%(N, D)
-            elif algorithm == 'idmrg': 
-                N, D = sh
-                fn = "N=%d-D=%d.pickle"%(N, D)
-            else: 
-                raise 
-                
-            path = '/'.join([dir, fn])
-            try: 
-                S= load(path)
-            except IOError as err: 
-                path_not_found.append(path)
-                if fault_tolerant: 
-                    continue
-                else: 
-                    raise
-            except Exception as e: 
-                path_not_found.append((path, e))
-                if fault_tolerant: 
-                    continue 
-                else: 
-                    raise
-            
-            measure_S(S, dir, which, exclude_which=exclude_which, param=param, force=force, 
-                    fault_tolerant=fault_tolerant, field_surfix=field_surfix,  **kwargs)
-            
-    if len(path_not_found)>0: 
-        print 'path_not_found is %s'%path_not_found
-
 def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,  
-        which=None, exclude_which=None, param=None,  force=0, field_surfix='', 
-        fault_tolerant=1, algorithm=None,  recursive=False,  **kwargs): 
+        which=None, exclude_which=None,  force=0, field_surfix='', 
+        fault_tolerant=1, algorithm=None, recursive=False,  **kwargs): 
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
     __sh_list = sh_list
@@ -429,27 +363,31 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     
     res= []
     for path in path_list:    
-        if 0: 
-            try: 
-                S= load(path)
-            except IOError as err: 
-                path_not_found.append(path)
-                if fault_tolerant: 
-                    continue
-                else: 
-                    raise
-            except Exception as e: 
-                path_not_found.append((path, e))
-                if fault_tolerant: 
-                    continue 
-                else: 
-                    raise
+
         temp = dict(path=path, which=which, exclude_which=exclude_which, 
             fault_tolerant=fault_tolerant, field_surfix=field_surfix, 
             force=force, **kwargs)  
         res.append(temp) 
     
     return res 
+
+#now I undertand that, this func in fact realized a decorator for individal measure funcs!!
+def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **kwargs): 
+    arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
+    if not use_dist_comp: 
+        for i in arg_group: 
+          
+            measure_S(**i)
+    else: 
+        from mypy.brokest.brokest import queue, run_many 
+        if servers is None: 
+            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
+                    ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
+            servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
+            servers.extend(sugon_list)
+            
+        tasks = [(measure_S, (), i) for i in arg_group] 
+        run_many(tasks, servers, info=kwargs.get('info', 1), try_period=kwargs.get('try_period', 1))
 
 def compute(n):
     import time, socket
@@ -487,23 +425,6 @@ def measure_all_by_dispy(arg_group):
         # job.stdout, job.stderr, job.exception, job.ip_addr, job.end_time
         print job.stdout, job.stderr , job.id, job.exception  
     cluster.stats()
-
- 
-def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **kwargs): 
-    arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
-    if not use_dist_comp: 
-        for i in arg_group: 
-            measure_S(**i)
-    else: 
-        from mypy.brokest.brokest import queue, run_many 
-        if servers is None: 
-            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
-                    ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
-            servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
-            servers.extend(sugon_list)
-            
-        tasks = [(measure_S, (), i) for i in arg_group] 
-        run_many(tasks, servers, info=kwargs.get('info', 1))
 
 def mera_backup_dir_finder(root): 
     res=[]
@@ -627,6 +548,21 @@ class TestIt(unittest.TestCase):
     def tearDown(self): 
         pass
     
+    def test_temp(self): 
+        from vmps.minimize import VMPS 
+        v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath='temp')
+        v.minimize()
+        dir = v.backup_parpath
+        args = self.args.copy()
+        which = ['correlation']
+        args.update(dir_list=[dir],which=which, force=0, show=0, 
+                param = {'correlation': {'i0': 1}}, 
+                algorithm='mps', mera_shape_list='all')
+        #measure_all( **args )
+        measure_all( **args )
+        db = ResultDB_vmps(dir)
+        print_vars(vars(),  ['db["correlation"]'])
+        
 
 
 if __name__ == '__main__':
@@ -681,9 +617,9 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                #'test_temp', 
+                'test_temp', 
                 #'test_measure_all', 
-                'test_vmps_all', 
+                #'test_vmps_all', 
                 #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
                 #'test_measure_all_by_dispy', 
