@@ -103,16 +103,17 @@ def get_ip_address():
         
     return ip
 
-def ssh_connect(hostname): 
+def ssh_connect(hostname, info=0, timeout=None): 
     """
         a convenient func
     """
     
+    timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
     if hostname in ['QTG-WS1-ubuntu', 'local']: 
-        args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=100)
+        args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=timeout)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
-        args= dict(host='211.86.151.102', user='zhihuali', connect_timeout=3600*4)
+        args= dict(host='211.86.151.102', user='zhihuali', connect_timeout=timeout)
     else: 
         raise ValueError(hostname)
     
@@ -120,7 +121,8 @@ def ssh_connect(hostname):
     msg = 'try ssh connecting from %s to %s'%(ip, args['host'])
     ssh = SshMachine(**args)
     msg +=   '  ... succeed'
-    print(msg)
+    if info>0: 
+        print(msg)
     return ssh
 
 @contextmanager
@@ -174,6 +176,27 @@ def rpyc_conn_local_zerodeploy():
         server.close()
         ssh.close()
 
+@contextmanager
+def rpyc_conn_local(): 
+    try: 
+        #EOFError:
+        get_ip_address()
+        
+        ssh = ssh_connect('local')
+        conn = rpyc.classic.ssh_connect(ssh, 17013)
+        yield conn
+    finally:
+        try: 
+            conn.close()
+        except : 
+            #raise Exception('connection failed')
+            print 'rpyc connection failed'
+            pass
+        try: 
+            ssh.close() 
+        except: 
+            print 'ssh connection failed'
+            pass
 
 @contextmanager
 def rpyc_conn(hostname, conn_type='classic',  port=17013): 
@@ -218,29 +241,6 @@ def rpyc_conn_easy(hostname, conn_type='classic',  port=17013):
         raise 
     return conn 
    
-
-
-@contextmanager
-def rpyc_conn_local(): 
-    try: 
-        #EOFError:
-        get_ip_address()
-        
-        ssh = ssh_connect('local')
-        conn = rpyc.classic.ssh_connect(ssh, 17013)
-        yield conn
-    finally:
-        try: 
-            conn.close()
-        except : 
-            #raise Exception('connection failed')
-            print 'rpyc connection failed'
-            pass
-        try: 
-            ssh.close() 
-        except: 
-            print 'ssh connection failed'
-            pass
 
 def rpyc_load(path, use_local_storage=False, compress=False): 
     if not use_local_storage: 
@@ -371,7 +371,7 @@ if __name__ == '__main__' :
     pass
     #nose.run()
 
-    if 0: #examine
+    if 1: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
