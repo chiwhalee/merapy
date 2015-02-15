@@ -15,6 +15,8 @@ from plumbum import SshMachine
 import rpyc
 from rpyc.utils.zerodeploy import DeployedServer
 import socket 
+import warnings 
+
 
 from merapy.utilities import load, save 
 
@@ -307,13 +309,29 @@ def rpyc_save(path, obj, use_local_storage=False, compress=False):
         #    out = conn.builtin.open(path, 'wb')
         #    conn.modules.cPickle.dump(obj, out)
         #    out.close()
-        with rpyc_conn_local() as conn: 
-            #save_local = conn.modules['merapy.utilities'].save 
-            #save_local(obj, path, compress=compress)
-            s=save( obj, path=None, compress=compress, as_str=1)
-            f = conn.builtin.open(path, 'wb')
-            f.write(s)
-            f.close()
+        try: 
+            with rpyc_conn_local() as conn: 
+                #save_local = conn.modules['merapy.utilities'].save 
+                #save_local(obj, path, compress=compress)
+                s=save( obj, path=None, compress=compress, as_str=1)
+                f = conn.builtin.open(path, 'wb')
+                f.write(s)
+                f.close()
+
+        except EOFError:  #最近遇到一个错误，rpyc_save write 有有可能会timeout，所以绕弯改成用scp
+            warnings.warn('save failed using rpyc, trying again with os.system scp...')
+            temp_dir =tempfile.mkdtemp()
+            fn = os.path.basename(path)
+            temp_path = '/'.join([temp_dir, fn])
+            rpyc_save(temp_path, obj, compress=compress)
+            cmd = 'scp %s %s@%s:%s'%(temp_path, LOCAL_USERNAME, LOCAL_IP, path)
+            print cmd 
+            a = os.system(cmd)
+            if a != 0: 
+                raise 
+        except Exception: 
+            raise 
+           
             
            
 def replace_func(func, conn): 
@@ -326,7 +344,10 @@ class DistCompute(object):
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass
+    
     def test_temp(self): 
+        path = '/tmp/bbbbbbbbbbbbbbbbbbbb'
+        rpyc_save(path, {1: 2}, use_local_storage=1)
         pass
     
     def test_save_and_load(self): 
@@ -371,7 +392,7 @@ if __name__ == '__main__' :
     pass
     #nose.run()
 
-    if 1: #examine
+    if 0: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -379,8 +400,8 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #TestIt('test_temp'), 
-           TestIt('test_save_and_load'), 
+           TestIt('test_temp'), 
+           #TestIt('test_save_and_load'), 
            #TestIt('test_rpyc_conn_local'), 
            #TestIt('test_rpyc_conn_local_zero'), 
         ]
