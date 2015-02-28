@@ -58,6 +58,9 @@ class OrderedDictLazy(OrderedDict):
         self.result_db_args= result_db_args
     
     def __getitem__(self, a): 
+        if isinstance(a, float): 
+            a = (a, )
+        
         if not self.has_key(a): 
             #if self.alpha_parpath_dict.has_key(a): 
             #    p = self.alpha_parpath_dict[a]
@@ -191,7 +194,7 @@ class Analysis(AnalysisTools):
         #x=np.array(x)
         return x
 
-    def get_run_failure(self, sh, aa_all=None): 
+    def get_run_failure_bac(self, sh, aa_all=None): 
         aa_all=self.alpha_list if aa_all is None else aa_all 
         #aa_fail=OrderedDict()
         #DD=[16, 20, 40, 80]
@@ -204,6 +207,14 @@ class Analysis(AnalysisTools):
         aa_fail=list(set(aa_all)- set(temp))
         aa_fail.sort()
         return aa_fail 
+    
+    def get_run_failure(self, sh, aa=None, resolution=None): 
+        resolution = resolution if resolution is not None  else self.default_resolution 
+        aa = aa if aa is not None else self.alpha_list 
+        for p in self.param_list: 
+            temp = self.get_param_range(p, aa) 
+            print_vars(vars(),  ['p, temp'])
+       
 
     def alpha_filter_bac(self, a=None, h=None, V=None):  #, **kwargs): 
         """
@@ -221,7 +232,7 @@ class Analysis(AnalysisTools):
                 aa = filter(lambda x: x[i]== x_val, aa)
         return aa
     
-    def filter_alpha(self, aa=None, sh=None, field=None, param_list=None, 
+    def filter_alpha(self, aa=None, sh=None, field=None, no_field=None, param_list=None, 
             surfix='', resolution='default', **kwargs): 
         """
             from wigner_crystal 
@@ -240,6 +251,7 @@ class Analysis(AnalysisTools):
             #surfix = None means all surfix; surfix = '' means empty surfix 
             if surfix == '' : 
                 aa = filter(lambda x: not isinstance(x[-1], str),  aa)
+
             else:
                 aa = filter(lambda x: x[-1]==surfix,  aa)
         
@@ -268,14 +280,16 @@ class Analysis(AnalysisTools):
             if not hasattr(resolution, '__iter__'): 
                 resolution = float(resolution)
                 #use a[: num_param] is because there may be surfix a = (1.0, 'a') then 'a' is excluded
-                func=lambda a:   all(map(lambda x:  (x/resolution).is_integer(), a[: num_param]))
+                func=lambda a:   all(map(lambda x:  round(x/resolution, 8).is_integer(), a[: num_param]))
             else: 
                 ran = xrange(num_param)
                 #round is needed, because for example 0.3/0.1 = 02999999999996 
                 func=lambda a:   all(map(lambda i:  round((a[i]/resolution[i]), 8).is_integer(), ran))
-                aa = filter(func, aa)
             
-        aa = map(lambda a:  a if len(a)>1 else a[0], aa)
+            aa = filter(func, aa)
+            
+        #aa = map(lambda a:  a if len(a)>1 else a[0], aa)
+        
         if sh is not None : 
             def func(a): 
                 dir = self.alpha_parpath_dict[a]
@@ -290,8 +304,17 @@ class Analysis(AnalysisTools):
             else: 
                 func = lambda a: self[a].fetch_easy(field, sh)
             aa = filter(func, aa) 
+        
+        if no_field is not None: 
+            assert field is None, 'field and no_field cant be given together'
+            temp = self.filter_alpha(aa, field=no_field, resolution=resolution,  
+                    sh=sh, surfix=surfix,  param_list=param_list, **kwargs)
+            
+            aa = list(set(aa)-set(temp))
+            aa.sort()
             
         return aa
+    
     alpha_filter = filter_alpha  
     
     def alpha_list_to_grid(self, aa=None, k1=0, k2=1):
@@ -351,11 +374,13 @@ class Analysis(AnalysisTools):
                 if signiture in name: 
                     
                     split = name.split('-')
-                    if len(split)>1: #more than one param 
-                        alpha = tuple([parse(a) for a in split])
-                    else: 
-                        #alpha = str(parse(split[0]))
-                        alpha = parse(split[0])
+                    #if len(split)>1: #more than one param 
+                    #    alpha = tuple([parse(a) for a in split])
+                    #else: 
+                    #    alpha = parse(split[0])
+                    
+                    #no mater one or many param,  use tuple as key uniformly 
+                    alpha = tuple([parse(a) for a in split])
                     
                     if surfix != '': 
                         alpha = str(alpha) + '-' +  surfix
@@ -398,7 +423,7 @@ class Analysis(AnalysisTools):
         print  '%s not found in self.sub_analysis %s'%(s, self.sub_analysis)
     
     def set_rdb_dict(self, alpha_list=None, create_empty_db=1, 
-            db_version=None, algorithm=None, reload_db_class=1, info=0):        
+            db_version=None, algorithm=None, reload_db_class=0, info=0):        
         if reload_db_class: 
             module_name = self.result_db_class.__module__
             module = importlib.import_module(module_name)
@@ -475,13 +500,16 @@ class Analysis(AnalysisTools):
         res = mera_backup_dir_finder(root)
     
     def measure_all(self, aa=None, sh_list='all', sh_min=None, sh_max=None,  which=None, 
-            exclude_which=None, force=0, fault_tolerant=1, recursive=False,  **kwargs): 
+            exclude_which=None, force=0, fault_tolerant=1, use_dist_comp=0, recursive=False,  **kwargs): 
         if aa is None: 
             aa = self.alpha_list
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
+        if use_dist_comp: 
+            kwargs['use_local_storage'] = 1 
         measure_all_orig(dir_list, mera_shape_list=sh_list, sh_min=sh_min, sh_max=sh_max, which=which, 
-                exclude_which = exclude_which, fault_tolerant = fault_tolerant, force=force, **kwargs)
+                exclude_which = exclude_which, use_dist_comp=use_dist_comp,  
+                fault_tolerant = fault_tolerant, force=force, **kwargs)
         self.set_rdb_dict(aa)
     
     def measure_two(self, alpha_paier_list): 
@@ -589,15 +617,6 @@ class Analysis(AnalysisTools):
         msg += ''.join([tab, 'sh_list: \n']) 
         msg += ''.join([tab, '\t', str(sh_list_max), '\n'])
         
-        if 0: # del this   #extract dir surfix 
-            temp = map(lambda x: x[-1] if isinstance(x[-1], str) else '', alpha_list)
-            surfix_list = list(set(temp))
-            if '' in surfix_list: 
-                surfix_list.remove('')
-            surfix_list.sort()
-            msg += ''.join([tab, 'surfix_list: \n']) 
-            msg += ''.join([tab, '\t', str(surfix_list), '\n'])
-            
         if 1: #extract dir surfix 
             surfix_list = self.get_surfix_list(alpha_list, force=1)
             msg += ''.join([tab, 'surfix_list: \n']) 
@@ -1031,7 +1050,7 @@ class Analysis(AnalysisTools):
             if clim is not None : 
                 cb.set_clim(clim)
         elif which_plot == 'surface': 
-            temp = ['interpolation']
+            temp = ['interpolation', 'extent', 'aspect']  #these are not accepted by plot_surface 
             for t in temp: 
                 style_dic.pop(t)
             ax.plot_surface(XX, YY, data, rstride=1, cstride=1, **style_dic)
@@ -1057,7 +1076,8 @@ class Analysis(AnalysisTools):
         return res 
         
     def plot_field_vs_alpha(self, field_name, aa=None, sh_list=None,
-            sub_key_list=None, alpha_db_map=None, rec_getter=None,  rec_getter_args=None, 
+            sub_key_list=None, alpha_db_map=None, empty_to_nan=True,  
+            rec_getter=None,  rec_getter_args=None, 
             param_name=None,  fault_tolerant=1,  **kwargs): 
         
         aa = aa if aa is not None else list(self.alpha_list)
@@ -1067,8 +1087,9 @@ class Analysis(AnalysisTools):
         sh_max = kwargs.get('sh_max')
         sh_list = sh_list if sh_list is not None else self.get_shape_list_all(aa=aa, sh_min=sh_min, sh_max=sh_max)
         sh_list = reversed(sorted(sh_list))
-        #sub_key_list = sub_key_list if sub_key_list is not None else []
+        
         alpha_db_map = alpha_db_map if alpha_db_map is not None else {}
+        rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
         info = kwargs.get('info', 0)
         algorithm = self.algorithm 
         if algorithm == 'vmps':
@@ -1076,7 +1097,7 @@ class Analysis(AnalysisTools):
                 field_name += '_entropy' 
         
         if param_name is None: 
-            if 1: 
+            if 0:  #del this  
                 # 这么做需要保证aa只有一个轴是不同的
                 temp = zip(*aa)
                 i = None   # some times aa is empty 
@@ -1090,7 +1111,7 @@ class Analysis(AnalysisTools):
                     param_name = None 
                     param_name_id = None 
             else: 
-                param_name, param_id = AlphaList.identify_param.im_func(self, aa)
+                param_name, param_name_id = AlphaList.identify_param.im_func(self, aa)
         else: 
             param_name_id = self.param_list.index(param_name)
         
@@ -1098,6 +1119,8 @@ class Analysis(AnalysisTools):
         not_found=[]
         for sh in sh_list: 
             #print 'sss', sh 
+            if algorithm == 'vmps' and field_name == 'entanglement_entropy' : 
+                sub_key_list = kwargs_orig.get('sub_key_list', ['EE', sh[0]//2, 1])
             data=[]
             for a in aa:
                 if alpha_db_map.has_key(a): 
@@ -1107,7 +1130,6 @@ class Analysis(AnalysisTools):
                 if rec_getter is None: 
                     rec=db.fetch_easy(field_name, sh, sub_key_list=sub_key_list, fault_tolerant=fault_tolerant)
                 else: 
-                    rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
                     rec = rec_getter(db, sh, **rec_getter_args)
                 
                 #if param_name is not None : 
@@ -1116,7 +1138,8 @@ class Analysis(AnalysisTools):
                 if rec is not None:
                     data.append((a1, rec))
                 else:
-                    data.append((a1, np.nan))
+                    if empty_to_nan: 
+                        data.append((a1, np.nan))
                     not_found.append(a)
                     
             if not_found and info>0: 
@@ -1132,18 +1155,25 @@ class Analysis(AnalysisTools):
             marker = kwargs_orig.get('marker', MARKER_CYCLE.next())
             kwargs.update(ylabel=field_name, return_ax=1, label=label, 
                     maker=marker, xlabel='$%s$'%param_name)
-            fig, ax = self._plot(x, y, **kwargs) 
-            
-            kwargs['fig'] = fig 
-            kwargs['ax'] = ax
+            try: 
+                fig, ax = self._plot(x, y, **kwargs) 
+                
+                kwargs['fig'] = fig 
+                kwargs['ax'] = ax
+            except Exception as err: 
+                #warnings.warn(str(err))
+                print err 
             
         if kwargs.get('return_fig'): 
             return fig 
     
     def plot_field_vs_alpha_3d(self, field_name, aa, sh, xparam, yparam, 
-           make_up=False, sub_key_list=None, **kwargs): 
+            rec_getter=None, rec_getter_args= None,  fault_tol=True, 
+           make_up=False, alpha_db_map=None,  sub_key_list=None, **kwargs): 
         info = kwargs.get('info', 0)
         aa = aa if aa is not None else self.alpha_list
+        alpha_db_map = alpha_db_map if alpha_db_map is not None else {}
+        rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
         xx = self.get_param_range(xparam, aa=aa)
         yy = self.get_param_range(yparam, aa=aa)
          
@@ -1168,8 +1198,17 @@ class Analysis(AnalysisTools):
         for a in aa: 
             x = a[p1]; y = a[p2]
             i = x_to_i[x]; j = y_to_j[y]
-            db = self[a]
-            rec = db.fetch_easy(field_name, sh, sub_key_list, info=0)
+            if alpha_db_map.has_key(a): 
+                db = alpha_db_map[a]
+            else: 
+                db=self[a]
+            
+            if rec_getter is None: 
+                rec=db.fetch_easy(field_name, sh, sub_key_list=sub_key_list, fault_tolerant=fault_tol)
+            else: 
+                rec = rec_getter(db, sh, **rec_getter_args)
+            #rec = db.fetch_easy(field_name, sh, sub_key_list, info=0)
+            
             if rec is not None : 
                 data[i, j] = rec 
             else:
@@ -1485,7 +1524,7 @@ class Analysis(AnalysisTools):
             fig=self._plot(x, y, **kwargs)
         if kwargs.get('return_fig'): 
             return fig
-   
+        
     def get_energy_err(self):
         """
             one record is like this:
@@ -1612,7 +1651,7 @@ class Analysis(AnalysisTools):
         
     def get_correlation(self, dir='xx', alpha=None, mera_shape=None, info=0): 
         """
-        mera_shape: a tuple (dim, layer)
+            mera_shape: a tuple (dim, layer)
         
         """
         #if dir  == 'xx': dir = 'pm'
@@ -2058,31 +2097,38 @@ class Analysis(AnalysisTools):
         if kwargs.get('return_fig'): 
             return fig 
    
-    def plot_entanglement_spectrum(self, aa, sh, which_level=None, num_level=None, param_name=None, **kwargs): 
+    def plot_entanglement_spectrum(self, aa, sh, sub_key_list=None,  which_level=None, 
+            num_level=None, param_name=None, **kwargs): 
         num_level= 20  if num_level is None else num_level
-        #sh=(0,80)
-        #ax=fig.axes[i]
+        #if sub_key_list is None: 
+        #    pass 
+        if self.algorithm == 'vmps': 
+            which = 'entanglement_entropy'
+        elif self.algorithm == 'idmrg' : 
+            which = 'entanglement_spectrum'
+        else: 
+            raise ValueError(self.algorithm)
         if which_level is not None : 
             num_level = len(which_level)
         ES=np.ndarray((len(aa), num_level))
         for j,a in enumerate(aa):
             db=self[a]
-            es=db.fetch_easy('entanglement_spectrum', sh)
+            es=db.fetch_easy(which, sh, sub_key_list)
             if es is not None:
                 if which_level is not None : 
                     ES[j]=es[which_level]
                 else: 
-                    ES[j,:]=es[:num_level]
+                    #len(es) may smaller than num_level 
+                    ES[j,:len(es)]=es[:num_level]
             else:
                 ES[j,:]=np.nan
-        if param_name is not None : 
-            ii=self.param_list.index(param_name)
-            x=[_[ii] for _ in aa]
-        else: 
-            x = aa 
-        #ax.plot(x, -np.log10(ES), '-o', )
-        self._plot(x, -np.log10(ES), **kwargs)
         
+        param_name, param_id = AlphaList.identify_param.im_func(self, aa) 
+        x=[_[param_id] for _ in aa]
+        kwargs.update(return_ax=1)
+        fig, ax=self._plot(x, -np.log10(ES), **kwargs)
+        ax.set_xlabel(param_name)
+        ax.set_ylabel('ES')
         
 
     def plot_magnetization(self, aa=None, sh=None, direct='z', pos=0, **kwargs): 
@@ -2215,18 +2261,6 @@ class Analysis(AnalysisTools):
         self._plot(x, y, marker='.', **kwargs)
         #ax.plot(x, y, '.-')  
     
-    def fit_lines(ax, func=None, fit_range=None):
-        for l in ax.lines:
-            l.set_linewidth(0)
-        lines=list(ax.lines)
-        for l in lines:
-            pass
-        l.set_linewidth
-    
-    @staticmethod 
-    def fit_curve(x, y, func, fit_range=None): 
-        param, cov = curve_fit(func, x, y)    
-        
     def reload_class(self, info=1): 
         module_name =self.__class__.__module__
         #print module_name
@@ -2246,14 +2280,13 @@ class Analysis(AnalysisTools):
         
         ax.set_aspect(1)
 
-    def plot_fidelity(self, aa, sh_list=None, delta=0.1, **kwargs):  
-        
+    def plot_fidelity(self, aa, sh_list=None, delta=0.1, use_dist_comp=0, **kwargs):  
         sh_list = sh_list if sh_list is not None  else self.get_shape_list_all()
         
         kwargs_orig = kwargs.copy()
         param_name, param_id = AlphaList.identify_param.im_func(self, aa) 
         for sh in sh_list:
-            data=self.calc_fidelity(aa[: -1], sh, delta=delta) #aa[: -1] means not calc fidelity for the last point 
+            data=self.calc_fidelity(aa[: -1], sh, delta=delta, force=kwargs_orig.get('force', False), use_dist_comp=use_dist_comp) #aa[: -1] means not calc fidelity for the last point 
             if data:
                 label = kwargs_orig.get('label', str(sh))
                 kwargs.update(return_ax=1, label=label, 
@@ -2277,7 +2310,6 @@ class Analysis(AnalysisTools):
                 bx.set_xscale('log')
                 bx.set_ylim(1.35, 1.72)
 
-
     def disregister_job(self, aa): 
         with rpyc_conn('local', 'service', 17012) as conn:     
             for a in aa:
@@ -2288,7 +2320,7 @@ class Analysis(AnalysisTools):
                 except Exception as err:
                     print err, 'param=', a 
 
-    def calc_fidelity(self, aa, sh, delta=0.1, force=0, fault_tolerant=1, **kwargs):
+    def calc_fidelity(self, aa, sh, delta=0.1, force=0, use_dist_comp=False, fault_tolerant=1, **kwargs):
         xx = self 
         if self.algorithm == 'vmps' : 
             from vmps.measure_and_analysis.measurement_vmps import fidelity
@@ -2322,7 +2354,19 @@ class Analysis(AnalysisTools):
                         db2 = xx[a2]
                         s1 = db1.load_S(sh)
                         s2 = db2.load_S(sh)
-                        ff=fidelity(s1, s2)
+                        print_vars(vars(),  ['a2'])
+                        if not use_dist_comp: 
+                            ff=fidelity(s1, s2)
+                        else: 
+                            from mypy.brokest.brokest import queue
+                            #print s1.keys(), s1['mpo'].additional_info.keys()
+                            #raise 
+                            s1['mpo'].additional_info.pop('J_power_fit')
+                            s2['mpo'].additional_info.pop('J_power_fit')
+                            ff = queue(fidelity, args=(s1, s2), kwargs={},  querry=0, host='210.45.121.30', port=90903)
+                            #ff = queue(fidelity, args=(s1, s2), querry=0, port=90900)
+                            print_vars(vars(),  ['a2', 'ff'])
+                            ff = ff[1]
                         db1.insert(which, sh, iter=-1, sub_key_list=[a2], val=ff)
                         db2.insert(which, sh, iter=-1, sub_key_list=[a1], val=ff)
                         db_change_list.extend([a1, a2])
@@ -2346,7 +2390,11 @@ class Analysis(AnalysisTools):
                     
                     s1=xx[a1].load_S(sh)
                     s2=xx[a2].load_S(sh)
-                    f=fidelity(s1, s2)    
+                    if not use_dist_comp: 
+                        f=fidelity(s1, s2)    
+                    else: 
+                        pass 
+                    #print_vars(vars(),  ['f'])
                     data.append((a1[param_name_id], f))
                 except Exception as err:
                     pass
@@ -2439,7 +2487,7 @@ class Analysis_idmrg(Analysis):
         #super(Analysis_idmrg, self).__init__(**kwargs)
     
     
-    def calc_EE(self, S):
+    def calc_EE_del(self, S):
         #lam = S['Lambda']
         lam = S['lam']
         U, s, V = np.linalg.svd(lam)
@@ -2495,9 +2543,8 @@ class Analysis_idmrg(Analysis):
             print 'update file ... %s succeeded'%(path[-30: ])
    
 
-class TestAnalsysi(unittest.TestCase): 
+class TestAnalsysis(unittest.TestCase): 
     def setUp(self): 
-       
         parpath = '/home/zhli/backup_tensor_dir/run-ising/mera/ternary/z2-symm/scale-invar/'
         path = '/home/zhli/backup_tensor_dir/run-long-better/mera/alpha=1.5/8.pickle'
         
@@ -2512,32 +2559,13 @@ class TestAnalsysi(unittest.TestCase):
     
     def test_temp(self): 
         from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
-        
-        if 1:
-            xx=an_idmrg_psi.an_test.an_FL
-            sursur= xx.get_surfix_list()
-            for sur in sursur:
-                aa=xx.filter_alpha(surfix=sur)
-                ss=xx.get_shape_list_all(aa=aa)
-                print ss, sur, aa, sursur
-                if not ss:
-                    continue
-                    
-                fig, ax=xx.fig_layout(len(ss), size=(2.5, 2)); i=0
-                for sh in ss:
-                    ax=fig.axes[i]; i+=1
-                    aa=xx.filter_alpha(sh=sh)
-                    xx.plot_alpha_2d(aa, ax=ax, title=sh, rotate=1)
-                fig.text(0, 1, xx.name, fontdict={'size':20, 'color':'r'})
-        xx.show_fig()
-        
-    def test_temp(self): 
-        from merapy.run_ising.analysis import an_vmps 
-        xx = an_vmps.an_main 
-        #print xx.alpha_list 
-        print xx.scan_alpha(xx.local_root)
-        
+        #xx=an_idmrg_lam.an_main_symm 
+        xx = an_vmps.an_main_symm 
+        aa=xx.filter_alpha(sh=(60, 100), alpha=1.0,  no_field='entanglement_entropy', resolution=None)
+        print_vars(vars(),  ['aa'])
 
+        xx.show_fig()
+    
     def test_preprocess_alpha_list(self): 
         an = self.an
         aa = [0.5, 0.3, 1.0, ]
@@ -2604,19 +2632,17 @@ if __name__ == '__main__':
                 db = ResultDB(parpath=a)
                 db.upgrade()
             
-       
-        
         if 0:
             unittest.main()
             
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               TestAnalsysi('test_temp'), 
-               #TestAnalsysi('test_preprocess_alpha_list'), 
-               #TestAnalsysi('test_plot_energy'), 
-               #TestAnalsysi('test_plot_magnetization'), 
-               #TestAnalsysi('test_alpha_list_operations'), 
+               TestAnalsysis('test_temp'), 
+               #TestAnalsysis('test_preprocess_alpha_list'), 
+               #TestAnalsysis('test_plot_energy'), 
+               #TestAnalsysis('test_plot_magnetization'), 
+               #TestAnalsysis('test_alpha_list_operations'), 
                
             ]
             for a in add_list: 

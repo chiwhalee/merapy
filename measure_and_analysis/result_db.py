@@ -15,6 +15,7 @@ import itertools
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
+import socket 
 
 import importlib
 from matplotlib.lines import Line2D
@@ -45,7 +46,45 @@ if 1:
     from matplotlib.lines import Line2D
     #print Line2D.marker
     marker_cycle = itertools.cycle(Line2D.markers)
-    MARKER_LIST = [ 'D', 'o',  'd',  'x', '*','+','^', '>', '.', '<', 'h']
+    ## for reference 
+    {
+         None: 'nothing',
+         0: 'tickleft',
+         1: 'tickright',
+         2: 'tickup',
+         3: 'tickdown',
+         4: 'caretleft',
+         5: 'caretright',
+         6: 'caretup',
+         7: 'caretdown',
+         '': 'nothing',
+         ' ': 'nothing',
+         '*': 'star',
+         '+': 'plus',
+         ',': 'pixel',
+         '.': 'point',
+         '1': 'tri_down',
+         '2': 'tri_up',
+         '3': 'tri_left',
+         '4': 'tri_right',
+         '8': 'octagon',
+         '<': 'triangle_left',
+         '>': 'triangle_right',
+         'D': 'diamond',
+         'H': 'hexagon2',
+         'None': 'nothing',
+         '^': 'triangle_up',
+         '_': 'hline',
+         'd': 'thin_diamond',
+         'h': 'hexagon1',
+         'o': 'circle',
+         'p': 'pentagon',
+         's': 'square',
+         'v': 'triangle_down',
+         'x': 'x',
+         '|': 'vline'} 
+
+    MARKER_LIST = [ 'o', 's', 'd',  'x', '*','+', 'D', '^',  '>', '.', '<', 'h']  #s=squre
     MARKER_CYCLE = itertools.cycle(MARKER_LIST)
     #COLOR_LIST = ['gold', 'hotpink', 'firebrick', 'indianred', 'yellow', 'mistyrose', 'darkolivegreen', 'olive', 'darkseagreen', 'pink', 'tomato', 'lightcoral', 'orangered', 'navajowhite', 'lime', 'palegreen', 'darkslategrey', 'greenyellow', 'burlywood', 'seashell', 'mediumspringgreen', 'fuchsia', 'papayawhip', 'blanchedalmond', 'chartreuse', 'dimgray', 'black', 'peachpuff', 'springgreen', 'aquamarine', 'white', 'orange', 'lightsalmon', 'darkslategray', 'brown', 'ivory', 'dodgerblue', 'peru', 'darkgrey', 'lawngreen', 'chocolate', 'crimson', 'forestgreen', 'slateblue', 'lightseagreen', 'cyan', 'mintcream', 'silver', 'antiquewhite', 'mediumorchid', 'skyblue', 'gray', 'darkturquoise', 'goldenrod', 'darkgreen', 'floralwhite', 'darkviolet', 'darkgray', 'moccasin', 'saddlebrown', 'grey', 'darkslateblue', 'lightskyblue', 'lightpink', 'mediumvioletred', 'slategrey', 'red', 'deeppink', 'limegreen', 'darkmagenta', 'palegoldenrod', 'plum', 'turquoise', 'lightgrey', 'lightgoldenrodyellow', 'darkgoldenrod', 'lavender', 'maroon', 'yellowgreen', 'sandybrown', 'thistle', 'violet', 'navy', 'magenta', 'dimgrey', 'tan', 'rosybrown', 'olivedrab', 'blue', 'lightblue', 'ghostwhite', 'honeydew', 'cornflowerblue', 'linen', 'darkblue', 'powderblue', 'seagreen', 'darkkhaki', 'snow', 'sienna', 'mediumblue', 'royalblue', 'lightcyan', 'green', 'mediumpurple', 'midnightblue', 'cornsilk', 'paleturquoise', 'bisque', 'slategray', 'darkcyan', 'khaki', 'wheat', 'teal', 'darkorchid', 'deepskyblue', 'salmon', 'darkred', 'steelblue', 'palevioletred', 'lightslategray', 'aliceblue', 'lightslategrey', 'lightgreen', 'orchid', 'gainsboro', 'mediumseagreen', 'lightgray', 'mediumturquoise', 'lemonchiffon', 'cadetblue', 'lightyellow', 'lavenderblush', 'coral', 'purple', 'aqua', 'whitesmoke', 'mediumslateblue', 'darkorange', 'mediumaquamarine', 'darksalmon', 'beige', 'blueviolet', 'azure', 'lightsteelblue', 'oldlace']
     COLOR_LIST = ['gold', 'red', 'green',  'yellow',  'olive',  'pink',
@@ -53,6 +92,8 @@ if 1:
             'silver',   'skyblue', 'gray',   'darkgreen',  'grey',  'violet',
             'blue', 'darkblue',  'purple',  ]
     COLOR_CYCLE = itertools.cycle(COLOR_LIST)
+    lines = ["-","--","-.",":"]
+    LINE_CYCLE= itertools.cycle(lines)
     
 
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
@@ -79,9 +120,10 @@ class AnalysisTools(object):
         r = x1 
         if r is None: 
             if x_min is None: 
-                x_min = x[0]
+                #x_min = -np.inf  #this is not compatible with period below
+                x_min = np.min(x)
             if x_max is None: 
-                x_max = x[-1]
+                x_max = np.inf 
             temp = np.logical_and(x>=x_min, x<=x_max)
             #if period != 1:
             if period is not None: 
@@ -126,31 +168,40 @@ class AnalysisTools(object):
        
         return func, param, cov 
     
-    def fit_line(self, line, func=None, x_min=None, x_max=None, period=None, x1=None):
+    def fit_line(self, line, func=None, x_min=None, x_max=None, x_extra=None, period=None, x1=None):
         x, y = line.get_data()
         x = x.astype(float); y=y.astype(float)
+
         arg = self.filter_array(x, x_min, x_max, period, x1)
         x = x[arg]
         y = y[arg]
-            
-        #param, cov = curve_fit(func, x, y)
         func_, param, cov = self.__class__.fit_curve(x, y, func)
+        if x_extra is not None:  # append one point for expolatating 
+            if x_extra>max(x): 
+                x = np.append(x, x_extra)
+            elif x_extra<min(x): 
+                x = np.insert(x, 0, x_extra)
+            else: 
+                raise ValueError
         y_fit = func_(x, *param)
         res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
         return res 
     
-    def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  add_text=False, fault_tol=True,  **kwargs): 
+    def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
+            add_text=False, fault_tol=True,  **kwargs): 
         ll = list(ax.lines)
         which_lines = range(len(ll)) if which_lines is None else which_lines 
         #for l in ax.lines[:len(aa)]:
         temp = []
-        fit_line_args= ['x_min', 'x_max', 'period', 'x1']
+        fit_line_args= ['x_min', 'x_max', 'x_extra', 'period', 'x1']
         fit_line_args= {a: kwargs.get(a) for a in fit_line_args}
         for i, l in enumerate(ll): 
             if not i in which_lines: 
                 continue 
-            
-            a=eval(l.get_label())#[0]
+            try: 
+                a=eval(l.get_label())#[0]
+            except: 
+                a = None 
             try: 
                 res=self.fit_line(l, func, **fit_line_args) 
                 #k, b= res['param']
@@ -160,7 +211,8 @@ class AnalysisTools(object):
                 if fault_tol: 
                     warnings.warn(str(err))
                 else: 
-                    raise 
+                    raise
+                continue 
                 
             if add_text: 
                 if func == 'EE_vs_D' : 
@@ -170,9 +222,15 @@ class AnalysisTools(object):
                 l.set_label(label)
             #temp.append((a, round(k, 2)))
             temp.append((a, k))
+            
             if plot_fit: 
+                args= kwargs.copy()
+                args.update(color=l.get_color(), marker=None)
+                #_ = self._plot.im_func(None, res['x'], res['y'], 
+                #        ax=ax, color=l.get_color(), label='', marker=None)        
                 _ = self._plot.im_func(None, res['x'], res['y'], 
-                        ax=ax, color=l.get_color(), label='', marker=None)        
+                        ax=ax, **args)
+                
         return temp 
     
     def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
@@ -274,7 +332,15 @@ class AnalysisTools(object):
         else: 
             labels, loc, val = None, None, None 
         return labels, loc, val 
-    
+
+    def hide_lines(self, ax, lines): 
+        for l in lines:
+            l.set_marker(None)
+            l.set_alpha(0)
+            l.set_label('')
+        ax.legend()        
+        
+
 #class ResultDB_Utills
 
 class ResultDB(OrderedDict, AnalysisTools): 
@@ -423,21 +489,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         os.system(cmd)
         msg = 'parpath not exist, so %s'%cmd
    
-    def has_key_list(self, key_list, info=1): 
-        temp = self
-        for k in key_list: 
-            #print 'kkk', k, key_list
-            if not hasattr(temp, 'has_key'):   # val of rec
-                if info>0: 
-                    print 'not has this key: %s'%(k, )
-                return False
-            if not temp.has_key(k): 
-                if info>0: 
-                    print 'not has this key: %s'%(k, )
-                return False
-            temp = temp[k]
-        
-        return True
 
     def has_shape(self, sh, system_class): 
         fn = system_class.shape_to_backup_fn.im_func(None, sh)
@@ -455,6 +506,22 @@ class ResultDB(OrderedDict, AnalysisTools):
                 rec = rec[t]
         return True
 
+    def has_key_list(self, key_list, info=1): 
+        temp = self
+        for k in key_list: 
+            #print 'kkk', k, key_list
+            if not hasattr(temp, 'has_key'):   # val of rec
+                if info>0: 
+                    print 'not has this key: %s'%(k, )
+                return False
+            if not temp.has_key(k): 
+                if info>0: 
+                    print 'not has this key: %s'%(k, )
+                return False
+            temp = temp[k]
+        
+        return True
+    
     @staticmethod 
     def make_nested_dict(key_list, old_dic=None,  val=None, info=0): 
         if old_dic is None: 
@@ -474,6 +541,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         else: 
             temp[last_key] = val
         return res 
+    
+    make_key_chain  =  make_nested_dict 
     
     def add_key_list(self, key_list, val=None, verbose=0): 
         if 1: 
@@ -495,7 +564,9 @@ class ResultDB(OrderedDict, AnalysisTools):
             temp=self.__class__.make_nested_dict(key_list[1: ], val=val)
             
             self[key_list[0]] = temp 
-                
+    
+    add_key_chain = add_key_list 
+    
     @classmethod
     def create_empty_db(cls, path, use_local_storage=False): 
         if 0: 
@@ -544,10 +615,13 @@ class ResultDB(OrderedDict, AnalysisTools):
         return N, D 
 
     def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None): 
-        fn = self.get_fn_list()
-        #print 'backup tensor files are %s'%fn
-        sh = [self.parse_fn(f) for f in fn]
-        #print sh; exit()
+        if socket.gethostname()=='QTG-WS1-ubuntu': 
+            fn = self.get_fn_list()
+            sh = [self.parse_fn(f) for f in fn]
+        else:
+            warnings.warn('host not  QTG-WS1-ubuntu, get_shape_list using energy rec')
+            sh = self.get('energy', {}).keys()
+       
         if N is not None:
             sh_min = (N, 0)
             sh_max = (N, np.inf)
@@ -751,10 +825,11 @@ class ResultDB(OrderedDict, AnalysisTools):
         """
             fetch_easy for version 1.0
         """
-        if mera_shape[1] == 'max' : 
-            mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
         
         try: 
+            if mera_shape[1] == 'max' : 
+                mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
+               
             rec = self[field_name][mera_shape]
             key = next(reversed(rec))  #last iter step
             rec = rec[key]
@@ -967,7 +1042,22 @@ class ResultDB(OrderedDict, AnalysisTools):
             return None 
         except Exception:
             raise 
-    
+
+    def _get_EE_ln_from_log2(self, sh, i, info=0):
+        """
+            temporary work around 
+        """
+        try:
+            qn_spect_dic=self.fetch_easy('entanglement_entropy', sh, ['spectrum', i, 1])
+            EE = 0.0
+            for v in qn_spect_dic.values(): 
+                EE += -np.sum(v*np.log(v))
+        except Exception as err:
+            if info>0: 
+                warnings.warn(str(err))
+            EE=None
+        return EE
+
     def delete_rec(self, key): 
         self.pop(key)
         self.commit()
@@ -1067,7 +1157,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         temp = line_style.keys()  + ['color']
         if kwargs.get('label') and kwargs.get('label_surfix'): 
-            kwargs['label'] = '-'.join([str(kwargs['label']), kwargs['label_surfix']])
+            kwargs['label'] = '-'.join([str(kwargs['label']), str(kwargs['label_surfix'])])
             
         dic_temp = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
         dic.update(dic_temp)
@@ -1127,6 +1217,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                 data.append((dim, rec))
             else:
                 not_found.append(dim)
+            
         if not_found and info: 
             print 'not_found is ', not_found
         #x, y=zip(*data)       
@@ -1197,16 +1288,17 @@ class ResultDB(OrderedDict, AnalysisTools):
             return fig 
     
     def plot_field_vs_position(self, field_name, sh, key_list=None,
-            r=None, r_min=None,  r_max=None,  period=1, fit=None, plot_fit=False, 
+            r=None, r_min=None,  r_max=None,  period=1, rec=None,  fit=None, plot_fit=False, 
             fault_tolerant=1, rec_getter=None, rec_getter_args=None, 
-            info=0, **kwargs): 
-        rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
-        if rec_getter is None: 
-            rec = self.fetch_easy(field_name, mera_shape=sh, sub_key_list=key_list, 
-                    fault_tolerant=fault_tolerant, info=info-1) 
-        else: 
-            rec = rec_getter(self, sh, **rec_getter_args)
-        
+            info=0, algorithm=None,  **kwargs): 
+        rec_getter_args = rec_getter_args if rec_getter_args is not None else {}
+        if rec is None: 
+            if rec_getter is None: 
+                rec = self.fetch_easy(field_name, mera_shape=sh, sub_key_list=key_list, 
+                        fault_tolerant=fault_tolerant, info=info-1) 
+            else: 
+                rec = rec_getter(self, sh, **rec_getter_args)
+            
         if rec is None: 
             return None
         algorithm = self['algorithm']
@@ -1223,7 +1315,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                 if 0:   #version 1.0 
                     r0, r1, y = zip(*rec)
                     x = np.array(r1) - np.array(r0)
-                else: 
+                else:
                     x, y = zip(*rec)
                     r0 = key_list[-1]
                     x = np.asarray(x)
@@ -2191,6 +2283,7 @@ class ResultDB_vmps(ResultDB):
     def update_db_structure(self): 
         pass 
         if self['version'] < 1.01:   
+            print 'update version from %s to %s'%(self['version'], 1.01)
             def update_correlation(db):
                 if db['version']==1.0:
                     ss= db.get_shape_list()
@@ -2216,6 +2309,7 @@ class ResultDB_vmps(ResultDB):
             update_correlation(self)
         
         if self['version'] <  1.02: 
+            print 'update version from %s to %s'%(self['version'], 1.02)
             sh_list = self.get_shape_list()
             for sh in sh_list: 
                 N = sh[0]
@@ -2293,16 +2387,20 @@ class ResultDB_idmrg(ResultDB):
         res = EE
         return res 
     
-    def calc_correlation(self, sh, direct,  r_list=None, info=0):
+    def calc_correlation(self, sh, direct,  r_list=None, force=False, info=0):
         """
             this is a temporary workaround 
         """
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
         r_list = [] if r_list is None else r_list 
-        res_old = self['correlation'][sh][-1][direct]
+        try: 
+            res_old = self['correlation'][sh][-1][direct]
+        except KeyError: 
+            self.add_key_list(['correlation', sh, -1, direct])
+            res_old = self['correlation'][sh][-1][direct]
         r_old = res_old.keys()
-        r_list = set(r_list)-set(r_old)
-        
+        if not force: 
+            r_list = set(r_list)-set(r_old)
         if len(r_list)>0: 
             state = self.load_S(sh)
             temp=func(state, [direct], r_list=[r[1] for r in r_list])
@@ -2455,6 +2553,42 @@ class ResultDB_idmrg(ResultDB):
         #ax.set_xlim(x[0], x[-1])
         if kwargs.get('return_ax'): 
             return fig, ax
+    
+    def calc_EE_from_finite_mps(self, sh, force=0, which_log='ln', fault_tol=1, info=0):
+        field = 'EE_from_finite_mps'
+        field = '_'.join([field, which_log])
+        rec=self.fetch_easy(field, sh)
+        if rec is None or force:
+            try:
+                state=self.load_S(sh, to_obj=1)
+                from vmps.mps import MPS
+                from vmps.idmrg_mcc import iDMRG_mcc
+                state.N_max=1
+                temp=iDMRG_mcc.generate_finite_mps_func.im_func(state)
+                mps = temp.to_normal_form('right', inplace=0)
+                #assert abs(abs(MPS.overlap(temp, mps)) -1.0 ) <= 1e-13
+                if 1:
+                    mmm = []
+                    d=state.mpo[1].shape[2]
+                    for A in mps: 
+                        a1, a2 = MPS.split_2sites(A, 'right', d=d) 
+                        mmm.extend([a1, a2])
+                    mps = MPS(temp.N*2, None, d, mps=mmm, symmetry=state.symmetry) 
+                import vmps.measure_and_analysis.measurement_vmps as mv
+                if which_log == 'ln':  
+                    rec=mv.entanglement_entropy_ln({'mps':mps})
+                elif which_log == 'log2': 
+                    rec=mv.entanglement_entropy({'mps':mps})
+                else: 
+                    raise ValueError(which_log)
+                    
+                rec = OrderedDict(rec['EE'])
+                self.insert(field, sh, -1, rec)
+                self.commit(info=info)
+            except:
+                if not fault_tol:
+                    raise 
+        return rec
 
 class ResultDB_idmrg_mcc(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -2483,21 +2617,24 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        from projects_mps.run_long_sandvik.analysis import an_vmps 
-        xx=an_vmps.an_main_symm
-        if 1:
-            fig, ax=xx.fig_layout()
-            aa=xx.filter_alpha()
-            
-            sh=(60, 'max')
-            sub_key_list=['EE',sh[0]//2, 1]
-            xx.plot_field_vs_alpha_3d('entanglement_entropy', aa, sh=sh, sub_key_list=sub_key_list, #make_up='v',  
-                                    clim=(0,3),  xparam='g', yparam='alpha', ax=ax, fault_tolerant=0, info=0)
-            fig.delaxes(fig.axes[1])
-            ax.invert_yaxis()
+        from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
 
-        db = xx[1.0, 0.9]
-        print_vars(vars(),  ['db["dim_max"]'])
+        xx=an_vmps.an_main_symm
+        fig, ax=xx.fig_layout(); ax.set_title('see also vmps')
+        aa = [(1.0,  0.0)]
+        sh=(100, 100)
+        for i, a in enumerate(aa):
+            db=xx[a]
+            db.plot_field_vs_length('entanglement_entropy', sh, key_list=['EE'],
+                                    label =a[0], 
+                rec_getter=xx.result_db_class._get_EE_ln_from_log2.im_func, 
+                rec_getter_args={'i':50}, 
+                                    #r_min=(sh[0])//5, 
+                                    r_min=0, 
+                                    period=1,  
+                                    #r_max=(sh[0])//3, 
+                                    r_max=40,
+                                    ax=ax)            
         xx.show_fig()
 
     def test_insert_and_fetch(self): 
