@@ -100,6 +100,9 @@ class TaskServer(Service):
     def exposed_get_pool(self): 
         return self.POOL 
     
+    def exposed_set_pool(self, pool): 
+        self.POOL = pool 
+    
     def exposed_operate_pool(self, func): 
         print 'oooooperate'
         func(self.POOL)
@@ -149,13 +152,13 @@ class TaskManager(object):
         #df = pd.DataFrame(pool).T 
         a=df[df['status']=='FAILED']
         for i in a.index:
-            msg = 'clear %d'%(i)
+            msg = 'clear %s'%(i, )
             print msg 
             self.root.disregister_job(i)
     
     def disregister_job(self, job_id_list): 
         for i in job_id_list: 
-            msg = 'disregister %d'%i
+            msg = 'disregister %s'%(i, )
             self.root.disregister_job(i)
             msg += '  ... done' 
             print msg 

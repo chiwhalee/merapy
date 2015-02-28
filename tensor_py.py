@@ -590,7 +590,7 @@ class iTensor(TensorBase):
            后面两种叫单位张量吗？ 
         
         """
-        totQN = QSp[0].QnClass.qn_id()
+        totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
         
         if rank%2 != 0:
             raise ValueError("rank shold be even, rank=%s"%(rank, ))
@@ -3059,11 +3059,6 @@ class iTensorFactory(object):
     def V111_1():
         pass
     
-    #unit_tensor = iTensor.unit_tensor
-    def unit_tensor_del_it_or_not(self, rank):
-        QSp = self.qsp_base.copy_many(rank, reverse=range(rank//2, rank))
-        totQN = self.qn_identity.copy()
-        return iTensor.unit_tensor(rank, QSp, totQN)
 
     @staticmethod
     def pauli_mat_2site(symmetry, which=None):

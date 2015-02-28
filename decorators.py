@@ -881,6 +881,7 @@ def set_STATE_end_simple(iter, q_iter=None, iter0=0, resume=False, power_on=True
         tensor_player.STATE = "stop"
         print "tensor_player is stopped"
 
+#issue: todo:  其实，这应该弄成context manager 
 def set_player_state_auto(iter, record_at, stop_at=10000000, verbose=False, info=0,  power_on=True):
     """
         arg verbose will be deprecated 
