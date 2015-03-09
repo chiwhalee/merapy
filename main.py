@@ -25,6 +25,7 @@
             QSp_V[3].update(qsp_max = qsp_max)
         
 """
+import warnings 
 import time
 import datetime 
 import pprint

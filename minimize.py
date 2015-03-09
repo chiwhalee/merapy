@@ -855,6 +855,7 @@ class ScaleInvar():
         return fn
 
 
+
 class TestScaleInvar(unittest.TestCase): 
     def setUp(self): 
         pass
@@ -908,7 +909,22 @@ class TestScaleInvar(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
 
+    if 1: 
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           #'test_save', 
+           #'test_load', 
+           #'test_example',  
+           #'test_heisbg',  
+        ]
+        for a in add_list: 
+            suite.addTest(TestScaleInvar(a))
+        unittest.TextTestRunner().run(suite)
 
        

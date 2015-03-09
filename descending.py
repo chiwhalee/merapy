@@ -52,12 +52,12 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
 if __name__ == "__main__": 
     from merapy.mera import test_Mera
     if 1:
-        M = test_Mera.instance(trunc_dim=2, tot_layer=4, symmetry="Z2")
-        sys = test_System.instance(M, model="Ising", symmetry="Z2", only_NN=False)
+        M = Mera.example(trunc_dim=2, tot_layer=4, symmetry="Z2")
+        sys = System.example(M, model="Ising", symmetry="Z2", only_NN=False)
     if 0:
         pass
-        M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1")
-        sys= test_System.instance(M, model="Heisenberg", symmetry="U1", only_NN=False)
+        M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1")
+        sys= System.example(M, model="Heisenberg", symmetry="U1", only_NN=False)
 
 
 

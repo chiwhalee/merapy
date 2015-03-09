@@ -1,4 +1,8 @@
 #coding=utf8
+
+import unittest 
+
+
 __all__ = ["ascending_ham"]
 
 def ascending_ham(M, S, ilayer, tau=None, info=0):
@@ -87,28 +91,50 @@ def ascending_generic(S):
     """
     pass
 
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
+        pass 
+    
+    def test_ascending(self): 
+        pass 
+        from mera import Mera
+        from hamiltonian import System 
+        if 0:
+            symm = "Travial"
+            M = Mera.example(trunc_dim=2, tot_layer=5, symmetry=symm)
+            sys = System.example(M, model="Ising", symmetry=symm, only_NN=False)
+        if 1:
+            symm = "U1"
+            M = Mera.example(trunc_dim=4, tot_layer=4, symmetry=symm)
+            sys= System.example(M, model="Heisenberg", symmetry=symm, only_NN=False, only_NNN=True)
+        
+        #set_ham_to_identity(sys)
+        #from decorators import set_STATE_end_simple
+        import decorators 
+        for i in range(M.num_of_layer-1):
+            #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
+            decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)
+            ascending_ham(M, sys, ilayer=i, info=0)
+
 
 if __name__ == "__main__":
 
-    from mera import test_Mera
-    from hamiltonian import test_System
-    if 0:
-        symm = "Travial"
-        M = test_Mera.instance(trunc_dim=2, tot_layer=5, symmetry=symm)
-        sys = test_System.instance(M, model="Ising", symmetry=symm, only_NN=False)
-    if 1:
-        symm = "U1"
-        M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry=symm)
-        sys= test_System.instance(M, model="Heisenberg", symmetry=symm, only_NN=False, only_NNN=True)
-    
-    #set_ham_to_identity(sys)
-    #from decorators import set_STATE_end_simple
-    import decorators 
-    for i in range(M.num_of_layer-1):
-        #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
-        decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)
-        ascending_ham(M, sys, ilayer=i, info=0)
-    
+    if 0: 
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           'test_ascending', 
+        ]
+        for a in add_list: 
+            suite.addTest(TestIt(a))
+        unittest.TextTestRunner().run(suite)
+       
+
+   
     
     
 

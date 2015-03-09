@@ -384,8 +384,8 @@ class TestIt(unittest.TestCase):
         with rpyc_conn_zerodeploy(hostname='local') as conn: 
             print conn.modules['os']
         
-        with rpyc_conn_zerodeploy(hostname='sugon') as conn: 
-            print conn.modules['os']
+        #with rpyc_conn_zerodeploy(hostname='sugon') as conn: 
+        #    print conn.modules['os']
         
 
 if __name__ == '__main__' : 
@@ -400,10 +400,10 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           TestIt('test_temp'), 
+           #TestIt('test_temp'), 
            #TestIt('test_save_and_load'), 
            #TestIt('test_rpyc_conn_local'), 
-           #TestIt('test_rpyc_conn_local_zero'), 
+           TestIt('test_rpyc_conn_local_zero'), 
         ]
         for a in add_list: 
             suite.addTest(a)
