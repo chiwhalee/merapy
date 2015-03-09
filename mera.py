@@ -9,7 +9,10 @@ q:
     
 
 """
+import unittest
 import numpy as np
+import warnings
+
 from quantum_number import  * #QN_idendity, QSp_base, QuantSpace, QSp_null
 from graphics import Graphics
 from tensor import *
@@ -19,7 +22,6 @@ import crandom
 from system_parameter import SystemParam
 from tensor_reflection import TensorReflect
 
-import warnings
 
 __all__ = ["Mera"]
 
@@ -49,7 +51,9 @@ class UTensor(object):
 
 
 class Mera(object):
-    #attention_this_may_be_wrong  too large MaxLayer is not a problem for fortran but may not for python
+    """
+        Multi-scale entanglement renornalization ansatz representing the wave function
+    """
     MaxLayer = 16
 
     def __init__(self, layer, nTop, qsp_0, qsp_max, qsp_max2, 
@@ -123,6 +127,72 @@ class Mera(object):
     
     def __ne__(self, other):
         return not self.__eq__(other)
+    
+    @staticmethod
+    def example(trunc_dim=2, tot_layer=4, symmetry="Z2", combine_2site=False):
+        """
+        
+        """
+        from quantum_number import init_System_QSp
+
+        #from quantum_number import QSp_base, QN_idendity
+        from system_parameter import SystemParam as SysParam
+        from tensor_network import TensorNetwork
+
+        QN_idendity, QSp_base , QSp_null = init_System_QSp(symmetry=symmetry)
+
+
+        #tensor.init_Buffer()
+
+        qsp_0= QSp_base.copy()
+        qsp_0.update()
+
+        
+        if symmetry == "Z2" :
+            qsp_max = qsp_0.copy()
+            qsp_max.Dims[0:2] = trunc_dim/2
+            qsp_max.RefQN[0,0:2] = [1,1]
+            qsp_max.RefQN[1,0:2] = [0,0]
+            qsp_max.update()
+
+
+            qsp_max2 = qsp_0.copy()
+            qsp_max2.Dims[0:2] = 2
+            qsp_max2.RefQN[0,0:2] = [2,1]
+            qsp_max2.RefQN[1,0:2] = [0,1]
+            qsp_max2.update()
+        elif symmetry == "U1":  
+            qsp_max =QspU1.max(trunc_dim)
+            qsp_max2 = qsp_max.copy()
+            
+        elif symmetry == "Travial" :
+            qsp_max= QSp_base.max(trunc_dim)
+            qsp_max2 = qsp_max.copy()
+        elif symmetry == "Z3":
+            qsp_max= QSp_base.max(trunc_dim)
+            qsp_max2 = qsp_max.copy()
+
+        else:
+            raise
+        
+        SysParam.ReAssumed= False
+        #SysParam.ReAssumed=True
+        topQN= QN_idendity.copy()
+        
+        crandom.mrandom.csrand(1234)
+        M= Mera(tot_layer, SysParam.nTop,qsp_0, qsp_max, qsp_max2, topQN, QSp_null, QN_idendity)
+        #sys.init_Hamiltonian(M)
+        return M
+   
+    def renormalization_map(self, i): 
+        raise NotImplemented
+    coarse_grain_map = renormalization_map
+    
+    def calc_support_patten(self, support_patten_phys): 
+        raise NotImplemented 
+    
+    def calc_asd_ops(self, support_patten_lay): 
+        raise NotImplemented 
     
     def key_property(self):
         qsp_max_property = self.qsp_max.key_property()

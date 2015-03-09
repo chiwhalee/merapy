@@ -50,16 +50,17 @@ class OperatorDict(dict):
 
 class System(object):
     """
-    TNet_sys:
-        一组指针，指向一组要收缩的张量;同时指向收缩中产生的张量
-        它又由 tlink 组成， 在f90中， tlink与 shallowcopy 配合使用为收缩做准备
-        , 说白了仅仅是为了调整收缩的顺序。在python中，这些都变得很travial
+        TNet_sys:
+            一组指针，指向一组要收缩的张量;同时指向收缩中产生的张量
+            它又由 tlink 组成， 在f90中， tlink与 shallowcopy 配合使用为收缩做准备
+            , 说白了仅仅是为了调整收缩的顺序。在python中，这些都变得很travial
     """
     TNet_sys= TensorNetwork() 
-    #ONLY_NNN = False 
     
-    def __init__(self, symmetry, mera, model, qsp_base=None, graph_module=None, model_param=None, 
-            only_NN=True, only_NNN=False, combine_2site=True, energy_exact=None):
+    def __init__(self, symmetry, mera, model, qsp_base=None, 
+            graph_module=None, model_param=None, 
+            only_NN=True, only_NNN=False, combine_2site=True, 
+            energy_exact=None):
         """
             System 和Mera的区别在于：
                 后者定义了U，V等张量
@@ -88,7 +89,9 @@ class System(object):
             self.model_param = {}
         #self.set_graph_module(graph_module)
         self.set_graph(graph_module)
-
+        
+            
+            
         if 1:
             #some records of the system
             self.iter = 0   #state of the system after iter times update, when S continue  
@@ -175,7 +178,6 @@ class System(object):
         def trunc_dim(self): 
             return 
     
-    
     def key_property(self):
         """
             key properties to identify S
@@ -220,6 +222,34 @@ class System(object):
     def __ne__(self, other):
         return not self.__eq__(other)
     
+    @staticmethod 
+    def example( M, symmetry, model, model_param=None, **kwargs): 
+            #only_NN=True, combine_2site=False, only_NNN=False):
+            
+        test_Mera = Mera 
+        
+        #M = test_Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
+        #M = test_Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); 
+        if model_param is None: 
+            if model == 'Heisenberg' : 
+                model_param = {'J_NN':1.0, 'J_NNN': 0.0, 'Jzz': 1.0}
+                kwargs.update(only_NN=1, only_NNN=0, combine_2site=1)
+            elif model == 'Ising' : 
+                model_param = {"h":-1.0, "J_NN":-1.0, "J_NNN":0.0, 'gamma':1.0} 
+                kwargs.update(only_NN=1, only_NNN=0, combine_2site=0)
+                
+            else: 
+                raise 
+                
+        sys=System(model=model, mera=M, symmetry=symmetry, 
+                model_param = model_param, 
+                 **kwargs)
+        #M = test_Mera.example()
+        #M = test_Mera.M
+        sys.init_Hamiltonian()
+       
+        return sys
+   
     def set_graph_module(self, module):
         #mapper = {"ternary":merapy.init_mera_graph}
         if module is None:
@@ -278,11 +308,10 @@ class System(object):
         """
 
         mera = self.mera
-                
+
         #set value for h2[0], rho[0]
         
         self.add_physics_layer()  
-        
         
         #here add starting from the 1st layer
         self.layer = mera.num_of_layer
@@ -2192,6 +2221,22 @@ class TestSystem(unittest.TestCase):
         self.sys= sys
         self.M = M
     
+    def test_example(self): 
+        if 1: 
+            M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); 
+            S= System.example(M, 'U1', 'Heisenberg')
+            print S 
+            H=np.array([-2. ,  0.5,  0.5,  0. ,  0.5, -1. ,  0. ,  0.5,  0.5,  0. , -1. , 0.5,  0. ,  0.5,  0.5, -2. ,  1. ,  0. ,  0. ,  0. ,  0. ,  0. , 0. ,  1. , -1.5,  0.5,  0.5, -0.5,  0. ,  1. ,  0. ,  0. , -0.5, 0.5,  0.5, -1.5,  0. ,  0. ,  1. ,  0. ,  0. ,  0. ,  1. ,  0. , -0.5,  0.5,  0.5, -1.5,  0. ,  1. ,  0. ,  0. ,  0. , -1. ,  0. , 0. ,  1. ,  0. ,  0. , -1.5,  0.5,  0.5, -0.5,  0. ,  0. ,  0. , 1. ,  0. , -1. ,  0. ])
+            self.assertTrue(np.all(S.H_2[0][0].data==H))
+
+        if 1: 
+            M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="Z2"); 
+            S= System.example(M, 'Z2', 'Ising')
+            print S 
+            H=np.array([-2., -1., -1., -1., -1., -1., -1.,  0.])
+            self.assertTrue(np.all(S.H_2[0][0].data==H))
+    
+
     def test_save(self): 
         from merapy.utilities import random_str
         import os
@@ -2223,7 +2268,6 @@ class TestSystem(unittest.TestCase):
                 os_local.remove(fn)
     
     def test_load(self): 
-        
         fn = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
         S=System.load(fn, 1)
         print S
@@ -3360,63 +3404,6 @@ class TestSystem(unittest.TestCase):
 
 
 if __name__=='__main__':
-    """  # results
-        trunc_dim = 2
-        init values   ---- pass
-                    {'h': 1.0, 'tot_Layer': 4, 'J_NN': -1.0, 'gamma': 1.0}
-                H_2
-                    layer= 0   	0 [ 0. -1. -1. -1. -1.]    [-1. -1. -1. -1. -2.]    8
-                    layer= 1   	1 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    128
-                    layer= 2   	2 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    128
-                    layer= 3   	3 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    128
-                rho_2
-                    layer= 0   	0 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    8
-                    layer= 1   	1 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    128
-                    layer= 2   	2 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    128
-                    layer= 3   	3 [ 0.  0.  0.  0.  0.]    [ 0.  0.  0.  0.  0.]    128
-
-
-
-                Reflection_Symmetrize(envs%tensor(niseq), =(niseq))
-                 J_ising(1)=  -1.0000000000000000     
-                 J_ising(2)=   0.0000000000000000     
-                 h=   1.0000000000000000     
-                 gamma=   1.0000000000000000     
-
-                 H_2 at layer           0           8
-                T%data= ,0.0000E+00 ,-.1000E+01 ,-.1000E+01 ,-.1000E+01 ,-.1000E+01 ,-.1000E+01 ,-.1000E+01 ,-.1000E+01 ,-.1000E+01 ,-.2000E+01
-                 H_2 at layer           1         128
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-                 H_2 at layer           2         128
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-                 H_2 at layer           3         128
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-
-                 rho_2 at layer           0           8
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-                 rho_2 at layer           1         128
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-                 rho_2 at layer           2         128
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-                 rho_2 at layer           3         128
-                T%data= ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00 ,0.0000E+00
-
-
-
-        trunc_dim=2, tot_layer=5
-            U
-                0 [ 1.  0.  1.  0.  0.]    [ 0.  0.  1.  0.  1.]    8
-                1 [ 1.  0.  1.  0.  0.]    [ 0.  0.  1.  0.  1.]    8
-                2 [ 1.  0.  1.  0.  0.]    [ 0.  0.  1.  0.  1.]    8
-                3 [ 1.  0.  1.  0.  0.]    [ 0.  0.  1.  0.  1.]    8
-                4 [ 1.  0.  1.  0.  0.]    [ 0.  0.  1.  0.  1.]    8
-            V
-                0 [-0.68966 -0.2565  -0.11678  0.66704 -0.11111]    [ 0.66704 -0.11111 -0.51846 -0.76133  0.37315]    8
-                1 [-0.42095 -0.15087 -0.43825  0.77973 -0.16802]    [ 0.77973 -0.16802  0.30662  0.8928   0.28401]    8
-                2 [-0.63657 -0.00092 -0.77041 -0.0352  -0.5796 ]    [-0.0352  -0.5796  -0.04041  0.53441 -0.61387]    8
-                3 [-0.54107 -0.44244 -0.02512  0.71475 -0.47816]    [ 0.71475 -0.47816 -0.70387 -0.50042  0.15974]    8
-                4 [ 0.9955 -0.0948]    [ 0.9955 -0.0948]    2
-    """
     if 0: 
         import mera
         test_Mera = mera.test_Mera
@@ -3471,7 +3458,7 @@ if __name__=='__main__':
         #ts.J_ising()
         #ts.J_heisbg()
 
-    if 0: #examine
+    if 0: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -3479,14 +3466,13 @@ if __name__=='__main__':
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #TestSystem('test_save'), 
-           TestSystem('test_load'), 
-           #TestSystem('test_heisbg') 
+           #'test_save', 
+           #'test_load', 
+           'test_example',  
+           #'test_heisbg',  
         ]
         for a in add_list: 
-            suite.addTest(a)
-        #suite.addTest(TestIt('test_ising'))
-        #suite.addTest(TestIt('test_heisbg'))
+            suite.addTest(TestSystem(a))
         unittest.TextTestRunner().run(suite)
        
 
