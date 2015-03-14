@@ -5,10 +5,10 @@
     e.g. G_123_01 means map from site 123 to a upper layer at 01
     this notation already contains info about num of sites and type of ops
 """
-
+import json 
+import numpy as np
 
 from merapy.graphics import Graphics
-import numpy as np
 
 
 __all__ = ["G2", "G_2_2", "G_3_3", "G_3_2", "G_22_2", "G_22_3", 'G_calc_EE_gen']
@@ -800,7 +800,7 @@ def def_G_3_3():
     order_3_3["R"][0:12]=[11,3,5,0,8,1,10,4,7,6,9,2]
     G_3_3["R"].contract_order = order_3_3["R"]  #[11,3,5,0,8,1,10,4,7,6,9,2]
     G_3_3["R"].weight = 1./3
-    return G_3_3, None
+    return G_3_3
 
 def def_G_3_2_old():
     """
@@ -998,7 +998,7 @@ def def_G_3_2():
 
     G_3_2[(1,2,3)].weight = 1./3
     G_3_2[(0,1,2)].weight = 1./3
-    return G_3_2,  order_3_2
+    return G_3_2
 
 def def_G_22_2():
     pass
@@ -1055,7 +1055,7 @@ def def_G_22_2():
     order_22_2[(0,3)][0:9]=[6,3,7,4,8,0,1,5,2]
     G_22_2[(0,3)].contract_order = order_22_2[(0,3)]
     G_22_2[(0,3)].weight = 1./3
-    return G_22_2, order_22_2
+    return G_22_2
 
 def def_G_22_3():
     """
@@ -1657,17 +1657,31 @@ G3, order3, weight3, GTop, order_top = init_mera_graph()
 G2, weight2, order2= init_g2()
 
 G_2_2 = G2
-G_3_3, order_3_3 = def_G_3_3()
-G_3_2, order_3_2 = def_G_3_2()
-G_22_2, order_22_2 = def_G_22_2()
+G_3_3 = def_G_3_3()
+G_3_2 = def_G_3_2()
+G_22_2 = def_G_22_2()
+
 G_22_3 = def_G_22_3()
+
+def upgrade_graphs(graph_dic): 
+    """
+        a workaroud for upgrade format of graphs 
+    """
+    for k, v in graph_dic.items(): 
+        v.contract_order = v.contract_order[: v.size]
+        
+
+temp = [G_2_2, G_3_3, G_3_2, G_22_2, G_22_3]
+for G in temp: 
+    upgrade_graphs(G)
+
 
 if __name__ == "__main__":
 
     
     g=G_calc_EE_gen()
     print g
-    if 0: 
+    if 0:  
         temp = [G_2_2, G_3_3, G_3_2, G_22_2, G_22_3]
         for g in temp: 
             
@@ -1675,7 +1689,8 @@ if __name__ == "__main__":
                 print i, g[i].graph_name,  g[i].comp_complexity
     
     
-
+    for i, j in G_22_3.items(): 
+        print j.graph_name 
 
 
 
