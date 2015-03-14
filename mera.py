@@ -12,6 +12,7 @@ q:
 import unittest
 import numpy as np
 import warnings
+from math import log
 
 from quantum_number import  * #QN_idendity, QSp_base, QuantSpace, QSp_null
 from graphics import Graphics
@@ -48,7 +49,269 @@ class UTensor(object):
     def unit_disentangler(self):
         pass
 
+def calc_ascending_site(n, n_min=1, lay=None): 
+    """
+    
+        a site is at n, where is it at coarsed layer lay?
+        Howto: 
+        1. 首先存在一个系统的标记的问题, 和约定的问题 
+            notation: 
+                包括site的编号: (l, n) 在第l层的第n个位置
+                和V tensor的编号: [l, m] 在第l层的第m个位置
+            convention: 
+            1) 在第0层site，第0个site，接在编号为0的Vtensor的中间的leg上
+                由此对于(l, n) , 接在 [l, n//3] 上，if n%3==0：中间腿；n%3==1: 右边腿； n%3==2: 左边腿
+            2) l层的编号为0的Vtensor朝上的腿，标记为第l+1层的0th site, 这样一次类推
+        2. 按照上述convention，再结合mera的结构，即可。具体规律为: 
+            1), 先把(l, n)，变成2site的(l, (n-1, n))
+            2)  (l, (n-1, n)) 被映射到 (l+1,  )
+            
+        
+        3.例子：
+            e.g.
+                    (0, 40) =>(0, 39-40)    
+                                首先预处理一下，把1site变成 2site
+                                40 is on the right leg of 13th V tensor
+                --> (0, 13-14), 13 is on the right leg of 4th V tensor, 14 is on the left leg of 5th V tensor
+                --> (0, 4-5),   4  is on the right leg of 1th V tensor, 5  is on the left leg of 2th V tensor
+                --> (0-1-2)
+                故 总的来说，要判断在哪(两个)个V上
+    """
+        
+    tube = [(n-1, n)]  #auto complete to two-site ops
+    
+    while 0: 
+        print 'hhhhh'
+        n_mod3 = n%3
+        n_div3 = n//3
+       
+        if   n_mod3 == 0: 
+            res = (n_div3-1, n_div3)
+        elif n_mod3 == 1: 
+            res = (n_div3,   n_div3 + 1)
+        elif n_mod3 == 2: 
+            res = (n_div3,   n_div3 + 1)
+        n = res[-1]   
+        
+        tube.append(res)    
+        if n <=  n_min: 
+            break
+    
+    #(4, 5)->(1, 2), (3, 4)->(1, 2), (2, 3)->(0, 1), (1, 2)->(0, 1)
+    while 1: 
+        if n <=  n_min: 
+            break
+       
+        n_mod3 = n%3
+        n_div3 = n//3
+       
+        if   n_mod3 == 0: 
+            res = (n_div3-1, n_div3)
+        elif n_mod3 == 1: 
+            res = (n_div3,   n_div3 + 1)
+        elif n_mod3 == 2: 
+            res = (n_div3,   n_div3 + 1)
+        n = res[-1]   
+        if n >= n_min: 
+            tube.append(res)    
 
+
+    return tube
+
+def coarse_grain_map(X, tau=0, n=1, T=None, return_full_list=0):
+    """ 
+        params: 
+            X:  tuple of list  
+            n: act on X by R for n times
+            T: total layer  of mera
+    """
+    if T is None: 
+        #print_vars(vars(),  ['X'])
+        #T =log(max(X), 3)
+        T = 5 
+    base = 3
+    causal_cone = []
+    for i in range(n): 
+        X_new = []
+        if tau + i>= T:  #already reach top  
+            causal_cone.append([0])
+            break 
+        for x in X:
+            if x%base ==  0 : 
+                x1 = [x/3]
+            else: 
+                x1 = [x//3, x//3  + 1]
+            for a in x1: 
+                if a not in X_new: 
+                    X_new.append(a)
+        #print X, X_new
+        X = list(X_new)
+        causal_cone.append(tuple(X_new))
+    #print causal_cone
+    if return_full_list: 
+        return causal_cone
+    else: 
+        return causal_cone[-1]
+
+def fine_grain_map(X, tau, n): 
+    """
+        n: num acted by fine map 
+    """
+    temp = [(i, i+1) for i in range(1000)]
+    res= [i for i in temp if coarse_grain_map(i, 0, n)==X]
+    #res = calc_ascending_site(27, n_min=1, lay=1 )
+    print res
+    #res= []  
+
+def calc_ascending_site_binary(n, n_min=1, lay=None): 
+    """
+    
+        a site is at n, where is it at coarsed layer lay?
+        Howto: 
+        1. 首先存在一个系统的标记的问题, 和约定的问题 
+            notation: 
+                包括site的编号: (l, n) 在第l层的第n个位置
+                和V tensor的编号: [l, m] 在第l层的第m个位置
+            convention: 
+            1) 在第0层site，第0个site，接在编号为0的Vtensor的中间的leg上
+                由此对于(l, n) , 接在 [l, n//3] 上，if n%3==0：中间腿；n%3==1: 右边腿； n%3==2: 左边腿
+            2) l层的编号为0的Vtensor朝上的腿，标记为第l+1层的0th site, 这样一次类推
+        2. 按照上述convention，再结合mera的结构，即可。具体规律为: 
+            1), 先把(l, n)，变成2site的(l, (n-1, n))
+            2)  (l, (n-1, n)) 被映射到 (l+1,  )
+            
+        
+        3.例子：
+            e.g.
+                    (0, 40) =>(0, 39-40)    
+                                首先预处理一下，把1site变成 2site
+                                40 is on the right leg of 13th V tensor
+                --> (0, 13-14), 13 is on the right leg of 4th V tensor, 14 is on the left leg of 5th V tensor
+                --> (0, 4-5),   4  is on the right leg of 1th V tensor, 5  is on the left leg of 2th V tensor
+                --> (0-1-2)
+                故 总的来说，要判断在哪(两个)个V上
+    """
+    raise NotImplemented('not completed')    
+    tube = [(n-1, n)]  #auto complete to two-site ops
+    
+    #rescale_factor = 2
+    b = 2  # rescale_factor
+    
+    #(4, 5)->(1, 2), (3, 4)->(1, 2), (2, 3)->(0, 1), (1, 2)->(0, 1)
+    while 1: 
+        if n <=  n_min: 
+            break
+       
+        n_mod_b = n%b
+        n_div_b = n//b
+       
+        if n_mod_b == 0: 
+            res = (n_div_b-1, n_div_b)
+        elif n_mod_b == 1: 
+            res = (n_div_b,   n_div_b + 1)
+        elif n_mod_b == 2: 
+            res = (n_div_b,   n_div_b + 1)
+        n = res[-1]   
+        if n >= n_min: 
+            tube.append(res)    
+
+
+    return tube
+
+def mera_full_graph(): 
+    site = OrderedDict()
+    #site at each layer, number
+    num_of_layer = 6
+    N0 = 2*3**(num_of_layer/2)
+    Nlay = OrderedDict()
+    node_U = OrderedDict()
+    node_V = OrderedDict()
+    
+    Nlay[0] = N0
+    for l in range(1, num_of_layer/2): 
+        Nlay[l] = Nlay[l-1]/3
+        for n in range(Nlay[l]): 
+            #site[l, n] = {'in':     , 'out': {'arrow': ' ', 'pos':    }}
+            n_mod3 = n%3 
+            l_mod2 = l%2
+            out_arrow_name = 'V' if n_mod3 == 0 else 'U'
+            in_arrow_name  = 'V' if n_mod3 == 0 else 'U' 
+            site[l, n] = {
+                    'in_arrow':  {'name':  in_arrow_name, 'lay': l-1, 'pos': (n-n_mod3)/3}, 
+                    'out_arrow': {'name': out_arrow_name, 'lay': l+1, 'pos': (n-n_mod3)/3}
+                    }
+    print site   
+
+class SupportSet(object): 
+    """  
+        an ordered set 
+        including effective support set, 
+        denoted by [X;tau]
+    
+    """
+    def __init__(self): 
+        self.connectivity = None   # num of connected intervals can be divided into 
+    
+    @staticmethod 
+    def split_disconnect(X): 
+        """
+            X:  must be a list of integers 
+        """
+        
+        res = []
+        iprev = X[0]
+        temp = (iprev, )
+        for i in X[1: ]:
+            if i == iprev + 1: 
+                temp  = temp + (i, )
+            else: 
+                res.append(temp)
+                iprev = i
+                temp = (iprev, )
+            iprev = i 
+        res.append(temp)
+        res= tuple(res)
+        if len(res)==1:  #make e.g. ((0, 1), ) into (0, 1)
+            res= res[0]
+        #print_vars(vars(),  ['X', 'res'])
+
+        return res 
+    
+    @staticmethod 
+    def join_disconnect(X): 
+        res= []
+        for i in X: 
+            if isinstance(i, int): 
+                res.append(i)
+            else: 
+                res.extend(list(i))
+        return res 
+
+class SupportPaternEff(object): 
+    """
+        effective support pattern 
+    """
+    def __init__(self, N): 
+        #assert 
+        self.lattice =  tuple(range(N))
+        
+    def eff_lattice(self, level): 
+        pass
+    
+    @staticmethod 
+    def show(spe): 
+        s= '**** Support Patern ***\n'
+        for i in spe: 
+            p = spe[i]
+            if len(p)<8: 
+                s += 'l={} \t{}\n'.format(i, p)
+            else: 
+                s += 'l={} \t{} \n\t... {}\n'.format(i, p[:4], p[-4: ])
+        print s 
+        
+SPE = SupportPaternEff 
+
+    
 
 class Mera(object):
     """
@@ -109,6 +372,11 @@ class Mera(object):
             self.add_one_layer(unitary_init=unitary_init)
         
         self.add_top_layer(rand_init=True)
+        
+        self.num_of_input = 2 * 3**self.num_of_layer 
+        #self.layer_eff = tuple(range(layer))
+        self.layer_keys = tuple(range(layer))
+        self.top_layer_key = layer - 1
 
     def __eq__(self, other):
         """
@@ -128,8 +396,8 @@ class Mera(object):
     def __ne__(self, other):
         return not self.__eq__(other)
     
-    @staticmethod
-    def example(trunc_dim=2, tot_layer=4, symmetry="Z2", combine_2site=False):
+    @classmethod 
+    def example(cls, trunc_dim=2, tot_layer=4, symmetry="Z2", combine_2site=False):
         """
         
         """
@@ -150,6 +418,7 @@ class Mera(object):
         
         if symmetry == "Z2" :
             qsp_max = qsp_0.copy()
+            print_vars(vars(),  ['trunc_dim'])
             qsp_max.Dims[0:2] = trunc_dim/2
             qsp_max.RefQN[0,0:2] = [1,1]
             qsp_max.RefQN[1,0:2] = [0,0]
@@ -593,6 +862,21 @@ class Mera(object):
             mix the two algorithms
         """
 
+def reset_mera(M):
+    """
+        
+    """
+    import numpy as np
+    for i in range(M.num_of_layer-1):
+        t = M.V[i].tensor[0]
+        rank = t.rank
+        qDims= np.empty(rank, "int")
+        iDims= np.empty(rank, "int")
+        qDims[:]= [0, 0, 0, 0]
+        iDims[:] = 0
+        t.data[:] = 0.0
+        t.set_element(qDims, iDims, 1.0)
+
 class test_Mera(object):
     @classmethod
     def instance(cls, trunc_dim=2, tot_layer=4, symmetry="Z2", combine_2site=False):
@@ -650,8 +934,40 @@ class test_Mera(object):
         #sys.init_Hamiltonian(M)
         return M
 
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
+        pass
+    def test_example(self): 
+        m = Mera.example() 
+        print_vars(vars(),  ['m.num_of_input'])
+    
+    def test_coarse_grain_map(self): 
+        
+        X = [55]; tau = 0; n = 1
+        res=coarse_grain_map(X, tau, n)
+        self.assertTrue(res==(18, 19)) 
+        
+        if 1: 
+            X = [1, 2, 3]; tau = 0; n = 1
+            for i in range(6): 
+                X = range(i, i + 3)
+                res = coarse_grain_map(X, tau, n) 
+                print X, res 
+        
+        res = SupportSet.split_disconnect(((1, 2, 3,  5, 6, 7, 10, 11)))
+        self.assertEqual(res, ((1, 2, 3), (5, 6, 7), (10, 11)))
 
-
+    def test_temp(self): 
+        
+        X = [1, 2, 3]; tau = 0; n = 1
+        for i in range(6): 
+            #X = range(i, i + 3)
+            X = [0, 1, 4, 5,  18, 19, 22]
+            res = coarse_grain_map(X, tau, n) 
+            print X, res 
+        
+        
+    
 if __name__=='__main__':
     """   
         ---- pass
@@ -771,23 +1087,43 @@ if __name__=='__main__':
     """ 
 
     pass
-    tm = test_Mera
-    #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="U1")
-    #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="Travial")
-    M = tm.instance(trunc_dim=6, tot_layer=4, symmetry="Z3")
-    #M = tm.instance(trunc_dim=11, tot_layer=4, symmetry="Travial")
-    print M
-    print type(M.topQN.val)
-    #M.show_param()
+    if 0: 
+        tm = test_Mera
+        #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="U1")
+        #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="Travial")
+        M = tm.instance(trunc_dim=6, tot_layer=4, symmetry="Z3")
+        #M = tm.instance(trunc_dim=11, tot_layer=4, symmetry="Travial")
+        print M
+        print type(M.topQN.val)
+        #M.show_param()
 
-    
-    #print M.__repr__(which=["U_dag", "V_dag"],  fewer=1)  
-    #print M.__repr__(which=["U", "V"],  fewer=1)  
-    
+        
+        #print M.__repr__(which=["U_dag", "V_dag"],  fewer=1)  
+        #print M.__repr__(which=["U", "V"],  fewer=1)  
+        
 
-    #print M.V[0][0]
-    #print M.V[M.num_of_layer-1][0]
+        #print M.V[0][0]
+        #print M.V[M.num_of_layer-1][0]
     
+    if 0: 
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+        
+           #'test_example',  
+           #'test_coarse_grain_map',  
+           'test_temp',  
+           
+        ]
+        for a in add_list: 
+            suite.addTest(TestIt(a))
+        unittest.TextTestRunner().run(suite)
+
+   
 
 
 

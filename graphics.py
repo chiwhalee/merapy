@@ -3,7 +3,6 @@
 import unittest
 
 from collections import OrderedDict
-from math import log
 #from Set import Set
 
 """ 
@@ -42,6 +41,7 @@ class Graphics():
         self.final_order = None  #arange final order of legs
         self.weight = None
         self.comp_complexity = None # todo: define this
+        self.additional_info = {'type':None}
     
     @staticmethod
     def init_from_dict(graph_def, pos_offset=1): 
@@ -214,13 +214,11 @@ class Graphics():
         #edges= np.array([-1L]*self.MaxEdge, "int")
         return anb
 
-    def contract_nodes(self, n1,n2 ):
+    def contract_nodes(self, n1, n2):
         """
-        status_1_verified
-        see Node_Contraction in f90
-        Contract all edges between nodes n1 and n2 in G   
-        optional argument ne, edges denote the number and id of edges 
-        that have been contracted
+            Contract all edges between nodes n1 and n2 in G   
+            optional argument ne, edges denote the number and id of edges 
+            that have been contracted
         """
         a = self.edges[:self.nodes[n1], n1].tolist()
         b = self.edges[:self.nodes[n2], n2].tolist()
@@ -233,9 +231,7 @@ class Graphics():
         self.nodes[n2] = -1
 
         self.size = self.size + 1
-        #print self.size,  len(ab)
         self.nodes[self.size-1] = len(ab)
-        #print ab
         if len(ab)>0:
             self.edges[:len(ab), self.size-1] = ab[:]
 
@@ -325,225 +321,13 @@ if 0:
     class TensorGraph():
         pass
 
-def calc_ascending_site(n, n_min=1, lay=None): 
-    """
-    
-        a site is at n, where is it at coarsed layer lay?
-        Howto: 
-        1. 首先存在一个系统的标记的问题, 和约定的问题 
-            notation: 
-                包括site的编号: (l, n) 在第l层的第n个位置
-                和V tensor的编号: [l, m] 在第l层的第m个位置
-            convention: 
-            1) 在第0层site，第0个site，接在编号为0的Vtensor的中间的leg上
-                由此对于(l, n) , 接在 [l, n//3] 上，if n%3==0：中间腿；n%3==1: 右边腿； n%3==2: 左边腿
-            2) l层的编号为0的Vtensor朝上的腿，标记为第l+1层的0th site, 这样一次类推
-        2. 按照上述convention，再结合mera的结构，即可。具体规律为: 
-            1), 先把(l, n)，变成2site的(l, (n-1, n))
-            2)  (l, (n-1, n)) 被映射到 (l+1,  )
-            
-        
-        3.例子：
-            e.g.
-                    (0, 40) =>(0, 39-40)    
-                                首先预处理一下，把1site变成 2site
-                                40 is on the right leg of 13th V tensor
-                --> (0, 13-14), 13 is on the right leg of 4th V tensor, 14 is on the left leg of 5th V tensor
-                --> (0, 4-5),   4  is on the right leg of 1th V tensor, 5  is on the left leg of 2th V tensor
-                --> (0-1-2)
-                故 总的来说，要判断在哪(两个)个V上
-    """
-        
-    tube = [(n-1, n)]  #auto complete to two-site ops
-    
-    while 0: 
-        print 'hhhhh'
-        n_mod3 = n%3
-        n_div3 = n//3
-       
-        if   n_mod3 == 0: 
-            res = (n_div3-1, n_div3)
-        elif n_mod3 == 1: 
-            res = (n_div3,   n_div3 + 1)
-        elif n_mod3 == 2: 
-            res = (n_div3,   n_div3 + 1)
-        n = res[-1]   
-        
-        tube.append(res)    
-        if n <=  n_min: 
-            break
-    
-    #(4, 5)->(1, 2), (3, 4)->(1, 2), (2, 3)->(0, 1), (1, 2)->(0, 1)
-    while 1: 
-        if n <=  n_min: 
-            break
-       
-        n_mod3 = n%3
-        n_div3 = n//3
-       
-        if   n_mod3 == 0: 
-            res = (n_div3-1, n_div3)
-        elif n_mod3 == 1: 
-            res = (n_div3,   n_div3 + 1)
-        elif n_mod3 == 2: 
-            res = (n_div3,   n_div3 + 1)
-        n = res[-1]   
-        if n >= n_min: 
-            tube.append(res)    
 
-
-    return tube
-
-
-def coarse_grain_map(X, tau, n=1, T=None, return_full_list=0):
-    """
-        n: act on X by R for n times
-        T: total layer  of mera
-    """
-    #if T is None: 
-    T =log(max(X), 3)
-    base = 3
-    causal_cone = []
-    for i in range(n): 
-        X_new = []
-        if tau + i>= T: 
-            causal_cone.append([0])
-            break 
-        for x in X:
-            if x%base ==  0 : 
-                x1 = [x/3]
-            else: 
-                x1 = [x//3, x//3  + 1]
-            for a in x1: 
-                if a not in X_new: 
-                    X_new.append(a)
-        #print X, X_new
-        X = list(X_new)
-        causal_cone.append(tuple(X_new))
-    #print causal_cone
-    if return_full_list: 
-        return causal_cone
-    else: 
-        return causal_cone[-1]
-
-def fine_grain_map(X, tau, n): 
-    """
-        n: num acted by fine map 
-    """
-    temp = [(i, i+1) for i in range(1000)]
-    res= [i for i in temp if coarse_grain_map(i, 0, n)==X]
-    #res = calc_ascending_site(27, n_min=1, lay=1 )
-    print res
-    #res= []  
-   
-
-def calc_ascending_site_binary(n, n_min=1, lay=None): 
-    """
-    
-        a site is at n, where is it at coarsed layer lay?
-        Howto: 
-        1. 首先存在一个系统的标记的问题, 和约定的问题 
-            notation: 
-                包括site的编号: (l, n) 在第l层的第n个位置
-                和V tensor的编号: [l, m] 在第l层的第m个位置
-            convention: 
-            1) 在第0层site，第0个site，接在编号为0的Vtensor的中间的leg上
-                由此对于(l, n) , 接在 [l, n//3] 上，if n%3==0：中间腿；n%3==1: 右边腿； n%3==2: 左边腿
-            2) l层的编号为0的Vtensor朝上的腿，标记为第l+1层的0th site, 这样一次类推
-        2. 按照上述convention，再结合mera的结构，即可。具体规律为: 
-            1), 先把(l, n)，变成2site的(l, (n-1, n))
-            2)  (l, (n-1, n)) 被映射到 (l+1,  )
-            
-        
-        3.例子：
-            e.g.
-                    (0, 40) =>(0, 39-40)    
-                                首先预处理一下，把1site变成 2site
-                                40 is on the right leg of 13th V tensor
-                --> (0, 13-14), 13 is on the right leg of 4th V tensor, 14 is on the left leg of 5th V tensor
-                --> (0, 4-5),   4  is on the right leg of 1th V tensor, 5  is on the left leg of 2th V tensor
-                --> (0-1-2)
-                故 总的来说，要判断在哪(两个)个V上
-    """
-    raise NotImplemented('not completed')    
-    tube = [(n-1, n)]  #auto complete to two-site ops
-    
-    #rescale_factor = 2
-    b = 2  # rescale_factor
-    
-    #(4, 5)->(1, 2), (3, 4)->(1, 2), (2, 3)->(0, 1), (1, 2)->(0, 1)
-    while 1: 
-        if n <=  n_min: 
-            break
-       
-        n_mod_b = n%b
-        n_div_b = n//b
-       
-        if n_mod_b == 0: 
-            res = (n_div_b-1, n_div_b)
-        elif n_mod_b == 1: 
-            res = (n_div_b,   n_div_b + 1)
-        elif n_mod_b == 2: 
-            res = (n_div_b,   n_div_b + 1)
-        n = res[-1]   
-        if n >= n_min: 
-            tube.append(res)    
-
-
-    return tube
-
-
-def mera_full_graph(): 
-    site = OrderedDict()
-    #site at each layer, number
-    num_of_layer = 6
-    N0 = 2*3**(num_of_layer/2)
-    Nlay = OrderedDict()
-    node_U = OrderedDict()
-    node_V = OrderedDict()
-    
-    Nlay[0] = N0
-    for l in range(1, num_of_layer/2): 
-        Nlay[l] = Nlay[l-1]/3
-        for n in range(Nlay[l]): 
-            #site[l, n] = {'in':     , 'out': {'arrow': ' ', 'pos':    }}
-            n_mod3 = n%3 
-            l_mod2 = l%2
-            out_arrow_name = 'V' if n_mod3 == 0 else 'U'
-            in_arrow_name  = 'V' if n_mod3 == 0 else 'U' 
-            site[l, n] = {
-                    'in_arrow':  {'name':  in_arrow_name, 'lay': l-1, 'pos': (n-n_mod3)/3}, 
-                    'out_arrow': {'name': out_arrow_name, 'lay': l+1, 'pos': (n-n_mod3)/3}
-                    }
-    print site   
-
-class SupportSet(object): 
-    """  
-        an ordered set 
-        including effective support set, 
-        denoted by [X;tau]
-    
-    """
-
-class SupportPatern(object): 
-    def __init__(self, N): 
-        #assert 
-        self.lattice =  tuple(range(N))
-        
-    def eff_lattice(self, level): 
-        pass
-
-class TestGraphics(unittest.TestCase): 
+class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass
     def test_aaa(self): 
         pass
-    def test_coarse_grain_map(self): 
-        X = [55]; tau = 0; n = 1
-        res=coarse_grain_map(X, tau, n)
-        self.assertTrue(res==(18, 19)) 
         
-   
 
 #mera_full_graph(); exit()    
 
@@ -551,7 +335,6 @@ class TestGraphics(unittest.TestCase):
 
 if __name__ == '__main__':        
     
-
     if 1: 
         g=Graphics()
         def set_value():
@@ -616,17 +399,24 @@ if __name__ == '__main__':
         g2.size = 2
         print g1.size
         print g    
-
-    if 1: #examine
-        suite = unittest.TestLoader().loadTestsFromTestCase(TestGraphics)
-        unittest.TextTestRunner(verbosity=0).run(suite)    
-       
-   
+    
+    if 1: 
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           'test_aaa',  
+        ]
+        for a in add_list: 
+            suite.addTest(TestIt(a))
+        unittest.TextTestRunner().run(suite)
     
     #fine_grain_map()    
     #print  all([1, 2]==(1, 2))
-    X = (3, 4); tau = 0; n = 1
-    fine_grain_map(X, tau, n)
+    
     
     
     

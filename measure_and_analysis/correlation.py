@@ -26,7 +26,8 @@ from result_db import ResultDB
 from merapy.hamiltonian import System
 from merapy.tensor_py import iTensorFactory
 from merapy.decorators import timer
-from merapy.graphics import calc_ascending_site
+#from merapy.graphics import calc_ascending_site
+from merapy.mera import calc_ascending_site
 from merapy.diagrams.V31 import graph_ternary
 from merapy.descending import descending_ham
   
