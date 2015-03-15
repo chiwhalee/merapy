@@ -14,6 +14,7 @@ from collections import OrderedDict
 import warnings
 import rpyc
 
+from merapy.utilities import print_vars
 from merapy.models import *
 from merapy.context_util import rpyc_conn_local, rpyc_conn_local_zerodeploy, rpyc_load
 from merapy.mera import *
@@ -60,7 +61,7 @@ class System(object):
     def __init__(self, symmetry, mera, model, qsp_base=None, 
             graph_module=None, model_param=None, 
             only_NN=True, only_NNN=False, combine_2site=True, 
-            energy_exact=None):
+            energy_exact=None, j_power_r_max=None,  info=0):
         """
             System 和Mera的区别在于：
                 后者定义了U，V等张量
@@ -79,6 +80,7 @@ class System(object):
         self.only_NNN = only_NNN
         self.symmetry = symmetry
         self.combine_2site = combine_2site
+        self.info = info
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry=self.symmetry, 
                 combine_2site=combine_2site)
         if qsp_base is not None: self.qsp_base = qsp_base  #models like Potts need alternate qsp_base than default
@@ -87,7 +89,7 @@ class System(object):
         else:
             #self.model_param = SystemParam.model_param.copy()  #copy or not?
             self.model_param = {}
-        #self.set_graph_module(graph_module)
+        
         self.set_graph(graph_module)
         
             
@@ -169,6 +171,9 @@ class System(object):
             self.network_tensor_dic_extra[0] = {"oo1":("SxA", 0), "oo2":("SxB", 0)} 
         
         self.Jleg_tau_0l_dic = {}   #used only in long rang int
+        
+        if j_power_r_max is not None:   #only for long range 
+            System.J_POWER_R_MAX = j_power_r_max 
     
     if 0: 
         @getter
@@ -250,7 +255,7 @@ class System(object):
        
         return sys
    
-    def set_graph_module(self, module):
+    def set_graph_module_del(self, module):
         #mapper = {"ternary":merapy.init_mera_graph}
         if module is None:
             import merapy.diagrams.V31.graph_ternary as module
@@ -269,11 +274,14 @@ class System(object):
                 g = module.__getattribute__(i)
                 self.__setattr__(i, g)
                 found.append(i)
+                #print_vars(vars(),  ['i', 'g.keys()'])
             except AttributeError as err:
+                warnings.warn(str(err))
                 not_found.append(i)
                 #print err
-        print "loading graphs in file %s, \n\tfound these %s, \n\tnot found and omit these%s"%(module.__file__, 
-                found, not_found)
+        if self.info>0: 
+            print "loading graphs in file %s, \n\tfound these %s, \n\tnot found and omit these%s"%(module.__file__, 
+                    found, not_found)
         self.graph_module_name = module.__name__.split('.')[-1]
 
     def fetch_op_names(self, type, range=None):
@@ -591,7 +599,8 @@ class System(object):
                 tensor = self.__getattribute__(w)[i][0]
                 if fewer:
                     #print "\t", i, tensor.data[:4].round(round),"  ",tensor.data[-4:].round(round), "  ", tensor.totDim
-                    res += "\t%d %s   %s   %d  buff %s\n"%(i, tensor.data[:4].round(round), tensor.data[-4:].round(round), tensor.totDim, tensor.buf_ref)
+                    res += "\t%d %s   %s   %d  buff %s\n"%(
+                            i, tensor.data[:4].round(round), tensor.data[-4:].round(round), tensor.totDim, tensor.buf_ref)
                 else:
                     #print "\t", i, tensor.data.round(round)
                     res +=  "\t%d%s\n"%(i, tensor.data.round(round))
@@ -1150,12 +1159,16 @@ class System(object):
 
         return  h0, Sz, Sp, Sm
 
-    @staticmethod   
-    def J_power_0l(l, alpha, beta):
+    #@staticmethod   
+    @classmethod 
+    def J_power_0l(cls, l, alpha, beta):
         """
-        l: distance between sites 0 and l
+            l: distance between sites 0 and l
         """
-        return beta/float(l)**alpha
+        if l<cls.J_POWER_R_MAX: 
+            return beta/float(l)**alpha
+        else: 
+            return 0.0 
 
     @staticmethod   
     def J_power_0l_only_for_test(l, alpha, beta):
@@ -1182,7 +1195,7 @@ class System(object):
                 15:-0.0 
                 
                 })
-            #print "J_power_0l is set to %s"%temp
+            
             if System.temp.has_key(l):
                 return System.temp[l]
             else:
@@ -1270,7 +1283,13 @@ class System(object):
 
     def tensor_network_mapping(self):
         pass
-
+    
+    def evaluation_map(self): 
+        """
+            maps a G -> \hat{G} and etc 
+        """
+        raise NotImplemented 
+    
     def contract(self, M, layer, G, nOps, Names, Ops, order, exception, extra=None, restart=True, branch=0, info=0):
         """
             there is bug in it
@@ -1285,7 +1304,7 @@ class System(object):
         if restart:  
             System.TNet_sys= TensorNetwork()
             System.TNet_sys.TG = G
-        TNet_sys= System.TNet_sys
+        TNet_sys = System.TNet_sys
         
         #tlink.tensor has n tensors, each store a perticular tensor from U, U_deg, V, etc
         
@@ -1324,7 +1343,20 @@ class System(object):
                 names= [TNet_sys.tlink[i].type_name for i in order[:G.size]]
                 print names
             n = G.size#TNet_sys.TG.nNode
-            output = TNet_sys.contract_except(n, order, exception=exception, info=info-1)#, memory_save= True )
+            try: 
+                output = TNet_sys.contract_except(n, order, exception=exception, info=info-1)#, memory_save= True )
+            except Exception as err: 
+                msg = 'additinal info: \n'
+                names= [TNet_sys.tlink[i].type_name for i in order[:G.size]]
+                for i in order[: G.size]: 
+                    t = TNet_sys.tlink[i]
+                    msg += '\t{}\t  {}\n'.format(t.type_name, t.shape)
+                
+                if not err.args: 
+                           err.args=('',)
+                err.args = (err.args[0] +'\n' + msg,)+err.args[1:]
+                raise 
+                   
             return output
     
     def contract_new(self, layer, G, exception, extra=None, extra_extra={}, restart=True, branch=0, info=0):
@@ -1388,13 +1420,16 @@ class System(object):
             return output
     
     
-    def add_env(self, M, layer, G, order, name, weight, add_tensor=None, branch=0, alpha=1.0, restart=True, info=0):
+    def add_env(self, M, layer, G, order, name, weight=None, add_tensor=None, branch=0, alpha=1.0, restart=True, info=0):
         """
             no need option of use_buf, as in tensor_network.contract_except we always use buf, so the tensor output.data below is already buffed
             one name may correspond to many nodes, contract except these nodes and add them together 
             this method corresponds to e.g. vidal's paper p.16 fig.21  第1和第4个图加起来
             elist: exception node list
+            
+            weight: this param will be deprecated in future,  through G.weight instead 
         """
+        weight = weight if weight is not None else G.weight 
         elist = G.find_node(name)
         nlist = len(elist)
         if nlist == 0:
@@ -1403,21 +1438,14 @@ class System(object):
             warnings.warn("in add_env node %s is not found in graph %s. just return None"%(
                 name, G.graph_name))
             return False
-
-        if info>0:
-            print "START add_env"
-            print 'exception name=', name, "nodes", elist
         
         #if isinstance(add_tensor, iTensor):  #sometimes this fails,  so use following instead
         if add_tensor is not None:
-            #add_tensor.data += output.data 
             for ne in range(nlist):
                 exception = elist[ne] 
-                if info>0:
-                    print 'eee exception=', exception
                 temp = self.contract(M, layer, G, nOps=0, Names=[], Ops=[], order=order, exception=exception, restart=restart, branch=branch, info=info-1)
                 temp.data *= weight
-                add_tensor.data  +=  temp.data 
+                add_tensor +=  temp
                 restart =  False 
             return True
         else:
@@ -1425,8 +1453,6 @@ class System(object):
             first = True
             for ne  in range(nlist):
                 exception = elist[ne] 
-                if info>0:
-                    print 'eee exception=', exception
                 temp = self.contract(M, layer, G, nOps=0, Names=[], Ops=[], order=order, exception=exception, restart=restart, branch=branch, info=info-1)
                 temp.data *= weight
                 
@@ -1437,16 +1463,13 @@ class System(object):
                     output.data += temp.data 
                 #这里把几个tensor按照weight加了起来，
                 restart =  False 
-            if info>0:
-                print "data (first and last 5 numbers):",  output.data[range(5) + range(-5, 0)].round(3)
-                print "END add_env\n"
             return output
 
     def add_env_new(self, M, layer, name, G, branch = 0, alpha=1.0, restart=True, info=0):
         """
-        one name may correspond to many nodes, contract except these nodes and add them together 
-        this method corresponds to e.g. vidal's paper p.16 fig.21  第1和第4个图加起来
-        elist: exception node list
+            one name may correspond to many nodes, contract except these nodes and add them together 
+            this method corresponds to e.g. vidal's paper p.16 fig.21  第1和第4个图加起来
+            elist: exception node list
         """
         
         elist=G.find_node(name)
@@ -1455,9 +1478,6 @@ class System(object):
         #    print "error, operator %s not found, exit"%name
         #    exit()
 
-        if info>0:
-            print "START add_env"
-            print 'exception name=', name, "nodes", elist
         
         first = True
         for ne  in range(nlist):
@@ -1474,16 +1494,14 @@ class System(object):
                 output.data = T_tmp.data*weight + output.data*alpha
             #这里把几个tensor按照weight加了起来，
             restart =  False 
-        if info>0:
-            print "data (first and last 5 numbers):",  output.data[range(5) + range(-5, 0)].round(3)
-            print "END add_env"
         return output
 
     def add_env_many(self, M, layer, name, G_dic, add_tensor=None, key_list=None, weight_dic=None, branch = 0, alpha=1.0, restart=True, info=0):
         """
-            params:
-                add_tensor: of type iTensor.  if it is not none, then result will add to add_tensor.data
             add_env for a set of graphs, G, order, weight are all dict
+            params:
+                add_tensor: of type iTensor,  if it is not none, then result will add to add_tensor.data
+                key_list: selected keys of graphs 
         """
 
         if key_list is not None:
@@ -1545,7 +1563,7 @@ class System(object):
 
     def add_env_many_many(self, M, layer, name_list, G_dic, key_list=None, weight_dic=None, branch = 0, alpha=1.0, restart=True, info=0):
         """
-        add_env for a set of graphs, G, order, weight are all dict
+            add_env for a set of graphs, G, order, weight are all dict
         """
         ilayer = layer
         
@@ -1938,7 +1956,7 @@ class System(object):
         self.energy_record[iter] = (self.energy, time.time(), time.clock())
     
     def get_energy_exact(self):
-        J_NNN = self.model_param["J_NNN"]
+        #J_NNN = self.model_param["J_NNN"]
         temp = {0.5:-1.5, 0.241186:-1.607784749}
 
         if self.model == "Heisenberg":
@@ -1950,11 +1968,15 @@ class System(object):
                 energy_exact = temp[0.241186]
             else:
                 energy_exact = -1.644934
-        if self.model == "Ising":
+        elif self.model == "Ising":
             from math import pi
             energy_exact = -4./pi  #1.27323954474
-        if self.model == 'Potts':
+        elif self.model == 'Potts':
             energy_exact = -2.4359911239
+        else: 
+            #print_vars(vars(),  ['self.model'])
+            #raise 
+            energy_exact = np.nan 
         return energy_exact
     
     def display(self, iter, filename, pace=1, interval=150):
@@ -2137,7 +2159,6 @@ class System(object):
         if state_bac == "play": 
             print "after expansion, tensor_player is switched from 'play' to 'record'"
             tensor_player.NEXT_STATE = "record" 
-        
 
 def set_ham_to_identity(sys):
     """

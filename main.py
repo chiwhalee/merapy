@@ -445,6 +445,8 @@ class Main(object):
             self.mera_kwargs = mera_kwargs
             self.sys_kwargs= sys_kwargs
             self.do_measure = kwargs.get('do_measure')
+            self.j_power_r_max = kwargs.get('j_power_r_max', None)
+            
             if self.do_measure is None: 
                 self.do_measure = False
         
@@ -543,6 +545,7 @@ class Main(object):
                     symmetry=self.SYMMETRY, model=self.MODEL, 
                     only_NN = self.only_NN, only_NNN = self.only_NNN,  
                     energy_exact=self.energy_exact, combine_2site=self.combine_2site, 
+                    j_power_r_max=self.j_power_r_max, 
                     **self.sys_kwargs)
             
             self.S.init_Hamiltonian()
@@ -766,12 +769,15 @@ class Main(object):
                 resume=self.resume, auto_resume=self.auto_resume, info=self.info-1, **kwargs)
         
         
-        if do_measure:  
-            ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-            if ppp is not None : 
-                exclude_which = self.measurement_args.get('exclude_which', [])
-                exclude_which.append('scaling_dim')
-                self.measure_S(self.S, ppp, exclude_which=exclude_which)
+        if do_measure:
+            try: 
+                ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+                if ppp is not None : 
+                    exclude_which = self.measurement_args.get('exclude_which', [])
+                    exclude_which.append('scaling_dim')
+                    self.measure_S(self.S, ppp, exclude_which=exclude_which)
+            except Exception as err: 
+                warnings.warn(str(err))
        
         return self.M, self.S
    
@@ -838,11 +844,14 @@ class Main(object):
         
         SI.scale_invariant()
         
-        if do_measure: 
-            ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-            if ppp is not None : 
-                exclude_which = self.measurement_args.get('exclude_which', [])
-                self.measure_S(self.S, ppp, exclude_which=exclude_which)
+        if do_measure:
+            try: 
+                ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+                if ppp is not None : 
+                    exclude_which = self.measurement_args.get('exclude_which', [])
+                    self.measure_S(self.S, ppp, exclude_which=exclude_which)
+            except Exception as err: 
+                warnings.warn(str(err))
         
         if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
             self.transfer_pickle_file()

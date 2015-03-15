@@ -111,6 +111,10 @@ class Graphics():
     
     from_dict = init_from_dict
     
+    @staticmethod 
+    def example(): 
+        raise NotImplemented 
+    
     def set_contract_order(self, order):
         if isinstance(order[0], str): 
             self.contract_order = [self.find_node(n) for n in order]
@@ -311,7 +315,6 @@ class Graphics():
             G[n] = val
         G = Diagram(G)
         return G
-            
         
     def to_networkx(self): 
         pass
