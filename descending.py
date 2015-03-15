@@ -6,7 +6,7 @@ from merapy.system_parameter import SystemParam
 #from merapy.tensor import *
 from merapy.tensor_network import *
 from merapy.mera import *
-from merapy.hamiltonian import *
+#from merapy.hamiltonian import *
 
 #from init_mera_graph import *  #init_mera_graph, init_g2
 #import init_mera_graph
@@ -35,7 +35,6 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
         temp = S.add_env_many(M, ilayer_m1, name, G_2_2, key_list=None, info=info-1)
         S.rho_2[ilayer_m1].O[0].data += temp.data
 
-
     if not S.only_NN:
         G_3_2 = S.G_3_2
         G_3_3 = S.G_3_3
@@ -48,9 +47,9 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
             S.add_env_many(M, ilayer_m1, name, G, add_tensor=S.rho_3[ilayer_m1].O[0], key_list=None, info=info-1)
 
 
-
 if __name__ == "__main__": 
     from merapy.mera import test_Mera
+    from merapy.hamiltonian import System 
     if 1:
         M = Mera.example(trunc_dim=2, tot_layer=4, symmetry="Z2")
         sys = System.example(M, model="Ising", symmetry="Z2", only_NN=False)
@@ -61,20 +60,7 @@ if __name__ == "__main__":
 
 
 
-    def reset_mera(M):
-        import numpy as np
-        for i in range(M.num_of_layer-1):
-            t = M.V[i].tensor[0]
-            rank = t.rank
-            qDims= np.empty(rank, "int")
-            iDims= np.empty(rank, "int")
-            qDims[:]= [0, 0, 0, 0]
-            iDims[:] = 0
-            t.data[:] = 0.0
-            t.set_element(qDims, iDims, 1.0)
-
-
-    from merapy.top_level import *
+    from merapy.top_level import top_level_product_state_u1 
     top_level_product_state_u1(M, sys)
     print sys
     for i in range(M.num_of_layer-1, 0, -1):

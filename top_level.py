@@ -150,19 +150,19 @@ def top_level_product_state(M,S):
     S.rho_2[iLayer].O[j].data[:] = 0.0
     
     #rank = (2, 2)
-    rank = S.rho_2[iLayer].O[j].rank
+    rank = S.rho_2[iLayer][j].rank
     qDims= np.empty(rank, "int")
     iDims= np.empty(rank, "int")
     
     # 0.5|00><00|
     qDims[:] = 0
     iDims[:] = 0
-    S.rho_2[iLayer].O[j].set_element(qDims, iDims, 0.5)
+    S.rho_2[iLayer][j].set_element(qDims, iDims, 0.5)
     
     # 0.5|11><11|    
     qDims[:] = 1
     iDims[:] = 0
-    S.rho_2[iLayer].O[j].set_element(qDims, iDims, 0.5)
+    S.rho_2[iLayer][j].set_element(qDims, iDims, 0.5)
     
     if not S.only_NN:
         warnings.warn("here buffer may be needed; rho_3 thus define correct?")

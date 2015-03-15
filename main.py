@@ -313,7 +313,7 @@ if 0:  #archive
             
             #每次更改耦合常数算新的值，要重新初始化
             if self.S.model == "Ising" :
-                self.S.init_Hamiltonian(self.M)
+                #self.S.init_Hamiltonian(self.M)
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, True)

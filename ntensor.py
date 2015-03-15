@@ -135,7 +135,7 @@ class TensorBase(object):
         return res
     
     def __radd__(self, other):
-        res= self.copy()
+        res = self.copy()
         if isinstance(other, float): 
             res.data = self.data + other
         else: 
@@ -966,6 +966,7 @@ if 0:
     #        print u
     #        print u.data, 'shape', u.data.shape
     #        print np.where(u.data==0)
+
 """
 about __new__: 
     __new__ is static class method, while __init__ is instance method.

@@ -375,7 +375,8 @@ class iTensor(TensorBase):
             if symmetry == 'Z2' : 
                 qsp = cls.easy_init( [1, -1], [2, 2]).copy_many(rank)
             elif symmetry == 'U1' : 
-                qsp = cls.easy_init( [0, 1, -1], [2, 1, 1]).copy_many(rank, ) #reverse=range(rank//2, rank))
+                #qsp = cls.easy_init( [0, 1, -1], [2, 1, 1]).copy_many(rank, ) 
+                qsp = cls.easy_init( [0, 1, -1], [2, 1, 1]).copy_many(rank, reverse=range(rank//2, rank))  #
             elif symmetry == 'Travial' : 
                 qsp = cls.easy_init( [1], [5]).copy_many(rank)
                 
@@ -2120,8 +2121,9 @@ class iTensor(TensorBase):
             raise 
         
 
-        #T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
-        if track_name: 
+        
+        #if track_name: 
+        if info>0: 
             T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
         T3.ind_labels= V3
         
@@ -2895,6 +2897,8 @@ class iTensor(TensorBase):
     def from_diagonal(qn_list, data_list): 
         pass 
     
+    def set_data_to_zero(self): 
+        self.data[: ] = 0.0
     
 class iTensor_new(TensorBase):
     def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
