@@ -1,6 +1,6 @@
 
 from merapy.quantum_number_py import QspZ2, QspU1, QspTravial
-from merapy.tensor_py import iTensor
+from merapy.tensor_py import iTensor, iTensorFactory 
 
 
 from merapy.context_util import make_temp_dir

@@ -359,8 +359,8 @@ class TestIt(unittest.TestCase):
             a=rpyc_load(fn, use_local_storage=1)
             self.assertTrue(a==obj)
             
-            fn ='/home/zhli/backup_tensor_dir/run-long-heisbg/mera/alpha=2.0/4.pickle' 
-            a=rpyc_load(fn, use_local_storage=1)
+            #fn ='/home/zhli/backup_tensor_dir/run-long-heisbg/mera/alpha=2.0/4.pickle' 
+            #a=rpyc_load(fn, use_local_storage=1)
     
     def xtest_make_temp_dir(self): 
         with make_temp_dir() as dd: 

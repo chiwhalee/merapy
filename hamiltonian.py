@@ -1330,11 +1330,15 @@ class System(object):
                 elif hasattr(self.mera, op_name):
                     TNet_sys.tlink[n]=M.__getattribute__(op_name)[layer + x][0].shallow_copy()
                 else:
-                    raise
+                    raise ValueError(str(op_name))
                 TNet_sys.tlink[n].type_name = op_name
-        except :
+        except Exception as err:
             msg = "error when mapping network to tensor, op_name=%(op_name)s, layer=%(layer)s"%vars()
-            raise Exception(msg)
+            if not err.args: 
+                       err.args=('',)
+            err.args = (err.args[0] +'\n' + msg,)+err.args[1:]
+            
+            raise 
 
         
         if 1:

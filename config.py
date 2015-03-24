@@ -15,6 +15,7 @@ if 1:
     from merapy.context_util import LOCAL_IP, LOCAL_USERNAME 
   
 import merapy.updaters_binary as upbin
+import merapy.schedule as schedule_module
 
 __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_model_param", "heisbg_model_param", 
         "updaters_z2", "updaters_u1", "updaters_binary", 
@@ -131,12 +132,13 @@ CFG_MERA.update({
             'which': None, 
             }, 
         
-        #'schedule':{
-        #    'schedule': None, 
-        #    'mera_shape_min': None, 
-        #    'mera_shape_max': None, 
-        #    'dim_diff_remap': {}, 
-        #    } , 
+        'schedule':{
+            #'schedule': None, 
+            'schedule': schedule_module.schedule_scale_invar,  
+            'mera_shape_min': (4, 4), 
+            'mera_shape_max': (12, 4), 
+            'dim_diff_remap': {}, 
+            } , 
         #'BACKUP_BASE_DIR': MERA_BACKUP_DIR,         
         #'BACKUP_BASE_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL,         
         'MERA_BACKUP_DIR': MERA_BACKUP_DIR, 
@@ -165,7 +167,8 @@ CFG_ISING_BASIC.update({
 CFG_HEISBG_BASIC = copy_config(CFG_MERA)
 CFG_HEISBG_BASIC.update({
     'unitary_init': 'random_unit_tensor',
-    'updaters':None, 
+    #'updaters':None, 
+    'updaters':updaters_u1, 
     #model specific
     'combine_2site':True, 
     'MODEL': 'Heisenberg',

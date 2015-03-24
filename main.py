@@ -755,6 +755,8 @@ class Main(object):
             descending_func = self.updaters["descending_func"]
             update_mera_func = self.updaters["update_mera_func"]
             rho_top_func = self.updaters["rho_top_func"]
+        else: 
+            raise ValueError(str(self.updaters))
         
         
         temp = ['use_local_storage' ]
@@ -1148,7 +1150,7 @@ class Main(object):
                 job_status = 'COMPLETED'
                 msg += 'run one COMPLETED.' 
             elif status== 'locked': 
-                msg += 'job exists' 
+                msg += 'job %s exists'%(job_id, ) 
                 
         except KeyboardInterrupt: 
             #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
