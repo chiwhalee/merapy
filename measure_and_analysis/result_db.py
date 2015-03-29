@@ -16,6 +16,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
 import socket 
+import IPython.display as display
 
 import importlib
 from matplotlib.lines import Line2D
@@ -100,6 +101,7 @@ __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',
     'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', ]
 
 FIELD_NAME_LIST = [
+        'energy', 
     'central_charge', 'scaling_dim', 'correlation', 'correlation_extra',  
     'entanglement_entropy', 'entanglement_spectrum', 'magnetization', 
     'entanglement_brute_force', 'entanglement_brute_force_6', 
@@ -110,11 +112,20 @@ FIELD_NAME_LIST = [
     #'entanglement_brute_force_9_aver' , 
     ]
 
+def html_border(s, fontsize=20): 
+   sss=  """
+    <div id='page' style='width: 600px'>
+      <h1 style='border:1.5px black solid; font-size:%(fontsize)dpx;'>
+       %(s)s
+      </h1>
+    </div>
+   """%vars() 
+   return sss
+
 class AnalysisTools(object): 
     """
         an abstract base calss 
     """
-    
     
     def filter_array(self, x, x_min=None, x_max=None, period=None, x1=None) :  
         r = x1 
@@ -339,7 +350,16 @@ class AnalysisTools(object):
             l.set_alpha(0)
             l.set_label('')
         ax.legend()        
-        
+    
+    def html_border(self, s): 
+        return display.HTML(html_border(s))
+    
+    def remark(self, s, style=None, color=None,  border=0): 
+        if color is not None: 
+            s= '<font color=%s> %s </font>'%(color, s)
+        if border: 
+            s= html_border(s)
+        return display.HTML(s)
 
 #class ResultDB_Utills
 
@@ -460,13 +480,14 @@ class ResultDB(OrderedDict, AnalysisTools):
             self._db[k] = v
             pass
     
-    def load_S(self, sh=None, path=None, to_obj=False):
+    def load_S(self, sh, path=None, to_obj=False):
         """
             todo: load 时，应该支持 update state 
         """
-        if sh is not None: 
-            fn = 'N=%d-D=%d.pickle'%(sh[0], sh[1])
-            path = '/'.join([self.parpath, fn])
+        
+        #fn = 'N=%d-D=%d.pickle'%(sh[0], sh[1])
+        fn = self.__class__.shape_to_backup_fn(sh)
+        path = '/'.join([self.parpath, fn])
             
         #with open(path, 'rb') as inn: 
         #    res=pickle.load(inn)
@@ -512,11 +533,14 @@ class ResultDB(OrderedDict, AnalysisTools):
             #print 'kkk', k, key_list
             if not hasattr(temp, 'has_key'):   # val of rec
                 if info>0: 
-                    print 'not has this key: %s'%(k, )
+                    msg='not has this key: %s'%(k, )
+                    warnings.warn(msg)
                 return False
             if not temp.has_key(k): 
                 if info>0: 
-                    print 'not has this key: %s'%(k, )
+                    msg='not has this key: %s'%(k, )
+                    warnings.warn(msg)
+                    
                 return False
             temp = temp[k]
         
@@ -1162,9 +1186,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         dic_temp = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
         dic.update(dic_temp)
         
-            
         if kwargs.get('yfunc'): 
             y = kwargs['yfunc'](y)
+        if kwargs.get('xfunc'): 
+            x = kwargs['xfunc'](x)
         if fig_type is None: 
             lines = ax.plot(x, y, **dic)
         elif fig_type == 'scatter' : 
@@ -1996,40 +2021,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             self.add_key_list(aa, val=recs, verbose=1)
             self.commit(info=1)
         
-    def get_energy(self, sh, which='eng', iter_min=0, iter_max=1e6, system_class=None, **kwargs):
-        aa = ['energy', tuple(sh)]
-        iter_min = 0 if iter_min is None else iter_min
-        iter_max = 1e6 if iter_max is None else iter_max
-        if not self.has_key_list(aa): 
-            if system_class is None: 
-                from merapy.hamiltonian import System as system_class
-            if len(sh)==2: 
-                sh = sh[0], sh[1]-1
-            else: 
-                sh = sh[0], sh[1]-1, sh[2]
-            #path = self.parpath  +  system_class.shape_to_backup_fn(*sh)
-            path = '/'.join([self.parpath, system_class.shape_to_backup_fn(*sh)])
-            #print path; exit()
-            res = system_class.load(path)
-            recs = res.energy_record
-            self.add_key_list(aa, val=recs, verbose=1)
-            self.commit(info=1)
-        else: 
-            sh = sh[0], sh[1]
-            recs = self['energy'][sh]
-        if which in ['energy', 'eng']: 
-            return recs
-            
-        elif which == 'diff': 
-            pass
-            temp = np.asarray( [(k, v[0]) for k, v in recs.iteritems() if iter_min< k < iter_max])
-            iter = temp[: , 0].astype(int)
-            eng = temp[: , 1]
-            diff = eng[1: ] -eng[0: -1]
-            return diff
-        else: 
-            raise
-        
     
     def count_eng_fluctuation(self, sh, iter_min=0, iter_max=1e10, info=0, **kwargs): 
         try: 
@@ -2058,27 +2049,13 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         return num_pos, mean_fluc
     
-    def _plot_energy_vs_time(self, sh, switch='diff',system_class=None, **kwargs):
-        if 0: 
-            aa = ['energy', tuple(sh)]
-            if not self.has_key_list(aa): 
-                if system_class is None: 
-                    from merapy.hamiltonian import System as system_class
-                if len(sh)==2: 
-                    sh = sh[0], sh[1]-1
-                else: 
-                    sh = sh[0], sh[1]-1, sh[2]
-                path = self.parpath  +  system_class.shape_to_backup_fn(*sh)
-                #print path; exit()
-                res = system_class.load(path)
-                recs = res.energy_record
-                self.add_key_list(aa, val=recs, verbose=1)
-                self.commit(info=1)
-            else: 
-                sh = sh[0], sh[1]
-                recs = self['energy'][sh]
-                
-        recs = self.get_energy(sh)
+    def _plot_energy_vs_time(self, sh, switch='diff', diff_lim=None, only_sign=False, sign_center=0, system_class=None, **kwargs):
+        try:         
+            recs = self.get_energy(sh)
+        except Exception as err: 
+            warnings.warn(str(err))
+            return 
+            
         if 1:
             t_eng = [(t, v[0])  for t, v in recs.iteritems()]
             t, eng = zip(*t_eng)
@@ -2087,14 +2064,25 @@ class ResultDB(OrderedDict, AnalysisTools):
                 t_diff = [(t_eng[i+1][0], (t_eng[i+1][1]-t_eng[i][1])/(t_eng[i+1][0]-t_eng[i][0])) 
                         for i in range(len(t_eng)-1)]
                 t, diff = zip(*t_diff)
+                t = np.array(t, dtype=int)
                 diff = np.array(diff)
+                if diff_lim is not None: 
+                    arg = np.where(np.abs(diff)>=diff_lim)
+                    t = t[arg]
+                    diff = diff[arg]
                 diff_log = np.log10(abs(diff))  # 必须在log下画，否则什么都看不清楚
                 show_fig = kwargs.get('show_fig')
                 kwargs['show_fig'] = 0
-                fig=self._plot(t, np.sign(diff), label='$sign(E_{t+1}-E_t)$', **kwargs)           
+                if not kwargs.has_key('label'): 
+                   kwargs['label']  = '$sign(E_{t+1}-E_t)$' 
+                fig=self._plot(t, 0.8*np.sign(diff) + sign_center , **kwargs)           
                 kwargs['show_fig'] = show_fig
                 kwargs['fig'] = fig
-                self._plot(t, diff_log, label='$log(E_{t+1}-E_t)$', xlabel='t', **kwargs)
+                if not only_sign: 
+                    kk = kwargs.copy()
+                    if kk.has_key('label'): 
+                        kk.pop('label')
+                    self._plot(t, diff_log, label='$log(E_{t+1}-E_t)$', xlabel='t', **kk)
             elif switch  == 'err': 
                 #eng_min = db.get_energy_min()
                 eng = np.array(eng)
@@ -2139,7 +2127,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                     new[field_name][sh][it] = val
             
             #pprint.pprint(new['entanglement_entropy'][12, 5])
-            #print new.fetch_easy_new( 'correlation_extra', (12, 5), sub_key_list=['pm', ])
+
             new['version'] = 1.0
             new.commit(info=1)
             cmd = 'mv  %s %s'%(new.path, self.path)
@@ -2172,24 +2160,28 @@ class ResultDB(OrderedDict, AnalysisTools):
                 exclude_which=exclude_which, force=force, 
             fault_tolerant=fault_tolerant, **kwargs)
 
-
 class ResultDB_mera(ResultDB): 
+    AUTO_UPDATE = False 
     def __init__(self, parpath,  **kwargs): 
         kwargs.update(algorithm='mera')
         ResultDB.__init__(self, parpath,  **kwargs)
-
+    
+    def update_db_structure(self): 
+        pass 
+    
+    def parse_fn(self, fn):
+        return System.backup_fn_parse(fn)
 
     @staticmethod
     def shape_to_backup_fn(sh,  nqn=None):
-        layer, dim = sh
+        #layer, dim = sh
+        dim, layer = sh
         nqn = "5_" if nqn == 5 else "" 
         layer = "-%dlay"%layer if layer != 3 else ""
         res= "%(nqn)s%(dim)d%(layer)s.pickle"%vars()
         return res
     backup_fn_gen = shape_to_backup_fn 
     
-    def parse_fn(self, fn):
-        return System.backup_fn_parse(fn)
     
     def get_correlation(self, sh, which='correlation_extra', direct='pm', 
             r_min=None,  r_max=None, period=None,  field_surfix=None, fault_tolerant=1, info=0): 
@@ -2253,7 +2245,49 @@ class ResultDB_mera(ResultDB):
            
                    
         return x, y    
-    
+
+    def get_energy(self, sh, which='eng', iter_min=0, iter_max=1e6, system_class=None, **kwargs):
+        aa = ['time_serials', tuple(sh)]
+        iter_min = 0 if iter_min is None else iter_min
+        iter_max = 1e6 if iter_max is None else iter_max
+        if not self.has_key_list(aa, info=1): 
+        #if 1: 
+            if 0: 
+                if system_class is None: 
+                    from merapy.hamiltonian import System as system_class
+                if len(sh)==2: 
+                    sh = sh[0], sh[1]-1
+                else: 
+                    sh = sh[0], sh[1]-1, sh[2]
+                
+                path = '/'.join([self.parpath, system_class.shape_to_backup_fn(*sh)])
+                res = system_class.load(path)
+            else: 
+                if len(sh)==2: 
+                    sh = sh[0], sh[1]-1
+                else: 
+                    sh = sh[0], sh[1]-1, sh[2]
+                res = self.load_S(sh)
+            recs = res.energy_record
+            #self.add_key_list(aa, val=recs, verbose=1)
+            #self.commit(info=1)
+        else:
+            sh = sh[0], sh[1]
+            recs = self['time_serials'][sh]
+        if which in ['energy', 'eng']: 
+            return recs
+            
+        elif which == 'diff': 
+            pass
+            temp = np.asarray( [(k, v[0]) for k, v in recs.iteritems() if iter_min< k < iter_max])
+            iter = temp[: , 0].astype(int)
+            eng = temp[: , 1]
+            diff = eng[1: ] -eng[0: -1]
+            return diff
+        else: 
+            raise
+        
+
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.02 
@@ -2357,7 +2391,6 @@ class ResultDB_vmps(ResultDB):
             y = y[a: b]
                    
         return x, y    
-
 
 class ResultDB_idmrg(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -2555,8 +2588,8 @@ class ResultDB_idmrg(ResultDB):
             return fig, ax
     
     def calc_EE_from_finite_mps(self, sh, force=0, which_log='ln', fault_tol=1, info=0):
-        field = 'EE_from_finite_mps'
         field = '_'.join([field, which_log])
+        field = 'EE_from_finite_mps'
         rec=self.fetch_easy(field, sh)
         if rec is None or force:
             try:
@@ -2617,24 +2650,23 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
-
-        xx=an_vmps.an_main_symm
-        fig, ax=xx.fig_layout(); ax.set_title('see also vmps')
-        aa = [(1.0,  0.0)]
-        sh=(100, 100)
-        for i, a in enumerate(aa):
+        #from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
+        #from current.run_long_better.analysis_long import an_mera 
+        from merapy.run_heisbg_NNN.analysis import  an_mera as an_nnn
+        xx=an_nnn.an_main    
+        fig=None 
+        sh=(8, 4)
+        aa = xx.filter_alpha(resolution=0.2)
+        fig, ax = xx.fig_layout()
+        for a in aa:
+            #ax=xx.add_ax(fig); fig=ax.figure
             db=xx[a]
-            db.plot_field_vs_length('entanglement_entropy', sh, key_list=['EE'],
-                                    label =a[0], 
-                rec_getter=xx.result_db_class._get_EE_ln_from_log2.im_func, 
-                rec_getter_args={'i':50}, 
-                                    #r_min=(sh[0])//5, 
-                                    r_min=0, 
-                                    period=1,  
-                                    #r_max=(sh[0])//3, 
-                                    r_max=40,
-                                    ax=ax)            
+            try: 
+                db.plot_energy_vs_time(sh, 'diff', label=a,  title=a, only_sign=1,   ax=ax)           
+            except: 
+                raise 
+        ax.set_ylim(-2, 2)
+
         xx.show_fig()
 
     def test_insert_and_fetch(self): 
