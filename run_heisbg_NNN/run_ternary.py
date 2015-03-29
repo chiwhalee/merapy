@@ -38,7 +38,7 @@ for c in config_group:
         c['schedule'].update(q_iter_max=5, mera_shape_max=(4, 4), do_measure=0)
         print  c['backup_parpath']
 
-Main.run_many(config_group, nproc=12, parallel=1)
+#Main.run_many(config_group, nproc=12, parallel=1)
 
 
     

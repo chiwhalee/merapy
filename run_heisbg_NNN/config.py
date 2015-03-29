@@ -14,6 +14,16 @@ def make_config(J2, algorithm='mera', alg_surfix='', backup_parpath=None, root1=
     cfg.update(algorithm=algorithm, algorithm_surfix=alg_surfix, combine_2site=1)
     cfg['model_param'].update(J_NN=1.0, J_zz=1.0, J_NNN=J2)
     cfg['do_measure'] = 1
+    cfg['measurement_args'] = {
+            'exclude_which': [
+                'entanglement_brute_force', 
+                #'entanglement_brute_force_6',  
+                'entanglement_brute_force_9', 
+                'entanglement_brute_force_9_aver'
+                ], 
+            'which': None, 
+            }, 
+    
     
     if 1:
         exact = None 

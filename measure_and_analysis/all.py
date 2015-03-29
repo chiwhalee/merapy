@@ -7,4 +7,7 @@ from merapy.measure_and_analysis.result_db import ResultDB
 from merapy.measure_and_analysis.tabulate import tabulate
 
 
- 
+def energy(S) : 
+    return S.energy 
+
+

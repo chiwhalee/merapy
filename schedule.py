@@ -30,13 +30,22 @@ if 1:
         {'ansatz':'prod_state', 'shape': (12,6),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'prod_state', 'shape': (12,7),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'prod_state', 'shape': (12,8),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+
         
         {'ansatz':'prod_state', 'shape': (14,4,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'prod_state', 'shape': (14,5,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         
+        {'ansatz':'prod_state', 'shape': (16,4),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        {'ansatz':'prod_state', 'shape': (16,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        {'ansatz':'prod_state', 'shape': (16,6),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        
         {'ansatz':'prod_state', 'shape': (17,4,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'prod_state', 'shape': (17,5,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
-        
+
+        {'ansatz':'prod_state', 'shape': (20,4),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        {'ansatz':'prod_state', 'shape': (20,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        {'ansatz':'prod_state', 'shape': (20,6),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+ 
         {'ansatz':'prod_state', 'shape': (21,4,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'prod_state', 'shape': (21,5,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         
@@ -67,6 +76,7 @@ if 1:
         
         {'ansatz':'scale_invar', 'shape': (16,4,3),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'scale_invar', 'shape': (16,5,3),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        {'ansatz':'scale_invar', 'shape': (16,6,3),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
        
         # note (17, 5)=(7, 4, 4, 1, 1)
         {'ansatz':'scale_invar', 'shape': (17,4,5),  'q_iter':10000,  'energy_diff_min': 1e-9}, 
@@ -82,6 +92,7 @@ if 1:
         
         {'ansatz':'scale_invar', 'shape': (20,4),    'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'scale_invar', 'shape': (20,5),    'q_iter':10000,  'energy_diff_min': 1e-9}, 
+        {'ansatz':'scale_invar', 'shape': (20,6),    'q_iter':10000,  'energy_diff_min': 1e-9}, 
        
         {'ansatz':'scale_invar', 'shape': (24,4),    'q_iter':10000,  'energy_diff_min': 1e-9}, 
         {'ansatz':'scale_invar', 'shape': (24,5),    'q_iter':10000,  'energy_diff_min': 1e-9}, 

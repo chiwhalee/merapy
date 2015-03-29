@@ -123,9 +123,12 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             field = list(FIELD_NAME_LIST)
             all_func = all_mera
             if S.model == 'wigner_crystal': 
-                db_version = 1.0 
+                #db_version = 1.0 
+                pass 
             else: 
-                db_version = None
+                #db_version = None
+                #db_version = rdb.get('version')
+                pass 
            
             if S.symmetry == 'U1': 
                 try: 
@@ -136,19 +139,29 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             
             propt = S.key_property()
             dim,  layer = propt['trunc_dim'], propt['num_of_layer']
+            nqn = len(propt['qns'])
             iter = S.iter
             fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
             path = parpath + '/' + fn
             
-            if db_version is None: 
-                k = (dim, layer, iter)
-                if not rdb.has_key(k): 
-                    raise NotImplemented   #后来修改了，不支持，需要再修改
-                    rdb[k] = OrderedDict()
-            
-            shape = (dim, layer)
+            #if db_version is None: 
+            #    k = (dim, layer, iter)
+            #    if not rdb.has_key(k): 
+            #        raise NotImplemented   #后来修改了，不支持，需要再修改
+            #        rdb[k] = OrderedDict()
+            print_vars(vars(),  ['nqn'])
+            if nqn <= 3: 
+                shape = (dim, layer)
+            else: 
+                shape = (dim, layer, nqn)
             corr_param = dict(direction=None, force_update=False, distance_max=10**4)
             rdb_class= ResultDB_mera 
+            
+            #if check_convergence: 
+            #    if abs(S.energy_diff_std) < energy_diff_min:
+            #        allow_measure = True
+            #    else: 
+            #        allow_measure = False 
             
         elif algorithm == 'mps': 
             #field = ['energy', 'correlation']
@@ -157,7 +170,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
             #S = S['mps']  #fuck, this is bad, but I like bad!
             #mps= S 
             mps= S['mps']
-            db_version = 1.0
+            #db_version = 1.0
             N, D = mps.N, mps.D
             #if mps.symmetry is not None : 
             if hasattr(mps, 'symmetry'):  
@@ -174,20 +187,6 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         elif algorithm == 'idmrg': 
             field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
                     'entanglement', 'entanglement_spectrum']
-            if 0: 
-                if S.get('which_minimize')=='psi_guess': 
-                    diff = S.get('energy_diff_2')
-                elif S.get('which_minimize')=='lam_guess': 
-                    diff = S.get('energy_diff')
-                else: 
-                    diff = None
-                diff_tol = S.get('energy_diff_tol')
-                if diff is not None and diff_tol is not None : 
-                    if not abs(diff) <= abs(diff_tol):   
-                        allow_measure = False 
-                        #print 'state is not converged. not allowing measure. return None'
-                        #return 
-            
             if check_convergence: 
                 c1 = S.get('converge_count')
                 c2 = S.get('converge_count_lim')
@@ -201,7 +200,7 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
                 all_func = all_idmrg
             A = S['A']
             symm = None if isinstance(A, np.ndarray) else A.symmetry 
-            db_version = 1.0
+            #db_version = 1.0
             N = 0
             #D = A.shape[0] if symm is None else A.shape[0].totDim 
             D = S.get('trunc_dim')
@@ -244,9 +243,12 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
 
     if rdb is None: 
         #rdb = ResultDB(parpath, dbname=None, version=db_version, use_local_storage=use_local_storage)
-        #rdb = ResultDB(parpath, dbname=None, use_local_storage=use_local_storage)
         rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+    
+    #if algorithm == 'mera' :  # backward compatibiliy for ResultDB version = None
+    db_version = rdb.get('version')
         
+     
     failed_list = []
     for w in which: 
         ff = func[w]
@@ -281,12 +283,15 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         print msg
     
     if algorithm == 'mera' :
-        print '\tenergy...     done'
-        if db_version is None: 
-            rdb[k].update({'energy': S.energy})
-        elif db_version >= 1.0:
-            if not rdb.has_key('energy'): rdb.add_key_list(['energy', shape])
-            rdb['energy'][shape] = S.energy_record
+        rdb['algorithm'] = 'mera'
+        #print '\tenergy...     done'
+        #if db_version is None: 
+        #    rdb[k].update({'energy': S.energy})
+        #elif db_version >= 1.0:
+        #    pass 
+        #    rdb.insert(field_name='energy', sh=shape, iter=-1, val=S.energy)
+        #    #if not rdb.has_key('energy'): rdb.add_key_list(['energy', shape])
+        #    #rdb['energy'][shape] = S.energy_record
     elif algorithm == 'mps': 
        
         rdb['algorithm'] = 'mps'
@@ -330,10 +335,13 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     if algorithm is None: 
         if 'mera' in aaa: 
             algorithm = 'mera'
+            rdb_class= ResultDB_mera
         elif 'mps' in aaa and 'idmrg' not in aaa: 
             algorithm = 'mps'
+            rdb_class= ResultDB_vmps
         elif 'idmrg' in aaa:
             algorithm = 'idmrg'
+            rdb_class= ResultDB_idmrg 
         else: 
             raise
     
@@ -341,7 +349,9 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     for dir in dir_list: 
         #fori d in dim_list: 
         if sh_list  == 'all': 
-            db = ResultDB(dir, algorithm=algorithm)
+            db = rdb_class(dir, algorithm=algorithm)
+            #print_vars(vars(),  ['db.keys()', 'db["algorithm"]'])
+            #raise 
             __sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
         
         for sh in __sh_list: 
@@ -376,7 +386,7 @@ def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **
     arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
     if not use_dist_comp: 
         for i in arg_group: 
-          
+            
             measure_S(**i)
     else: 
         from mypy.brokest.brokest import queue, run_many 
