@@ -407,10 +407,9 @@ class Main(object):
     def __init__(self, system_class=None, mera_class=None, updaters=None, trunc_dim=None, tot_layer=None, unitary_init=None, q_iter=8, q_lay=3, info=0,
         MODEL="Heisenberg", SYMMETRY="Z2", only_NN=True, only_NNN=False, use_player=True, message=None, 
         filename=None, backup_fn='auto', backup_parpath=None, resume=False, auto_resume=True, J_NNN = None, USE_REFLECTION=None, 
-        NUM_OF_THREADS=1, RAND_SEED=1234, USE_CUSTOM_RAND=True, 
+        NUM_OF_THREADS=1, rand_seed=1234, USE_CUSTOM_RAND=True, 
         model_param=None, energy_exact=None, combine_2site=True, qsp_base=None, qsp_max=None, 
         mera_kwargs={}, sys_kwargs={}, **kwargs):
-        
         self.hostname = socket.gethostname()
         if 1: 
             self.system_class = system_class if system_class is not None else System
@@ -433,7 +432,7 @@ class Main(object):
             self.backup_parpath = backup_parpath
             self.USE_REFLECTION = USE_REFLECTION
             self.NUM_OF_THREADS= NUM_OF_THREADS
-            self.RAND_SEED = RAND_SEED
+            self.rand_seed = rand_seed
             self.USE_CUSTOM_RAND = USE_CUSTOM_RAND
             self.model_param = model_param
             self.resume = resume
@@ -461,7 +460,7 @@ class Main(object):
         
         #issue in each main, should use independent random state!     
         if USE_CUSTOM_RAND:
-            crandom.mrandom.csrand(RAND_SEED)
+            crandom.mrandom.csrand(rand_seed)
         else:
             random.seed()
             crandom.rand = random.random
@@ -736,7 +735,7 @@ class Main(object):
         
         SystemParam.param_extra.update({
                 "resume":self.resume, 
-                "RAND_SEED":self.RAND_SEED, 
+                "rand_seed":self.rand_seed, 
                 "USE_CUSTOM_RAND":self.USE_CUSTOM_RAND, 
                 "unitary_init":self.M.unitary_init, 
                 #"top_level_func":self.updaters[4].func_name, 
@@ -774,12 +773,14 @@ class Main(object):
         if do_measure:
             try: 
                 ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+                print_vars(vars(),  ['self.measurement_args'])
                 if ppp is not None : 
                     exclude_which = self.measurement_args.get('exclude_which', [])
                     exclude_which.append('scaling_dim')
                     self.measure_S(self.S, ppp, exclude_which=exclude_which)
             except Exception as err: 
                 warnings.warn(str(err))
+                
        
         return self.M, self.S
    

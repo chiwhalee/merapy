@@ -14,6 +14,8 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
         注意这里与f90中不同，f90中是把 ilayer-1 ascending 到 ilayer
         
         tau: tau is used only when calculate coup coeff for long range models
+        todo: 
+            in future support ascending_ham for several times 
     """
     
     #G_2_2 = init_mera_graph.G_2_2
@@ -90,6 +92,12 @@ def ascending_generic(S):
         #not completed
     """
     pass
+
+def ascending_abstract(asc_func, S, level, times=1): 
+    """
+        ascend from level to level + times 
+    """
+    raise NotImplemented  
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 

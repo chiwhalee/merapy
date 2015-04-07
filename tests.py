@@ -3,11 +3,14 @@
 
 import unittest
 
+from merapy.graphics import TestIt as Test_graphics 
 from merapy.run import TestIt as Test_run 
 from merapy.utilities import TestIt as Test_util 
 from merapy.context_util import TestIt as Test_context 
 from merapy.tensor_svd import TestIt as Test_svd 
 from merapy.common_util import TestCommon 
+from merapy.tensor_network import TestIt as Test_tensor_network 
+from merapy.top_level import TestIt as Test_top_level 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)
 #python -m unittest discover --pattern=*.py

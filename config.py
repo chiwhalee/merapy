@@ -43,9 +43,6 @@ updaters_binary.update({"ascending_func":upbin.ascending_ham, "descending_func":
 
 updaters_z2= [ascending_ham, None, update_all_in_once,finite_site, top_level_product_state]
 
-#updaters_u1= [ascending_ham, descending_ham, iterative_optimize_all, finite_site_u1, top_level_product_state_u1]
-
-
 
 ising_model_param = {"h":-1.0, "J_NN":-1.0, "J_NNN":0.0}
 heisbg_model_param = {"J_NN":1.0, "J_NNN":0.241186}
@@ -100,7 +97,7 @@ CFG_MERA.update({
         
         'USE_CUSTOM_RAND':False,  #always need try different seeds 
         'USE_REFLECTION': False,
-        'RAND_SEED':1234,  #this is seed for custom rand
+        'rand_seed':1234,  #this is seed for custom rand
         'use_player':True, 
         'backup_fn': None,
         'filename': None,

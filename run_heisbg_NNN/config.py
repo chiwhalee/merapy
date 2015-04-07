@@ -4,11 +4,24 @@
 #from vmps.config import CONFIG_HEISENBG_BASIC, copy_config
 #from vmps.config import CONFIG_HEISENBG_BASIC, copy_config, Config
 from merapy.config import CFG_HEISBG_BASIC, copy_config, Config 
+from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
+from merapy.schedule import schedule_prod_state, copy_schedule
 
 
-
-def make_config(J2, algorithm='mera', alg_surfix='', backup_parpath=None, root1='', surfix=''): 
+def make_config(J2, algorithm='mera', alg_surfix='', which_top_state='scale_invar',  backup_parpath=None, root1='', surfix=''): 
     cfg= copy_config(CFG_HEISBG_BASIC)
+    if which_top_state == 'scale_invar_state' : 
+        pass
+    elif which_top_state == 'prod_state' : 
+        cfg['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+        cfg['updaters']['rho_top_func'] = top_level_product_state_u1 
+    elif which_top_state == 'eigen_state' : 
+        cfg['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+        cfg['updaters']['rho_top_func'] = top_level_eigenstate 
+        pass 
+    else: 
+        raise 
+    
     cfg['model_name'] = 'heisbg_NNN'
     #cfg['model_param'].update(h=h)
     cfg.update(algorithm=algorithm, algorithm_surfix=alg_surfix, combine_2site=1)
@@ -22,7 +35,7 @@ def make_config(J2, algorithm='mera', alg_surfix='', backup_parpath=None, root1=
                 'entanglement_brute_force_9_aver'
                 ], 
             'which': None, 
-            }, 
+            } 
     
     
     if 1:

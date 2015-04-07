@@ -524,28 +524,28 @@ class System(object):
         #in some curcumstance I should be used
         qsp = mera.qsp_0.copy_many(2, reverse=[1])    
         self.I[0][0] = iTensor.identity(qsp)
+        
+        if 1:  # 下面是level 0 的rho，在算法中其实没有用到，值一直没改变 
+            rank = 4
+            QSp = [mera.qsp_0.copy() for i in range(rank)]
+            totQN = self.qn_identity.copy()
+            #注意这里，rho_2 和U, H_2等张量不同，它的0，1两条腿是朝上的,2,3朝下
+            QSp[0].reverse()
+            QSp[1].reverse()
+            #sys.rho_2[0][i] = iTensor(rank, QSp, totQN )
+            self.rho_2[0][0] = iTensor(rank, QSp, totQN )
+            self.rho_2[0][0].data[:] = 0.0
 
-        rank = 4
-        QSp = [mera.qsp_0.copy() for i in range(rank)]
-        totQN = self.qn_identity.copy()
-        #注意这里，rho_2 和U, H_2等张量不同，它的0，1两条腿是朝上的,2,3朝下
-        QSp[0].reverse()
-        QSp[1].reverse()
-        #sys.rho_2[0][i] = iTensor(rank, QSp, totQN )
-        self.rho_2[0][0] = iTensor(rank, QSp, totQN )
-        self.rho_2[0][0].data[:] = 0.0
+            #rank, QSp, totQN = func(rank=6)
+            rank = 6
+            QSp = mera.qsp_0.copy_many(6, reverse=[3, 4, 5])
+            QSp[3].reverse()
+            QSp[4].reverse()
+            QSp[5].reverse()
+            self.rho_3[0][0] = iTensor(rank, QSp, totQN)
+            self.rho_3[0][0].data[:] = 0.0
 
-        #rank, QSp, totQN = func(rank=6)
-        rank = 6
-        QSp = mera.qsp_0.copy_many(6, reverse=[3, 4, 5])
-        QSp[3].reverse()
-        QSp[4].reverse()
-        QSp[5].reverse()
-        self.rho_3[0][0] = iTensor(rank, QSp, totQN)
-        self.rho_3[0][0].data[:] = 0.0
-
-        #rho_top is not used at all
-        if 0:
+        if 0: #they are not used at all
             rank = 2
             totQN = self.qn_identity.copy()
             QSp = [self.qsp_null.copy() for i in range(rank)]
@@ -571,11 +571,6 @@ class System(object):
         totqn = self.qn_identity
         rho_top = iTensor(rank, QSp, totqn)
         rho_top.data[0] = 1.0
-
-        #self.rho_2[ilayer + 1][0] = rho_top
-        if 0:
-            self.rho_2.append([])
-            self.rho_2[ilayer+1] = [rho_top]
         self.rho_2[ilayer+1][0] = rho_top
 
     def __repr__(self, layers=[], which=None,fewer=True, round=5):
@@ -1333,7 +1328,7 @@ class System(object):
                     raise ValueError(str(op_name))
                 TNet_sys.tlink[n].type_name = op_name
         except Exception as err:
-            msg = "error when mapping network to tensor, op_name=%(op_name)s, layer=%(layer)s"%vars()
+            msg = "\terror when mapping network to tensor, op_name=%(op_name)s, layer=%(layer)s, x=%(x)d"%vars()
             if not err.args: 
                        err.args=('',)
             err.args = (err.args[0] +'\n' + msg,)+err.args[1:]
@@ -2138,6 +2133,10 @@ class System(object):
         
     def _expand_layer(self, out=None):
         from decorators import tensor_player, set_STATE_end_1
+        #print_vars(vars(),  ['tensor_player'])
+        #raise 
+        if not hasattr(tensor_player, 'STATE'):   # this could happen 
+            tensor_player.STATE = 'stop'
         state_bac = tensor_player.STATE
         tensor_player.STATE = "stop"
 
@@ -2155,6 +2154,7 @@ class System(object):
         
         
         self.add_one_layer(ilayer, duplicate=True)
+        self.add_top_layer()  # this is needed only when use top_level_eigenstate 
         self.iter1 = 0  #reset counting
         msg = "\nEXPAND ONE LAYER, NOW NUM_OF_LAYER IS %d\n"%self.mera.num_of_layer
         print msg
@@ -2293,9 +2293,10 @@ class TestSystem(unittest.TestCase):
                 os_local.remove(fn)
     
     def test_load(self): 
-        fn = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
-        S=System.load(fn, 1)
-        print S
+        #fn = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
+        #S=System.load(fn, 1)
+        #print S
+        pass 
     
     def instance(self, M, symmetry, model, only_NN=True, only_NNN=False):
         test_Mera = mera.test_Mera
@@ -3483,7 +3484,7 @@ if __name__=='__main__':
         #ts.J_ising()
         #ts.J_heisbg()
 
-    if 0: 
+    if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -3493,8 +3494,7 @@ if __name__=='__main__':
         add_list = [
            #'test_save', 
            #'test_load', 
-           'test_example',  
-           #'test_heisbg',  
+           #'test_example',  
         ]
         for a in add_list: 
             suite.addTest(TestSystem(a))

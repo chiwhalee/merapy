@@ -1,6 +1,7 @@
 #coding=utf8
 
 import numpy as np
+import unittest 
 
 from mera import *
 from hamiltonian import *
@@ -9,6 +10,7 @@ from tensor_svd import Tensor_svd
 from merapy.diagrams.V31.graph_ternary import GTop, order_top
 import warnings
 
+from merapy.utilities import print_vars
 
 """
 q:
@@ -80,9 +82,9 @@ if 0:
         delete_TLink(ops)
 
 
-def top_level_ham2(M,S, topQN):
+def top_level_ham2(M, S, topQN):
     """
-    将H_2[M.num_of_layer-2] 对角化，得到M.V[M.num_of_layer-1]
+        将H_2[M.num_of_layer-2] 对角化，得到M.V[M.num_of_layer-1]
     
     """
     iLayer = M.num_of_layer-1
@@ -102,14 +104,16 @@ def top_level_ham2(M,S, topQN):
     M.V_dag[ilayer_p1][j] = M.V[ilayer_p1][j].conjugate(M.V[ilayer_p1][j].rank-1, use_buf=True)
 
 
-def top_level_eigenstate(M,S):
+def top_level_eigenstate(M, S):
     """
-    set rho_2[M.num_of_layer-1]
+        it is in fact a desending operation: map from rho_top of 
+        rank (1, 1) to rho[M.num_of_layer-1] of rank (2, 2)
+        todo: replace this function by descending 
     """
+    #print_vars(vars(),  ["repr('use top_level_eigenstate')"])
     topQN = M.topQN.copy()
-    #print "mmm", M.topQN.val, type(M.topQN.val)
-    #exit()
-    top_level_ham2(M,S, topQN)
+   
+    top_level_ham2(M, S, topQN)
     
     G = GTop
     order = order_top
@@ -118,10 +122,10 @@ def top_level_eigenstate(M,S):
     
     name = "oo"
     weight = 0.5
-    S.rho_2[iLayer].O[j].data[:] = 0.0
+    S.rho_2[iLayer][j].data[:] = 0.0
     
     
-    S.rho_2[iLayer].O[j]=S.add_env(M, iLayer, G, order, name, weight, info=0)
+    S.rho_2[iLayer][j]=S.add_env(M, iLayer, G, order, name, weight, info=0)
     
     #average
     order1 = [1, 0, 3, 2]
@@ -291,36 +295,111 @@ def top_level_product_state_u1_1site(M,S):
         #S.rho_3[iLayer].O[j]=I.direct_product(S.rho_2[iLayer].O[j], use_buf=True)
 
 
+class TestIt(unittest.TestCase): 
+    def setUp(self): 
+        pass
+    
+    def test_eigen_state(self): 
+        pass 
+        symm = 'Travial'
+        symm = 'U1'
+        M = Mera.example(trunc_dim=4, tot_layer=4, symmetry=symm); 
+        S= System.example(M, symm, 'Heisenberg')
+        #top_level_eigenstate(M, S)
+        print_vars(vars(),  ['M', 'S'])
+        import decorators
+        from merapy.ascending import ascending_ham 
+        #np.set_printoptions(precision=3)
+        decorators.tensor_player.STATE = 'stop'
+        if 1: 
+            for i in range(M.num_of_layer-1):
+                #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
+                decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)
+                ascending_ham(M, S, ilayer=i, info=0)
+        decorators.tensor_player.STATE = 'stop'
+        print_vars(vars(),  ['S'])
+        top_level_eigenstate(M, S)
+        #print_vars(vars(),  ['S'])
+        #self.assertAlmostEqual()
+        old=np.array([ 0.00184772, -0.01285457, -0.01285457,  0.03879706, -0.01285457, 0.08942899,  0.08942899, -0.2699104 , -0.01285457,  0.08942899])
+        self.assertTrue(np.allclose(S.rho_2[3][0].data[: 10], old, atol=1e-8))
+       
+    def test_temp(self): 
+        pass 
+        symm = 'Travial'
+        #symm = 'U1'
+        M = Mera.example(trunc_dim=4, tot_layer=4, symmetry=symm); 
+        S= System.example(M, symm, 'Heisenberg', info=2)
+        #top_level_eigenstate(M, S)
+        #print_vars(vars(),  ['M', 'S'])
+        import decorators
+        from merapy.ascending import ascending_ham 
+        #np.set_printoptions(precision=3)
+        decorators.tensor_player.STATE = 'stop'
+        S.expand_layer(5)
+        if 1: 
+            for i in range(M.num_of_layer-1):
+                #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
+                decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0, )
+                ascending_ham(M, S, ilayer=i, info=-1)
+        decorators.tensor_player.STATE = 'stop'
+        print_vars(vars(),  ['S'])
+        top_level_eigenstate(M, S)
+        
+        #print_vars(vars(),  ['S'])
+        #self.assertAlmostEqual()
+        old=np.array([ 0.00184772, -0.01285457, -0.01285457,  0.03879706, -0.01285457, 0.08942899,  0.08942899, -0.2699104 , -0.01285457,  0.08942899])
+        #self.assertTrue(np.allclose(S.rho_2[3][0].data[: 10], old, atol=1e-8))
+       
+    
 
 if __name__ == "__main__":
-    from mera import test_Mera
-    if 0:
-        M = test_Mera.instance(trunc_dim=2, tot_layer=4, symmetry="Z2")
-        sys= test_System.instance(M, model="Ising", symmetry="Z2", only_NN=False)
-        
-        #top_level_ham2(M, sys, M.topQN)
-        print M.V[3][0]
-        top_level_eigenstate(M, sys)
-        #top_level_product_state(M, sys)
-        print sys.rho_2[3].O[0]
-        print sys.rho_3[3].O[0]
-    if 1:
-        M = test_Mera.instance(trunc_dim=3, tot_layer=4, symmetry="Z3")
-        sys = test_System.instance(M, model="Potts", symmetry="Z3", only_NN=False)
-        
-        #top_level_ham2(M, sys, M.topQN)
-        #print M.V[3][0]
-        #top_level_eigenstate(M, sys)
-        top_level_product_state_u1(M, sys)
-        print sys.rho_2[3][0]
-        print sys.rho_3[3][0]
+    if 0: 
+        from mera import test_Mera
+        if 0:
+            M = test_Mera.instance(trunc_dim=2, tot_layer=4, symmetry="Z2")
+            sys= test_System.instance(M, model="Ising", symmetry="Z2", only_NN=False)
+            
+            #top_level_ham2(M, sys, M.topQN)
+            print M.V[3][0]
+            top_level_eigenstate(M, sys)
+            #top_level_product_state(M, sys)
+            print sys.rho_2[3].O[0]
+            print sys.rho_3[3].O[0]
+        if 1:
+            M = test_Mera.instance(trunc_dim=3, tot_layer=4, symmetry="Z3")
+            sys = test_System.instance(M, model="Potts", symmetry="Z3", only_NN=False)
+            
+            #top_level_ham2(M, sys, M.topQN)
+            #print M.V[3][0]
+            #top_level_eigenstate(M, sys)
+            top_level_product_state_u1(M, sys)
+            print sys.rho_2[3][0]
+            print sys.rho_3[3][0]
 
-    if 0:
-        M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1")
-        sys= test_System.instance(M, model="Heisenberg", symmetry="U1", only_NN=True)
-        top_level_product_state_u1_1site(M, sys)
+        if 0:
+            M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1")
+            sys= test_System.instance(M, model="Heisenberg", symmetry="U1", only_NN=True)
+            top_level_product_state_u1_1site(M, sys)
     
-    
+    if 0: 
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        unittest.main()
+        
+    else: 
+        suite = unittest.TestSuite()
+        add_list = [
+           #'test_eigen_state', 
+           'test_temp', 
+        ]
+        for a in add_list: 
+            suite.addTest(TestIt(a))
+        unittest.TextTestRunner().run(suite)
+       
+
+        
+        
 
 
 
