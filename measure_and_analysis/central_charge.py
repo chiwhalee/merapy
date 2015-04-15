@@ -50,8 +50,10 @@ def rho_eig(rho, k, info=0):
     
     v = {}
     
-    if k is None: k = 80
-    v = Tensor_svd.eig_sparse(rho, qn_instance_list, k=k)
+    if k is None: 
+        k = 80
+    #v = Tensor_svd.eig_sparse(rho, qn_instance_list, k=k)
+    v = Tensor_svd.eig_sparse(rho, qn_instance_list, k=k, is_hermite=1)
         
 
     #print 'eigen val ', v
@@ -75,7 +77,6 @@ def rho_eig(rho, k, info=0):
         if info>0:
             print val[:10], '\n', val[-5:]
             print val_neg
-            
         
         EE = -np.sum(val*np.log2(val))
         
@@ -694,8 +695,6 @@ class TestIt(unittest.TestCase):
         path_dic['z2'] = path_z2
         self.path_dic = path_dic
 
-    def test_temp(self): 
-        pass
     
     def test_central_charge(self): 
         #path = './states_for_tests/dim=4-symm=U1-model=heisbg.pickle'
@@ -726,52 +725,56 @@ class TestIt(unittest.TestCase):
         
         res = entanglement_brute_force_6(S=S, k=80, plot=0, info=2);  
         print res['EE']
+    
+    def test_temp(self): 
+        
+        pass
 
 
 if __name__ == '__main__':
     #ttt = TestIt()
     #ttt.test_aaa()
     #ttt.test_bbb()
+    if 0: 
+        if len(sys.argv)>1:
+            path = sys.argv[1]   
+        else:
+            if 1:         
+                path = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
+                path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/12-4lay.pickle'
+                #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/mera_backup_test_folder/2.pickle'
+                #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/run-ising/ternary-symm=triv/2.pickle'     
+                #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/new_run/alpha=1.6/12-4lay.pickle'
+                S = System.load(path)
+                 
+                print central_charge(S=S, force_update=True, info=0)
+                print "res should be {'EE': {1: 0.842492, 2: 1.010302}, 'c': 0.50343}" 
+                
+                #entanglement_extra(S, k=80, info=2)
+                #path = '/home/zhli/Documents/mera_backup_tensor/run-xx/ternary/traiv-symm/prod-state/4.pickle' 
+                
+                #res=entanglement_brute_force(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
+                res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
+                #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
     
-    if len(sys.argv)>1:
-        path = sys.argv[1]   
-    else:
-        if 1:         
-            path = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
-            path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/12-4lay.pickle'
-            #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/mera_backup_test_folder/2.pickle'
-            #path = '/home/zhli/windows/C/Users/zhli/Dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python/merapy/run-ising/ternary-symm=triv/2.pickle'     
-            #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/new_run/alpha=1.6/12-4lay.pickle'
-            S = System.load(path)
-             
-            print central_charge(S=S, force_update=True, info=0)
-            print "res should be {'EE': {1: 0.842492, 2: 1.010302}, 'c': 0.50343}" 
-            
-            #entanglement_extra(S, k=80, info=2)
-            #path = '/home/zhli/Documents/mera_backup_tensor/run-xx/ternary/traiv-symm/prod-state/4.pickle' 
-            
-            #res=entanglement_brute_force(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
-            res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
-            #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
-    
-        if 0: #examine
-            #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
-            #unittest.TextTestRunner(verbosity=0).run(suite)    
-            TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
-            unittest.main()
-        if 0: 
-            suite = unittest.TestSuite()
-            add_list = [
-               #TestIt('test_temp'), 
-               TestIt('test_entanglement_brute_force_6'), 
-           
-            ]
-            for a in add_list: 
-                suite.addTest(a)
-            #suite.addTest(TestIt('test_ising'))
-            #suite.addTest(TestIt('test_heisbg'))
-            unittest.TextTestRunner().run(suite)
-           
+    if 0: #examine
+        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
+        #unittest.TextTestRunner(verbosity=0).run(suite)    
+        TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
+        unittest.main()
+    if 1: 
+        suite = unittest.TestSuite()
+        add_list = [
+           #TestIt('test_temp'), 
+           TestIt('test_entanglement_brute_force_6'), 
+       
+        ]
+        for a in add_list: 
+            suite.addTest(a)
+        #suite.addTest(TestIt('test_ising'))
+        #suite.addTest(TestIt('test_heisbg'))
+        unittest.TextTestRunner().run(suite)
+       
 
 
 

@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import numpy.linalg as linalg
 import scipy 
-from scipy.sparse.linalg import eigs
+from scipy.sparse.linalg import eigs, eigsh 
 from collections import OrderedDict 
 import warnings 
 from math import sqrt 
@@ -865,7 +865,7 @@ class Tensor_svd(object):
         return Vg, E
 
     @classmethod
-    def eig_sparse(cls, itensor, qn_list, k=10, tol=None):
+    def eig_sparse(cls, itensor, qn_list, is_hermite=False, k=10, tol=None):
         """
             eigenvalue decomposition of sparse tensor
         """
@@ -888,12 +888,17 @@ class Tensor_svd(object):
                 d = V_buf.shape[0]
                 #print 'dddd', d
                 if d <=  20:
-                    vals, vecs= linalg.eig(a=V_buf)
-                elif k>d:
-                    k = d-2
-                    vals, vecs= eigs(A=V_buf, k=k, tol=tol )
-                else:
-                    vals, vecs= eigs(A=V_buf, k=k, tol=tol )
+                    if is_hermite: 
+                        vals, vecs= linalg.eigh(a=V_buf)
+                    else: 
+                        vals, vecs= linalg.eig(a=V_buf)
+                else: 
+                    if k>d:
+                        k = d-2
+                    if is_hermite: 
+                        vals, vecs= eigsh(A=V_buf, k=k, tol=tol )
+                    else: 
+                        vals, vecs= eigs(A=V_buf, k=k, tol=tol )
                 #res[gidx] = qn, vals
                 res[qn._val] = vals
 
