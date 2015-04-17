@@ -22,6 +22,7 @@ from merapy.tensor import *
 from merapy.tensor_network import *
 from merapy.system_parameter import SystemParam 
 from merapy.quantum_number import *
+from vmps.iterative_optimize import IterativeOptimize 
 
 __ISING__ = True
 
@@ -49,7 +50,7 @@ class OperatorDict(dict):
     def __init__(self):
         pass
 
-class System(object):
+class System(IterativeOptimize):
     """
         TNet_sys:
             一组指针，指向一组要收缩的张量;同时指向收缩中产生的张量
@@ -61,7 +62,7 @@ class System(object):
     def __init__(self, symmetry, mera, model, qsp_base=None, 
             graph_module=None, model_param=None, 
             only_NN=True, only_NNN=False, combine_2site=True, 
-            energy_exact=None, j_power_r_max=None,  info=0):
+            energy_exact=None, j_power_r_max=None,  info=0, **kwargs):
         """
             System 和Mera的区别在于：
                 后者定义了U，V等张量
@@ -74,6 +75,59 @@ class System(object):
                 model_param: dict, specify parameters for Ising, Heisenberg, etc
 
         """
+        if 1: 
+            default_args = {
+                #common to vmps
+                'use_player': True, 
+                'info': 0, 
+                'is_initialized': False, 
+                
+                #ham
+                    'model': None, 
+                    'only_NN': True, 
+                    'only_NNN': False, 
+                    'model_param': {}, 
+                
+                'mera_class': Mera, 
+                'qsp_base': None, 
+                'qsp_max': None, 
+                'trunc_dim': 4, 
+                'combine_2site': False, 
+                
+                'tot_layer': 4,
+                'nTop': 2, 
+                'unitary_init': 'unit_tensor',
+                'mera_kwargs': {}, 
+                
+                'translation_invariant': 1, 
+                'symmetry': 'Travial',  
+                
+                #minimize
+                'updaters': None, 
+                'q_iter': 5, 
+                'q_lay': 1, 
+                
+                #IO
+                'use_local_storage': False, 
+                'backup_parpath': None, 
+                'backup_parpath_local': None, 
+                'auto_resume': True, 
+                
+                #measure
+                'do_measure': 0, 
+                
+                
+                #only for long range int 
+                'interaction_range_max': 2, 
+                }
+            if 1: 
+                for k in default_args: 
+                    if kwargs.has_key(k): 
+                        default_args[k] = kwargs[k]
+                
+                for k, v in default_args.iteritems(): 
+                    setattr(self, k, v)
+        
         self.model = model
         self.model_name = model
         self.only_NN = only_NN
@@ -121,6 +175,8 @@ class System(object):
         
         if mera is not None:
             self.mera = mera
+        else: 
+            self.mera = None 
             #temp = ["U", "V", "U_dag", "V_dag"]
 
         #self.op_names= ["H_2", "H_3", "rho_2", "rho_3", "I", "SxA", "SxB", "SzA", "SzB", "SpA", "SpB", "SmA", "SmB"]
@@ -175,6 +231,68 @@ class System(object):
         if j_power_r_max is not None:   #only for long range 
             System.J_POWER_R_MAX = j_power_r_max 
     
+    def initialize(self): 
+        """
+            实质性的初始化
+            包括几个方面
+            ham，mera，图
+            
+        """
+        
+        #below are tabken form main.Main.init_all 
+        qn_identity, qsp_base, qsp_null=init_System_QSp(
+                symmetry=self.symmetry, combine_2site=self.combine_2site)
+        
+        if self.qsp_base is None: self.qsp_base = qsp_base
+        self.qn_identity = qn_identity
+        self.qsp_null = qsp_null
+        qsp_0 = self.qsp_base.copy()
+        if not self.combine_2site and self.symmetry == "U1" :
+            qsp_max = qsp_base.__class__.max(self.trunc_dim, combine_2site=self.combine_2site)
+        else:
+            qsp_max= qsp_base.__class__.max(self.trunc_dim)
+        qsp_max2 = qsp_max.copy() 
+        
+        if self.qsp_max is not None:
+            qsp_max = self.qsp_max.copy()
+            qsp_max2 = None #self.qsp_max.copy()
+            print "trunc_dim is updated to %d"%qsp_max.totDim
+            self.trunc_dim = qsp_max.totDim
+
+        topQN = qn_identity.copy()
+    
+        if 1:
+            self.mera = self.mera_class(self.tot_layer, self.nTop, 
+                    qsp_0, qsp_max, qsp_max2, topQN, qsp_null, qn_identity, 
+                    unitary_init=self.unitary_init, **self.mera_kwargs)
+            self.M = self.mera
+
+            
+            if 0: 
+                self = self.system_class(mera=self.M, model_param=self.model_param,  
+                        symmetry=self.symmetry, model=self.MODEL, 
+                        only_NN = self.only_NN, only_NNN = self.only_NNN,  
+                        energy_exact=self.energy_exact, combine_2site=self.combine_2site, 
+                        **self.sys_kwargs)
+            
+            
+            self.init_Hamiltonian()
+            #self.init_ham_eff()  # merapy 2.0,  replace init_Hamiltonian in future 
+            #self.init_rho_eff()
+
+            #每次更改耦合常数算新的值，要重新初始化
+            if self.model == "Ising":
+                #self.init_Hamiltonian()
+                for iLayer in range(self.M.num_of_layer-1): 
+                    #top V shouldn't inited by init_layer
+                    self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
+        
+        self.is_initialized = True     
+        
+    def init_iteration(self): 
+        if not self.is_initialized: 
+            self.initialize()
+    
     if 0: 
         @getter
         def num_of_layer(self): 
@@ -228,7 +346,9 @@ class System(object):
         return not self.__eq__(other)
     
     @staticmethod 
-    def example( M, symmetry, model, model_param=None, **kwargs): 
+    def example( M=None, symmetry=None, model='Heisenberg', 
+            trunc_dim=4, tot_layer=4, 
+            model_param=None, **kwargs): 
             #only_NN=True, combine_2site=False, only_NNN=False):
             
         test_Mera = Mera 
@@ -236,10 +356,12 @@ class System(object):
         #M = test_Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
         #M = test_Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); 
         if model_param is None: 
-            if model == 'Heisenberg' : 
+            if model.lower() == 'heisenberg' : 
+                symmetry = symmetry if symmetry is not None else 'U1'
                 model_param = {'J_NN':1.0, 'J_NNN': 0.0, 'Jzz': 1.0}
                 kwargs.update(only_NN=1, only_NNN=0, combine_2site=1)
             elif model == 'Ising' : 
+                symmetry = symmetry if symmetry is not None else 'Z2'
                 model_param = {"h":-1.0, "J_NN":-1.0, "J_NNN":0.0, 'gamma':1.0} 
                 kwargs.update(only_NN=1, only_NNN=0, combine_2site=0)
                 
@@ -249,9 +371,9 @@ class System(object):
         sys=System(model=model, mera=M, symmetry=symmetry, 
                 model_param = model_param, 
                  **kwargs)
-        #M = test_Mera.example()
-        #M = test_Mera.M
-        sys.init_Hamiltonian()
+        
+        #sys.init_Hamiltonian()
+        sys.initialize()
        
         return sys
    
@@ -1153,7 +1275,134 @@ class System(object):
         h0[2].data -= identity.data
 
         return  h0, Sz, Sp, Sm
+    
+    def _minimize_finite_size(self, resume=True, auto_resume=None, backup_fn=None, filename=None, 
+            q_iter=None, do_measure=None, **kwargs):
+        
+        self.init_iteration()
+        
+        if self.info>0: 
+            print 'start minimize'
+        if self.updaters is None: 
+            from merapy.ascending import ascending_ham
+            from merapy.descending import descending_ham
+            from merapy.iteration import iterative_optimize_all
+            from merapy.all_in_once import update_all_in_once
+            from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
+            from merapy.minimize import finite_site_u1  
+            self.updaters= {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
+                "finite_range_func":finite_site_u1, "rho_top_func":top_level_product_state_u1}
+             
+        from merapy.minimize import finite_site_u1  as finite_range_func 
+        LayStart=0
+        q_one=1
+        backup_fn_local = None
+        do_measure  = do_measure if do_measure is not None else self.do_measure
+        
+        backup_parpath = self.backup_parpath
+        backup_parpath_local = self.backup_parpath_local
+        if kwargs.get('backup_parpath') is not None : 
+            backup_parpath = kwargs.get('backup_parpath')    
+        self.make_dir(backup_parpath, backup_parpath_local)
+        
+        fn = self.backup_fn_auto() 
+        if backup_parpath is not None:
+            
+            backup_fn = backup_parpath  + '/' +  fn
+        if backup_parpath_local is not None: 
+            backup_fn_local = '/'.join([backup_parpath_local, fn])
+           
+        filename = 'res-'  + self.backup_fn_auto()
+        filename = filename.split('.')[0] + '.dat'
+        if backup_parpath is not None: 
+            filename = backup_parpath + '/' + filename
+        self.filename = filename 
 
+        if q_iter is None:
+            q_iter = self.q_iter
+        if resume is not None:
+            self.resume  = resume
+                
+        
+        if self.resume and backup_fn is not None:
+            if not self.use_local_storage: 
+                self.resume_func(backup_fn)
+            else: 
+                self.resume_func(backup_fn_local, use_local_storage=self.use_local_storage)
+            if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                energy_diff_min = kwargs.get('energy_diff_min')
+                if  self.energy_diff_std is not None: 
+                    if self.energy_diff_std <= energy_diff_min: 
+                        q_iter = 0
+                        do_measure = 0
+                        msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
+                                self.energy_diff_std, energy_diff_min)
+                        print msg
+           
+        if auto_resume is not None:   self.auto_resume = auto_resume
+        
+        print 'SystemParam code is deleted'
+        #SystemParam.param_extra.update({
+        #        "resume":self.resume, 
+        #        "RAND_SEED":self.RAND_SEED, 
+        #        "USE_CUSTOM_RAND":self.USE_CUSTOM_RAND, 
+        #        "unitary_init":self.M.unitary_init, 
+        #        #"top_level_func":self.updaters[4].func_name, 
+        #        "message":self.message, 
+        #        "energy_exact":self.energy_exact
+        #        })
+        #SystemParam.show(self.filename)    
+        
+        if isinstance(self.updaters, list): #only for backward compatable
+            
+            ascending_func, descending_func, update_mera_func, finite_range_func, rho_top_func= tuple(self.updaters)
+        elif isinstance(self.updaters, dict):
+            
+            finite_range_func = self.updaters["finite_range_func"]
+            ascending_func = self.updaters["ascending_func"]
+            descending_func = self.updaters["descending_func"]
+            update_mera_func = self.updaters["update_mera_func"]
+            rho_top_func = self.updaters["rho_top_func"]
+        
+        
+        temp = ['use_local_storage' ]
+        args = {t: self.__getattribute__(t) for t in temp}
+        args.update(backup_fn_local=backup_fn_local)
+        kwargs.update(args)
+       
+        finite_range_func(self.M, self, ascending=ascending_func, descending=descending_func, 
+                update_mera=update_mera_func, rho_top_func = rho_top_func, 
+                q_one=q_one, q_lay=self.q_lay, q_iter=q_iter, use_player=self.use_player, 
+                filename=self.filename, backup_fn=backup_fn, lstart = LayStart, lstep=0, 
+                resume=self.resume, auto_resume=self.auto_resume, info=self.info-1, **kwargs)
+        
+        
+        if do_measure:  
+            ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+            if ppp is not None : 
+                exclude_which = self.measurement_args.get('exclude_which', [])
+                exclude_which.append('scaling_dim')
+                self.measure_S(self, ppp, exclude_which=exclude_which)
+       
+        return self.M, self
+    
+    def make_dir(self, dir, dir_local=None): 
+        #this is taken form main.Main.make_dir 
+      
+        if dir is not None : 
+            if not os.path.exists(dir): 
+                os.makedirs(dir)
+                print 'dir not found, mkdir %s'%dir
+        
+        if dir_local is not None: 
+            with rpyc_conn_local_zerodeploy() as conn: 
+                os_local = conn.modules.os
+                if not os_local.path.exists(dir_local): 
+                    msg = 'dir %s not found'%(dir_local[-30: ])
+                    cmd = 'mkdir %s'%dir_local
+                    os_local.makedirs(dir_local)
+                    print '\n'.join([msg, cmd])
+    
     #@staticmethod   
     @classmethod 
     def J_power_0l(cls, l, alpha, beta):
@@ -2191,60 +2440,62 @@ def set_ham_to_identity(sys):
             sys.SmA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
             sys.SmB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
 
-def check_symm(T2):
-    """
-    status_0p9_translated_formally
-    """
-    #ifdef __NONONO__        
-    ME = 0.0; mp=1
-    for p  in range(T2.totDim):
-        X = T2.data[p]
-        Get_Position(T2, p, pos)
-        iSwap(pos[1], pos[2])
-        iSwap(pos[3], pos[4])
-#            Y = GetElement[T2, pos]
-        if abs[X-Y] == ME:  
-            ME = abs[X-Y]
-            mp = p
-    Get_Position(T2,mp,pos)
-    print "[4[1x,I4],2x,E15.8]", pos[0:4], ME
-    #endif
+if 0: 
+    def check_symm(T2):
+        """
+        status_0p9_translated_formally
+        """
+        #ifdef __NONONO__        
+        ME = 0.0; mp=1
+        for p  in range(T2.totDim):
+            X = T2.data[p]
+            Get_Position(T2, p, pos)
+            iSwap(pos[1], pos[2])
+            iSwap(pos[3], pos[4])
+    #            Y = GetElement[T2, pos]
+            if abs[X-Y] == ME:  
+                ME = abs[X-Y]
+                mp = p
+        Get_Position(T2,mp,pos)
+        print "[4[1x,I4],2x,E15.8]", pos[0:4], ME
+        #endif
 
-def check_symm3(T3):
-    """
-    status_0p9_translated_formally
-    """
-    #ifdef __NONONO__        
-    ME = 0.0;mp=1
-    for p  in range(T3.totDim):
-        X = T3.data[p]
-        Get_Position(T3, p, pos)
-        iSwap(pos[1], pos[3])
-        iSwap(pos[4], pos[6])
-        #            Y = GetElement[T3, pos]
-        if abs[X-Y] == ME:  
-            ME = abs[X-Y]
-            mp = p
-    Get_Position(T3,mp, pos)
-    print "[6[1x,I4], E15.8]", pos[0:6], ME
-    #endif        
+    def check_symm3(T3):
+        """
+        status_0p9_translated_formally
+        """
+        #ifdef __NONONO__        
+        ME = 0.0;mp=1
+        for p  in range(T3.totDim):
+            X = T3.data[p]
+            Get_Position(T3, p, pos)
+            iSwap(pos[1], pos[3])
+            iSwap(pos[4], pos[6])
+            #            Y = GetElement[T3, pos]
+            if abs[X-Y] == ME:  
+                ME = abs[X-Y]
+                mp = p
+        Get_Position(T3,mp, pos)
+        print "[6[1x,I4], E15.8]", pos[0:6], ME
+        #endif        
   
 class TestSystem(unittest.TestCase):
     def setUp(self): 
-        import mera
-        
-        test_Mera = mera.test_Mera
-         
-        #M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
-        M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); 
-        model_param = {'J_NN':1.0, 'J_NNN': 0.0, 'Jzz': 1.0}
-        sys= System(mera=M, symmetry="U1", model="Heisenberg", only_NN=1, only_NNN=0, 
-                model_param=model_param)
-        #sys = System(model=model, mera=M, symmetry=symmetry, only_NN=only_NN, only_NNN=only_NNN)
-        sys.init_Hamiltonian()
-        self.S = sys
-        self.sys= sys
-        self.M = M
+        if 0: 
+            import mera
+            
+            test_Mera = mera.test_Mera
+             
+            #M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
+            M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); 
+            model_param = {'J_NN':1.0, 'J_NNN': 0.0, 'Jzz': 1.0}
+            sys= System(mera=M, symmetry="U1", model="Heisenberg", only_NN=1, only_NNN=0, 
+                    model_param=model_param)
+            #sys = System(model=model, mera=M, symmetry=symmetry, only_NN=only_NN, only_NNN=only_NNN)
+            sys.init_Hamiltonian()
+            self.S = sys
+            self.sys= sys
+            self.M = M
     
     def test_example(self): 
         if 1: 
@@ -2260,6 +2511,14 @@ class TestSystem(unittest.TestCase):
             print S 
             H=np.array([-2., -1., -1., -1., -1., -1., -1.,  0.])
             self.assertTrue(np.all(S.H_2[0][0].data==H))
+    
+    def test_minimize(self): 
+        m=System.example(model='Ising', symmetry='Travial', info=1)
+        m._minimize_finite_size()
+        print_vars(vars(),  ['m.energy'])
+        self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
+        from merapy.decorators import tensor_player 
+        tensor_player.STATE = 'stop'
     
 
     def test_save(self): 
@@ -2548,123 +2807,7 @@ class TestSystem(unittest.TestCase):
         layer = 3
         S.eng_ham(layer)
 
-    @staticmethod
-    def test_ising():
-        """
-        status_1
-        materialize operators(tensors) of the ising hamiltonian, especially h0, Sx
-        see op_ising in f90
-        """
-
-        gamma = SystemParam.gamma
-        h = SystemParam.h
-
-        h0 = {}
-        #define several tensor ops. 
-        """
-        sigma_z = Tensor()
-        sigma_x = Tensor()
-        sigma_y = Tensor()
-        I_2 = Tensor()
-        T = Tensor()        
-
-        sigma_x.nullify(use_buf= True )
-        sigma_y.nullify(use_buf= True )
-        sigma_z.nullify(use_buf= True )
-        I_2.nullify(use_buf= True )
-        T.nullify(use_buf= True )
-        """
-        
-        rank = 2
-        totQN = QN_idendity
-
-        QSp = [QSp_base.copy() for i in range(rank)]
-       
-        QSp[1].reverse()   
-        sigma_z=iTensor(rank, QSp, totQN )
-        sigma_z.data[0:2] = [1.0,-1.0]
-        
-        #I_2=iTensor(rank, QSp, totQN )
-        #I_2 = Tensor()
-        I_2 = iTensor(rank, QSp, totQN )
-        I_2.data[0:2] = [1.0,1.0]
-        
-
-        totQN = QN_idendity.copy()
-        #totQN.val = -1
-        totQN.set_val([-1])
-        sigma_x = iTensor(rank, QSp, totQN)
-        sigma_x.data[0:2] = [1.0,1.0]
-        
-
-        totQN = QN_idendity.copy()
-        #totQN.val = -1
-        totQN.set_val([-1])
-        sigma_y=iTensor(rank, QSp, totQN )
-        sigma_y.data[0:2] = [-1.0,1.0]
-       
-        J_xx0 = System.J_xx0
-        T= sigma_x.direct_product( sigma_x)
-
-        print "T = ", T.data.round(3 )
-        #h0[2] = T.scale(self.J_xx0[1]*[1+gamma]*0.5 )
-        h0[2] = T.scale(J_ising(1)*(1+gamma)*0.5)
-        #here obtain sigma_xx(1 + gamma)/2
-        
-        print "1"
-        print h0[2].data.round(3)
-
-        T=sigma_y.direct_product(sigma_y)
-        
-        print "y"
-        print sigma_y.data.round(3)
-        print "1.05"
-        print T.data.round(3)
-        
-        T=T.scale(-1.0)
-
-        print "1.1"
-        print T.data.round(3)
-        h0[2] = h0[2].add_with_scale(T, 1.0, J_ising(1)*(1-gamma)*0.5)
-
-        print "2"
-        print h0[2].data.round(3)
-       
-
-        T= sigma_z.direct_product(I_2)
-
-        h0[2]=h0[2].add_with_scale(T, 1.0, 0.5*h)
-        T=I_2.direct_product(sigma_z)
-        h0[2]=h0[2].add_with_scale(T, 1.0, 0.5*h)
-        #here obtain sigma_xx(1 + gamma)/2  + sigma_yy(1-gamma)/2  
-        #+ sig_z×I2*h/2  + I2×sig_z*h/2
-        #this is the final form of h0[2]
-       
-
-        if 1:
-            print "\n"*2
-            print 'self.J_xx0[1]=', J_ising(1)
-            #print 'self.J_xx0[2]=', self.J_xx0[2]
-            print 'h=', h
-            print 'gamma=', gamma
-                
-        T=I_2.direct_product(I_2)
-        h0[2]=h0[2].add_with_scale(T, 1.0,  -1.0)
-        
-        #delete_Tensor(sigma_x)
-        print h0[2].data.round(3)
-        return h0
-    @staticmethod
-    def test_ising_2():
-        #from quantum_number import init_System_QSp
-        import quantum_number_py_new
-        QN_idendity, QSp_base, QSp_null= init_System_QSp("Z2")
-
-        p = {"gamma":1.0, "h":1.2, "J_NN":-1.0, "J_NNN":0, "alpha":1.0, "beta":2.0, 
-                "QN_idendity":QN_idendity, "QSp_base":QSp_base}
-        h2, sx=System.op_ising(p)
-        print h2[2].data
-
+    
     @staticmethod
     def op_heisenberg():
         """ ---- pass """
@@ -3484,7 +3627,7 @@ if __name__=='__main__':
         #ts.J_ising()
         #ts.J_heisbg()
 
-    if 1: 
+    if 0: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -3495,6 +3638,7 @@ if __name__=='__main__':
            #'test_save', 
            #'test_load', 
            #'test_example',  
+           'test_minimize',  
         ]
         for a in add_list: 
             suite.addTest(TestSystem(a))
