@@ -182,7 +182,7 @@ def load(path, as_str=False, info=0):
         #print 'hhhh', repr(head)
         #assert len(head)>2 
         if not len(head)>2: 
-            raise EOFError('file is proberbly broken')
+            raise EOFError('file is proberbly broken, %s'%(path, ))
         #head1 is different compress levels 
         if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
             msg = 'discompress file ... '

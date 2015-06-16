@@ -150,7 +150,10 @@ class QnTravial(QnBase):
     NUM_OF_SYMM = 1
     QNS = (1, )
     QnId = 1
-    def __init__(self):
+    def __init__(self, value=None):
+        """
+            the param value is just for consistency with other QnClass 
+        """
         #self._val = np.array([1], np.int)
         self._val = 1
 
