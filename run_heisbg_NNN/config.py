@@ -10,8 +10,8 @@ from merapy.schedule import schedule_prod_state, copy_schedule
 
 def make_config(J2, algorithm='mera', alg_surfix='', which_top_state='scale_invar',  backup_parpath=None, root1='', surfix=''): 
     cfg= copy_config(CFG_HEISBG_BASIC)
-    #print cfg['schedule']['schedule']
-    #raise 
+
+
     if which_top_state == 'scale_invar_state' : 
         pass
     elif which_top_state == 'prod_state' : 
@@ -25,7 +25,6 @@ def make_config(J2, algorithm='mera', alg_surfix='', which_top_state='scale_inva
         raise 
     
     cfg['model_name'] = 'heisbg_NNN'
-    #cfg['model_param'].update(h=h)
     cfg.update(algorithm=algorithm, algorithm_surfix=alg_surfix, combine_2site=1)
     cfg['model_param'].update(J_NN=1.0, J_zz=1.0, J_NNN=J2)
     cfg['do_measure'] = 1
