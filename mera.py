@@ -320,7 +320,9 @@ class Mera(object):
     MaxLayer = 16
 
     def __init__(self, layer, nTop, qsp_0, qsp_max, qsp_max2, 
-            topQN, qsp_null, qn_identity, tensor_defs=None, unitary_init=None):
+            topQN, qsp_null, qn_identity, tensor_defs=None, 
+            rand_seed=None, USE_CUSTOM_RAND=False,  
+            unitary_init=None):
         """
             see init_Mera in f90
             给所有的tensor allocate space
@@ -377,6 +379,13 @@ class Mera(object):
         #self.layer_eff = tuple(range(layer))
         self.layer_keys = tuple(range(layer))
         self.top_layer_key = layer - 1
+        
+        #if USE_CUSTOM_RAND:
+        #    crandom.mrandom.csrand(rand_seed)
+        #else:
+        #    np.random.seed(rand_seed)
+        #    crandom.rand = np.random.random
+        
 
     def __eq__(self, other):
         """
@@ -861,7 +870,33 @@ class Mera(object):
             this is an idea:  of mine:  can one change mps to mera and vise versa?
             mix the two algorithms
         """
-
+    
+    def reset_to_identity(self): 
+        """
+            reset each tensor in mera to identify map 
+            this is used in e.g test J for long range 
+        """
+        M = self 
+        for i in range(M.num_of_layer-1):
+            t = M.V[i][0]
+            rank = t.rank
+            qDims= np.empty(rank, "int")
+            iDims= np.empty(rank, "int")
+            qDims[:]= 0#[0, 0, 0, 0]
+            iDims[:] = 0
+            t.data[:] = 0.0
+            t.set_element(qDims, iDims, 1.0)
+            
+            t = M.V_dag[i][0]
+            rank = t.rank
+            qDims= np.empty(rank, "int")
+            iDims= np.empty(rank, "int")
+            qDims[:]= 0 #[0, 0, 0, 0]
+            iDims[:] = 0
+            t.data[:] = 0.0
+            t.set_element(qDims, iDims, 1.0)
+        
+    
 def reset_mera(M):
     """
         

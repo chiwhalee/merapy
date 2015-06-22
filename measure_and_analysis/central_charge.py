@@ -9,8 +9,11 @@ import cPickle as pickle
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 import unittest
+import tempfile 
 
 import merapy 
+from merapy.utilities import print_vars
+from merapy import load 
 from merapy.hamiltonian import System
 from merapy.tensor_svd import Tensor_svd
 from merapy.quantum_number_py import *
@@ -135,18 +138,18 @@ def __entanglement_entropy(S, layer, k=None, spectrum=0, info=0):
             rho_ = rho[i]
             EE[i], val[i] = rho_eig(rho_, k)
         
-        
         #cc = 3*(EE[2]-EE[1]); cc = round(cc, digit)
         digit = 6
         EE[1] = round(EE[1], digit)
         EE[2] = round(EE[2], digit)
                
-        #print "EE %s"%EE
         if spectrum: 
             return EE, val
         else: 
             return EE
-   
+
+xxxx = __entanglement_entropy 
+
 
 def entanglement_spectrum(S, k=None, info=0, path=None, verbose=False): 
     numl = S.mera.num_of_layer
@@ -686,6 +689,7 @@ def negativity():
     pass
 
 class TestIt(unittest.TestCase): 
+    INITED = False 
     def setUp(self): 
         path_dic = {}
         path_z2 = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'           
@@ -695,7 +699,26 @@ class TestIt(unittest.TestCase):
         path_dic['z2'] = path_z2
         self.path_dic = path_dic
 
-    
+    def initialize(self): 
+        if not TestIt.INITED:  #and 0: 
+            from merapy.config import CFG_HEISBG_BASIC 
+            from merapy.main import Main 
+            parpath = tempfile.mkdtemp()
+            cfg = CFG_HEISBG_BASIC.copy();   
+            
+            cfg.update(USE_CUSTOM_RAND=True, 
+                    trunc_dim=4, tot_layer=4, 
+                    use_player=True, SYMMETRY="U1", NUM_OF_THREADS=1, 
+                    backup_parpath = parpath, 
+                    )
+            cfg['model_param'].update({"J_NN":1.0, "J_NNN":0.0})
+            main = Main(**cfg)
+            main.run(q_iter=10, do_measure=0)
+            #res= {0: 0, 1: -0.15447477974680113, 2: -0.27316843978691985, 3: -0.38435891607150841, 4: -0.49142890463353184, 5: -0.59574502419909914, 6: -0.69595138685370195, 7: -0.78927036090526448, 8: -0.87373436401172677, 9: -0.9490632254128426, 10: -1.015790781309708}
+            #main.S.examine_energy(res)
+            
+            TestIt.INITED = True 
+       
     def test_central_charge(self): 
         #path = './states_for_tests/dim=4-symm=U1-model=heisbg.pickle'
         path = './states_for_tests/dim=12-lay=4-symm=U1-model=heisbg.pickle'
@@ -727,14 +750,21 @@ class TestIt(unittest.TestCase):
         print res['EE']
     
     def test_temp(self): 
+        if 0: 
+            self.initialize()
+        if 1: 
+            path='/tmp/tmphvKfKt/4.pickle'
+            s= load(path)
+            EE = xxxx(s, 0)
+            print_vars(vars(),  ['EE'])
+            
+            
         
         pass
 
 
 if __name__ == '__main__':
-    #ttt = TestIt()
-    #ttt.test_aaa()
-    #ttt.test_bbb()
+
     if 0: 
         if len(sys.argv)>1:
             path = sys.argv[1]   
@@ -758,21 +788,17 @@ if __name__ == '__main__':
                 #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
     
     if 0: #examine
-        #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
-        #unittest.TextTestRunner(verbosity=0).run(suite)    
         TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     if 1: 
         suite = unittest.TestSuite()
         add_list = [
-           #TestIt('test_temp'), 
-           TestIt('test_entanglement_brute_force_6'), 
+           #'test_entanglement_brute_force_6', 
+           'test_temp', 
        
         ]
         for a in add_list: 
-            suite.addTest(a)
-        #suite.addTest(TestIt('test_ising'))
-        #suite.addTest(TestIt('test_heisbg'))
+            suite.addTest(TestIt(a))
         unittest.TextTestRunner().run(suite)
        
 

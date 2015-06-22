@@ -809,7 +809,7 @@ class Tensor_svd(object):
     @classmethod
     def eig(cls, itensor, totQN=None):
         """
-            see iTensor_Eig in f90
+            full diagonalization of itensor 
             thif func is only used in calc central_charge
             params:
                 totQN:  can be used to select excitation states
@@ -865,9 +865,11 @@ class Tensor_svd(object):
         return Vg, E
 
     @classmethod
-    def eig_sparse(cls, itensor, qn_list, is_hermite=False, k=10, tol=None):
+    def eig_sparse(cls, itensor, qn_list, which_eig='sparse', which='LM', is_hermite=False, k=10, tol=None):
         """
             eigenvalue decomposition of sparse tensor
+            using eigs, eigsh 
+            update: now it both supports 'sparse' and 'full' via which_eig
         """
         #tol = 1e-18 if tol is None else tol
         tol = tol if tol is not None else 1e-12
@@ -876,10 +878,11 @@ class Tensor_svd(object):
         div = rank//2
         cls.group_legs(itensor, div)
         
-        res= {}
-        #print "QSp_Group input is:\n%s"%cls.QSp_Group1
-        #print "QSp_Group output is:\n%s"%cls.QSp_Group2
-        #print "selected input qn are %s"%qn_list
+        if isinstance(qn_list[0], int): 
+            qn_list = [itensor.QSp[0].QnClass(i) for  i in qn_list]
+        
+        res = {}
+        
         for gidx in range(cls.QSp_Group1.nQN):
             #print "ggg", gidx, cls.QSp_Group1.QNs[gidx]
             qn = cls.QSp_Group1.QNs[gidx]  
@@ -887,19 +890,22 @@ class Tensor_svd(object):
                 V_buf = cls.get_block1(itensor, gidx)
                 d = V_buf.shape[0]
                 #print 'dddd', d
-                if d <=  20:
+                if d <=  20 or which_eig=='full':
+                    
                     if is_hermite: 
                         vals, vecs= linalg.eigh(a=V_buf)
                     else: 
                         vals, vecs= linalg.eig(a=V_buf)
-                else: 
+                elif which_eig == 'sparse' : 
                     if k>d:
                         k = d-2
                     if is_hermite: 
-                        vals, vecs= eigsh(A=V_buf, k=k, tol=tol )
+                        vals, vecs= eigsh(A=V_buf, which=which, k=k, tol=tol )
                     else: 
-                        vals, vecs= eigs(A=V_buf, k=k, tol=tol )
-                #res[gidx] = qn, vals
+                        vals, vecs= eigs(A=V_buf, which=which, k=k, tol=tol )
+                else: 
+                    raise 
+                
                 res[qn._val] = vals
 
             else:

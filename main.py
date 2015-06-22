@@ -458,12 +458,13 @@ class Main(object):
             import __main__
             self.filename = __main__.__file__.replace("main", "res").replace("run", "res").replace(".py", ".dat")
         
-        #issue in each main, should use independent random state!     
-        if USE_CUSTOM_RAND:
-            crandom.mrandom.csrand(rand_seed)
-        else:
-            random.seed()
-            crandom.rand = random.random
+        if 1: 
+            #issue in each main, should use independent random state!     
+            if USE_CUSTOM_RAND:
+                crandom.mrandom.csrand(rand_seed)
+            else:
+                random.seed()
+                crandom.rand = random.random
 
         if 1:
             #if lang_tensor:
@@ -536,6 +537,7 @@ class Main(object):
         if 1:
             self.M= self.mera_class(self.tot_layer, SystemParam.nTop, 
                     qsp_0, qsp_max, qsp_max2, topQN, qsp_null, qn_identity, 
+                    #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
                     unitary_init=self.unitary_init, **self.mera_kwargs)
             #print 'sssss', type(self.system_class),  self.sys_kwargs
             
@@ -545,6 +547,7 @@ class Main(object):
                     only_NN = self.only_NN, only_NNN = self.only_NNN,  
                     energy_exact=self.energy_exact, combine_2site=self.combine_2site, 
                     j_power_r_max=self.j_power_r_max, 
+                    #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
                     **self.sys_kwargs)
             
             self.S.init_Hamiltonian()
@@ -559,129 +562,6 @@ class Main(object):
         
         LayStart=0
         q_one=1 
-
-    def finite_site_u1_del(self, q_iter, q_lay=1, q_one=1, backup_fn=None, 
-            lstart=0, lstep=0, resume=False, auto_resume=True, info=0):
-        """
-            ref:
-                参考 Evenbly, G., and G. Vidal. "Algorithms for entanglement renormalization." Physical Review B 79.14 (2009): 144108.
-                p.17 A1-A4.  
-                与Vidal文中稍有不同的是，see my note n5 at page 17
-            todo:
-                应该还用Vidal文中的迭代顺序，即先把所有的rho求出来，这样更舒服
-
-
-            总的来说，要更新h2, rho, mera 这三部分，要合理安排三类算子，以及每类算子的每一曾的更新次序。
-            更新h2, 必须要有mera；
-            更新mera，必须要有h2和rho；
-            更新rho，实际上rho不是独立的，完全由mera决定
-            只有h2[0]和mera是实际的矩阵，而其他都是收缩的中间过程, 是虚的
-            conduct a complete optimization for the system
-
-            q_iter: wee vidal p.18 qiter, number to sweep  optimizing all u and w in whole mera
-            q_lay: see vidal p.18 qlay, the number to repeat optimizing all u and w within that layer
-            q_one: see vidal p.16 qone, number to iterate to optimize a single w or u
-
-        """
-        if isinstance(self.updaters, list): #only for backward compatable
-            ascending, descending, update_mera, finite_site_u1, rho_top_func= tuple(self.updaters)
-        elif isinstance(self.updaters, dict):
-            ascending = self.updaters["ascending_func"]
-            descending = self.updaters["descending_func"]
-            update = self.updaters["update_func"]
-
-
-        use_player = self.use_player
-        filename = self.name
-        M = self.M
-        S= self.S
-
-        #err_tol = 1.E-7
-        if resume:    
-            auto_resume = False
-        iter0 = S.iter
-        # iter=0 is init, original value
-        #S.iter precisely means the state of S after iter times update, e.g. S.iter = 0 means original state
-        
-        #note here start is no longer controled by the passed in param start; remove that param in future
-        if iter0 == 0:
-            if rho_top_func.__name__ in ["top_level_product_state", "top_level_product_state_u1", "top_level_product_state_u1_1site"]:
-                rho_top_func(M, S)     #rho_top is never changed when using top_level_product_state
-            start = True 
-        elif iter0 > 0:
-            start = False
-        
-        
-        for iter  in xrange(iter0 + 1, q_iter + iter0 + 1):
-            if info>0:
-                print str(iter) + "th iteratiion"
-            
-            if use_player:
-                if iter0 == 0:
-                    set_STATE_end_1(iter, record_at=iter0 + 2, power_on=True)
-                else:
-                    if resume:
-                        set_STATE_end_1(iter, record_at=iter0 + 1, power_on=True)
-                    else:
-                        set_STATE_end_1(iter, record_at=-1, power_on=True)  #no more record, start play immediatly
-
-
-            #第一遍：从下到上把H_2求出来
-            #注意对于finite range，在fortran的算法里，最上层的V张量是个摆设，不是实际的最上层!, 它的值没有被更新过
-            for ilayer in range(lstart, M.num_of_layer-1):
-                #note the update order here, start from H then M then H:  H[0]->M[0]->H[1]->M[1]->....
-                #H[0] is inited before finite_site
-                if not start:   
-                    for iter_lay in range(q_lay):
-                        #iterative_optimize_all(M,S,ilayer,j=0, info=info-1)
-                        update_mera(M,S,ilayer,j=0, info=info-1)    #update U[ilayer] etc
-                ascending(M, S, ilayer, info=info-1)   #calculate H[ilayer+1] for ilayer
-            
-            #update rho_2[M.num_of_layer-1]        
-            if rho_top_func.__name__ == "top_level_eigenstate": 
-                rho_top_func(M, S)
-
-            #这里似乎不一定在top layer收缩，可以任意layer
-            
-            #S.iter = iter
-            S.iter += 1 
-            S.eng_ham(M.num_of_layer-1)
-            S.save_eng(S.iter)
-            steps, dt_real= S.display(S.iter, filename)
-            if steps*dt_real>86400*10: #(10 days)
-                if iter-iter0>10:
-                    print "\nENERGY_DIFF IS TOO SMALL, BREAK AT HERE. steps= %(steps)d\n"%vars()
-                    #print "energy_diff is too small, break at here. steps= %(steps)d"%vars()
-                    break
-
-            if auto_resume and backup_fn is not None:
-                try:
-                    S0= System.load(backup_fn)
-                except IOError:
-                    print "try to resume but file %s not found"%backup_fn
-                else:
-                    if S.energy> S0.energy:
-                        print S
-                        S= S0
-                        M = S0.mera
-                        S.iter = S0.iter
-                        print "aotu_resumed from %s at a lower enegy=%2.15f"%(backup_fn, S0.energy)
-                finally:
-                    auto_resume = False
-
-
-            #这一步更新rho[num_of_layer-2] ,..., [1]
-            for ilayer  in range(M.num_of_layer-1, lstart + 1, -1):
-                #rho[0]可以求出来，但它在更新U，V时用不到，我们也不用它来收缩算能量，故不求它
-                for iter_lay in range(q_lay):
-                    #calculate reduced density mat. for each layer
-                    descending(M,S,ilayer,  info=info-1)
-
-            start =  False 
-            
-            if S.iter%50 == 0 and iter-iter0>10:
-                if backup_fn is not None:
-                    S.save(fn=backup_fn)
 
     #@profileit(fn="profile.tmp")
     def run(self, resume=True, auto_resume=None, backup_fn=None, filename=None, 
@@ -1199,7 +1079,8 @@ class Main(object):
                 elif 'qtg' in hostname: 
                     nproc = ncpu_tot/2//nt
                 elif hostname == Main.LOCALHOSTNAME: 
-                    nproc = 2
+                    #nproc = 2
+                    nproc = ncpu_tot/2//nt
                 else: 
                     warnings.warn('unfamiliar hostname %s'%(hostname, ))
                     nproc = ncpu_tot/2//nt 
