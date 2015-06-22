@@ -443,6 +443,7 @@ class Main(object):
             self.qsp_max = qsp_max
             self.mera_kwargs = mera_kwargs
             self.sys_kwargs= sys_kwargs
+            self.sys_kwargs.update(kwargs)
             self.do_measure = kwargs.get('do_measure')
             self.j_power_r_max = kwargs.get('j_power_r_max', None)
             

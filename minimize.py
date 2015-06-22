@@ -7,6 +7,7 @@ import warnings
 import time
 from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 
+from merapy import print_vars
 from merapy.decorators import set_STATE_end_1, tensor_player
 from merapy.measure_and_analysis.scaling_dimension import  calc_scaling_dim_1site, calc_scaling_dim_2site 
 from merapy.measure_and_analysis.measurement import measure_S
@@ -271,6 +272,7 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         q_one: see vidal p.16 qone, number to iterate to optimize a single w or u
 
     """
+
     use_local_storage = kwargs.get('use_local_storage', False)
     last_save_time = time.time()
     if resume:    
@@ -305,7 +307,11 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
                     set_STATE_end_1(iter, record_at=iter0 + 1, power_on=True, verbose=verbose)
                 else:
                     set_STATE_end_1(iter, record_at=-1, power_on=True, verbose=verbose)  #no more record, start play immediatly
-
+        
+        if S.use_pinning_term:
+            S.use_pinning_term_func()
+            
+        
         #第一遍：从下到上把H_2求出来
         #注意对于finite range，在fortran的算法里，最上层的V张量是个摆设，不是实际的最上层!, 它的值没有被更新过
         for ilayer in range(lstart, M.num_of_layer-1):
@@ -453,11 +459,11 @@ class ScaleInvar():
                 out = open(self.filename, "a"); out.write(aa); out.close()
             #print "use following ham ops: %s\n"%self.ham_op_names.keys()
         
-        #iter0 = S.iter
+       
         iter0 = S.iter1
         
         q_iter = self.q_iter + iter0 + 1 if self.q_iter_relative else  self.q_iter + 1
-        #print q_iter
+        
 
         if not self.resume:
             S.log[iter0] = S.get_info()
@@ -466,6 +472,9 @@ class ScaleInvar():
             if self.use_player:
                 record_at = iter0+2 if self.resume else iter0 + 1
                 set_STATE_end_1(iter, record_at=record_at, power_on=True)
+            
+            if S.use_pinning_term:
+                S.use_pinning_term_func()
 
             #for ilayer in range(M.num_of_layer-2):
             for ilayer in range(self.SIlayer):

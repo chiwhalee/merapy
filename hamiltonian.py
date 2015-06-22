@@ -15,6 +15,7 @@ import warnings
 import rpyc
 
 from merapy.utilities import print_vars
+import merapy.crandom as crandom 
 from merapy.models import *
 from merapy.context_util import rpyc_conn_local, rpyc_conn_local_zerodeploy, rpyc_load
 from merapy.mera import *
@@ -57,12 +58,12 @@ class System(IterativeOptimize):
             它又由 tlink 组成， 在f90中， tlink与 shallowcopy 配合使用为收缩做准备
             , 说白了仅仅是为了调整收缩的顺序。在python中，这些都变得很travial
     """
-    TNet_sys= TensorNetwork() 
+    TNet_sys = TensorNetwork() 
     
     def __init__(self, symmetry, mera, model, qsp_base=None, 
             graph_module=None, model_param=None, 
-            only_NN=True, only_NNN=False, combine_2site=True, 
-            energy_exact=None, j_power_r_max=None,  info=0, **kwargs):
+            only_NN=True, only_NNN=False, 
+            energy_exact=None, j_power_r_max=None, **kwargs):
         """
             System 和Mera的区别在于：
                 后者定义了U，V等张量
@@ -75,68 +76,73 @@ class System(IterativeOptimize):
                 model_param: dict, specify parameters for Ising, Heisenberg, etc
 
         """
-        if 1: 
-            default_args = {
-                #common to vmps
+        
+        default_args = {
+            #common to vmps
                 'use_player': True, 
                 'info': 0, 
                 'is_initialized': False, 
-                
-                #ham
-                    'model': None, 
-                    'only_NN': True, 
-                    'only_NNN': False, 
-                    'model_param': {}, 
-                
-                'mera_class': Mera, 
-                'qsp_base': None, 
-                'qsp_max': None, 
-                'trunc_dim': 4, 
-                'combine_2site': False, 
-                
-                'tot_layer': 4,
-                'nTop': 2, 
-                'unitary_init': 'unit_tensor',
-                'mera_kwargs': {}, 
-                
-                'translation_invariant': 1, 
-                'symmetry': 'Travial',  
-                
-                #minimize
+            
+            #ham
+                'model': None, 
+                'only_NN': True, 
+                'only_NNN': False, 
+                'model_param': {}, 
+            
+            'mera_class': Mera, 
+            'qsp_base': None, 
+            'qsp_max': None, 
+            'trunc_dim': 4, 
+            'combine_2site': True, 
+            
+            'tot_layer': 4,
+            'nTop': 2, 
+            'unitary_init': 'unit_tensor',
+            'mera_kwargs': {}, 
+            
+            'translation_invariant': 1, 
+            'symmetry': 'Travial',  
+            'USE_CUSTOM_RAND': False, 
+            'rand_seed': None,  
+            
+            #minimize
                 'updaters': None, 
                 'q_iter': 5, 
                 'q_lay': 1, 
-                
-                #IO
+                'use_pinning_term': False,   # add a pinning term to ham,  to avoid stuck 
+                'pinning_term_def': {'op': None,'name': None, 'step_limit': 300}, 
+                'pinning_term': None, 
+            
+            #IO
                 'use_local_storage': False, 
                 'backup_parpath': None, 
                 'backup_parpath_local': None, 
                 'auto_resume': True, 
-                
-                #measure
+            
+            #measure
                 'do_measure': 0, 
-                
-                
-                #only for long range int 
+            
+            
+            #only for long range int 
                 'interaction_range_max': 2, 
-                }
-            if 1: 
-                for k in default_args: 
-                    if kwargs.has_key(k): 
-                        default_args[k] = kwargs[k]
-                
-                for k, v in default_args.iteritems(): 
-                    setattr(self, k, v)
+            }
+        if 1: 
+            for k in default_args: 
+                if kwargs.has_key(k): 
+                    default_args[k] = kwargs[k]
+            
+            for k, v in default_args.iteritems(): 
+                setattr(self, k, v)
         
         self.model = model
         self.model_name = model
         self.only_NN = only_NN
         self.only_NNN = only_NNN
         self.symmetry = symmetry
-        self.combine_2site = combine_2site
-        self.info = info
+        #self.combine_2site = combine_2site
+        #self.info = info
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry=self.symmetry, 
-                combine_2site=combine_2site)
+                combine_2site=self.combine_2site)
         if qsp_base is not None: self.qsp_base = qsp_base  #models like Potts need alternate qsp_base than default
         if model_param is not None:
             self.model_param = model_param
@@ -230,6 +236,12 @@ class System(IterativeOptimize):
         
         if j_power_r_max is not None:   #only for long range 
             System.J_POWER_R_MAX = j_power_r_max 
+        
+        #if self.USE_CUSTOM_RAND:
+        #    crandom.mrandom.csrand(self.rand_seed)
+        #else:
+        #    np.random.seed(self.rand_seed)
+        #    crandom.rand = np.random.random
     
     def initialize(self): 
         """
@@ -286,6 +298,7 @@ class System(IterativeOptimize):
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
+        
         
         self.is_initialized = True     
         
@@ -345,8 +358,9 @@ class System(IterativeOptimize):
     def __ne__(self, other):
         return not self.__eq__(other)
     
-    @staticmethod 
-    def example( M=None, symmetry=None, model='Heisenberg', 
+    #@staticmethod 
+    @classmethod 
+    def example(cls, M=None, symmetry='Travial', model='Heisenberg', 
             trunc_dim=4, tot_layer=4, 
             model_param=None, **kwargs): 
             #only_NN=True, combine_2site=False, only_NNN=False):
@@ -368,9 +382,8 @@ class System(IterativeOptimize):
             else: 
                 raise 
                 
-        sys=System(model=model, mera=M, symmetry=symmetry, 
-                model_param = model_param, 
-                 **kwargs)
+        #sys=System(model=model, mera=M, symmetry=symmetry, model_param = model_param, **kwargs)
+        sys=cls(model=model, mera=M, symmetry=symmetry, model_param = model_param, **kwargs)
         
         #sys.init_Hamiltonian()
         sys.initialize()
@@ -601,14 +614,20 @@ class System(IterativeOptimize):
 
         elif self.model == "Heisenberg":
             if self.combine_2site:
-                h0, Sz, Sp, Sm=System.op_heisenberg(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
+                h0, Sz, Sp, Sm, pinning_term =System.op_heisenberg(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
+                self.pinning_term = pinning_term 
             else:
-                h0, Sz, Sp, Sm=System.op_heisenberg_1site(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
+                h0, Sz, Sp, Sm = System.op_heisenberg_1site(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
-
+            
+            
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
+            
+            if self.use_pinning_term: 
+                self.H_2_bac = self.H_2[0][0].copy()
+
 
             if not self.only_NN:
 
@@ -910,9 +929,8 @@ class System(IterativeOptimize):
         symmetry = param["symmetry"]
         qspclass =symmetry_to_Qsp(symmetry)
         QN_idendity, QSp_base = param["QN_idendity"], param["QSp_base"]
-        #QN_idendity, QSp_base, QSp_null =  qspclass.set_base(dim=4)
 
-        #h = param["h"]
+        
         Jzz = param["Jzz"]  #Jzz has only implemented for NN interaction
         J_NN = param["J_NN"]
         J_NNN = param["J_NNN"]
@@ -981,6 +999,7 @@ class System(IterativeOptimize):
         h0[2] += s0s1 
         
         
+        
         if 1:  #next neareast neighbour interaction
             if symmetry in ["Z2"]:
                 sisi = sigma_z1.direct_product(sigma_z1) + 2.0*(
@@ -1004,6 +1023,11 @@ class System(IterativeOptimize):
             s0s2 = 0.5*(sisi + isis)
             s0s2 *=  J_NNN
             h0[2] += s0s2
+            
+            #this is a temporary workaround for meta stable state for J1J2 model 
+            pinning_term = s0s2.copy()
+            pinning_term.data = -pinning_term.data 
+       
                 
         if not only_NNN and not only_NN and symmetry in ["U1", "Travial"] :     #long range terms
             alpha, beta = param["alpha"], param["beta"]
@@ -1157,8 +1181,8 @@ class System(IterativeOptimize):
             identity=ii.direct_product(ii)
             
         h0[2].data -= identity.data
-
-        return  h0, Sz, Sp, Sm
+        
+        return  h0, Sz, Sp, Sm, pinning_term 
 
     @staticmethod
     def op_heisenberg_1site(**param):
@@ -1385,6 +1409,93 @@ class System(IterativeOptimize):
                 self.measure_S(self, ppp, exclude_which=exclude_which)
        
         return self.M, self
+
+    def _minimize_scale_invar(self, resume=True, auto_resume=None, backup_fn=None, filename="auto", 
+            num_of_SIlayer=3, q_lay=1, q_iter=5, do_measure=None,  **kwargs):
+        """ 
+            taken from Main.run_scale_invar 
+        """
+        from merapy.minimize import ScaleInvar 
+        
+        do_measure  = do_measure if do_measure is not None else self.do_measure
+        
+        q_one = 1
+        
+        backup_parpath = self.backup_parpath
+        backup_parpath_local = self.backup_parpath_local
+        if kwargs.get('backup_parpath') is not None : 
+            backup_parpath = kwargs.get('backup_parpath')
+        if kwargs.get('backup_parpath_local') is not None : 
+            backup_parpath_local = kwargs.get('backup_parpath_local')
+        
+                
+        fn = self.backup_fn_auto() 
+        if backup_parpath is not None : 
+           
+            backup_fn  = backup_parpath + '/' + fn
+        backup_fn_local = None
+        if backup_parpath_local is not None: 
+            backup_fn_local = '/'.join([backup_parpath_local, fn])
+            
+
+        #if filename is not None:   self.filename = filename
+        filename = 'res-'  + self.backup_fn_auto()
+        filename = filename.split('.')[0] + '.dat'
+        
+        
+        if backup_parpath is not None: 
+            filename = backup_parpath + '/' + filename
+        self.filename = filename 
+      
+
+        self.make_dir(backup_parpath, backup_parpath_local)
+        temp = backup_fn if not self.use_local_storage else backup_fn_local
+        if resume and temp is not None:  
+            self.resume_func(temp, use_local_storage=self.use_local_storage)
+            if not hasattr(self, 'iter1'):
+                self.iter1 = self.iter
+            energy_diff_min  = kwargs.get('energy_diff_min')
+            if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                if self.energy_diff_std <= energy_diff_min and self.energy_diff_std is not None  : 
+                    q_iter = 0
+                    do_measure = 0
+                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
+                            self.energy_diff_std, energy_diff_min)
+                    print msg
+                
+        if auto_resume is not None:   self.auto_resume = auto_resume
+        
+        temp = ['use_local_storage']
+        args = {t: self.__getattribute__(t) for t in temp}
+        args['backup_fn_local'] = backup_fn_local
+        kwargs.update(args)
+
+        SI = ScaleInvar(self, self.updaters, num_of_SIlayer, q_iter, q_one, q_lay=q_lay, 
+                filename=filename, backup_fn=backup_fn, 
+                resume=resume, auto_resume=auto_resume, 
+                use_player=self.use_player, info=self.info, **kwargs)
+        
+        SI.scale_invariant()
+        
+        if do_measure:
+            try: 
+                ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+                if ppp is not None : 
+                    exclude_which = self.measurement_args.get('exclude_which', [])
+                    self.measure_S(self, ppp, exclude_which=exclude_which)
+            except Exception as err: 
+                warnings.warn(str(err))
+        
+        if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
+            self.transfer_pickle_file()
+        
+        return self
+
+    def minimize(self): 
+        """
+            this is a wraper 
+        """
+        pass 
     
     def make_dir(self, dir, dir_local=None): 
         #this is taken form main.Main.make_dir 
@@ -2108,6 +2219,12 @@ class System(IterativeOptimize):
             res.Jleg_tau_0l_dic = {}
             res.__class__.Jleg_tau_0l = System.Jleg_tau_0l
             
+        if not hasattr(res, 'use_pinning_term'): 
+            res.use_pinning_term = False 
+        
+        #if not hasattr(res, 'use_pinning_term'): 
+        #    res.use_pinning_term = False 
+            
         return res
     
     if 0:   #del these
@@ -2412,7 +2529,15 @@ class System(IterativeOptimize):
         if state_bac == "play": 
             print "after expansion, tensor_player is switched from 'play' to 'record'"
             tensor_player.NEXT_STATE = "record" 
-
+    
+    def use_pinning_term_func(self): 
+        if self.iter<self.pinning_term_def['step_limit']: 
+            self.H_2[0][0].data = self.H_2_bac.data  + self.pinning_term.data 
+        else: 
+            self.H_2[0][0] = self.H_2_bac 
+            self.use_pinning_term = False
+            print  'self.use_pinning_term is set to False'
+    
 def set_ham_to_identity(sys):
     """
     for debugging 
@@ -2512,11 +2637,20 @@ class TestSystem(unittest.TestCase):
             H=np.array([-2., -1., -1., -1., -1., -1., -1.,  0.])
             self.assertTrue(np.all(S.H_2[0][0].data==H))
     
-    def test_minimize(self): 
+    def test_minimize_finite_site(self): 
         m=System.example(model='Ising', symmetry='Travial', info=1)
         m._minimize_finite_size()
         print_vars(vars(),  ['m.energy'])
         self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
+        from merapy.decorators import tensor_player 
+        tensor_player.STATE = 'stop'
+    
+    def test_minimize_scale_invar(self): 
+        m=System.example(model='Ising', rand_seed=1234, symmetry='Travial', info=1)
+        m._minimize_finite_size()
+        m._minimize_scale_invar()
+        print_vars(vars(),  ['m.energy'])
+        #self.assertAlmostEqual(m.energy, -0.98131885665452145, 10)
         from merapy.decorators import tensor_player 
         tensor_player.STATE = 'stop'
     
@@ -3638,7 +3772,8 @@ if __name__=='__main__':
            #'test_save', 
            #'test_load', 
            #'test_example',  
-           'test_minimize',  
+           #'test_minimize_finite_site',  
+           'test_minimize_scale_invar',  
         ]
         for a in add_list: 
             suite.addTest(TestSystem(a))
