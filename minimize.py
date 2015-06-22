@@ -277,38 +277,20 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         auto_resume = False
 
     backup_fn_local = kwargs.get('backup_fn_local', None)
-    iter0 = S.iter1
-    #S.iter precisely means the state of S after iter times update, e.g. S.iter = 0 means original state
+    iter0 = S.iter1    #S.iter precisely means the state of S after iter times update, e.g. S.iter = 0 means original state
+
     
-    
-    
-    #note here start is no longer controled by the passed in param start; remove that param in future
-    if S.iter == 0:
+    if S.iter == 0:  #note here start is no longer controled by the passed in param start; remove that param in future
         if rho_top_func.__name__ in ["top_level_product_state", "top_level_product_state_u1", "top_level_product_state_u1_1site"]:
             rho_top_func(M, S)     #rho_top is never changed when using top_level_product_state
         start = True 
     else:  
         start = False
     
-    if q_iter_relative:   q_iter = q_iter + iter0 + 1
-        
+    if q_iter_relative:   
+        q_iter = q_iter + iter0 + 1
     q_iter = q_iter + iter0 + 1 if q_iter_relative else  q_iter + 1
-    
     is_resumed = False
-    
-    #if not q_iter_relative and q_iter == iter0  and auto_resume:
-    
-    #if not q_iter_relative and q_iter == iter0  and backup_fn is not None:
-    #    try:
-    #        S0= System.load(backup_fn)
-    #    except IOError:
-    #        print "try to resume but file %s not found"%backup_fn
-    #        raise IOError
-    #    else:
-    #        S.__dict__ = S0.__dict__
-    #        M.__dict__ = S0.mera.__dict__
-    #        print "AOTU_REASSUMED FROM %s \n"%(backup_fn)
-    #        is_resumed = True
 
     for iter  in xrange(iter0 + 1, q_iter):
         if info>0:
@@ -335,10 +317,8 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
                     update_mera(M,S,ilayer,j=0, info=info-1)    #update U[ilayer] etc
             ascending(M, S, ilayer, info=info-1)   #calculate H[ilayer+1] for ilayer
         
-        #update rho_2[M.num_of_layer-1]        
-        #print rho_top_func.__name__ ;exit()
-        if rho_top_func.__name__ == "top_level_eigenstate": 
-            
+        
+        if rho_top_func.__name__ == "top_level_eigenstate":   #update rho_2[M.num_of_layer-1]        
             rho_top_func(M, S)
 
         #这里似乎不一定在top layer收缩，可以任意layer
@@ -348,7 +328,7 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         S.eng_ham(M.num_of_layer-1)
         S.save_eng(S.iter)
         steps, dt_real= S.display(S.iter, filename)
-        #if 1:
+
         if iter-iter0>10:
             if run_time_max is not None: 
                 if steps*dt_real>run_time_max: #(10 days)
