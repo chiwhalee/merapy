@@ -616,21 +616,18 @@ class System(IterativeOptimize):
             if self.combine_2site:
                 h0, Sz, Sp, Sm, pinning_term =System.op_heisenberg(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
-                self.pinning_term = pinning_term 
-                if self.use_pinning_term: 
-                    self.H_2_bac = self.H_2[0][0].copy()
             else:
                 h0, Sz, Sp, Sm, pinning_term = System.op_heisenberg_1site(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
-                if self.use_pinning_term: 
-                    self.H_3_bac = self.H_3[0][0].copy()
             
-            
+            self.pinning_term = pinning_term 
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
-           
-            
-
+            if self.use_pinning_term: 
+                if self.combine_2site: 
+                    self.H_2_bac = self.H_2[0][0].copy()
+                else: 
+                    self.H_3_bac = self.H_3[0][0].copy()
 
             if not self.only_NN and not self.only_NNN:
 
@@ -2537,7 +2534,7 @@ class System(IterativeOptimize):
     
     def use_pinning_term_func(self): 
         if self.iter<self.pinning_term_def['step_limit']: 
-            if S.combine_2site: 
+            if self.combine_2site: 
                 self.H_2[0][0].data = self.H_2_bac.data  + self.pinning_term.data 
             else: 
                 self.H_3[0][0].data = self.H_3_bac.data  + self.pinning_term.data 
