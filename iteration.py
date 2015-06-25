@@ -55,6 +55,13 @@ def iterative_optimize_all(M, S, layer, j=0, tau=None, info=0):
             S.add_env(M, ilayer, graph, order, name, weight, add_tensor=envs[n], restart=restart, info=info-1)
             restart =  False 
     
+    if not S.only_NN: 
+        for G in [S.G_3_2, S.G_3_3]:
+            weight = {g:-G[g].weight for g in G}
+            for n  in range(2):
+                name = Names[n]
+                S.add_env_many(M, ilayer, name, add_tensor=envs[n], G_dic=G, weight_dic=weight, info=info-1)
+        
     #---------------------------------------------------------------------
     #---------------------------------------------------------------------    
     # Update Disentangler and isometry

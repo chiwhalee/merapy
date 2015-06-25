@@ -40,7 +40,17 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
         order = G.contract_order
         weight = G.weight
         S.add_env(M, ilayer, G, order, name, weight, add_tensor=S.H_2[ilayer_p1][0], info=info-1)
+    
+    if not S.only_NN:         
         
+        name = "OO"  #h3->h2
+        temp=S.add_env_many(M, ilayer,name, S.G_3_2, branch=0, info=info-1)
+        S.H_2[ilayer_p1][j].data += temp.data  #*weight
+        
+        name = "OOO"  #h3->h3 
+        S.H_3[ilayer_p1][j].data[:] = 0.0
+        S.add_env_many(M, ilayer,name, S.G_3_3, add_tensor=S.H_3[ilayer_p1][0],  branch=0, info=info-1)
+
     
     if info>0:
         print "H_2 at iLayer+1,",ilayer_p1

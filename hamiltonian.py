@@ -624,12 +624,13 @@ class System(IterativeOptimize):
             
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
+           
             
             if self.use_pinning_term: 
                 self.H_2_bac = self.H_2[0][0].copy()
 
 
-            if not self.only_NN:
+            if not self.only_NN and not self.only_NNN:
 
                 self.SzA[0][0] =  Sz[1]
                 self.SzB[0][0] =  Sz[2]
