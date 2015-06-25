@@ -617,17 +617,19 @@ class System(IterativeOptimize):
                 h0, Sz, Sp, Sm, pinning_term =System.op_heisenberg(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
                 self.pinning_term = pinning_term 
+                if self.use_pinning_term: 
+                    self.H_2_bac = self.H_2[0][0].copy()
             else:
-                h0, Sz, Sp, Sm = System.op_heisenberg_1site(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
+                h0, Sz, Sp, Sm, pinning_term = System.op_heisenberg_1site(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
+                if self.use_pinning_term: 
+                    self.H_3_bac = self.H_3[0][0].copy()
             
             
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
            
             
-            if self.use_pinning_term: 
-                self.H_2_bac = self.H_2[0][0].copy()
 
 
             if not self.only_NN and not self.only_NNN:
@@ -1248,6 +1250,7 @@ class System(IterativeOptimize):
                 
         # =============================================================                                                             
         #next neareast neighbour interaction, 3-site operator
+        pinning_term = None 
         if not only_NN:
             if 1: #symmetry in ["Travial", "Z2"]:
                 sziz = sigma_z.direct_product(sigma_0).direct_product(sigma_z)
@@ -1259,6 +1262,10 @@ class System(IterativeOptimize):
 
                 
             print "J_NNN is set to %1.5f"%J_NNN        
+            #this is a temporary workaround for meta stable state for J1J2 model 
+        
+            pinning_term = h0[3].copy()
+            pinning_term.data = -pinning_term.data 
 
         # =============================================================                                                              
         #long range terms
@@ -1299,7 +1306,7 @@ class System(IterativeOptimize):
             #print identity.matrix_view(); exit()
         h0[2].data -= identity.data
 
-        return  h0, Sz, Sp, Sm
+        return  h0, Sz, Sp, Sm, pinning_term 
     
     def _minimize_finite_size(self, resume=True, auto_resume=None, backup_fn=None, filename=None, 
             q_iter=None, do_measure=None, **kwargs):
@@ -2222,9 +2229,6 @@ class System(IterativeOptimize):
             
         if not hasattr(res, 'use_pinning_term'): 
             res.use_pinning_term = False 
-        
-        #if not hasattr(res, 'use_pinning_term'): 
-        #    res.use_pinning_term = False 
             
         return res
     
@@ -2533,9 +2537,17 @@ class System(IterativeOptimize):
     
     def use_pinning_term_func(self): 
         if self.iter<self.pinning_term_def['step_limit']: 
-            self.H_2[0][0].data = self.H_2_bac.data  + self.pinning_term.data 
-        else: 
-            self.H_2[0][0] = self.H_2_bac 
+            if S.combine_2site: 
+                self.H_2[0][0].data = self.H_2_bac.data  + self.pinning_term.data 
+            else: 
+                self.H_3[0][0].data = self.H_3_bac.data  + self.pinning_term.data 
+                
+        else:
+            if self.combine_2site: 
+                self.H_2[0][0] = self.H_2_bac 
+            else: 
+                self.H_3[0][0] = self.H_3_bac 
+                
             self.use_pinning_term = False
             print  'self.use_pinning_term is set to False'
     
