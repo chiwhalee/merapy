@@ -5,6 +5,7 @@ import unittest
 import inspect 
 import os 
 import numpy as np
+import collections
 from tempfile import mkdtemp 
 import cPickle as pickle 
 import warnings 
@@ -267,10 +268,12 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
             #except AttributeError as err: 
             except Exception as err: 
                 res='error: ' +  str(err)
-        if isinstance(res, str):   # only print a str 
-            return  str(res)
-        else: 
-            return  str(x) + key_val_sep + str(res)
+                
+        #if isinstance(res, str):   # only print a str 
+        #    return  str(res)
+        #else: 
+        #    return  str(x) + key_val_sep + str(res)
+        return  str(x) + key_val_sep + str(res)
             
     
     res = head
@@ -290,10 +293,83 @@ def dict_to_object(dic):
             #return '<%s>' % str('\n '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.iteritems()))             
             return ', '.join(self.__dict__.keys())
     return OBJECT(**dic)
-    
+
+
+class OrderedSet(collections.MutableSet):
+    """
+        taken from 
+            http://stackoverflow.com/questions/1653970/does-python-have-an-ordered-set
+            http://code.activestate.com/recipes/576694/
+    """
+    def __init__(self, iterable=None):
+        self.end = end = [] 
+        end += [None, end, end]         # sentinel node for doubly linked list
+        self.map = {}                   # key --> [key, prev, next]
+        if iterable is not None:
+            self |= iterable
+
+    def __len__(self):
+        return len(self.map)
+
+    def __contains__(self, key):
+        return key in self.map
+
+    def add(self, key):
+        if key not in self.map:
+            end = self.end
+            curr = end[1]
+            curr[2] = end[1] = self.map[key] = [key, curr, end]
+
+    def discard(self, key):
+        if key in self.map:        
+            key, prev, next = self.map.pop(key)
+            prev[2] = next
+            next[1] = prev
+
+    def __iter__(self):
+        end = self.end
+        curr = end[2]
+        while curr is not end:
+            yield curr[0]
+            curr = curr[2]
+
+    def __reversed__(self):
+        end = self.end
+        curr = end[1]
+        while curr is not end:
+            yield curr[0]
+            curr = curr[1]
+
+    def pop(self, last=True):
+        if not self:
+            raise KeyError('set is empty')
+        key = self.end[1][0] if last else self.end[2][0]
+        self.discard(key)
+        return key
+
+    def __repr__(self):
+        if not self:
+            return '%s()' % (self.__class__.__name__,)
+        return '%s(%r)' % (self.__class__.__name__, list(self))
+
+    def __eq__(self, other):
+        if isinstance(other, OrderedSet):
+            return len(self) == len(other) and list(self) == list(other)
+        return set(self) == set(other)
+
+            
+if __name__ == '__main__':
+    s = OrderedSet('abracadaba')
+    t = OrderedSet('simsalabim')
+    print(s | t)
+    print(s & t)
+    print(s - t)
+
+
 class TestIt(unittest.TestCase): 
     def test_temp(self): 
-        pass
+        s = OrderedSet('sssssdfsdfdsf')
+        print_vars(vars(),  ['s', 'type(s)', 'list(s)'])
     
     def test_save_load(self): 
         for i in [0, 1]: 
@@ -318,7 +394,8 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         
         add_list = [
-        'test_save_load', 
+        'test_temp', 
+        #'test_save_load', 
           
         ]
         for a in add_list: 
