@@ -16,6 +16,10 @@ if 1:
 
     
     schedule_prod_state = [
+        {'ansatz':'prod_state',  'shape': (4,3), 'q_iter':50000,  'energy_diff_min': 1e-10},  
+        {'ansatz':'prod_state',  'shape': (8,3), 'q_iter':50000,  'energy_diff_min': 1e-10},  
+        {'ansatz':'prod_state',  'shape': (12,3), 'q_iter':50000,  'energy_diff_min': 1e-10},  
+        
         {'ansatz':'prod_state',  'shape': (4,4), 'q_iter':50000,  'energy_diff_min': 1e-10},  
         #{'ansatz':'prod_state',  'shape': (4,5), 'q_iter':50000,  'energy_diff_min': 1e-10},  
         {'ansatz':'prod_state',  'shape': (4,6), 'q_iter':50000,  'energy_diff_min': 1e-10},  

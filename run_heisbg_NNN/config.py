@@ -8,7 +8,7 @@ from merapy.top_level import top_level_product_state, top_level_product_state_u1
 from merapy.schedule import schedule_prod_state, copy_schedule
 
 
-def make_config(J2, algorithm='mera', alg_surfix='', which_top_state='scale_invar',  backup_parpath=None, root1='', surfix=''): 
+def make_config(J2, algorithm='mera', alg_surfix='', which_top_state='scale_invar_state',  backup_parpath=None, root1='', surfix=''): 
     cfg= copy_config(CFG_HEISBG_BASIC)
 
 

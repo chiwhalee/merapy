@@ -110,7 +110,8 @@ class System(IterativeOptimize):
                 'q_iter': 5, 
                 'q_lay': 1, 
                 'use_pinning_term': False,   # add a pinning term to ham,  to avoid stuck 
-                'pinning_term_def': {'op': None,'name': None, 'step_limit': 300}, 
+                'pinning_term_def': {'op': None,'name': None,'h_name': None, 'lam': None, 
+                    'xi': np.inf, 'step_limit': 1000},   # pinning term of the form  lam*exp(-t/xi)*op
                 'pinning_term': None, 
             
             #IO
@@ -620,14 +621,15 @@ class System(IterativeOptimize):
                 h0, Sz, Sp, Sm, pinning_term = System.op_heisenberg_1site(QN_idendity=self.qn_identity, QSp_base=self.qsp_base, 
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
             
-            self.pinning_term = pinning_term 
+            #self.pinning_term = pinning_term 
+            self.pinning_term_def['op'] = pinning_term[self.pinning_term_def['name']]
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
-            if self.use_pinning_term: 
-                if self.combine_2site: 
-                    self.H_2_bac = self.H_2[0][0].copy()
-                else: 
-                    self.H_3_bac = self.H_3[0][0].copy()
+            #if self.use_pinning_term: 
+            #    if self.combine_2site: 
+            #        self.H_2_bac = self.H_2[0][0].copy()
+            #    else: 
+            #        self.H_3_bac = self.H_3[0][0].copy()
 
             if not self.only_NN and not self.only_NNN:
 
@@ -999,7 +1001,6 @@ class System(IterativeOptimize):
         h0[2] += s0s1 
         
         
-        
         if 1:  #next neareast neighbour interaction
             if symmetry in ["Z2"]:
                 sisi = sigma_z1.direct_product(sigma_z1) + 2.0*(
@@ -1024,9 +1025,12 @@ class System(IterativeOptimize):
             s0s2 *=  J_NNN
             h0[2] += s0s2
             
-            #this is a temporary workaround for meta stable state for J1J2 model 
-            pinning_term = s0s2.copy()
-            pinning_term.data = -pinning_term.data 
+        #this is a temporary workaround for meta stable state for J1J2 model 
+        #pinning_term = s0s2.copy()
+        #pinning_term.data = -pinning_term.data 
+        pinning_term = {}
+        pinning_term['s0s2'] = s0s2.copy()
+        pinning_term['issi'] = 0.5*issi 
        
                 
         if not only_NNN and not only_NN and symmetry in ["U1", "Travial"] :     #long range terms
@@ -2532,7 +2536,7 @@ class System(IterativeOptimize):
             print "after expansion, tensor_player is switched from 'play' to 'record'"
             tensor_player.NEXT_STATE = "record" 
     
-    def use_pinning_term_func(self): 
+    def use_pinning_term_func_bac(self): 
         if self.iter<self.pinning_term_def['step_limit']: 
             if self.combine_2site: 
                 self.H_2[0][0].data = self.H_2_bac.data  + self.pinning_term.data 
@@ -2544,6 +2548,37 @@ class System(IterativeOptimize):
                 self.H_2[0][0] = self.H_2_bac 
             else: 
                 self.H_3[0][0] = self.H_3_bac 
+                
+            self.use_pinning_term = False
+            print  'self.use_pinning_term is set to False'
+    
+    def use_pinning_term_func(self): 
+        pin_def = self.pinning_term_def
+        if not self.pinning_term_def.has_key('h_backup'): 
+            h_name = self.pinning_term_def['h_name']
+            self.pinning_term_def['h_backup'] = getattr(self, h_name)[0][0].copy()
+        
+        if self.iter<self.pinning_term_def['step_limit']: 
+            h_name = pin_def['h_name']
+            if self.combine_2site: 
+                xi = pin_def['xi']
+                coeff = pin_def['lam']*np.exp(-float(self.iter)/xi)
+                print_vars(vars(),  ['coeff'])
+                getattr(self, h_name)[0][0].data = (
+                pin_def['h_backup'].data  + coeff*pin_def['op'].data)
+                #self.H_2[0][0].data = self.H_2_bac.data  + self.pinning_term.data 
+            else: 
+                #self.H_3[0][0].data = self.H_3_bac.data  + self.pinning_term.data 
+                raise NotImplemented 
+                
+        else:
+            h_name = self.pinning_term_def['h_name']
+            h_backup = self.pinning_term_def['h_backup']
+            if self.combine_2site: 
+                getattr(self, h_name)[0][0]=h_backup 
+            else: 
+                #self.H_3[0][0] = self.H_3_bac 
+                raise NotImplemented 
                 
             self.use_pinning_term = False
             print  'self.use_pinning_term is set to False'
