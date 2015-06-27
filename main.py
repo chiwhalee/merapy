@@ -468,11 +468,11 @@ class Main(object):
                 crandom.rand = random.random
 
         if 1:
-            #if lang_tensor:
-            #    SystemParam.lang_tensor = lang_tensor
-            #could be removed
-            if tot_layer is not None:
-                SystemParam.tot_layer = tot_layer
+            
+           
+          
+            #if tot_layer is not None:
+            #    SystemParam.tot_layer = tot_layer
             if trunc_dim is not None:
                 SystemParam.trunc_dim = trunc_dim
             
@@ -534,7 +534,8 @@ class Main(object):
             self.trunc_dim = qsp_max.totDim
 
         topQN = qn_identity.copy()
-        
+
+
         if 1:
             self.M= self.mera_class(self.tot_layer, SystemParam.nTop, 
                     qsp_0, qsp_max, qsp_max2, topQN, qsp_null, qn_identity, 
