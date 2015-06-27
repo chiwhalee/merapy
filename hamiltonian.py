@@ -622,7 +622,8 @@ class System(IterativeOptimize):
                         symmetry=self.symmetry, only_NN=self.only_NN, only_NNN=self.only_NNN, **self.model_param)
             
             #self.pinning_term = pinning_term 
-            self.pinning_term_def['op'] = pinning_term[self.pinning_term_def['name']]
+            if self.use_pinning_term: 
+                self.pinning_term_def['op'] = pinning_term[self.pinning_term_def['name']]
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
             #if self.use_pinning_term: 
