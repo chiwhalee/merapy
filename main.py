@@ -445,7 +445,7 @@ class Main(object):
             self.sys_kwargs= sys_kwargs
             self.sys_kwargs.update(kwargs)
             self.do_measure = kwargs.get('do_measure')
-            self.j_power_r_max = kwargs.get('j_power_r_max', None)
+            #self.j_power_r_max = kwargs.get('j_power_r_max', None)
             
             if self.do_measure is None: 
                 self.do_measure = False
@@ -548,7 +548,7 @@ class Main(object):
                     symmetry=self.SYMMETRY, model=self.MODEL, 
                     only_NN = self.only_NN, only_NNN = self.only_NNN,  
                     energy_exact=self.energy_exact, combine_2site=self.combine_2site, 
-                    j_power_r_max=self.j_power_r_max, 
+                    #j_power_r_max=self.j_power_r_max, 
                     #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
                     **self.sys_kwargs)
             
