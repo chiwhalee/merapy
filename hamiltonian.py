@@ -623,7 +623,10 @@ class System(IterativeOptimize):
             
             #self.pinning_term = pinning_term 
             if self.use_pinning_term: 
-                self.pinning_term_def['op'] = pinning_term[self.pinning_term_def['name']]
+                if self.pinning_term_def['op'] is None: 
+                    assert pinning_term.has_key(self.pinning_term_def['name'] )
+                    self.pinning_term_def['op'] = pinning_term[self.pinning_term_def['name']]
+                    
             self.H_2[0][0] = h0[2]
             self.H_3[0][0] = h0[3]
             #if self.use_pinning_term: 
