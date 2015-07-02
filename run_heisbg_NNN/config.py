@@ -121,9 +121,9 @@ if 1:
         #pinning_term.data = -pinning_term.data 
         # todo: pinning_term is better defined in config.py 
         pinning_term = {}
-        pinning_term['s0s2'] = s0s2.copy()
+        pinning_term['sisi'] = s0s2.copy()
         pinning_term['issi'] = 0.5*issi 
-        pinning_term['s0s1'] = 0.25*(ssii + iiss)
+        pinning_term['ssii'] = 0.25*(ssii + iiss)
                 
         if symmetry in ["Z2"]:
             #identity= sigma_0.direct_product(sigma_0)
