@@ -13,6 +13,7 @@ import types
 from collections import OrderedDict
 import warnings
 import rpyc
+import importlib 
 
 from merapy.utilities import print_vars
 import merapy.crandom as crandom 
@@ -402,6 +403,10 @@ class System(IterativeOptimize):
             #import merapy.init_mera_graph
             #module = merapy.init_mera_graph
             import merapy.diagrams.V31.graph_ternary as module
+        elif isinstance(module, str): 
+            module = importlib.import_module(module)
+            #todo: in config, change all graph_modul into str of the path 
+
         xx = ["G_2_2", "G_2_3", "G_3_2", "G_3_3", "G_22_2", "G_22_3"]  #G_2_3 occurs in binary graph
         found = []
         not_found = []

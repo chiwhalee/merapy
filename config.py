@@ -209,7 +209,8 @@ if 1:
                 "V_dag":{"type":(1, 2)}, 
                 }
         mera_kwargs= {"tensor_defs":tensor_defs}
-        sys_kwargs= {"graph_module":graph_binary, }
+        #sys_kwargs= {"graph_module":graph_binary, }
+        sys_kwargs= {"graph_module":'merapy.diagrams.V21.graph_binary', }
         new = {"updaters":updaters_binary, "mera_kwargs":mera_kwargs, "sys_kwargs":sys_kwargs, "only_NN":False, "only_NNN":True}
         return new
     cfg_binary = _cfg_binary()
