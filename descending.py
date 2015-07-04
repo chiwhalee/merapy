@@ -2,7 +2,6 @@
 
 import warnings
 
-from merapy.system_parameter import SystemParam
 #from merapy.tensor import *
 from merapy.tensor_network import *
 from merapy.mera import *

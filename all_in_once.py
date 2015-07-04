@@ -14,7 +14,6 @@ from tensor_network import *
 from mera import *
 from hamiltonian import *
 from tensor_reflection import TensorReflect
-from system_parameter import SystemParam
 
 #from init_mera_graph import G_2_2
 from merapy.diagrams.V31.graph_ternary import G_2_2
@@ -79,7 +78,7 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
             #here lonly change data,  but not QSp and etc.
             restart =  False 
     
-    if SystemParam.USE_REFLECTION:   #note this is defferent with f90 
+    if S.USE_REFLECTION:   #note this is defferent with f90 
         for n in range(2, num_of_tensor):
             #print "iii", ilayer, n
             #print envs[n].data 
@@ -115,7 +114,7 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
         envs[n].reverse_qsp()
             #q: why not reverse qsp?
     
-    if SystemParam.USE_REFLECTION and 1:    
+    if S.USE_REFLECTION:    
         for n  in range(2):
             TensorReflect.reflect_symmetrize(envs[n], ndiv=ndiv[n])
     

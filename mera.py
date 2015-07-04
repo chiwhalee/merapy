@@ -20,7 +20,6 @@ from tensor import *
 from tensor_svd import *
 #from random_64 import mrandom
 import crandom
-from system_parameter import SystemParam
 from tensor_reflection import TensorReflect
 
 
@@ -321,7 +320,7 @@ class Mera(object):
 
     def __init__(self, layer, nTop, qsp_0, qsp_max, qsp_max2, 
             topQN, qsp_null, qn_identity, tensor_defs=None, 
-            rand_seed=None, USE_CUSTOM_RAND=False,  
+            rand_seed=None, USE_CUSTOM_RAND=False, USE_REFLECTION=False,   
             unitary_init=None):
         """
             see init_Mera in f90
@@ -339,7 +338,7 @@ class Mera(object):
         """
         #self.nNeigh = nNeigh
         #self.NSize = nNeigh**layer
-        self.nTop = nTop
+        self.nTop = nTop  #this param is not used at all 
         self.qsp_0 = qsp_0
         self.qsp_max = qsp_max #.copy()
         self.qsp_max2 = qsp_max2 #.copy()
@@ -347,6 +346,7 @@ class Mera(object):
         self.qsp_null = qsp_null
         self.qn_identity = qn_identity 
         self.symmetry = self.qsp_0.QNs[0].SYMMETRY 
+        self.USE_REFLECTION = USE_REFLECTION 
 
         self.tensor_defs= {
                 "U":        {"type":(2, 2),    "type_1":"unitary",	        "dual":False,}, 
@@ -413,7 +413,6 @@ class Mera(object):
         from quantum_number import init_System_QSp
 
         #from quantum_number import QSp_base, QN_idendity
-        from system_parameter import SystemParam as SysParam
         from tensor_network import TensorNetwork
 
         QN_idendity, QSp_base , QSp_null = init_System_QSp(symmetry=symmetry)
@@ -453,12 +452,11 @@ class Mera(object):
         else:
             raise
         
-        SysParam.ReAssumed= False
-        #SysParam.ReAssumed=True
         topQN= QN_idendity.copy()
         
         crandom.mrandom.csrand(1234)
-        M= Mera(tot_layer, SysParam.nTop,qsp_0, qsp_max, qsp_max2, topQN, QSp_null, QN_idendity)
+        nTop = 2
+        M= Mera(tot_layer, nTop, qsp_0, qsp_max, qsp_max2, topQN, QSp_null, QN_idendity)
         #sys.init_Hamiltonian(M)
         return M
    
@@ -587,7 +585,7 @@ class Mera(object):
             else:
                 self.V[ilayer][j] = self.V[ilayer-1][j].copy()
             
-            if SystemParam.USE_REFLECTION:
+            if self.USE_REFLECTION:
                 TensorReflect.reflect_symmetrize(self.V[ilayer][j], ndiv=ndiv)
                 Tensor_svd.svd(self.V[ilayer][j], ndiv=ndiv)
             
@@ -921,7 +919,6 @@ class test_Mera(object):
         from quantum_number import init_System_QSp
 
         #from quantum_number import QSp_base, QN_idendity
-        from system_parameter import SystemParam as SysParam
         from tensor_network import TensorNetwork
 
         QN_idendity, QSp_base , QSp_null = init_System_QSp(symmetry=symmetry)
@@ -960,12 +957,11 @@ class test_Mera(object):
         else:
             raise
         
-        SysParam.ReAssumed= False
-        #SysParam.ReAssumed=True
         topQN= QN_idendity.copy()
         
         crandom.mrandom.csrand(1234)
-        M= Mera(tot_layer, SysParam.nTop,qsp_0, qsp_max, qsp_max2, topQN, QSp_null, QN_idendity)
+        nTop = 2
+        M= Mera(tot_layer, nTop, qsp_0, qsp_max, qsp_max2, topQN, QSp_null, QN_idendity)
         #sys.init_Hamiltonian(M)
         return M
 

@@ -22,7 +22,6 @@ from merapy.context_util import rpyc_conn_local, rpyc_conn_local_zerodeploy, rpy
 from merapy.mera import *
 from merapy.tensor import *
 from merapy.tensor_network import *
-from merapy.system_parameter import SystemParam 
 from merapy.quantum_number import *
 from vmps.iterative_optimize import IterativeOptimize 
 
@@ -90,6 +89,7 @@ class System(IterativeOptimize):
                 'only_NNN': False, 
                 'model_param': {}, 
             
+            'USE_REFLECTION': False, 
             'mera_class': Mera, 
             'qsp_base': None, 
             'qsp_max': None, 
@@ -149,7 +149,6 @@ class System(IterativeOptimize):
         if model_param is not None:
             self.model_param = model_param
         else:
-            #self.model_param = SystemParam.model_param.copy()  #copy or not?
             self.model_param = {}
         
         self.set_graph(graph_module)
@@ -756,7 +755,7 @@ class System(IterativeOptimize):
     @staticmethod
     def op_ising(**param):
         """
-            todo:模型的参数不应该用SystemParam 赋值，而应该在构造时赋值
+
             materialize operators(tensors) of the ising hamiltonian, especially h0, Sx
             see op_ising in f90
         """
@@ -799,7 +798,7 @@ class System(IterativeOptimize):
     @staticmethod
     def op_ising_2site(**param):
         """
-            todo:模型的参数不应该用SystemParam 赋值，而应该在构造时赋值
+            
             materialize operators(tensors) of the ising hamiltonian, especially h0, Sx
             
         """
@@ -1383,17 +1382,6 @@ class System(IterativeOptimize):
            
         if auto_resume is not None:   self.auto_resume = auto_resume
         
-        print 'SystemParam code is deleted'
-        #SystemParam.param_extra.update({
-        #        "resume":self.resume, 
-        #        "RAND_SEED":self.RAND_SEED, 
-        #        "USE_CUSTOM_RAND":self.USE_CUSTOM_RAND, 
-        #        "unitary_init":self.M.unitary_init, 
-        #        #"top_level_func":self.updaters[4].func_name, 
-        #        "message":self.message, 
-        #        "energy_exact":self.energy_exact
-        #        })
-        #SystemParam.show(self.filename)    
         
         if isinstance(self.updaters, list): #only for backward compatable
             
@@ -1959,7 +1947,7 @@ class System(IterativeOptimize):
         this func is not used
         top level 的收缩图与其他不同，因为top V 不同
         """
-        SystemParam.TNet_sys= TensorNetwork()
+        TNet_sys= TensorNetwork()
 
         layer = M.num_of_layer
         
@@ -3667,7 +3655,7 @@ class TestSystem(unittest.TestCase):
         h0 = System.op_heisenberg(QN_idendity=QN_idendity, 
                 symmetry=symmetry, 
                 only_NN=False, 
-                QSp_base=QSp_base, only_NNN=False, **SystemParam.model_param)
+                QSp_base=QSp_base, only_NNN=False, )
         #print h0[3]
         #print h0[2]  #.data.round(5)
 
@@ -3803,7 +3791,7 @@ if __name__=='__main__':
         
         #ts.eng_ham()
         
-        #print SystemParam.gamma
+
         #ts.test_ising()
         #ts.test_ising_2()
         #ts.op_heisenberg()

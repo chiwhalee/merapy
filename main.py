@@ -60,7 +60,6 @@ from merapy.quantum_number import *
 from merapy.mera import Mera
 from merapy.hamiltonian import System
 from merapy.tensor_py import iTensor, iTensorFactory
-from merapy.system_parameter import SystemParam 
 from merapy.scale_invariant import ScaleInvar
 from merapy import common_util
 from merapy import crandom
@@ -190,148 +189,6 @@ if 0:  #archive
         job_server = pp.Server(ncpus=6)
         job_server.submit
 
-
-    class Main_new(object):
-        def __init__(self, updaters, trunc_dim=None, tot_layer=None, q_iter=8,q_lay=3, info=0,
-            MODEL="Heisenberg", SYMMETRY="Z2", only_NN=True, only_NNN=False, use_player=True,
-            filename=None, J_NNN = None, USE_REFLECTION=None, 
-            model_param=None, qsp_max=None):
-
-            if filename == "default":
-                import __main__
-                filename = __main__.__file__.replace("main", "res").replace("run", "res").replace(".py", ".dat")
-                #filename = __main__.__file__.replace(".py", ".dat")
-                #filename = "res-" + filename
-            else:
-                pass
-            
-
-            if 0:
-                args= ["tot_layer", "trunc_dim", "USE_REFLECTION"]
-                loc = locals()
-                print loc
-                for a in args:
-                    if a in loc:
-                        if loc[a]:
-                            SystemParam.__setattr__(a, loc[a])
-            
-            if 1:
-                #if lang_tensor:
-                #    SystemParam.lang_tensor = lang_tensor
-                #could be removed
-                if tot_layer is not None:
-                    SystemParam.tot_layer = tot_layer
-                if trunc_dim is not None:
-                    SystemParam.trunc_dim = trunc_dim
-                
-                #can't be removed
-                if USE_REFLECTION is not None:
-                    SystemParam.USE_REFLECTION = USE_REFLECTION
-                    if SystemParam.USE_REFLECTION  and trunc_dim != 2:
-                        raise ValueError("USE_REFLECTION is not compatable with trunc_dim")
-                
-                args=["MODEL", "SYMMETRY", "only_NN"]
-                temp=locals()
-                for a in args:
-                    if temp[a] is not None:
-                        setattr(SystemParam, a, temp[a])
-
-                SystemParam.system_cfg()
-                if model_param is not None:
-                    SystemParam.model_param.update(model_param)
-
-                SystemParam.show(filename)    
-            
-            LayStart=0; q_one=1 
-            layer = tot_layer
-            symmetry = SYMMETRY
-
-           
-            varables= vars()
-            print varables.keys()
-            
-            sys_param_name = ["model", "symmetry", "only_NN", "only_NNN"]
-            self.sys_param = {i:vars()[i] for i in sys_param_name if vars().has_key(i)}
-            
-            #mera_param_name = ["trunc_dim", "tot_layer", "symmetry"]
-            #self.mera_param = {i:varables[i] for i in mera_param_name}
-            mera_inspect = inspect.getargspec(Mera.__init__)
-            self.mera_param_name = mera_inspect.args
-            print self.mera_param_name
-            self.param_main_names = inspect.getargspec(Main.__init__).args
-            #print Main.__init__.__dict__
-            self.param_main_names.remove("self")
-            print self.param_main_names
-            print updaters
-            self.param_main = {i:varables[i] for i in self.param_main_names}
-            self.param_main.update(vars())
-
-            print self.param_main #.args
-
-            #self.mera_param = {i:varables[i]}
-
-            iter_param_name = ["q_iter", "q_one", "q_lay"]
-            self.iter_param = {i:varables[i] for i in iter_param_name}
-
-            self.init_system()
-
-        def init_system(self):
-            """
-                set the attribute self.S,  self.M
-            """
-            SYMMETRY, trunc_dim = self.param_main["SYMMETRY"], self.param_main["trunc_dim"]
-            qn_identity, QSp_base, qsp_null=init_System_QSp(symmetry = SYMMETRY)
-            #print QSp_base
-            qsp_0 = QSp_base.copy()
-            reset_System_QSp(symmetry=SYMMETRY)
-            qsp_max, qsp_max2=QSp_base.__class__.max(trunc_dim)
-
-            self.S= System(SYMMETRY, **self.sys_param)
-            
-
-            SystemParam.ReAssumed= False
-            topQN= qn_identity.copy()
-
-            
-            nTop = None
-            self.param_main.update(vars())
-            crandom.mrandom.csrand(1234)
-
-            param_mera_names = inspect.getargspec(Mera.__init__).args
-            param_mera_names.remove("self")
-            self.param_mera_dic = {i:self.param_main[i] for i in param_mera_names}
-            
-            print param_mera_names
-            if not SystemParam.ReAssumed:
-                self.M= Mera(**self.param_mera_dic)
-                self.S.init_Hamiltonian(self.M)
-            else:
-                hamiltonian.Restore_System(SystemParam.BackupFile,M,sys)
-            
-
-            SystemParam.ReAssumed=False
-            
-            #每次更改耦合常数算新的值，要重新初始化
-            if self.S.model == "Ising" :
-                #self.S.init_Hamiltonian(self.M)
-                for iLayer in range(self.M.num_of_layer-1): 
-                    #top V shouldn't inited by init_layer
-                    self.M.init_layer(iLayer, True)
-
-        def run(self):
-            lstart=0
-            lstep= 0
-            cont = None
-            q_one=1 
-            
-            ascending, descending, update_mera, finite_site, rho_top_func= tuple(self.param_main["updaters"])
-            M = self.M
-            #S= self.sys
-            self.param_main.update(vars())
-
-            self.param_iter_names = inspect.getargspec(finite_site).args        
-            self.param_iter_dic= {i:self.param_main[i] for i in self.param_iter_names}
-            finite_site(**self.param_iter_dic)
 
 if 1: 
     import copy_reg
@@ -469,48 +326,12 @@ class Main(object):
 
         if 1:
             
-           
-          
-            #if tot_layer is not None:
-            #    SystemParam.tot_layer = tot_layer
-            if trunc_dim is not None:
-                SystemParam.trunc_dim = trunc_dim
+            if self.USE_REFLECTION  and self.trunc_dim != 2:
+                raise ValueError("USE_REFLECTION is not compatable with trunc_dim")
             
-            #can't be removed
-            if USE_REFLECTION is not None:
-                SystemParam.USE_REFLECTION = USE_REFLECTION
-                if SystemParam.USE_REFLECTION  and self.trunc_dim != 2:
-                    raise ValueError("USE_REFLECTION is not compatable with trunc_dim")
-            
-            if 0: #del
-                if NUM_OF_THREADS is None:
-                    NUM_OF_THREADS= 1
-                elif NUM_OF_THREADS== "auto":
-                    if trunc_dim<= 4:
-                        NUM_OF_THREADS= 1
-                    else:
-                        NUM_OF_THREADS= 6
-                elif isinstance(NUM_OF_THREADS, int):
-                    pass
-                else:
-                    raise ValueError("NUM_OF_THREADS=%s"%NUM_OF_THREADS)
-                os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
-            
+             
+            #os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
             Main.set_num_of_threads(NUM_OF_THREADS)
-        if 1:
-            args=["MODEL", "SYMMETRY", "only_NN", "only_NNN", "NUM_OF_THREADS"]
-            temp=locals()
-            for a in args:
-                val = self.__getattribute__(a)
-                #print a,  val
-                if  val is not None:
-                    setattr(SystemParam, a, val)
-        
-        SystemParam.system_cfg()
-        
-        if model_param is not None:
-            SystemParam.model_param.update(model_param)
-            
         
         self.init_all()
 
@@ -537,10 +358,13 @@ class Main(object):
 
 
         if 1:
-            self.M= self.mera_class(self.tot_layer, SystemParam.nTop, 
+            nTop = 2 #not used at all
+            self.M= self.mera_class(self.tot_layer, nTop, 
                     qsp_0, qsp_max, qsp_max2, topQN, qsp_null, qn_identity, 
                     #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
-                    unitary_init=self.unitary_init, **self.mera_kwargs)
+                    unitary_init=self.unitary_init,
+                    USE_REFLECTION=self.USE_REFLECTION, 
+                    **self.mera_kwargs)
             #print 'sssss', type(self.system_class),  self.sys_kwargs
             
             
@@ -548,6 +372,7 @@ class Main(object):
                     symmetry=self.SYMMETRY, model=self.MODEL, 
                     only_NN = self.only_NN, only_NNN = self.only_NNN,  
                     energy_exact=self.energy_exact, combine_2site=self.combine_2site, 
+                    USE_REFLECTION=self.USE_REFLECTION, 
                     #j_power_r_max=self.j_power_r_max, 
                     #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
                     **self.sys_kwargs)
@@ -615,16 +440,6 @@ class Main(object):
            
         if auto_resume is not None:   self.auto_resume = auto_resume
         
-        SystemParam.param_extra.update({
-                "resume":self.resume, 
-                "rand_seed":self.rand_seed, 
-                "USE_CUSTOM_RAND":self.USE_CUSTOM_RAND, 
-                "unitary_init":self.M.unitary_init, 
-                #"top_level_func":self.updaters[4].func_name, 
-                "message":self.message, 
-                "energy_exact":self.energy_exact
-                })
-        SystemParam.show(self.filename)    
         
         if isinstance(self.updaters, list): #only for backward compatable
             

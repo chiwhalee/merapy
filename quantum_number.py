@@ -1,9 +1,7 @@
 
 #from system_parameter import lang_tensor
-import system_parameter
-which = system_parameter.SystemParam.lang_tensor
 
-#which = "cython"
+which = 'py'
 
 if which == "py":
     from quantum_number_py import *

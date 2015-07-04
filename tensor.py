@@ -1,10 +1,10 @@
 
 
-#from system_parameter import lang_tensor
-import system_parameter
-which = system_parameter.SystemParam.lang_tensor
 
-#which = "cython"
+#import system_parameter
+#which = system_parameter.SystemParam.lang_tensor
+which = 'py'
+
 
 if which == "py":
     from tensor_py import *
