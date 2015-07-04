@@ -3279,6 +3279,8 @@ class iTensorFactory(object):
                 rank, qsp, totqn = temp()
                 #here val = 1 is absolutely right.
                 #_val = 1 just means spin = 1,  not 1/2 !!
+                #issue:  here totqn for sp should be -1, see note1 in doc of .spin_one_mat, 
+                #but the value wont affect the final results, so not change it at present 
                 totqn.set_val(1)  #note this differs with sigma_z
                 sigma_p1 = iTensor(rank, qsp, totqn)
                 #sigma_p1 := sp×I
@@ -3458,7 +3460,10 @@ class iTensorFactory(object):
             sigma_0.data[:] = [1.0, 1.0]
             
             rank, qsp, totqn = temp()
+            #issue:  here totqn for sp should be -2, see note1 in doc of .spin_one_mat, 
+            #but the value wont affect the final results, so not change it at present 
             totqn.set_val(2)  
+            
             sigma_p = iTensor(rank, qsp, totqn)
             sigma_p.data[0] = 1.0
             sigma_m = sigma_p.conjugate(1)
@@ -3484,6 +3489,125 @@ class iTensorFactory(object):
         return res 
     
     pauli_mat = pauli_mat_1site 
+    
+    @staticmethod
+    def spin_one_mat( symmetry='U1'): 
+        """
+            irreducible representation matrices of su2 lie algebra labeled by [spin]. 
+            these are spin mat (not corresponding to pauli mat)
+            note1: 
+                if spin = 1
+                    o = sum_{m', m in [1, 0, -1]} { a_{m', m} |m'><m| } 
+                    for sz,  requirs m' = m
+                    for sp, in the textbook of QM, it requirs m' = m + 1. It
+                        should be that m' = -(m + 1), so the tot_qn= m' + m = -1,
+                        instead of 1. 其实不矛盾，其要点是，base (1>, 0>, -1>)^t conj ->
+                        (-1>, 0>, 1>), 定义i (i')为m (m')在基矢中的位置，则 i'= i +
+                        1.  换句话说，在QM中，总是用量子数的位置标记矩阵元a_{i',
+                        i}，这里直接用量子数标记
+                    for sm, m' = -(m-1) => tot_qn=1
+        """
+        pass 
+        qspclass = symmetry_to_Qsp(symmetry)
+        qnclass = qspclass.QnClass 
+        #qn_identity, qsp_base, qsp_null = qspclass.set_base()
+        qn_identity = qspclass.QnClass.qn_id()
+        qsp_null = qspclass.null()
+        
+        if symmetry == "Travial":
+            
+            qsp_base = qspclass.easy_init([1], [3])
+            
+            temp = lambda: (2, qsp_base.copy_many(2, reverse=[1]),  qn_identity.copy())
+
+            rank, qsp, totqn = temp()
+            sz=iTensor(rank, qsp, totqn)
+            sz.data[:] = np.array([[1, 0, 0], [0, 0, 0], [0, 0, -1]], dtype=np.float64).ravel(order='F')
+            
+            rank, qsp, totqn = temp()
+            s0=iTensor(rank, qsp, totqn)
+            s0.data[:] = np.identity(3, dtype=np.float64).ravel(order='F')
+            
+            rank, qsp, totqn = temp()
+            sx=iTensor(rank, qsp, totqn)
+            sx.data[:] = 1/np.sqrt(2)*np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=np.float64).ravel(order='F')
+            
+            rank, qsp, totqn = temp()
+            sy=iTensor(rank, qsp, totqn)
+            #note this is not standard sy, rather sy/i
+            sy_complex = 1/np.sqrt(2)*np.array([[0, -1j, 0], [1j, 0, -1j], [0, 1j, 0]], dtype=np.complex128).ravel(order='F')
+            sy.data[:] = np.asarray(sy_complex/1j, dtype=float)
+
+            rank, qsp, totqn = temp()
+            sp=iTensor(rank, qsp, totqn)
+            sp.data[:] = np.asarray(sx.data + 1j*sy_complex, dtype=float)
+            sm = sp.conjugate(1)
+            i, z, x, y, p, m = s0, sz, sx, sy, sp, sm
+            I, Z, X, Y, P, M = s0, sz, sx, sy, sp, sm
+            
+
+            order = "F"  # this order has no effect
+            spm = sp.tensor_prod(sm, order)
+            smp = sm.tensor_prod(sp, order)
+
+            sxx = sx.tensor_prod(sx, order)
+            syy = sy.tensor_prod(sy, order)
+            szz = sz.tensor_prod(sz, order)
+            
+            ii = i.direct_product(i)
+            sz1 = z.direct_product(i)
+            sz2 = i.direct_product(z)
+            sp1 = p.direct_product(i)
+            sp2 = i.direct_product(p)
+            sm1 = m.direct_product(i)
+            sm2 = i.direct_product(m)
+        
+        elif symmetry == "U1":
+            qsp_base = qspclass.easy_init([1, 0, -1], [1, 1, 1])
+            qn_identity = QnU1.qn_id()
+        
+            def temp():
+                rank = 2
+                qsp = qsp_base.copy_many(2, reverse=[1])
+                totqn = qn_identity.copy()
+                return rank, qsp, totqn
+            
+            #rank, qsp, totqn = temp()
+            sz = iTensor(*temp())
+            #sz = iTensor(rank,qsp,totqn)
+            sz.data[:] = [1.0, 0.0, -1.0]
+
+            s0 = iTensor(*temp())
+            #s0 = iTensor(rank, qsp, totqn)
+            s0.data[:] = [1.0, 1.0, 1.0]
+            
+            rank, qsp, totqn = temp()
+            totqn.set_val(-1)  
+            sp = iTensor(rank, qsp, totqn)
+            sp.data[:] = math.sqrt(2.)
+            sm = sp.conjugate(1)
+
+            if 0:
+                print sz #.matrix_view()
+                print sp.matrix_view()
+                print sm.matrix_view()
+            
+            szz = sz.tensor_prod(sz)
+            spm = sp.tensor_prod(sm)
+            smp = sm.tensor_prod(sp)
+            
+            #I, X, Y, Z = s0, sx, sy, sz    
+            
+            I, Z = s0, sz 
+        else: 
+            raise 
+        
+        temp = vars()
+        res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
+        for i in res: 
+            res[i].type_name = i 
+            
+        return res 
     
     def check_pauli_mat(self):
         if self.symmetry  ==  "U1":
@@ -4508,6 +4632,15 @@ class Test_iTensorFactory(unittest.TestCase):
         t.show_data()
         print t.to_ndarray()
             
+    def test_spin_one_mat(self): 
+        #t = iTensorFactory.spin_one_mat('U1')
+        t = iTensorFactory.spin_one_mat('Travial')
+        #t = iTensorFactory.pauli_mat_1site('U1')
+        sp = t['sp']
+        print_vars(vars(),  ['t.keys()', 'sp.to_ndarray()'])
+       
+      
+            
 
 class performance_iTensor(object):
     pass
@@ -4725,7 +4858,7 @@ if __name__== "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list_iTensor = [
-           'test_temp', 
+           #'test_temp', 
            #'test_tensor_player', 
            #'test_permutation', 
            #'test_to_ndarray', 
@@ -4750,6 +4883,7 @@ if __name__== "__main__":
         ]
         add_list_iTF = [
             #'test_diagonal_tensor_rank2', 
+            'test_spin_one_mat', 
                 ]
         
         for a in add_list_iTensor: 

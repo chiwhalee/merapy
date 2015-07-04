@@ -1042,13 +1042,6 @@ class QspU1(QuantSpaceBase):
         
         if 1:
             qsp_null = QspU1.null()
-        if 0:
-            num_good_qn = 5
-            temp= [0,1,-1,2,-2]
-            goodqns= [QnU1(0) for i in range(num_good_qn)]
-            for i in range(num_good_qn):
-                goodqns[i].val[0] = temp[i]
-            qsp_base.update()
         
         return qn_identity, qsp_base, qsp_null
     
