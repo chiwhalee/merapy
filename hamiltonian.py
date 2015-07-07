@@ -6,6 +6,7 @@ q:
 """
 import unittest
 import numpy as np
+import os 
 import time
 import cPickle as pickle
 #import collections
@@ -60,7 +61,7 @@ class System(IterativeOptimize):
     """
     TNet_sys = TensorNetwork() 
     
-    def __init__(self, symmetry, mera, model, qsp_base=None, 
+    def __init__(self, symmetry, mera=None, model=None, qsp_base=None, 
             graph_module=None, model_param=None, 
             only_NN=True, only_NNN=False, 
             energy_exact=None, j_power_r_max=None, **kwargs):
@@ -299,6 +300,15 @@ class System(IterativeOptimize):
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
+        if self.updaters is None: 
+            from merapy.ascending import ascending_ham
+            from merapy.descending import descending_ham
+            from merapy.iteration import iterative_optimize_all
+            from merapy.all_in_once import update_all_in_once
+            from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
+            from merapy.minimize import finite_site_u1  
+            self.updaters= {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
+                "finite_range_func":finite_site_u1, "rho_top_func":top_level_product_state_u1}
         
         
         self.is_initialized = True     
@@ -1317,71 +1327,67 @@ class System(IterativeOptimize):
 
         return  h0, Sz, Sp, Sm, pinning_term 
     
-    def _minimize_finite_size(self, resume=True, auto_resume=None, backup_fn=None, filename=None, 
+    def _minimize_finite_size(self, 
+            resume=True, auto_resume=None, backup_fn=None, filename=None, 
             q_iter=None, do_measure=None, **kwargs):
         
         self.init_iteration()
         
-        if self.info>0: 
-            print 'start minimize'
-        if self.updaters is None: 
-            from merapy.ascending import ascending_ham
-            from merapy.descending import descending_ham
-            from merapy.iteration import iterative_optimize_all
-            from merapy.all_in_once import update_all_in_once
-            from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
-            from merapy.minimize import finite_site_u1  
-            self.updaters= {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
-                "finite_range_func":finite_site_u1, "rho_top_func":top_level_product_state_u1}
              
         from merapy.minimize import finite_site_u1  as finite_range_func 
         LayStart=0
         q_one=1
-        backup_fn_local = None
-        do_measure  = do_measure if do_measure is not None else self.do_measure
         
-        backup_parpath = self.backup_parpath
-        backup_parpath_local = self.backup_parpath_local
-        if kwargs.get('backup_parpath') is not None : 
-            backup_parpath = kwargs.get('backup_parpath')    
-        self.make_dir(backup_parpath, backup_parpath_local)
-        
-        fn = self.backup_fn_auto() 
-        if backup_parpath is not None:
+        if 0: 
+            backup_fn_local = None 
+            self.filename = None 
+            self.resume = False 
+        if 1: 
+            backup_fn_local = None
+            do_measure  = do_measure if do_measure is not None else self.do_measure
             
-            backup_fn = backup_parpath  + '/' +  fn
-        if backup_parpath_local is not None: 
-            backup_fn_local = '/'.join([backup_parpath_local, fn])
-           
-        filename = 'res-'  + self.backup_fn_auto()
-        filename = filename.split('.')[0] + '.dat'
-        if backup_parpath is not None: 
-            filename = backup_parpath + '/' + filename
-        self.filename = filename 
-
-        if q_iter is None:
-            q_iter = self.q_iter
-        if resume is not None:
-            self.resume  = resume
+            backup_parpath = self.backup_parpath
+            backup_parpath_local = self.backup_parpath_local
+            if kwargs.get('backup_parpath') is not None : 
+                backup_parpath = kwargs.get('backup_parpath')    
+            self.make_dir(backup_parpath, backup_parpath_local)
+            
+            fn = self.backup_fn_auto() 
+            if backup_parpath is not None:
                 
-        
-        if self.resume and backup_fn is not None:
-            if not self.use_local_storage: 
-                self.resume_func(backup_fn)
-            else: 
-                self.resume_func(backup_fn_local, use_local_storage=self.use_local_storage)
-            if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
-                energy_diff_min = kwargs.get('energy_diff_min')
-                if  self.energy_diff_std is not None: 
-                    if self.energy_diff_std <= energy_diff_min: 
-                        q_iter = 0
-                        do_measure = 0
-                        msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
-                                self.energy_diff_std, energy_diff_min)
-                        print msg
-           
-        if auto_resume is not None:   self.auto_resume = auto_resume
-        
+                backup_fn = backup_parpath  + '/' +  fn
+            if backup_parpath_local is not None: 
+                backup_fn_local = '/'.join([backup_parpath_local, fn])
+               
+            filename = 'res-'  + self.backup_fn_auto()
+            filename = filename.split('.')[0] + '.dat'
+            if backup_parpath is not None: 
+                filename = backup_parpath + '/' + filename
+            self.filename = filename 
+
+            if q_iter is None:
+                q_iter = self.q_iter
+            if resume is not None:
+                self.resume  = resume
+                    
+            
+            if self.resume and backup_fn is not None:
+                if not self.use_local_storage: 
+                    self.resume_func(backup_fn)
+                else: 
+                    self.resume_func(backup_fn_local, use_local_storage=self.use_local_storage)
+                if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                    energy_diff_min = kwargs.get('energy_diff_min')
+                    if  self.energy_diff_std is not None: 
+                        if self.energy_diff_std <= energy_diff_min: 
+                            q_iter = 0
+                            do_measure = 0
+                            msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
+                                    self.energy_diff_std, energy_diff_min)
+                            print msg
+               
+            if auto_resume is not None:   self.auto_resume = auto_resume
+            
         
         if isinstance(self.updaters, list): #only for backward compatable
             
@@ -1421,6 +1427,8 @@ class System(IterativeOptimize):
         """ 
             taken from Main.run_scale_invar 
         """
+        self.init_iteration()
+        
         from merapy.minimize import ScaleInvar 
         
         do_measure  = do_measure if do_measure is not None else self.do_measure
@@ -1501,8 +1509,9 @@ class System(IterativeOptimize):
         """
             this is a wraper 
         """
-        pass 
-    
+        if self.info>0: 
+            print 'start minimize'
+ 
     def make_dir(self, dir, dir_local=None): 
         #this is taken form main.Main.make_dir 
       
@@ -2231,11 +2240,6 @@ class System(IterativeOptimize):
         return res
     
     if 0:   #del these
-        @staticmethod
-        def _load2_del(fn="backup_tensor.pickle"):
-            inn = open(fn, "rb")
-            res = pickle.load(inn)
-            return res
 
         def load2_del(self, fn="backup_tensor.pickle"):
             #inn = open(fn, "rb")
@@ -2319,6 +2323,32 @@ class System(IterativeOptimize):
             pickle.dump(res, out)
             out.close()
             print "M, S saved to %s"%fn
+    
+    def resume_func(self, backup_path, use_local_storage=False):
+        """
+            this is token from Main.resume_func  
+        """
+        #if not use_local_storage: 
+        if 1: 
+            if backup_path is not None : 
+                LOCAL = '' if not use_local_storage else 'LOCAL file '
+                msg = "\nTRY TO RESUME from %s%s...  "%(LOCAL, backup_path[-30:])
+                try:
+                    self.S = self.__class__.load(backup_path, use_local_storage=use_local_storage)
+                    self.M = self.S.mera
+                    iter = self.S.iter1
+                    eng = self.S.energy
+                    msg  += "RESUMED successfully at iter=%s,  eng=%s"%(iter, eng)
+                except IOError as err:
+                    if err.errno == 2: 
+                        msg += str(err)
+                        msg += "discard manually resume"
+                    else:
+                        raise IOError
+                except TypeError as err:
+                    msg += str(err)
+                    msg += "discard manually resume"
+                print(msg)
 
     def save_eng(self, iter):
         self.energy_record[iter] = (self.energy, time.time(), time.clock())
@@ -2579,7 +2609,33 @@ class System(IterativeOptimize):
                 
             self.use_pinning_term = False
             print  'self.use_pinning_term is set to False'
-    
+
+    @staticmethod
+    def check_hermite(M, S, precision=None):
+        print "\ncheck hermite"
+        state = tensor_player.STATE
+        tensor_player.STATE = "stop"
+        for lay in range(M.num_of_layer-0):
+        #if 1:
+            #lay = M.num_of_layer-1
+            print lay
+            print "H_2", S.H_2[lay][0].is_hermite(precision=precision, out_more=True)
+            if not S.only_NN:
+                print "H_3", S.H_3[lay][0].is_hermite(precision=precision, out_more=True)
+                if not S.only_NNN:
+                    if S.model == "Ising":
+                        print "SxA", S.SxA[lay][0].is_hermite(precision)
+                        print "SxB", S.SxB[lay][0].is_hermite(precision)
+                    else:
+                        print "SpA", S.SpA[lay][0].is_hermite(precision)
+                        print "SpB", S.SpB[lay][0].is_hermite(precision)
+                        print "SmA", S.SmA[lay][0].is_hermite(precision)
+                        print "SmB", S.SmB[lay][0].is_hermite(precision)
+                        
+                        print "SpA adjoint to SmA", S.SpA[lay][0].is_adjoint_to(S.SmA[lay][0], precision=precision, out_more=True)
+                        print "SpB adjoint to SmB", S.SpB[lay][0].is_adjoint_to(S.SmB[lay][0], precision=precision, out_more=True)
+        tensor_player.STATE = state
+
 def set_ham_to_identity(sys):
     """
     for debugging 

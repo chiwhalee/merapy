@@ -111,7 +111,7 @@ CFG_MERA.update({
         'tot_layer': 4,
         'trunc_dim': 4,
         
-        'run_schedule': False,
+        #'run_schedule': False,
         
         'backup_parpath': None, 
         'backup_parpath_local': None,   #used for distributive compute
@@ -217,6 +217,8 @@ if 1:
 
     def _cfg_quaternary():
         from merapy.diagrams.V41 import graph_quaternary 
+        #merapy.quantum_number_py.QspU1.MaxQNNum = 30   #increase this because legs of V increases
+        #print "set QspU1.MaxQNNum to 30"
         tensor_defs = {
                 "V":{"type":(4, 1)}, 
                 "V_dag":{"type":(1, 4)}, 
@@ -252,6 +254,9 @@ if 1:
     cfg_septenary = _cfg_septenary()
     
 def cfg_graph(which):
+    #merapy.quantum_number_py.QspU1.MaxQNNum = 30   #increase this because legs of V increases
+    #print "set QspU1.MaxQNNum to 30"
+    
     dic = {
             'binary':         { 'parpath':'V21',                }, 
             'modified_binary':{ 'parpath':'modified_binary',    }, 

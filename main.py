@@ -64,7 +64,7 @@ from merapy.scale_invariant import ScaleInvar
 from merapy import common_util
 from merapy import crandom
 import merapy.schedule
-from merapy.schedule import copy_schedule, schedule_scale_invar
+from merapy.schedule import copy_schedule, schedule_scale_invar, schedule_prod_state
 from merapy.decorators import *
 from merapy.measure_and_analysis.measurement import measure_S
 
@@ -254,12 +254,9 @@ if 1:
 
         copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method) 
         
-        
 
-
-class Main(object):
-    #used in distributed computing 
-    LOCALHOSTNAME = 'QTG-WS1-ubuntu'
+class Main_old(object):
+    LOCALHOSTNAME = 'QTG-WS1-ubuntu'  #used in distributed computing 
     
     def __init__(self, system_class=None, mera_class=None, updaters=None, trunc_dim=None, tot_layer=None, unitary_init=None, q_iter=8, q_lay=3, info=0,
         MODEL="Heisenberg", SYMMETRY="Z2", only_NN=True, only_NNN=False, use_player=True, message=None, 
@@ -312,10 +309,6 @@ class Main(object):
         for t in temp: 
             setattr(self, t, kwargs.get(t))
 
-        if self.filename == "default":
-            import __main__
-            self.filename = __main__.__file__.replace("main", "res").replace("run", "res").replace(".py", ".dat")
-        
         if 1: 
             #issue in each main, should use independent random state!     
             if USE_CUSTOM_RAND:
@@ -324,14 +317,13 @@ class Main(object):
                 random.seed()
                 crandom.rand = random.random
 
-        if 1:
+
             
-            if self.USE_REFLECTION  and self.trunc_dim != 2:
-                raise ValueError("USE_REFLECTION is not compatable with trunc_dim")
-            
+        if self.USE_REFLECTION  and self.trunc_dim != 2:
+            raise ValueError("USE_REFLECTION is not compatable with trunc_dim")
              
-            #os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
-            Main.set_num_of_threads(NUM_OF_THREADS)
+        #os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
+        Main.set_num_of_threads(NUM_OF_THREADS)
         
         self.init_all()
 
@@ -395,6 +387,7 @@ class Main(object):
             q_iter=None, do_measure=None, **kwargs):
         LayStart=0
         q_one=1
+        
         backup_fn_local = None
         do_measure  = do_measure if do_measure is not None else self.do_measure
         
@@ -558,7 +551,8 @@ class Main(object):
         
         return self.S
 
-    def run_schedule(self, schedule=None, mera_shape_min=(4, 4), mera_shape_max=(12, 4), q_iter_max=None, backup_parpath=None,  filename='auto', backup_fn='auto', 
+    def run_schedule(self, schedule=None, mera_shape_min=(4, 4), mera_shape_max=(12, 4), 
+            q_iter_max=None, backup_parpath=None,  filename='auto', backup_fn='auto', 
            do_measure=None, skip_list=[],  skip_dim_list=[],  dim_diff_remap={}, info=0):
         """
             schedule is a OrderedDict like
@@ -586,6 +580,7 @@ class Main(object):
                         schedule[i]['energy_diff_min'] = diff
             
         symmetry = self.S.symmetry
+        #symmetry = self.config['SYMMETRY']
         qsp_class=symmetry_to_QspClass(symmetry)
         
         #for key, val in schedule.items():
@@ -604,6 +599,7 @@ class Main(object):
             if q_iter_max is not None : 
                 if task['q_iter'] > q_iter_max: 
                     task['q_iter']  = q_iter_max
+                    
             shape = task['shape']
             
             msg = '\nSTARTING TASK %s'%(task, )
@@ -658,20 +654,20 @@ class Main(object):
                         if info>0: 
                             print msg
                         continue
-                #print 'sssss', self.S, type(self.S)
+
                 propt = self.S.key_property()
                 dim_current = propt['trunc_dim']
                 layer_current = propt['num_of_layer']
                 nqn_current = propt['nqn']
                 qsp_current = qsp_class.max(dim_current, nqn_current)
                 shape_current = (dim_current, layer_current, nqn_current)
-                #if dim_current <dim: 
+                
                 
                 if qsp_current < qsp_destination: 
-                    self.expand_dim(dim, nqn)
+                    self.S.expand_dim(dim, nqn)
                 
                 if layer_current <layer: 
-                    self.expand_layer(layer)
+                    self.S.expand_layer(layer)
                 
                 
                 #if dim_current>dim or layer_current> layer: 
@@ -710,32 +706,6 @@ class Main(object):
     def stop_player(self):
         set_STATE_end_1(iter=None, record_at=None, stop_at=None, power_on=False)
 
-    @staticmethod
-    def check_hermite(M, S, precision=None):
-        print "\ncheck hermite"
-        state = tensor_player.STATE
-        tensor_player.STATE = "stop"
-        for lay in range(M.num_of_layer-0):
-        #if 1:
-            #lay = M.num_of_layer-1
-            print lay
-            print "H_2", S.H_2[lay][0].is_hermite(precision=precision, out_more=True)
-            if not S.only_NN:
-                print "H_3", S.H_3[lay][0].is_hermite(precision=precision, out_more=True)
-                if not S.only_NNN:
-                    if S.model == "Ising":
-                        print "SxA", S.SxA[lay][0].is_hermite(precision)
-                        print "SxB", S.SxB[lay][0].is_hermite(precision)
-                    else:
-                        print "SpA", S.SpA[lay][0].is_hermite(precision)
-                        print "SpB", S.SpB[lay][0].is_hermite(precision)
-                        print "SmA", S.SmA[lay][0].is_hermite(precision)
-                        print "SmB", S.SmB[lay][0].is_hermite(precision)
-                        
-                        print "SpA adjoint to SmA", S.SpA[lay][0].is_adjoint_to(S.SmA[lay][0], precision=precision, out_more=True)
-                        print "SpB adjoint to SmB", S.SpB[lay][0].is_adjoint_to(S.SmB[lay][0], precision=precision, out_more=True)
-        tensor_player.STATE = state
-    
     def thread_compare(self, func, args, thread_list):
         """  this idea is stupid and not work!!"""
         raise NotImplemented  
@@ -778,42 +748,6 @@ class Main(object):
     @staticmethod
     def get_num_threads_max(): 
         return psutil.NUM_CPUS
-        
-    @staticmethod
-    def init_quaternary_del(init_mera_graph=None):
-        if init_mera_graph is None:
-            import merapy.init_mera_graph as init_mera_graph
-        import merapy.quantum_number_py
-        from merapy.diagrams.V41.graph_quaternary import G_2_2, G_3_2, G_22_2, G_22_3
-
-        merapy.quantum_number_py.QspU1.MaxQNNum = 30   #increase this because legs of V increases
-        print "set QspU1.MaxQNNum to 30"
-
-
-        print "replaced init_mera_graph.G_2_2 with quaternary conterpart"
-        init_mera_graph.G_2_2 = G_2_2
-        init_mera_graph.G_3_2 = G_3_2
-        init_mera_graph.G_3_3 = {}
-        init_mera_graph.G_22_2 = G_22_2
-        init_mera_graph.G_22_3 = G_22_3
-        print "using quaternary graph  "*10
-    
-    def expand_layer(self, lay):
-        self.S.expand_layer(lay)
-        
-    def expand_dim(self, dim, nqn=None):
-        self.S.expand_dim(dim, nqn)
-    
-    @staticmethod
-    def load(fn):
-        inn = open(fn, "rb")
-        res = pickle.load(inn)
-        return res
-    
-    
-    def __del__(self, ): 
-        print 'exit main, and run main.stop_player'
-        self.stop_player()
     
     @classmethod
     def run_one(cls, config): 
@@ -937,6 +871,7 @@ class Main(object):
         grid = itertools.product(*args)
         return list(grid)  #efficiency doesnt matter,  list is better
     grid = make_grid  # another name
+    
     @staticmethod
     def grid_merger(*args): 
         return itertools.chain(*args)
@@ -1059,14 +994,250 @@ class Main(object):
         smtp.sendmail(from_addr,to_addrs,msg.as_string())
         smtp.quit()
 
+    def __del__(self, ): 
+        print 'exit main, and run main.stop_player'
+        self.stop_player()
+
+class Main(Main_old): 
+    pass 
+    def __init__(self, **config): 
+        for k, v in config.iteritems(): 
+            setattr(self, k, v)
+        self.config = config
+        self.initialized = False 
+    
+    def init_mera(self): 
+        config = self.config
+        if config['USE_CUSTOM_RAND']:
+            crandom.mrandom.csrand(config['rand_seed'])
+        else:
+            random.seed()
+            crandom.rand = random.random
+        
+        if 0: 
+        
+            if 1:
+                ham = config.get('ham')
+                ham_type = config['ham_type']
+                model_name = config['model_name']
+
+                if ham is None:
+                    if ham_type == 'hset':
+                        ham = make_hset(N, model_name)
+                    elif ham_type == 'mpo': 
+                        args = {i: self.__getattribute__(i) for i in self.make_mpo_func_args if hasattr(self, i)}
+                        ham = self.make_mpo_func(**args)
+                else:
+                    if isinstance(ham, MPO):
+                        ham_type = 'mpo'
+                    else:
+                        ham_type = 'hset'
+        
+        
+        args = self.config.copy()
+        args['info'] = self.info - 1
+        #self.show_config()
+        Main.set_num_of_threads(self.NUM_OF_THREADS)
+        
+        system_class = config.get('system_class', System)
+        #self.S = system_class(None, ham, **args )
+        args= config.copy()
+        self.S = system_class(args['SYMMETRY'], None, args.get('MODEL'), **args )
+    
+    def init_alg(self): 
+        self.init_mera()
+        self.initialized = True 
+    
+    def run(self, **kwargs): 
+        #self.show_config()
+        if not self.initialized: 
+            self.init_alg() 
+        
+        Main.set_num_of_threads(self.NUM_OF_THREADS)
+        #print_vars(vars(),  ['self.S.q_iter'])
+
+        self.S._minimize_finite_size(**kwargs)
+        return self.S
+
+    def run_scale_invar(self, **kwargs): 
+        #self.show_config()
+        if not self.initialized: 
+            self.init_alg() 
+        
+        Main.set_num_of_threads(self.NUM_OF_THREADS)
+        self.S._minimize_scale_invar(**kwargs)
+        return self.S
+
+    def run_schedule(self, schedule=None, mera_shape_min=(4, 4), mera_shape_max=(12, 4), 
+            q_iter_max=None, backup_parpath=None,  filename='auto', backup_fn='auto', 
+           do_measure=None, skip_list=[],  skip_dim_list=[],  dim_diff_remap={}, info=0):
+        """
+            schedule is a OrderedDict like
+            (ansatz, dim, layer, q_iter, run_time_max, energy_diff_min)
+            
+            { 4:  ('ScaleInvar', '')}
+            
+            }
+        """
+        #super(self.__class__, self).run_schedule(**kwargs)
+        if not self.initialized: 
+            self.init_alg()
+            self.S.initialize()
+        
+        if schedule is None: 
+            schedule = schedule_scale_invar
+        schedule = copy_schedule(schedule, skip_list=skip_list)
+        do_measure  = do_measure if do_measure is not None else self.do_measure
+        
+        if len(dim_diff_remap)>0: 
+            #print dim_diff_remap; exit()
+            print 'remap of dim with energy_diff_min is %s'%dim_diff_remap
+            for i in range(len(schedule)): 
+                dim = schedule[i]['shape'][0]
+                for d in sorted(dim_diff_remap.keys()): 
+                    #print 'ddddd', i, d, dim
+                    if dim >= d: 
+                        diff  = dim_diff_remap[d]
+                        schedule[i]['energy_diff_min'] = diff
+            
+        symmetry = self.S.symmetry
+        #symmetry = self.config['SYMMETRY']
+        qsp_class=symmetry_to_QspClass(symmetry)
+        
+        #for key, val in schedule.items():
+        for task in schedule: 
+            if task['ansatz'] == 'prod_state':  
+                run_func = self.run
+                run_param_name = ('q_iter', 'energy_diff_min')
+            elif task['ansatz'] == 'scale_invar': 
+                run_func = self.run_scale_invar
+                run_param_name = ('q_iter', 'run_time_max', 'energy_diff_min')
+            elif task['ansatz'] == 'eigenstate': 
+                raise NotImplemented
+            else: 
+                raise
+            
+            if q_iter_max is not None : 
+                
+                if task['q_iter'] > q_iter_max: 
+                    task['q_iter']  = q_iter_max
+            shape = task['shape']
+            
+            msg = '\nSTARTING TASK %s'%(task, )
+            if info>0: print msg
+            
+            dim, layer = shape[:2]
+            nqn = None
+            if len(shape)>2: nqn = shape[2]
+            
+            if dim in skip_dim_list: 
+                msg='dim=%d is in skip_dim_list, skip it'%(dim, )
+                if info>0: print msg
+                continue
+            try: 
+                qsp_destination = qsp_class.max(dim, nqn)
+            except ValueError as err:
+                msg = 'error occurred, skip %s'%(shape, )
+                if info>0: print err, '\n',  msg
+                continue
+            
+            if 1: 
+                if mera_shape_min is not None : 
+                    dim_min, layer_min = mera_shape_min[: 2]
+                    nqn_min = None
+                    if len(mera_shape_min)>2: nqn_min = mera_shape_min[2]
+                    qsp_min = qsp_class.max(dim_min, nqn_min)
+                    
+                    
+                    #if qsp_destination < qsp_min or layer <layer_min: 
+                    if (not  qsp_destination >= qsp_min)   or layer <layer_min: 
+                        #msg = 'shape (%d, %d) smaller than mera_shape_min %s, skip it'%(dim, layer, mera_shape_min, )
+                        msg = 'shape %s smaller than mera_shape_min %s, skip it'%(shape, mera_shape_min, )
+                        if info>0: print msg
+                        continue
+                
+                if mera_shape_max is not None :    
+                    dim_max, layer_max = mera_shape_max[: 2]
+                    nqn_max = None
+                    if len(mera_shape_max)>2: nqn_max = mera_shape_max[2]
+                    qsp_max = qsp_class.max(dim_max, nqn_max)
+                    if 0: 
+                        print qsp_destination
+                        print qsp_max
+                        print  'qsp_destination>qsp_max', qsp_destination>qsp_max
+                        exit()
+                    
+                    if qsp_destination>qsp_max or (nqn> nqn_max and self.SYMMETRY=='U1')  or layer> layer_max: 
+                    #if qsp_destination>qsp_max or nqn> nqn_max or layer> layer_max: 
+                    #if qsp_destination>qsp_max  or layer> layer_max: 
+                        
+                        msg = 'shape %s exceeds mera_shape_max %s, skip it'%(shape, mera_shape_max, )
+                        if info>0: 
+                            print msg
+                        continue
+
+                propt = self.S.key_property()
+                dim_current = propt['trunc_dim']
+                layer_current = propt['num_of_layer']
+                nqn_current = propt['nqn']
+                qsp_current = qsp_class.max(dim_current, nqn_current)
+                shape_current = (dim_current, layer_current, nqn_current)
+                
+                
+                if qsp_current < qsp_destination: 
+                    self.S.expand_dim(dim, nqn)
+                
+                if layer_current <layer: 
+                    self.S.expand_layer(layer)
+                
+                
+                #if dim_current>dim or layer_current> layer: 
+                if qsp_current> qsp_destination or layer_current> layer: 
+                    msg = 'shape %s smaller than current shape = %s, skip it'%(shape, shape_current)
+                    print msg
+                    continue
+                   
+            run_param = dict([(i, task.get(i)) for i in run_param_name])
+            print_vars(vars(),  ['self', 'run_param'])
+            #run_func(self, backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, 
+            #        do_measure=do_measure, **run_param)
+            run_func(backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, 
+                    do_measure=do_measure, **run_param)
+
+    def show_config(self): 
+        return 
+        aaa = [ 'model_param']
+        aaa = {a: self.__getattribute__(a) for a in aaa}
+
+        msg = ''
+        msg += '\n\n' 
+        msg += str( datetime.datetime.today()) + '\n'
+        msg += str(aaa)
+        if self.filename is not None : 
+            out = open(self.filename, 'a')
+            out.write(msg)
+            out.close()
+        print msg
+            
+    @classmethod
+    def run_one(cls, config): 
+        return cls.__base__.run_one.im_func(cls, config)
+    
 
 class TestMain(unittest.TestCase): 
     def setUp(self): 
-        from config import CFG_HEISBG_BASIC, updaters_u1
-        temp = dict(USE_CUSTOM_RAND=True, updaters=updaters_u1, trunc_dim=4, tot_layer=4, use_player=True, 
-                SYMMETRY="Travial", 
-                NUM_OF_THREADS=1, do_measure=0)
-        cfg_heisbg = CFG_HEISBG_BASIC.copy();   cfg_heisbg.update(temp)
+        if 1: 
+            from config import CFG_HEISBG_BASIC, updaters_u1
+            temp = dict(USE_CUSTOM_RAND=True, updaters=updaters_u1, trunc_dim=4, tot_layer=4, use_player=True, 
+                    SYMMETRY="Travial", 
+                    NUM_OF_THREADS=1, do_measure=0)
+            cfg_heisbg = CFG_HEISBG_BASIC.copy();   cfg_heisbg.update(temp)
+        if 1: 
+            from merapy.config import CFG_ISING_BASIC, copy_config, updaters_u1 
+            from merapy.finite_site import finite_site_u1
+            cfg_ising = copy_config(CFG_ISING_BASIC) 
+            cfg_ising['updaters'] = updaters_u1
+            
         #model_param={"J_NN":1.0, "J_NNN":0.241186}
         #cfg_heisbg['model_param'].update(model_param)
         #if 1:  #test run_schedule
@@ -1076,7 +1247,7 @@ class TestMain(unittest.TestCase):
         except: 
             pass 
         
-        self.config = cfg_heisbg
+        self.config_heisbg = cfg_heisbg
     
     def test_temp(self): 
         from merapy.run_ising.config import make_config 
@@ -1106,14 +1277,13 @@ class TestMain(unittest.TestCase):
             print g 
         
     def test_run(self): 
-        config = self.config 
+        config = self.config_heisbg 
         config['SYMMETRY'] = 'Travial'
+        config.update(q_iter=10)
         main = Main(**config)
         main.run(q_iter=10, backup_parpath='./mera_backup_test_folder', do_measure=0)
     
     def test_run_on_remote(self): 
-        config = self.config
-        config['SYMMETRY'] = 'Travial'
         #with rpyc_conn('sugon') as conn: 
         with rpyc_conn_zerodeploy('sugon') as conn: 
             conn.namespace['self'] = self
@@ -1123,7 +1293,7 @@ class TestMain(unittest.TestCase):
             print conn.modules.os.getcwd()
     
     def test_resume_func(self): 
-        config = self.config 
+        config = self.config_heisbg 
         config['SYMMETRY'] = 'Travial'
         with make_temp_dir() as d1, make_temp_dir() as d2: 
             config['backup_parpath'] = d1
@@ -1144,7 +1314,7 @@ class TestMain(unittest.TestCase):
                 print conn.modules.os.getcwd()
         
     def test_make_dir(self): 
-        config = self.config 
+        config = self.config_heisbg 
         print config['backup_parpath']
         print config['backup_parpath_local']
         a ='/tmp/lksjdfoi/oiweffw' 
@@ -1161,31 +1331,33 @@ class TestMain(unittest.TestCase):
         self.assertTrue(exist)
         
     def test_run_scale_invar(self): 
-        config = self.config
-        config['SYMMETRY'] = 'U1'
+        config = self.config_heisbg
+        #config['SYMMETRY'] = 'U1'
+        config['SYMMETRY'] = 'Travial'
         config['measurement_args']['exclude_which'].append('correlation_extra')  # too slow
         main = Main(**config)
         with make_temp_dir() as dd: 
             main.run_scale_invar(q_iter=5, backup_parpath=dd, do_measure=1)
         
     def test_run_schedule(self): 
-        from merapy import schedule
-        print '-------'*30
-        #main = self.main
-        config = self.config
+
+        config = self.config_heisbg
         config['SYMMETRY'] = 'Travial'
+        config['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+        config.update(tot_layer=3)
         main = Main(**config)
-        main.run_schedule(schedule=schedule.schedule_scale_invar, do_measure=0, backup_fn='auto', 
-                backup_parpath='./mera_backup_test_folder', 
-                q_iter_max = 10, 
-                mera_shape_min = (4, 4), mera_shape_max=(8, 5), skip_dim_list=[14])
+
+        main.run_schedule(schedule=schedule_scale_invar, do_measure=0, backup_fn='auto', 
+                backup_parpath ='./mera_backup_test_folder', 
+                q_iter_max = 5, 
+                mera_shape_min = (4, 3), mera_shape_max=(8, 4), skip_dim_list=[14])
         S = main.S
-        self.assertEqual(S.iter, 40)
-        self.assertEqual(S.iter1, 10)
-        print 'pass tests for right num of iter'
+        self.assertEqual(S.iter, 15)
+        self.assertEqual(S.iter1, 5)
+
 
     def test_set_num_of_threads_1(self): 
-        config = self.config
+        config = self.config_heisbg
         #config['NUM_OF_THREADS'] = 4
         main = Main(**config)
         main.run(q_iter=5)
@@ -1218,14 +1390,16 @@ class TestMain(unittest.TestCase):
         config['updaters'] = updaters_u1
         config_group = [copy_config(config) for i in range(NNN)]
         
-        for i in config_group: 
-            id = config_group.index(i)
-            #i['backup_parpath'] = '/home/zhli/Documents/mera_backup_tensor/mera_backup_test_folder/%d/'%id  
-            i['backup_parpath'] = mkdtemp()
+        for c in config_group: 
+            c['SYMMETRY'] = 'Travial'
+            c.update(tot_layer=3)
+            c['backup_parpath'] = mkdtemp()
+            c['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+            c['schedule'].update(q_iter_max=10, mera_shape_min=(3, 3),  mera_shape_max=(4, 3))
         Main.run_many(config_group, parallel=1)
 
     def test_transfer_pickle_file(self): 
-        config = self.config
+        config = self.config_heisbg
         config['SYMMETRY'] = 'Travial'
         print config['backup_parpath']
         print config['backup_parpath_local']
@@ -1261,15 +1435,19 @@ if __name__=="__main__":
         suite = unittest.TestSuite()
         add_list = [
         #'test_temp',
-        #'test_run',
-        #'test_run_scale_invar',
-        #'test_run_schedule',
+        
+        'test_run',
+        'test_run_scale_invar',
+        'test_run_schedule',
+        'test_run_many',
+        
         #'test_make_dir',
         #'test_run_on_remote',
+        
         #'test_resume_func',
         #'test_transfer_pickle_file',
+        
         #'test_set_num_of_threads_1',
-        'test_run_many',
                 ]
         for a in add_list: 
             suite.addTest(TestMain(a))
