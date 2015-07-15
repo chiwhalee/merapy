@@ -53,8 +53,8 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
     
     envs[0] = M.V[ilayer][j].copy(use_buf=True)
     envs[1] = M.U[ilayer][j].copy(use_buf=True)
-    envs[2] = S.H_2[ilayer+1].O[j].copy(use_buf=True)   # note above Names[2]="OO"
-    envs[3] = S.rho_2[ilayer].O[j].copy(use_buf=True)
+    envs[2] = S.H_2[ilayer+1][j].copy(use_buf=True)   # note above Names[2]="OO"
+    envs[3] = S.rho_2[ilayer][j].copy(use_buf=True)
 
     #q41
     for n  in range(2):
@@ -91,7 +91,7 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
     #update H_2 and rho_2
     #S.H_2[ilayer+1].O[j]=envs[2].scale(-1.0)
     #S.H_2[ilayer+1].O[j].data = -1.0*envs[2].data
-    S.H_2[ilayer+1].O[j].data[:] = -1.0*envs[2].data[:]
+    S.H_2[ilayer+1][j].data[:] = -1.0*envs[2].data[:]
     
     X = envs[3].trace()
 #    print 'X=', X
@@ -104,7 +104,7 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
     
     #S.rho_2[ilayer-1].O[j]=envs[3].scale(X)
     #S.rho_2[ilayer].O[j]=envs[3].scale(X)
-    S.rho_2[ilayer].O[j].data[:] = X*envs[3].data[:]
+    S.rho_2[ilayer][j].data[:] = X*envs[3].data[:]
     
     
     

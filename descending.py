@@ -30,20 +30,20 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
     
     if 1:
         name = "oo"  #note that rho_2 is OO, oo is H_2
-        S.rho_2[ilayer_m1].O[0].data[:] = 0.0
+        S.rho_2[ilayer_m1][0].data[:] = 0.0
         temp = S.add_env_many(M, ilayer_m1, name, G_2_2, key_list=None, info=info-1)
-        S.rho_2[ilayer_m1].O[0].data += temp.data
+        S.rho_2[ilayer_m1][0].data += temp.data
 
     if not S.only_NN:
         G_3_2 = S.G_3_2
         G_3_3 = S.G_3_3
 
         name = "ooo"
-        S.rho_3[ilayer_m1].O[0].data[:] = 0.0
+        S.rho_3[ilayer_m1][0].data[:] = 0.0
         for G in [G_3_2, G_3_3]:
             #temp = S.add_env_many(M, ilayer_m1, name, G, key_list=None, info=info-1)
             #S.rho_3[ilayer_m1].O[0].data += temp.data
-            S.add_env_many(M, ilayer_m1, name, G, add_tensor=S.rho_3[ilayer_m1].O[0], key_list=None, info=info-1)
+            S.add_env_many(M, ilayer_m1, name, G, add_tensor=S.rho_3[ilayer_m1][0], key_list=None, info=info-1)
 
 
 if __name__ == "__main__": 
@@ -66,10 +66,10 @@ if __name__ == "__main__":
         print "iii", i
         descending_ham(M, sys, ilayer=i, info=5)
         exit()
-        #print sys.H_2[i+1].O[0].data.round(5)
+        #print sys.H_2[i+1][0].data.round(5)
     #print M.V[M.num_of_layer-1].tensor[0]
     #print sys
-    #print sys.H_2[1].O[0].data
+    #print sys.H_2[1][0].data
     
 
 

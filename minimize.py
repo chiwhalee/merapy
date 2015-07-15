@@ -248,7 +248,8 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
         print "END finite_site"
 
 def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func, 
-        q_one, q_lay, q_iter, q_iter_relative=False, use_player=False, filename=None, backup_fn=None, 
+        q_one, q_lay, q_iter, q_iter_relative=False, use_player=False, 
+        filename=None, backup_fn=None, 
         lstart=1, lstep=0, resume=False, auto_resume=True, before_scaleinvar=False, 
         run_time_max=None, energy_diff_min=0.0, info=0, **kwargs):
     """
@@ -383,11 +384,14 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
                         S.save(fn=backup_fn)
                     else: 
                         S.save(fn=backup_fn_local, use_local_storage=use_local_storage)
-    
-    if not use_local_storage and backup_fn is not None:
-        S.save(fn=backup_fn)
-    if use_local_storage and backup_fn_local is not None:
-        S.save(fn=backup_fn_local, use_local_storage=1)
+            
+    iter_tot = S.iter1-iter0
+    msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
+    if iter_tot>0 : 
+        temp = backup_fn if not S.use_local_storage else backup_fn_local
+        if temp is not None: 
+            print "\nS has been changed, save at final iter"
+            S.save(fn=temp, use_local_storage=S.use_local_storage)
 
 
 def FiniteRangeIter(Iteration): 

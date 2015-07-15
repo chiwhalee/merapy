@@ -151,7 +151,7 @@ def top_level_product_state(M,S):
     """
     iLayer = M.num_of_layer-1
     j=0
-    S.rho_2[iLayer].O[j].data[:] = 0.0
+    S.rho_2[iLayer][j].data[:] = 0.0
     
     #rank = (2, 2)
     rank = S.rho_2[iLayer][j].rank
@@ -240,10 +240,10 @@ def top_level_product_state_u1(M,S):
     I.set_element(qDims, iDims, 1.0)
     
     #rho_2 = 1.0*|00><00| 
-    S.rho_2[iLayer].O[j] = I.direct_product(I, use_buf=True)
+    S.rho_2[iLayer][j] = I.direct_product(I, use_buf=True)
     
     if not S.only_NN:
-        S.rho_3[iLayer].O[j]=I.direct_product(S.rho_2[iLayer].O[j], use_buf=True)
+        S.rho_3[iLayer][j]=I.direct_product(S.rho_2[iLayer][j], use_buf=True)
 
 def top_level_product_state_u1_1site(M,S):
     """

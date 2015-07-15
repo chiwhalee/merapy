@@ -47,6 +47,7 @@ import rpyc
 from plumbum import SshMachine
 import itertools
 import signal 
+import tempfile 
 from tempfile import mkdtemp
 
 uname=os.uname()[1]
@@ -1008,31 +1009,12 @@ class Main(Main_old):
     
     def init_mera(self): 
         config = self.config
+        #print_vars(vars(),  ['USE_CUSTOM_RAND'], head='\n\nCCCCCCCC\n\n')
         if config['USE_CUSTOM_RAND']:
             crandom.mrandom.csrand(config['rand_seed'])
         else:
             random.seed()
             crandom.rand = random.random
-        
-        if 0: 
-        
-            if 1:
-                ham = config.get('ham')
-                ham_type = config['ham_type']
-                model_name = config['model_name']
-
-                if ham is None:
-                    if ham_type == 'hset':
-                        ham = make_hset(N, model_name)
-                    elif ham_type == 'mpo': 
-                        args = {i: self.__getattribute__(i) for i in self.make_mpo_func_args if hasattr(self, i)}
-                        ham = self.make_mpo_func(**args)
-                else:
-                    if isinstance(ham, MPO):
-                        ham_type = 'mpo'
-                    else:
-                        ham_type = 'hset'
-        
         
         args = self.config.copy()
         args['info'] = self.info - 1
@@ -1041,28 +1023,26 @@ class Main(Main_old):
         
         system_class = config.get('system_class', System)
         #self.S = system_class(None, ham, **args )
-        args= config.copy()
+        args = config.copy()
         self.S = system_class(args['SYMMETRY'], None, args.get('MODEL'), **args )
     
-    def init_alg(self): 
+    def init_alg_del(self): 
         self.init_mera()
         self.initialized = True 
     
     def run(self, **kwargs): 
-        #self.show_config()
         if not self.initialized: 
-            self.init_alg() 
+            self.init_mera()
+            self.initialized = True 
         
         Main.set_num_of_threads(self.NUM_OF_THREADS)
-        #print_vars(vars(),  ['self.S.q_iter'])
-
         self.S._minimize_finite_size(**kwargs)
         return self.S
 
     def run_scale_invar(self, **kwargs): 
-        #self.show_config()
         if not self.initialized: 
-            self.init_alg() 
+            self.init_mera()
+            self.initialized = True 
         
         Main.set_num_of_threads(self.NUM_OF_THREADS)
         self.S._minimize_scale_invar(**kwargs)
@@ -1081,7 +1061,9 @@ class Main(Main_old):
         """
         #super(self.__class__, self).run_schedule(**kwargs)
         if not self.initialized: 
-            self.init_alg()
+            #self.init_alg()
+            self.init_mera()
+            self.initialized = True 
             self.S.initialize()
         
         if schedule is None: 
@@ -1106,11 +1088,12 @@ class Main(Main_old):
         
         #for key, val in schedule.items():
         for task in schedule: 
+            which_minimize = task['ansatz']
             if task['ansatz'] == 'prod_state':  
-                run_func = self.run
+                run_func = System._minimize_finite_size 
                 run_param_name = ('q_iter', 'energy_diff_min')
             elif task['ansatz'] == 'scale_invar': 
-                run_func = self.run_scale_invar
+                run_func = System._minimize_scale_invar
                 run_param_name = ('q_iter', 'run_time_max', 'energy_diff_min')
             elif task['ansatz'] == 'eigenstate': 
                 raise NotImplemented
@@ -1118,7 +1101,6 @@ class Main(Main_old):
                 raise
             
             if q_iter_max is not None : 
-                
                 if task['q_iter'] > q_iter_max: 
                     task['q_iter']  = q_iter_max
             shape = task['shape']
@@ -1184,12 +1166,12 @@ class Main(Main_old):
                 shape_current = (dim_current, layer_current, nqn_current)
                 
                 
+                
                 if qsp_current < qsp_destination: 
                     self.S.expand_dim(dim, nqn)
                 
                 if layer_current <layer: 
                     self.S.expand_layer(layer)
-                
                 
                 #if dim_current>dim or layer_current> layer: 
                 if qsp_current> qsp_destination or layer_current> layer: 
@@ -1198,11 +1180,12 @@ class Main(Main_old):
                     continue
                    
             run_param = dict([(i, task.get(i)) for i in run_param_name])
-            print_vars(vars(),  ['self', 'run_param'])
+            
             #run_func(self, backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, 
             #        do_measure=do_measure, **run_param)
-            run_func(backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, 
-                    do_measure=do_measure, **run_param)
+            #print_vars(vars(),  ['self.S.mera', 'self.S.mera.qsp_max'])
+            #run_func(self.S, backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, do_measure=do_measure, **run_param)
+            self.S.minimize(which_minimize, **run_param)
 
     def show_config(self): 
         return 
@@ -1222,7 +1205,8 @@ class Main(Main_old):
     @classmethod
     def run_one(cls, config): 
         return cls.__base__.run_one.im_func(cls, config)
-    
+
+Main = Main_old 
 
 class TestMain(unittest.TestCase): 
     def setUp(self): 
@@ -1283,7 +1267,7 @@ class TestMain(unittest.TestCase):
         main = Main(**config)
         main.run(q_iter=10, backup_parpath='./mera_backup_test_folder', do_measure=0)
     
-    def test_run_on_remote(self): 
+    def xtest_run_on_remote(self): 
         #with rpyc_conn('sugon') as conn: 
         with rpyc_conn_zerodeploy('sugon') as conn: 
             conn.namespace['self'] = self
@@ -1292,7 +1276,7 @@ class TestMain(unittest.TestCase):
             conn.execute(code)
             print conn.modules.os.getcwd()
     
-    def test_resume_func(self): 
+    def xtest_resume_func(self): 
         config = self.config_heisbg 
         config['SYMMETRY'] = 'Travial'
         with make_temp_dir() as d1, make_temp_dir() as d2: 
@@ -1312,8 +1296,22 @@ class TestMain(unittest.TestCase):
                 #Main_remote = conn.modules['merapy.main'].Main
                 conn.execute(code)
                 print conn.modules.os.getcwd()
+
+    def test_resume(self): 
+        config = self.config_heisbg.copy()
+        config['SYMMETRY'] = 'Travial'
+        config.update(USE_CUSTOM_RAND=1)
+        dir = tempfile.mkdtemp()
+        config['backup_parpath'] = dir 
+        main = Main(**config)
+        main.run(q_iter=5)
         
-    def test_make_dir(self): 
+        if 1:  
+            main = Main(**config)
+            main.run(q_iter=10)
+        self.assertAlmostEqual(main.S.energy, -1.15128521352, 10) 
+
+    def xtest_make_dir(self): 
         config = self.config_heisbg 
         print config['backup_parpath']
         print config['backup_parpath_local']
@@ -1344,19 +1342,17 @@ class TestMain(unittest.TestCase):
         config = self.config_heisbg
         config['SYMMETRY'] = 'Travial'
         config['schedule']['schedule'] = copy_schedule(schedule_prod_state)
-        config.update(tot_layer=3)
+        dir = tempfile.mkdtemp()
+        config.update(tot_layer=3, backup_parpath=dir )
         main = Main(**config)
-
-        main.run_schedule(schedule=schedule_scale_invar, do_measure=0, backup_fn='auto', 
-                backup_parpath ='./mera_backup_test_folder', 
-                q_iter_max = 5, 
-                mera_shape_min = (4, 3), mera_shape_max=(8, 4), skip_dim_list=[14])
+        main.run_schedule(schedule=schedule_scale_invar, do_measure=0, #backup_fn='auto', 
+                q_iter_max = 5, mera_shape_min = (4, 3), mera_shape_max=(8, 4), skip_dim_list=[14])
         S = main.S
         self.assertEqual(S.iter, 15)
         self.assertEqual(S.iter1, 5)
 
 
-    def test_set_num_of_threads_1(self): 
+    def xtest_set_num_of_threads_1(self): 
         config = self.config_heisbg
         #config['NUM_OF_THREADS'] = 4
         main = Main(**config)
@@ -1398,7 +1394,7 @@ class TestMain(unittest.TestCase):
             c['schedule'].update(q_iter_max=10, mera_shape_min=(3, 3),  mera_shape_max=(4, 3))
         Main.run_many(config_group, parallel=1)
 
-    def test_transfer_pickle_file(self): 
+    def xtest_transfer_pickle_file(self): 
         config = self.config_heisbg
         config['SYMMETRY'] = 'Travial'
         print config['backup_parpath']
@@ -1424,6 +1420,8 @@ class TestRpyc(unittest.TestCase):
         pass
 
 if __name__=="__main__":
+    warnings.filterwarnings('ignore')
+
     
     if 0: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
@@ -1436,18 +1434,18 @@ if __name__=="__main__":
         add_list = [
         #'test_temp',
         
-        'test_run',
-        'test_run_scale_invar',
-        'test_run_schedule',
-        'test_run_many',
+        #'test_run',
+        #'test_run_scale_invar',
+        #'test_run_schedule',
+        #'test_run_many',
+        'test_resume',
         
-        #'test_make_dir',
-        #'test_run_on_remote',
+        #'xtest_make_dir',
+        #'xtest_run_on_remote',
         
-        #'test_resume_func',
-        #'test_transfer_pickle_file',
-        
-        #'test_set_num_of_threads_1',
+        #'xtest_resume_func',
+        #'xtest_transfer_pickle_file',
+        #'xtest_set_num_of_threads_1',
                 ]
         for a in add_list: 
             suite.addTest(TestMain(a))

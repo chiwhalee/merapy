@@ -32,7 +32,7 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
     name="OO"   #hamiltonian operator
 
     ilayer_p1 = ilayer + 1
-    S.H_2[ilayer_p1].O[j].data[:] =0.0
+    S.H_2[ilayer_p1][j].data[:] =0.0
     if info>0:
         print "START ascending_ham"
     for g in sorted(G_2_2):
@@ -54,7 +54,7 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
     
     if info>0:
         print "H_2 at iLayer+1,",ilayer_p1
-        print S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3) 
+        print S.H_2[ilayer_p1][j].data[:4].round(3),"....", S.H_2[ilayer_p1][j].data[-4:].round(3) 
         print "END ascending_ham"
 
 def ascending_ham_1site(M, S, ilayer, tau=None, info=0):
@@ -81,7 +81,7 @@ def ascending_ham_1site(M, S, ilayer, tau=None, info=0):
     name="O"   #hamiltonian operator
 
     ilayer_p1 = ilayer + 1
-    S.H_1[ilayer_p1].O[j].data[:] =0.0
+    S.H_1[ilayer_p1][j].data[:] =0.0
     if info>0:
         print "START ascending_ham"
     for g in sorted(G_1_1):
@@ -94,7 +94,7 @@ def ascending_ham_1site(M, S, ilayer, tau=None, info=0):
     
     if info>0:
         print "H_1 at iLayer+1,",ilayer_p1
-        print S.H_1[ilayer_p1].O[j].data[:4].round(3),"....", S.H_1[ilayer_p1].O[j].data[-4:].round(3) 
+        print S.H_1[ilayer_p1][j].data[:4].round(3),"....", S.H_1[ilayer_p1][j].data[-4:].round(3) 
         print "END ascending_ham"
 
 def ascending_generic(S): 

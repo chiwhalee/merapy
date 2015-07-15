@@ -282,7 +282,6 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
         print  res
     else: 
         return res 
-   
 
 
 def dict_to_object(dic): 

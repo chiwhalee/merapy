@@ -15,7 +15,12 @@ from collections import OrderedDict
 import warnings
 import rpyc
 import importlib 
+import tempfile 
 
+
+from vmps.iterative_optimize import IterativeOptimize 
+
+from merapy.decorators import tensor_player 
 from merapy.utilities import print_vars
 import merapy.crandom as crandom 
 from merapy.models import *
@@ -24,15 +29,15 @@ from merapy.mera import *
 from merapy.tensor import *
 from merapy.tensor_network import *
 from merapy.quantum_number import *
-from vmps.iterative_optimize import IterativeOptimize 
+
 
 __ISING__ = True
 
 class Operators(object):
     """
-    this may be deprecated,  
-    for fortran define a tensor container is necessary,  but for python, 
-    use list or dict instead
+        this may be deprecated,  
+        for fortran define a tensor container is necessary,  but for python, 
+        use list or dict instead
     """
     def __init__(self):
         self.start_site= None
@@ -44,6 +49,20 @@ class Operators(object):
         return self.O[i]
     def __setitem__(self, i, x):
         self.O[i] = x
+
+class Operators(list):
+    """
+        this may be deprecated,  
+        for fortran define a tensor container is necessary,  but for python, 
+        use list or dict instead
+    """
+    def __init__(self):
+        self.start_site= None
+        self.num_of_site= None
+        #self.O= None  #None indicates not "allocated" as in fortran  #[Tensor()]
+        nSite = 1
+        #self.O = [None]*nSite
+        list.__init__(self, [None])
 
 class Hamiltonian(object):
     pass
@@ -59,6 +78,8 @@ class System(IterativeOptimize):
             它又由 tlink 组成， 在f90中， tlink与 shallowcopy 配合使用为收缩做准备
             , 说白了仅仅是为了调整收缩的顺序。在python中，这些都变得很travial
     """
+    VERSION  = 1.0
+    ALGORITHM = 'mera'
     TNet_sys = TensorNetwork() 
     
     def __init__(self, symmetry, mera=None, model=None, qsp_base=None, 
@@ -77,6 +98,7 @@ class System(IterativeOptimize):
                 model_param: dict, specify parameters for Ising, Heisenberg, etc
 
         """
+        IterativeOptimize.__init__(self, **kwargs)
         
         default_args = {
             #common to vmps
@@ -89,6 +111,24 @@ class System(IterativeOptimize):
                 'only_NN': True, 
                 'only_NNN': False, 
                 'model_param': {}, 
+                
+            'which_minimize': 'prod_state', # in ['prod_state', 'eigen_state', 'scale_invar_state'], 
+            #IO
+                'save_attr_list': self.save_attr_list + [
+                    'mera', 
+                    'H_2', 'H_3', 'rho_2', 'rho_3', 
+                    'SpB', 'SpA', 'SmA', 'SmB', 'SzA', 'SzB' , 'SxA', 'SxB', 
+                    'qsp_max', 'qsp_base', 
+                    'iter', 'iter0', 'iter1',  #?  
+                    'energy', 'energy_err', 'energy_record', 'energy_diff_std', 'record', 'energy_diff', 
+                    'Jleg_tau_0l_dic', 
+                    'updaters', #?
+                    ] , 
+                
+                '_not_resume_attr_list': self._not_resume_attr_list  + [
+                    'precision',  'rho_correction_coeff_list', 
+                    ], 
+            
             
             'USE_REFLECTION': False, 
             'mera_class': Mera, 
@@ -124,7 +164,16 @@ class System(IterativeOptimize):
             
             #measure
                 'do_measure': 0, 
-            
+                'measurement_args': {
+                    'exclude_which': [
+                        'entanglement_brute_force', 
+                        'entanglement_brute_force_6',  
+                        'entanglement_brute_force_9', 
+                        'entanglement_brute_force_9_aver'
+                        ], 
+                    'which': None, 
+                    }, 
+           
             
             #only for long range int 
                 'interaction_range_max': 2, 
@@ -1328,23 +1377,17 @@ class System(IterativeOptimize):
         return  h0, Sz, Sp, Sm, pinning_term 
     
     def _minimize_finite_size(self, 
-            resume=True, auto_resume=None, backup_fn=None, filename=None, 
-            q_iter=None, do_measure=None, **kwargs):
+            resume=True, backup_fn=None, filename=None, 
+            q_iter=None,  **kwargs):
         
         self.init_iteration()
+        from merapy.minimize_new import finite_site_u1  as finite_range_func 
         
-             
-        from merapy.minimize import finite_site_u1  as finite_range_func 
-        LayStart=0
-        q_one=1
+        LayStart=0; q_one=1
         
         if 0: 
-            backup_fn_local = None 
-            self.filename = None 
-            self.resume = False 
-        if 1: 
             backup_fn_local = None
-            do_measure  = do_measure if do_measure is not None else self.do_measure
+            
             
             backup_parpath = self.backup_parpath
             backup_parpath_local = self.backup_parpath_local
@@ -1364,108 +1407,108 @@ class System(IterativeOptimize):
             if backup_parpath is not None: 
                 filename = backup_parpath + '/' + filename
             self.filename = filename 
-
-            if q_iter is None:
-                q_iter = self.q_iter
+            
+        self.set_backup_path()    
+        print_vars(vars(),  ['self.backup_path', 'self.backup_path_local', 
+            'self.backup_parpath_local'])
+        
+        if 1:   
+            q_iter = q_iter if q_iter is not None else self.q_iter 
             if resume is not None:
                 self.resume  = resume
-                    
             
-            if self.resume and backup_fn is not None:
-                if not self.use_local_storage: 
-                    self.resume_func(backup_fn)
-                else: 
-                    self.resume_func(backup_fn_local, use_local_storage=self.use_local_storage)
+            if self.resume and self.backup_path is not None:
+                self.resume_func()
+                    
                 if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
                     energy_diff_min = kwargs.get('energy_diff_min')
                     if  self.energy_diff_std is not None: 
                         if self.energy_diff_std <= energy_diff_min: 
                             q_iter = 0
-                            do_measure = 0
+                            
                             msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
                                     self.energy_diff_std, energy_diff_min)
                             print msg
-               
-            if auto_resume is not None:   self.auto_resume = auto_resume
             
-        
         if isinstance(self.updaters, list): #only for backward compatable
-            
             ascending_func, descending_func, update_mera_func, finite_range_func, rho_top_func= tuple(self.updaters)
         elif isinstance(self.updaters, dict):
-            
             finite_range_func = self.updaters["finite_range_func"]
             ascending_func = self.updaters["ascending_func"]
             descending_func = self.updaters["descending_func"]
             update_mera_func = self.updaters["update_mera_func"]
             rho_top_func = self.updaters["rho_top_func"]
-        
+        else: 
+            print_vars(vars(),  ['self.updaters'])
+            raise 
         
         temp = ['use_local_storage' ]
         args = {t: self.__getattribute__(t) for t in temp}
-        args.update(backup_fn_local=backup_fn_local)
+        #args.update(backup_fn_local=backup_fn_local)
         kwargs.update(args)
        
-        finite_range_func(self.M, self, ascending=ascending_func, descending=descending_func, 
+        finite_range_func(self.mera, self, ascending=ascending_func, descending=descending_func, 
                 update_mera=update_mera_func, rho_top_func = rho_top_func, 
                 q_one=q_one, q_lay=self.q_lay, q_iter=q_iter, use_player=self.use_player, 
-                filename=self.filename, backup_fn=backup_fn, lstart = LayStart, lstep=0, 
+                filename=self.filename, backup_fn=self.backup_path, lstart = LayStart, lstep=0, 
                 resume=self.resume, auto_resume=self.auto_resume, info=self.info-1, **kwargs)
         
-        
-        if do_measure:  
-            ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-            if ppp is not None : 
-                exclude_which = self.measurement_args.get('exclude_which', [])
-                exclude_which.append('scaling_dim')
-                self.measure_S(self, ppp, exclude_which=exclude_which)
+        #if do_measure:  
+        #    ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+        #    if ppp is not None : 
+        #        exclude_which = self.measurement_args.get('exclude_which', [])
+        #        exclude_which.append('scaling_dim')
+        #        self.measure_S(self, ppp, exclude_which=exclude_which)
        
         return self.M, self
 
-    def _minimize_scale_invar(self, resume=True, auto_resume=None, backup_fn=None, filename="auto", 
+    def _minimize_scale_invar(self, resume=True, auto_resume=None, 
+            backup_fn=None, filename="auto", 
             num_of_SIlayer=3, q_lay=1, q_iter=5, do_measure=None,  **kwargs):
         """ 
             taken from Main.run_scale_invar 
         """
         self.init_iteration()
         
-        from merapy.minimize import ScaleInvar 
+        from merapy.minimize_new import ScaleInvar 
         
         do_measure  = do_measure if do_measure is not None else self.do_measure
         
         q_one = 1
-        
-        backup_parpath = self.backup_parpath
-        backup_parpath_local = self.backup_parpath_local
-        if kwargs.get('backup_parpath') is not None : 
-            backup_parpath = kwargs.get('backup_parpath')
-        if kwargs.get('backup_parpath_local') is not None : 
-            backup_parpath_local = kwargs.get('backup_parpath_local')
-        
-                
-        fn = self.backup_fn_auto() 
-        if backup_parpath is not None : 
-           
-            backup_fn  = backup_parpath + '/' + fn
-        backup_fn_local = None
-        if backup_parpath_local is not None: 
-            backup_fn_local = '/'.join([backup_parpath_local, fn])
+        if 0:         
+            backup_parpath = self.backup_parpath
+            backup_parpath_local = self.backup_parpath_local
+            if kwargs.get('backup_parpath') is not None : 
+                backup_parpath = kwargs.get('backup_parpath')
+            if kwargs.get('backup_parpath_local') is not None : 
+                backup_parpath_local = kwargs.get('backup_parpath_local')
             
+                    
+            fn = self.backup_fn_auto() 
+            if backup_parpath is not None : 
+               
+                backup_fn  = backup_parpath + '/' + fn
+            backup_fn_local = None
+            if backup_parpath_local is not None: 
+                backup_fn_local = '/'.join([backup_parpath_local, fn])
+                
 
-        #if filename is not None:   self.filename = filename
-        filename = 'res-'  + self.backup_fn_auto()
-        filename = filename.split('.')[0] + '.dat'
-        
-        
-        if backup_parpath is not None: 
-            filename = backup_parpath + '/' + filename
-        self.filename = filename 
-      
+            #if filename is not None:   self.filename = filename
+            filename = 'res-'  + self.backup_fn_auto()
+            filename = filename.split('.')[0] + '.dat'
+            
+            
+            if backup_parpath is not None: 
+                filename = backup_parpath + '/' + filename
+            self.filename = filename 
 
-        self.make_dir(backup_parpath, backup_parpath_local)
-        temp = backup_fn if not self.use_local_storage else backup_fn_local
-        if resume and temp is not None:  
-            self.resume_func(temp, use_local_storage=self.use_local_storage)
+            self.make_dir(backup_parpath, backup_parpath_local)
+            temp = backup_fn if not self.use_local_storage else backup_fn_local
+        
+        self.set_backup_path()
+        
+        if resume: 
+            self.resume_func()
             if not hasattr(self, 'iter1'):
                 self.iter1 = self.iter
             energy_diff_min  = kwargs.get('energy_diff_min')
@@ -1481,7 +1524,7 @@ class System(IterativeOptimize):
         
         temp = ['use_local_storage']
         args = {t: self.__getattribute__(t) for t in temp}
-        args['backup_fn_local'] = backup_fn_local
+        #args['backup_fn_local'] = backup_fn_local
         kwargs.update(args)
 
         SI = ScaleInvar(self, self.updaters, num_of_SIlayer, q_iter, q_one, q_lay=q_lay, 
@@ -1491,26 +1534,33 @@ class System(IterativeOptimize):
         
         SI.scale_invariant()
         
-        if do_measure:
-            try: 
-                ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-                if ppp is not None : 
-                    exclude_which = self.measurement_args.get('exclude_which', [])
-                    self.measure_S(self, ppp, exclude_which=exclude_which)
-            except Exception as err: 
-                warnings.warn(str(err))
+        #if do_measure:
+        #    try: 
+        #        ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+        #        if ppp is not None : 
+        #            exclude_which = self.measurement_args.get('exclude_which', [])
+        #            self.measure_S(self, ppp, exclude_which=exclude_which)
+        #    except Exception as err: 
+        #        warnings.warn(str(err))
         
         if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
             self.transfer_pickle_file()
         
         return self
 
-    def minimize(self): 
+    def minimize(self, which_minimize, **kwargs): 
         """
             this is a wraper 
         """
         if self.info>0: 
             print 'start minimize'
+        which_minimize = which_minimize if which_minimize is not None else self.which_minimize     
+        if which_minimize in ['prod_state', 'eigen_state']: 
+            self._minimize_finite_size(**kwargs)
+        elif which_minimize in ['scale_invar_state', 'scale_invar']:  # only retain name 'scale_invar_state' in future
+            self._minimize_scale_invar(**kwargs)
+        else: 
+            raise  ValueError(which_minimize)
  
     def make_dir(self, dir, dir_local=None): 
         #this is taken form main.Main.make_dir 
@@ -2017,20 +2067,6 @@ class System(IterativeOptimize):
             time.sleep(1)
 
     
-    @staticmethod
-    def backup_fn_gen(dim, layer, nqn=None):
-        nqn = "5_" if nqn == 5 else "" 
-        layer = "-%dlay"%layer if layer != 3 else ""
-        res= "%(nqn)s%(dim)d%(layer)s.pickle"%vars()
-        return res
-    shape_to_backup_fn = backup_fn_gen  # another name
-    
-    @staticmethod
-    def shape_to_backup_fn_del(dim, layer, nqn=None): 
-        """
-            just another name,  same func 
-        """
-        return System.backup_fn_gen(dim, layer, nqn)
     
     @staticmethod
     def backup_fn_parse(fn):
@@ -2068,12 +2104,25 @@ class System(IterativeOptimize):
         dim, nqn, lay = self._fn_auto()
         fn = "%(nqn)s%(dim)d%(lay)s.pickle"%vars()
         return fn
-    
 
     def output_fn_auto(self):
         dim, nqn, lay = self._fn_auto()
         fn = "res-%(nqn)s%(dim)d%(lay)s.dat"%vars()
         return fn
+
+    @staticmethod
+    def backup_fn_gen_bac(dim, layer, nqn=None):
+        nqn = "5_" if nqn == 5 else "" 
+        layer = "-%dlay"%layer if layer != 3 else ""
+        res= "%(nqn)s%(dim)d%(layer)s.pickle"%vars()
+        return res
+    
+    def backup_fn_gen(self):
+        dim, nqn, lay = self._fn_auto()
+        fn = "%(nqn)s%(dim)d%(lay)s.pickle"%vars()
+        return fn
+    
+    shape_to_backup_fn = backup_fn_gen  # another name
 
     def save(self, fn, check=True, use_local_storage=False):
         """
@@ -2089,9 +2138,11 @@ class System(IterativeOptimize):
         except IOError:
             msg += "file not exist, a new file is created."  
         else:
-            if S0 != self:
-                msg  += "current system not match with stored one! save denied."
-                allow_save = False
+            #if S0 != self:
+            #    msg  += "current system not match with stored one! save denied."
+            #    allow_save = False
+            if 1: 
+                pass
                 
             elif S0.iter1>self.iter1:
                 msg  += "S0.iter1 %d > self.iter1 %d, save denied"%(S0.iter1, self.iter1)
@@ -2106,8 +2157,10 @@ class System(IterativeOptimize):
         else: 
             msg += ' ... save denied. raise' 
             raise Exception(msg)
-        
-    
+
+    def save_new(self, fn=None, use_local_storage=False): 
+        IterativeOptimize.save(self, path=fn, use_local_storage=use_local_storage) 
+
     @staticmethod    
     def _save(obj, fn, use_local_storage = False):
         if not use_local_storage: 
@@ -2124,7 +2177,8 @@ class System(IterativeOptimize):
     @staticmethod
     def load(fn, use_local_storage=False):
         res= rpyc_load(fn, use_local_storage)    
-        res = System.update_S(res)
+        if not isinstance(res, dict):  #temporary work around 
+            res = System.update_S(res)
         
         return res
     
@@ -2239,105 +2293,45 @@ class System(IterativeOptimize):
             
         return res
     
-    if 0:   #del these
-
-        def load2_del(self, fn="backup_tensor.pickle"):
-            #inn = open(fn, "rb")
-            #res = pickle.load(inn)
-            res  = self._load2(fn)
-            temp = ["U", "V", "H_2", "rho_2", "U_dag", "V_dag"]
-            for t in temp:
-                for i in range(self.mera.num_of_layer):
-                    if hasattr(self, t):
-                        self.__getattribute__(t)[i][0].data[:] = res[t][i]  
-                    else:
-                        self.mera.__getattribute__(t)[i][0].data = res[t][i]  
-            
-            i = self.mera.num_of_layer-1
-            self.__getattribute__("rho_2")[i][0].data[:] = res["rho_2"][i] 
-            if 0:
-                self.mera.__getattribute__("V")[i][0].data[:] = res["V"][i] 
-                self.mera.__getattribute__("V_dag")[i][0].data[:] = res["V_dag"][i] 
-
-            save_attr = ["iter", "energy", "energy_record"]
-            for i in save_attr:
-                self.__setattr__(i, res[i])
-            #self.iter = res["iter"]
-        
-        @staticmethod
-        def load3_del(fn, S):
-            inn = open(fn, "rb")
-            res = pickle.load(inn)
-            
-            temp1 = ["U", "V", "U_dag", "V_dag"] 
-            temp2 = ["H_2", "H_3", "rho_2", "rho_3"]
-
-            for l in range(res.mera.num_of_layer):
-                for i in temp1:
-                    try:
-                        res.mera.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
-                    except: pass
-                        #print 
-                    #except: AttributeError
-                for i in temp2:
-                    try:
-                        res.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
-                    except: pass
-
-            #原因在save时，把iTensor.buf_ref 储存了，造成load后tBuffer引用错乱，see iTensor.__del__。加入如下代码，将其清空
-            for l in range(res.mera.num_of_layer):
-                for i in temp1:
-                    try:
-                        res.mera.__getattribute__(i)[l][0].Qsp = S.mera.__getattribute__(i)[l][0].Qsp 
-                    except: pass
-                for i in temp2:
-                    try:
-                        res.__getattribute__(i)[l][0].Qsp = S.__getattribute__(i)[l][0].Qsp
-                    except: pass
-            return res
-
-        def save2_del(self, fn="backup_tensor.pickle"):
-            """
-            it turns out QnZ2, QnU1 can't be pickled, the reason is not sure
-            """
-            out = open(fn, "wb")
-            res= {}
-            temp = ["U", "V", "H_2", "rho_2", "U_dag", "V_dag"]
-            for t in temp:
-                res[t] = {}
-                for i in range(self.mera.num_of_layer):
-                    if hasattr(self, t):
-                        res[t][i] = self.__getattribute__(t)[i][0].data
-                    else:
-                        res[t][i] = self.mera.__getattribute__(t)[i][0].data
-            if 0:
-                i = self.mera.num_of_layer-1
-                res["rho_2"][i] = self.__getattribute__("rho_2")[i][0].data
-                res["V"][i] = self.mera.__getattribute__("V")[i][0].data
-                res["V_dag"][i] = self.mera.__getattribute__("V_dag")[i][0].data
-            
-            save_attr = ["iter", "energy", "energy_record"]
-            for a in save_attr:
-                res[a] = self.__getattribute__(a)
-            #res["iter"] = self.iter
-            pickle.dump(res, out)
-            out.close()
-            print "M, S saved to %s"%fn
-    
-    def resume_func(self, backup_path, use_local_storage=False):
+    def resume_func(self):
         """
             this is token from Main.resume_func  
         """
         #if not use_local_storage: 
+        backup_path = self.backup_path if not self.use_local_storage else self.backup_path_local 
         if 1: 
             if backup_path is not None : 
-                LOCAL = '' if not use_local_storage else 'LOCAL file '
+                LOCAL = '' if not self.use_local_storage else 'LOCAL file '
                 msg = "\nTRY TO RESUME from %s%s...  "%(LOCAL, backup_path[-30:])
                 try:
-                    self.S = self.__class__.load(backup_path, use_local_storage=use_local_storage)
-                    self.M = self.S.mera
-                    iter = self.S.iter1
-                    eng = self.S.energy
+                    #self.S = self.__class__.load(backup_path, use_local_storage=use_local_storage)
+                    temp = self.__class__.load(backup_path, use_local_storage=self.use_local_storage)
+                    print_vars(vars(),  ['type(temp)'])
+                    
+                    if not isinstance(temp, dict):  #temporary work around  for backward compatible                 
+                        temp = temp.__dict__ 
+                        temp.pop('updaters')  
+                        temp.pop('backup_parpath')
+                        if temp.has_key('is_initialized'): 
+                            temp.pop('is_initialized')
+                    
+                    if 0:  #resume check 
+                        if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                            energy_diff_min = kwargs.get('energy_diff_min')
+                            if  self.energy_diff_std is not None: 
+                                if self.energy_diff_std <= energy_diff_min: 
+                                    q_iter = 0
+                                    
+                                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
+                                            self.energy_diff_std, energy_diff_min)
+                                    print msg
+                    
+                    self.__dict__.update(temp)
+                    #self.M = self.S.mera
+                    #iter = self.S.iter1
+                    #eng = self.S.energy
+                    iter = self.iter1
+                    eng = self.energy 
                     msg  += "RESUMED successfully at iter=%s,  eng=%s"%(iter, eng)
                 except IOError as err:
                     if err.errno == 2: 
@@ -2348,8 +2342,25 @@ class System(IterativeOptimize):
                 except TypeError as err:
                     msg += str(err)
                     msg += "discard manually resume"
+                except Exception: 
+                    raise 
                 print(msg)
-
+    
+    def resume_check(self, old_state): 
+        allow_resume = 1
+        eng_bac = old_state['mps'].energy
+        eng = self.mps.energy if self.mps is not None  else None 
+        msg = ''
+        if eng is None: eng = np.nan
+        if eng_bac < eng or eng is np.nan: 
+            msg += 'stored_eng=%1.12f is lower that current_eng=%1.12f.  '%(eng_bac, eng) 
+            msg += 'resumed successfully'
+        else: 
+            allow_resume = 0
+            msg += 'stored_eng=%1.12f is higher that current_eng=%1.12f.  '%(eng_bac, eng) 
+            msg += 'discard ressuming' 
+        return allow_resume, msg
+    
     def save_eng(self, iter):
         self.energy_record[iter] = (self.energy, time.time(), time.clock())
     
@@ -2511,6 +2522,7 @@ class System(IterativeOptimize):
                 raise Exception(err_msg)
     
     def expand_dim(self, trunc_dim, nqn=None):
+        print '\ntry to expand dim'
         qspclass = symmetry_to_Qsp(self.symmetry)
         qsp = qspclass.max(trunc_dim, nqn)
         self._expand_dim(qsp_max=qsp)
@@ -2636,6 +2648,16 @@ class System(IterativeOptimize):
                         print "SpB adjoint to SmB", S.SpB[lay][0].is_adjoint_to(S.SmB[lay][0], precision=precision, out_more=True)
         tensor_player.STATE = state
 
+    def measure_S(self, S, parpath, exclude_which=None):
+        from merapy.measure_and_analysis.measurement import measure_S
+        #state_bac = tensor_player.STATE
+        #self.stop_player()
+        tensor_player.STATE = 'stop'
+        msg = '\nmeasurement after final iter: '
+         
+        measure_S(S,  parpath, exclude_which=exclude_which, use_local_storage=self.use_local_storage)
+        #tensor_player.STATE = state_bac
+
 def set_ham_to_identity(sys):
     """
     for debugging 
@@ -2703,6 +2725,7 @@ if 0:
         #endif        
   
 class TestSystem(unittest.TestCase):
+    
     def setUp(self): 
         if 0: 
             import mera
@@ -2720,7 +2743,7 @@ class TestSystem(unittest.TestCase):
             self.sys= sys
             self.M = M
     
-    def test_example(self): 
+    def xtest_example(self): 
         if 1: 
             M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); 
             S= System.example(M, 'U1', 'Heisenberg')
@@ -2734,6 +2757,46 @@ class TestSystem(unittest.TestCase):
             print S 
             H=np.array([-2., -1., -1., -1., -1., -1., -1.,  0.])
             self.assertTrue(np.all(S.H_2[0][0].data==H))
+            print_vars(vars(),  ['S.__dict__.keys()'])
+
+    def test_backup_path(self): 
+        dir = tempfile.mkdtemp()
+        m=System.example(model='Ising', 
+                use_local_storage = 1, 
+                backup_parpath=dir, 
+                backup_parpath_local = dir, 
+                symmetry='Travial', info=1)
+        m.set_backup_path()
+        #fn = m.backup_fn_auto()
+        print_vars(vars(),  ['m.backup_parpath', 
+            'm.backup_path', 'm.backup_path_local'])
+        m.minimize('prod_state')
+      
+    def test_minimize(self): 
+        m=System.example(model='Ising', symmetry='Travial', info=1)
+        m.minimize('prod_state')
+        print_vars(vars(),  ['m.energy'])
+        self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
+        from merapy.decorators import tensor_player 
+        tensor_player.STATE = 'stop'
+    
+    def test_resume(self):
+        dir = tempfile.mkdtemp()
+        m=System.example(model='Ising',
+                backup_parpath = dir, 
+                symmetry='Travial', info=1)
+        m.minimize('prod_state')
+        print_vars(vars(),  ['m.energy'])
+        self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
+        from merapy.decorators import tensor_player 
+        tensor_player.STATE = 'stop'
+        m=System.example(model='Ising',
+                backup_parpath = dir, 
+                symmetry='Travial', info=1)
+        
+        m.minimize('prod_state', q_iter=10)
+        print_vars(vars(),  ['m.energy'])
+        
     
     def test_minimize_finite_site(self): 
         m=System.example(model='Ising', symmetry='Travial', info=1)
@@ -2752,11 +2815,22 @@ class TestSystem(unittest.TestCase):
         from merapy.decorators import tensor_player 
         tensor_player.STATE = 'stop'
     
+    def test_expand_dim_and_layer(self): 
+        m=System.example(model='Ising', symmetry='Travial', info=1)
+        m._minimize_finite_size()
+        #print_vars(vars(),  ['m.energy'])
+        #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
+        print m.mera 
+        from merapy.decorators import tensor_player 
+        tensor_player.STATE = 'stop'
+        m.expand_dim(6)
+        m._minimize_finite_size()
+        print m.mera 
 
-    def test_save(self): 
+    def xtest_save(self): 
         from merapy.utilities import random_str
         import os
-        S= self.S
+        
         if 1: 
             fn = random_str(size=8)
             fn = '/'.join(['/tmp', fn])
@@ -2789,1019 +2863,1020 @@ class TestSystem(unittest.TestCase):
         #print S
         pass 
     
-    def instance(self, M, symmetry, model, only_NN=True, only_NNN=False):
-        test_Mera = mera.test_Mera
-        ts= test_System
+    if 0: 
+        def instance(self, M, symmetry, model, only_NN=True, only_NNN=False):
+            test_Mera = mera.test_Mera
+            ts= test_System
+            
+            #M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
+            M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); 
+            
+            sys=System(model=model, mera=M, symmetry=symmetry, only_NN=only_NN, only_NNN=only_NNN)
+            #M = test_Mera.instance()
+            #M = test_Mera.M
+            sys.init_Hamiltonian()
+            return sys
         
-        #M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
-        M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1"); 
-        
-        sys=System(model=model, mera=M, symmetry=symmetry, only_NN=only_NN, only_NNN=only_NNN)
-        #M = test_Mera.instance()
-        #M = test_Mera.M
-        sys.init_Hamiltonian()
-        return sys
-    
-    def contract(self):
-        """   ----pass """
-        sys= self.instance()
-        layer = 1
-        which = -1
-        G = G3[which]
-        #order = order3[:, which]
-        order= order3[which]
-        M = test_Mera.instance()
-        #print "MMM", M.num_of_layer
-        
-        #print 'ggg', G3[which]
-        Names= []
-        Ops= []
-        exception = 4
-        res= 0
-        res = sys.contract(M, layer, G, 0, Names, 
-                Ops, order, exception=exception, info=2)
+        def contract(self):
+            """   ----pass """
+            sys= self.instance()
+            layer = 1
+            which = -1
+            G = G3[which]
+            #order = order3[:, which]
+            order= order3[which]
+            M = test_Mera.instance()
+            #print "MMM", M.num_of_layer
+            
+            #print 'ggg', G3[which]
+            Names= []
+            Ops= []
+            exception = 4
+            res= 0
+            res = sys.contract(M, layer, G, 0, Names, 
+                    Ops, order, exception=exception, info=2)
 
-    def contract1(self, info=0):
-        S= self.sys
-        M = self.M
-        
-        ilayer = 0
-        which =-1 
-        G = G2[which]
-        #order= order2[:, which]
-        order= order2[which]
-        #print "ooo", order
-        weight=weight2[which]
-        name="OO"   #hamiltonian operator
-        
-        #print 
-        exception=G.find_node(name)[0]
-        
-        print "exception", exception
+        def contract1(self, info=0):
+            S= self.sys
+            M = self.M
+            
+            ilayer = 0
+            which =-1 
+            G = G2[which]
+            #order= order2[:, which]
+            order= order2[which]
+            #print "ooo", order
+            weight=weight2[which]
+            name="OO"   #hamiltonian operator
+            
+            #print 
+            exception=G.find_node(name)[0]
+            
+            print "exception", exception
 
-        info = 5
-        T_tmp = S.contract(M, ilayer, G, 0, Names=[], Ops=[], order=order, 
-                exception=exception, info=info-1)
-        print "ddd", T_tmp.data.round(5)
+            info = 5
+            T_tmp = S.contract(M, ilayer, G, 0, Names=[], Ops=[], order=order, 
+                    exception=exception, info=info-1)
+            print "ddd", T_tmp.data.round(5)
 
-    def contract_except_V(self, info=0):
-        """
-        ---pass
-        """
-        S= self.sys
-        M = self.M
-        
-        ilayer = 0
-        which =-1 
-        G = G2[which]
-        #order= order2[:, which]
-        order= order2[which]
-        #print "ooo", order
-        weight=weight2[which]
-        name="V"   #hamiltonian operator
-        
-        #print 
-        exception=G.find_node(name)[1]
+        def contract_except_V(self, info=0):
+            """
+            ---pass
+            """
+            S= self.sys
+            M = self.M
+            
+            ilayer = 0
+            which =-1 
+            G = G2[which]
+            #order= order2[:, which]
+            order= order2[which]
+            #print "ooo", order
+            weight=weight2[which]
+            name="V"   #hamiltonian operator
+            
+            #print 
+            exception=G.find_node(name)[1]
 
-        
-        print "exception", exception
+            
+            print "exception", exception
 
-        print "rho_2 is set to be 1"
-        S.rho_2[0][0].data[:] = 1.
+            print "rho_2 is set to be 1"
+            S.rho_2[0][0].data[:] = 1.
 
-        info = 1
-        T_tmp = S.contract(M, ilayer, G, 0, Names=[], Ops=[], order=order, 
-                exception=exception, info=info-1)
-        print "ddd", T_tmp.data.round(5)
+            info = 1
+            T_tmp = S.contract(M, ilayer, G, 0, Names=[], Ops=[], order=order, 
+                    exception=exception, info=info-1)
+            print "ddd", T_tmp.data.round(5)
 
-    def contract_V_Vdag(self):
-        T1 = self.M.V[0][0]
-        T2 = self.M.V_dag[0][0]
-        G = G2[1]
-        n1 = G.find_node("V")[0]
-        n2 = G.find_node("Vp")[0]
-        ord1 = G.edges[:4, n1]
-        ord2 = G.edges[:4, n2]
+        def contract_V_Vdag(self):
+            T1 = self.M.V[0][0]
+            T2 = self.M.V_dag[0][0]
+            G = G2[1]
+            n1 = G.find_node("V")[0]
+            n2 = G.find_node("Vp")[0]
+            ord1 = G.edges[:4, n1]
+            ord2 = G.edges[:4, n2]
 
-        ord1 = [1, 2, 3, 9]
-        ord2 = [6, 1, 2, 3]
-        print ord1, ord2
-        print T1.data.round(3)
-        print T2.data.round(3)        
-        res, leg= T1.contract(T2, ord1, ord2)
-        print res.data.round(3 )
-        print T1
+            ord1 = [1, 2, 3, 9]
+            ord2 = [6, 1, 2, 3]
+            print ord1, ord2
+            print T1.data.round(3)
+            print T2.data.round(3)        
+            res, leg= T1.contract(T2, ord1, ord2)
+            print res.data.round(3 )
+            print T1
 
-    def contract_two(self):
-        """  ---pass """
-        T1 = self.M.V[0][0]
-        T2 = self.sys.H_2[0][0]
-        G = G2[1]
-        n1 = G.find_node("V")[0]
-        n2 = G.find_node("oo")[0]
-        ord1 = G.edges[:4, n1]
-        ord2 = G.edges[:4, n2]
+        def contract_two(self):
+            """  ---pass """
+            T1 = self.M.V[0][0]
+            T2 = self.sys.H_2[0][0]
+            G = G2[1]
+            n1 = G.find_node("V")[0]
+            n2 = G.find_node("oo")[0]
+            ord1 = G.edges[:4, n1]
+            ord2 = G.edges[:4, n2]
 
-        #ord1 = [1, 2, 3, 9]
-        #ord2 = [6, 1, 2, 3]
-        print ord1, ord2
-        print T1.data.round(3)
-        print T2.data.round(3)        
-        
-        info = 1
-        res, leg= T1.contract(T2, ord1, ord2, info=info-1)
-        print res.data.round(3 )
-        print leg
+            #ord1 = [1, 2, 3, 9]
+            #ord2 = [6, 1, 2, 3]
+            print ord1, ord2
+            print T1.data.round(3)
+            print T2.data.round(3)        
+            
+            info = 1
+            res, leg= T1.contract(T2, ord1, ord2, info=info-1)
+            print res.data.round(3 )
+            print leg
 
 
-    def contract_two_UV(self):
-        """  ---pass """
-        T1 = self.M.V[1][0]
-        #T2 = self.sys.H_2[0][0]
-        T2 = self.M.U[1][0]
+        def contract_two_UV(self):
+            """  ---pass """
+            T1 = self.M.V[1][0]
+            #T2 = self.sys.H_2[0][0]
+            T2 = self.M.U[1][0]
 
-        G = G2[1]
-        
-        n1 = G.find_node("V")[0]
-        n2 = G.find_node("U")[0]
-        
-        ord1 = G.edges[:4, n1]
-        ord2 = G.edges[:4, n2]
+            G = G2[1]
+            
+            n1 = G.find_node("V")[0]
+            n2 = G.find_node("U")[0]
+            
+            ord1 = G.edges[:4, n1]
+            ord2 = G.edges[:4, n2]
 
-        #ord1 = [1, 2, 3, 9]
-        #ord2 = [6, 1, 2, 3]
-        print ord1, ord2
-        print T1.data[:8].round(5), T1.data[-5:].round(5)
-        print T2.data[:8].round(5), T2.data[-5:].round(5)        
-        
-        info = 1
-        res, leg= T1.contract(T2, ord1, ord2, info=info-1)
-        print res.data[:8].round(5), "\t", res.data[-8:].round(5)
-        #print res
-        #print leg
+            #ord1 = [1, 2, 3, 9]
+            #ord2 = [6, 1, 2, 3]
+            print ord1, ord2
+            print T1.data[:8].round(5), T1.data[-5:].round(5)
+            print T2.data[:8].round(5), T2.data[-5:].round(5)        
+            
+            info = 1
+            res, leg= T1.contract(T2, ord1, ord2, info=info-1)
+            print res.data[:8].round(5), "\t", res.data[-8:].round(5)
+            #print res
+            #print leg
 
-    def contract_two_core(self):
-        """  ---pass """
-        T1 = self.M.V[1][0]
-        T2 = self.M.U[1][0]
+        def contract_two_core(self):
+            """  ---pass """
+            T1 = self.M.V[1][0]
+            T2 = self.M.U[1][0]
 
-        
-        print T1.data[:8].round(5), T1.data[-5:].round(5)
-        print T2.data[:8].round(5), T2.data[-5:].round(5)        
-        
-        info = 1
-        res= T1.contract_core(T2, 2 )
-        print res.data[:8].round(5), "\t", res.data[-8:].round(5)
-        #print res
+            
+            print T1.data[:8].round(5), T1.data[-5:].round(5)
+            print T2.data[:8].round(5), T2.data[-5:].round(5)        
+            
+            info = 1
+            res= T1.contract_core(T2, 2 )
+            print res.data[:8].round(5), "\t", res.data[-8:].round(5)
+            #print res
 
-    def add_env(self, info=0):
-        S= self.sys
-        #M = test_Mera.instance()
-        M = self.M
-        ilayer = 0
-        jlayer = 1
-        which = -1
-        G = G2[which]
-        #order= order2[:, which]
-        order= order2[which]
-        weight=weight2[which]
-        name="OO"   #hamiltonian operator
-        info = 2
-        S.H_2[jlayer][0]=S.add_env(M, ilayer, G, 
-                order, name, weight,  info=info-1)
-        
-        print S.H_2[jlayer][0].data.round(3)
-        #print S
+        def add_env(self, info=0):
+            S= self.sys
+            #M = test_Mera.instance()
+            M = self.M
+            ilayer = 0
+            jlayer = 1
+            which = -1
+            G = G2[which]
+            #order= order2[:, which]
+            order= order2[which]
+            weight=weight2[which]
+            name="OO"   #hamiltonian operator
+            info = 2
+            S.H_2[jlayer][0]=S.add_env(M, ilayer, G, 
+                    order, name, weight,  info=info-1)
+            
+            print S.H_2[jlayer][0].data.round(3)
+            #print S
 
-    def add_env_V(self, info=0):
-        S= self.sys
-        #M = test_Mera.instance()
-        M = self.M
-        ilayer = 0
-        
-        which = -1 
-        G = G2[which]
-        #order= order2[:, which]
-        order= order2[which]
-        weight=weight2[which]
-        name="V"   #hamiltonian operator
-        info = 2
+        def add_env_V(self, info=0):
+            S= self.sys
+            #M = test_Mera.instance()
+            M = self.M
+            ilayer = 0
+            
+            which = -1 
+            G = G2[which]
+            #order= order2[:, which]
+            order= order2[which]
+            weight=weight2[which]
+            name="V"   #hamiltonian operator
+            info = 2
 
-        print "rho_2 is set to 1.0"
-        S.rho_2[0][0].data[:] = 1.
-        
-        #weight = -weight
-        #if which == -1: weight = weight*0.5
+            print "rho_2 is set to 1.0"
+            S.rho_2[0][0].data[:] = 1.
+            
+            #weight = -weight
+            #if which == -1: weight = weight*0.5
 
-        t=S.add_env(M, ilayer, G, 
-                order, name, weight,  info=info-1)
-        
-        print t.data.round(3)
+            t=S.add_env(M, ilayer, G, 
+                    order, name, weight,  info=info-1)
+            
+            print t.data.round(3)
 
 
-    def ascending(self,info=0):
-        M = self.M
-        S= self.sys
-        i=0
-        j = 0
-        name="OO"   #hamiltonian operator
-        ilayer = 0
-        jlayer = 1
-        S.H_2[jlayer][j].data[:] =0.0
+        def ascending(self,info=0):
+            M = self.M
+            S= self.sys
+            i=0
+            j = 0
+            name="OO"   #hamiltonian operator
+            ilayer = 0
+            jlayer = 1
+            S.H_2[jlayer][j].data[:] =0.0
 
-        info = 1
+            info = 1
 
-        if info:
-            print "START ascending_ham"
-        for g in [-1, 0, 1]:
             if info:
-                print "iLayer,g=",ilayer, g
-            #print S.H_2[ilayer][j]
-            
-            #q29
-            G = G2[g]
-            #order= order2[:,g]
-            order= order2[g]
-            weight=weight2[g]
-            
-            temp=S.add_env(M, ilayer, G, order, name, weight, S.H_2[jlayer][j], info=info-1)
-            S.H_2[jlayer][j].data += temp.data 
+                print "START ascending_ham"
+            for g in [-1, 0, 1]:
+                if info:
+                    print "iLayer,g=",ilayer, g
+                #print S.H_2[ilayer][j]
+                
+                #q29
+                G = G2[g]
+                #order= order2[:,g]
+                order= order2[g]
+                weight=weight2[g]
+                
+                temp=S.add_env(M, ilayer, G, order, name, weight, S.H_2[jlayer][j], info=info-1)
+                S.H_2[jlayer][j].data += temp.data 
+                print S.H_2[jlayer][0].data.round(5)
             print S.H_2[jlayer][0].data.round(5)
-        print S.H_2[jlayer][0].data.round(5)
-        if info:
-            print "END ascending_ham"
+            if info:
+                print "END ascending_ham"
 
-
-
-    def eng_ham(self):
-        S= self.instance()
-        M = test_Mera.instance()
-        layer = 3
-        S.eng_ham(layer)
-
-    
-    @staticmethod
-    def op_heisenberg():
-        """ ---- pass """
-        from quantum_number import init_System_QSp
-        QN_idendity, QSp_base, QSp_null= init_System_QSp("U1")
-
-        h0 = System.op_heisenberg()
-        print h0[2]
-        #print h0[2]  #.data.round(5)
-        #results
-        """
-            625 ---pass
-                ----Begin iTensor----------------------------------------------
-                    rank:	4
-                    idx_dim:	81
-                    nidx:	19
-                    totQN:	(    0)
-                    QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
-                    Dims:	array([4, 4, 4, 4])
-                    totDim:	70
-                    idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
-                           81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
-                           81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
-                           81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
-                           16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
-                    Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
-                        [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
-                        [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
-
-                    Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
-                     [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
-                     [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
-                     [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
-                    data:	[0 0 0 0]: [ 0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.]
-                    [2 1 0 0]: [ 0.  0.  0.  0.]
-                    [1 2 0 0]: [ 0.  0.  0.  1.]
-                    [1 0 1 0]: [ 0.  0.  0.  0.]
-                    [0 1 1 0]: [ 0.  0.  0.  0.]
-                    [2 0 2 0]: [ 0.  0.  0.  0.]
-                    [0 2 2 0]: [ 0.  0.  1.  0.]
-                    [1 0 0 1]: [ 0.  0.  1.  0.]
-                    [0 1 0 1]: [ 0.  0.  0.  0.]
-                    [1 1 1 1]: [ 0.]
-                    [0 0 2 1]: [ 1.  0.  0.  0.]
-                    [2 1 2 1]: [ 0.]
-                    [1 2 2 1]: [ 0.]
-                    [2 0 0 2]: [ 0.  0.  0.  0.]
-                    [0 2 0 2]: [ 0.  0.  0.  0.]
-                    [0 0 1 2]: [ 0.  0.  0.  0.]
-                    [2 1 1 2]: [ 0.]
-                    [1 2 1 2]: [ 0.]
-                    [2 2 2 2]: [ 0.]
-
-                ----End iTensor----------------------------------------------
-
-                625----Begin Tensor-------------------------------------------
-                    T%rank=    4
-                    T%totQN=     0
-                    T%nQN=     3     3     3     3
-                    T%nIdx=   19
-                    T%QNs(:,1)     =     0     1    -1
-                    T%QNs%Dims(:,1)=     2     1     1
-                    T%QNs(:,2)     =     0     1    -1
-                    T%QNs%Dims(:,2)=     2     1     1
-                    T%QNs(:,3)     =     0    -1     1
-                    T%QNs%Dims(:,3)=     2     1     1
-                    T%QNs(:,4)     =     0    -1     1
-                    T%QNs%Dims(:,4)=     2     1     1
-                    Data=
-                    T%Block_QN=     0     0     0     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     1     0     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     2     0     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.1000E+01
-                    T%Block_QN=     1     0     1     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     1     1     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     0     2     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                M    T%Block_QN=     0     2     2     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.1000E+01
-                    0.0000E+00
-                M    T%Block_QN=     1     0     0     1
-                    0.0000E+00
-                    0.0000E+00
-                    0.1000E+01
-                    0.0000E+00
-                    T%Block_QN=     0     1     0     1
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     1     1     1
-                    0.0000E+00
-                    T%Block_QN=     0     0     2     1
-                    0.1000E+01
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     1     2     1
-                    0.0000E+00
-                    T%Block_QN=     1     2     2     1
-                    0.0000E+00
-                    T%Block_QN=     2     0     0     2
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     2     0     2
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     0     1     2
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     1     1     2
-                    0.0000E+00
-                    T%Block_QN=     1     2     1     2
-                    0.0000E+00
-                    T%Block_QN=     2     2     2     2
-                    0.0000E+00
-                ----End   Tensor-------------------------------------------
-
-            622  --- pass absolutly
-                hhh 622  ----Begin iTensor----------------------------------------------
-                    rank:	4
-                    idx_dim:	81
-                    nidx:	19
-                    totQN:	(    0)
-                    QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
-                    Dims:	array([4, 4, 4, 4])
-                    totDim:	70
-                    idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
-                           81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
-                           81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
-                           81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
-                           16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
-                    Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
-                        [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
-                        [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
-
-                    Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
-                     [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
-                     [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
-                     [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
-                    data:	[0 0 0 0]: [-2.  1.  1.  0.  1.  0.  0.  1.  1.  0.  0.  1.  0.  1.  1. -2.]
-                    [2 1 0 0]: [ 2.  0.  0.  0.]
-                    [1 2 0 0]: [ 0.  0.  0.  0.]
-                    [1 0 1 0]: [-1.  1.  1.  1.]
-                    [0 1 1 0]: [ 0.  2.  0.  0.]
-                    [2 0 2 0]: [ 1.  1.  1. -1.]
-                    [0 2 2 0]: [ 0.  0.  0.  0.]
-                    [1 0 0 1]: [ 0.  0.  0.  0.]
-                    [0 1 0 1]: [ 1.  1.  1. -1.]
-                    [1 1 1 1]: [ 2.]
-                    [0 0 2 1]: [ 0.  0.  0.  0.]
-                    [2 1 2 1]: [ 0.]
-                    [1 2 2 1]: [ 0.]
-                    [2 0 0 2]: [ 0.  2.  0.  0.]
-                    [0 2 0 2]: [-1.  1.  1.  1.]
-                    [0 0 1 2]: [ 0.  0.  0.  2.]
-                    [2 1 1 2]: [ 0.]
-                    [1 2 1 2]: [ 0.]
-                    [2 2 2 2]: [ 2.]
-
-                ----End iTensor----------------------------------------------
-
-
-                622----Begin Tensor-------------------------------------------
-                    T%rank=    4
-                    T%totQN=     0
-                    T%nQN=     3     3     3     3
-                    T%nIdx=   19
-                    T%QNs(:,1)     =     0     1    -1
-                    T%QNs%Dims(:,1)=     2     1     1
-                    T%QNs(:,2)     =     0     1    -1
-                    T%QNs%Dims(:,2)=     2     1     1
-                    T%QNs(:,3)     =     0    -1     1
-                    T%QNs%Dims(:,3)=     2     1     1
-                    T%QNs(:,4)     =     0    -1     1
-                    T%QNs%Dims(:,4)=     2     1     1
-                    Data=
-                    T%Block_QN=     0     0     0     0
-                    -.2000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    0.1000E+01
-                    0.0000E+00
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    0.0000E+00
-                    0.1000E+01
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    -.2000E+01
-                    T%Block_QN=     2     1     0     0
-                    0.2000E+01
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     2     0     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     0     1     0
-                    -.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                M    T%Block_QN=     0     1     1     0
-                    0.0000E+00
-                    0.2000E+01
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     0     2     0
-                    0.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    -.1000E+01
-                    T%Block_QN=     0     2     2     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     0     0     1
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     1     0     1
-                    0.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    -.1000E+01
-                    T%Block_QN=     1     1     1     1
-                    0.2000E+01
-                    T%Block_QN=     0     0     2     1
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     1     2     1
-                    0.0000E+00
-                    T%Block_QN=     1     2     2     1
-                    0.0000E+00
-                M    T%Block_QN=     2     0     0     2
-                    0.0000E+00
-                    0.2000E+01
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     2     0     2
-                    -.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    T%Block_QN=     0     0     1     2
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.2000E+01
-                    T%Block_QN=     2     1     1     2
-                    0.0000E+00
-                    T%Block_QN=     1     2     1     2
-                    0.0000E+00
-                    T%Block_QN=     2     2     2     2
-                    0.2000E+01
-                ----End   Tensor-------------------------------------------
-
-
-            641 --- pass
-                641 ----Begin Tensor-------------------------------------------
-                    T%rank=    4
-                    T%totQN=     0
-                    T%nQN=     3     3     3     3
-                    T%nIdx=   19
-                    T%QNs(:,1)     =     0     1    -1
-                    T%QNs%Dims(:,1)=     2     1     1
-                    T%QNs(:,2)     =     0     1    -1
-                    T%QNs%Dims(:,2)=     2     1     1
-                    T%QNs(:,3)     =     0    -1     1
-                    T%QNs%Dims(:,3)=     2     1     1
-                    T%QNs(:,4)     =     0    -1     1
-                    T%QNs%Dims(:,4)=     2     1     1
-                    Data=
-                    T%Block_QN=     0     0     0     0
-                    -.1000E+01
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    0.1000E+01
-                    -.1000E+01
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    -.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    -.1000E+01
-                    T%Block_QN=     2     1     0     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     2     0     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     0     1     0
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    T%Block_QN=     0     1     1     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     0     2     0
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    T%Block_QN=     0     2     2     0
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     1     0     0     1
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     1     0     1
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    T%Block_QN=     1     1     1     1
-                    0.1000E+01
-                    T%Block_QN=     0     0     2     1
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     1     2     1
-                    0.1000E+01
-                    T%Block_QN=     1     2     2     1
-                    0.0000E+00
-                    T%Block_QN=     2     0     0     2
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     0     2     0     2
-                    0.0000E+00
-                    0.1000E+01
-                    0.1000E+01
-                    0.0000E+00
-                    T%Block_QN=     0     0     1     2
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    0.0000E+00
-                    T%Block_QN=     2     1     1     2
-                    0.0000E+00
-                    T%Block_QN=     1     2     1     2
-                    0.1000E+01
-                    T%Block_QN=     2     2     2     2
-                    0.1000E+01
-                ----End   Tensor-------------------------------------------
-
-
-                hhh 641  ----Begin iTensor----------------------------------------------
-                    rank:	4
-                    idx_dim:	81
-                    nidx:	19
-                    totQN:	(    0)
-                    QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
-                    Dims:	array([4, 4, 4, 4])
-                    totDim:	70
-                    idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
-                           81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
-                           81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
-                           81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
-                           16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
-                    Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
-                        [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
-                        [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
-
-                    Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
-                     [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
-                     [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
-                     [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
-                    data:	[0 0 0 0]: [-1.  1.  1.  0.  1. -1.  0.  1.  1.  0. -1.  1.  0.  1.  1. -1.]
-                    [2 1 0 0]: [ 0.  0.  0.  0.]
-                    [1 2 0 0]: [ 0.  0.  0.  0.]
-                    [1 0 1 0]: [ 0.  1.  1.  0.]
-                    [0 1 1 0]: [ 0.  0.  0.  0.]
-                    [2 0 2 0]: [ 0.  1.  1.  0.]
-                    [0 2 2 0]: [ 0.  0.  0.  0.]
-                    [1 0 0 1]: [ 0.  0.  0.  0.]
-                    [0 1 0 1]: [ 0.  1.  1.  0.]
-                    [1 1 1 1]: [ 1.]
-                    [0 0 2 1]: [ 0.  0.  0.  0.]
-                    [2 1 2 1]: [ 1.]
-                    [1 2 2 1]: [ 0.]
-                    [2 0 0 2]: [ 0.  0.  0.  0.]
-                    [0 2 0 2]: [ 0.  1.  1.  0.]
-                    [0 0 1 2]: [ 0.  0.  0.  0.]
-                    [2 1 1 2]: [ 0.]
-                    [1 2 1 2]: [ 1.]
-                    [2 2 2 2]: [ 1.]
-
-                ----End iTensor----------------------------------------------
-
-            635  ---pass
-                ----Begin Tensor-------------------------------------------
-                    T%rank=    4
-                    T%totQN=     0
-                    T%nQN=     3     3     3     3
-                    T%nIdx=   19
-                    T%QNs(:,1)     =     0     1    -1
-                    T%QNs%Dims(:,1)=     2     1     1
-                    T%QNs(:,2)     =     0     1    -1
-                    T%QNs%Dims(:,2)=     2     1     1
-                    T%QNs(:,3)     =     0    -1     1
-                    T%QNs%Dims(:,3)=     2     1     1
-                    T%QNs(:,4)     =     0    -1     1
-                    T%QNs%Dims(:,4)=     2     1     1
-                    Data=
-                    T%Block_QN=     0     0     0     0
-                     -.10E+01 0.50E+00 0.50E+00 0.00E+00 0.50E+00 0.00E+00 0.00E+00 0.50E+00 0.50E+00 0.00E+00 0.00E+00 0.50E+00 0.00E+00 0.50E+00 0.50E+00 -.10E+01
-                    T%Block_QN=     2     1     0     0
-                     0.10E+01 0.00E+00 0.00E+00 0.00E+00
-                    T%Block_QN=     1     2     0     0
-                     0.00E+00 0.00E+00 0.00E+00 0.10E+01
-                    T%Block_QN=     1     0     1     0
-                     -.50E+00 0.50E+00 0.50E+00 0.50E+00
-                    T%Block_QN=     0     1     1     0
-                     0.00E+00 0.10E+01 0.00E+00 0.00E+00
-                    T%Block_QN=     2     0     2     0
-                     0.50E+00 0.50E+00 0.50E+00 -.50E+00
-                    T%Block_QN=     0     2     2     0
-                     0.00E+00 0.00E+00 0.10E+01 0.00E+00
-                    T%Block_QN=     1     0     0     1
-                     0.00E+00 0.00E+00 0.10E+01 0.00E+00
-                    T%Block_QN=     0     1     0     1
-                     0.50E+00 0.50E+00 0.50E+00 -.50E+00
-                    T%Block_QN=     1     1     1     1
-                     0.10E+01
-                    T%Block_QN=     0     0     2     1
-                     0.10E+01 0.00E+00 0.00E+00 0.00E+00
-                    T%Block_QN=     2     1     2     1
-                     0.00E+00
-                    T%Block_QN=     1     2     2     1
-                     0.00E+00
-                    T%Block_QN=     2     0     0     2
-                     0.00E+00 0.10E+01 0.00E+00 0.00E+00
-                    T%Block_QN=     0     2     0     2
-                     -.50E+00 0.50E+00 0.50E+00 0.50E+00
-                    T%Block_QN=     0     0     1     2
-                     0.00E+00 0.00E+00 0.00E+00 0.10E+01
-                    T%Block_QN=     2     1     1     2
-                     0.00E+00
-                    T%Block_QN=     1     2     1     2
-                     0.00E+00
-                    T%Block_QN=     2     2     2     2
-                     0.10E+01
-                ----End   Tensor-------------------------------------------
-
-
-                635 ----Begin iTensor----------------------------------------------
-                    rank:	4
-                    idx_dim:	81
-                    nidx:	19
-                    totQN:	(    0)
-                    QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
-                    Dims:	array([4, 4, 4, 4])
-                    totDim:	70
-                    idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
-                           81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
-                           81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
-                           81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
-                           16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
-                    Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
-                        [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
-                        [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
-
-                    Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
-                     [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
-                     [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
-                     [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
-                    data:	[0 0 0 0]: [-1.   0.5  0.5  0.   0.5  0.   0.   0.5  0.5  0.   0.   0.5  0.   0.5  0.5
-                     -1. ]
-                    [2 1 0 0]: [ 1.  0.  0.  0.]
-                    [1 2 0 0]: [ 0.  0.  0.  1.]
-                    [1 0 1 0]: [-0.5  0.5  0.5  0.5]
-                    [0 1 1 0]: [ 0.  1.  0.  0.]
-                    [2 0 2 0]: [ 0.5  0.5  0.5 -0.5]
-                    [0 2 2 0]: [ 0.  0.  1.  0.]
-                    [1 0 0 1]: [ 0.  0.  1.  0.]
-                    [0 1 0 1]: [ 0.5  0.5  0.5 -0.5]
-                    [1 1 1 1]: [ 1.]
-                    [0 0 2 1]: [ 1.  0.  0.  0.]
-                    [2 1 2 1]: [ 0.]
-                    [1 2 2 1]: [ 0.]
-                    [2 0 0 2]: [ 0.  1.  0.  0.]
-                    [0 2 0 2]: [-0.5  0.5  0.5  0.5]
-                    [0 0 1 2]: [ 0.  0.  0.  1.]
-                    [2 1 1 2]: [ 0.]
-                    [1 2 1 2]: [ 0.]
-                    [2 2 2 2]: [ 1.]
-
-                ----End iTensor----------------------------------------------
-
-
-            665 ---pass
-                ----Begin Tensor-------------------------------------------
-                    T%rank=    4
-                    T%totQN=     0
-                    T%nQN=     3     3     3     3
-                    T%nIdx=   19
-                    T%QNs(:,1)     =     0     1    -1
-                    T%QNs%Dims(:,1)=     2     1     1
-                    T%QNs(:,2)     =     0     1    -1
-                    T%QNs%Dims(:,2)=     2     1     1
-                    T%QNs(:,3)     =     0    -1     1
-                    T%QNs%Dims(:,3)=     2     1     1
-                    T%QNs(:,4)     =     0    -1     1
-                    T%QNs%Dims(:,4)=     2     1     1
-                    Data=
-                    T%Block_QN=     0     0     0     0
-                     -.18E+01 0.50E+00 0.50E+00 0.00E+00 0.50E+00 -.12E+01 0.00E+00 0.50E+00 0.50E+00 0.00E+00 -.12E+01 0.50E+00 0.00E+00 0.50E+00 0.50E+00 -.18E+01
-                    T%Block_QN=     2     1     0     0
-                     0.10E+01 0.24E+00 0.24E+00 0.00E+00
-                    T%Block_QN=     1     2     0     0
-                     0.00E+00 0.24E+00 0.24E+00 0.10E+01
-                    T%Block_QN=     1     0     1     0
-                     -.15E+01 0.50E+00 0.50E+00 -.50E+00
-                    T%Block_QN=     0     1     1     0
-                     0.24E+00 0.10E+01 0.00E+00 0.24E+00
-                    T%Block_QN=     2     0     2     0
-                     -.50E+00 0.50E+00 0.50E+00 -.15E+01
-                    T%Block_QN=     0     2     2     0
-                     0.24E+00 0.00E+00 0.10E+01 0.24E+00
-                    T%Block_QN=     1     0     0     1
-                     0.24E+00 0.00E+00 0.10E+01 0.24E+00
-                    T%Block_QN=     0     1     0     1
-                     -.50E+00 0.50E+00 0.50E+00 -.15E+01
-                    T%Block_QN=     1     1     1     1
-                     0.24E+00
-                    T%Block_QN=     0     0     2     1
-                     0.10E+01 0.24E+00 0.24E+00 0.00E+00
-                    T%Block_QN=     2     1     2     1
-                     -.12E+01
-                    T%Block_QN=     1     2     2     1
-                     0.00E+00
-                    T%Block_QN=     2     0     0     2
-                     0.24E+00 0.10E+01 0.00E+00 0.24E+00
-                    T%Block_QN=     0     2     0     2
-                     -.15E+01 0.50E+00 0.50E+00 -.50E+00
-                    T%Block_QN=     0     0     1     2
-                     0.00E+00 0.24E+00 0.24E+00 0.10E+01
-                    T%Block_QN=     2     1     1     2
-                     0.00E+00
-                    T%Block_QN=     1     2     1     2
-                     -.12E+01
-                    T%Block_QN=     2     2     2     2
-                     0.24E+00
-                ----End   Tensor-------------------------------------------
-
-                ----Begin iTensor----------------------------------------------
-                    rank:	4
-                    idx_dim:	81
-                    nidx:	19
-                    totQN:	(    0)
-                    QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
-                    Dims:	array([4, 4, 4, 4])
-                    totDim:	70
-                    idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
-                           81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
-                           81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
-                           81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
-                           16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
-                    Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
-                        [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
-                        [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
-
-                    Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
-                     [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
-                     [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
-                     [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
-                    data:	[0 0 0 0]: [-1.75881  0.5      0.5      0.       0.5     -1.24119  0.       0.5      0.5
-                      0.      -1.24119  0.5      0.       0.5      0.5     -1.75881]
-                    [2 1 0 0]: [ 1.       0.24119  0.24119  0.     ]
-                    [1 2 0 0]: [ 0.       0.24119  0.24119  1.     ]
-                    [1 0 1 0]: [-1.5  0.5  0.5 -0.5]
-                    [0 1 1 0]: [ 0.24119  1.       0.       0.24119]
-                    [2 0 2 0]: [-0.5  0.5  0.5 -1.5]
-                    [0 2 2 0]: [ 0.24119  0.       1.       0.24119]
-                    [1 0 0 1]: [ 0.24119  0.       1.       0.24119]
-                    [0 1 0 1]: [-0.5  0.5  0.5 -1.5]
-                    [1 1 1 1]: [ 0.24119]
-                    [0 0 2 1]: [ 1.       0.24119  0.24119  0.     ]
-                    [2 1 2 1]: [-1.24119]
-                    [1 2 2 1]: [ 0.]
-                    [2 0 0 2]: [ 0.24119  1.       0.       0.24119]
-                    [0 2 0 2]: [-1.5  0.5  0.5 -0.5]
-                    [0 0 1 2]: [ 0.       0.24119  0.24119  1.     ]
-                    [2 1 1 2]: [ 0.]
-                    [1 2 1 2]: [-1.24119]
-                    [2 2 2 2]: [ 0.24119]
-                ----End iTensor----------------------------------------------
-        """
-    
-    @staticmethod
-    def op_heisenberg_h3():
-        """ ---- pass """
-        from quantum_number import init_System_QSp
-        symmetry = "U1"
-
-        QN_idendity, QSp_base, QSp_null= init_System_QSp(symmetry)
-        h0 = System.op_heisenberg(QN_idendity=QN_idendity, 
-                symmetry=symmetry, 
-                only_NN=False, 
-                QSp_base=QSp_base, only_NNN=False, )
-        #print h0[3]
-        #print h0[2]  #.data.round(5)
-
-
-    def H2(self):
-        """
-        ---pass  
-        when h = 1,  gamma = 1.0
-        final form of H0[2].data = [ 0., -1., -1., -1., -1., -1., -1., -2.]
-
-        """
-        S= self.instance()
-        h2 = S.H_2[0][0]
-        print h2.data
-
-
-
-    def H2_all(self):
-       for l in range(self.sys.layer):
-            print "H_2 at layer ", l
-            h2 = self.sys.H_2[l][0]
-            print h2
-
-
-    def rho2(self):
-        print "\n"*5                  
-        for l in range(sys.layer):
-            print "layer=", l
-            r2 = self.sys.rho_2[l][0]
-            #print r2.data.round(5)
-            print r2.QSp
-
-    def rho2_all(self):
-       import top_level
-       top_level.top_level_product_state(self.mera,self.sys)
-       for l in range(self.sys.layer):
-            print "rho_2 at layer ", l
-            r2 = self.sys.rho_2[l][0]
-            print r2
-
-    def apply_to_layer(self, layer, func=None, w1=["U", "V"], w2=["H_2", "rho_2"]):
-        print " =========================================="
-        if func:
-            print "apply "+func.__name__," to layer ", layer
-
-
-        M = self.M
-        sys=self.sys
-        #w1 = ["U", "V"]
-        r1 = range(4)
-        #w2 = ["H_2", "rho_2"]
+        def eng_ham(self):
+            S= self.instance()
+            M = test_Mera.instance()
+            layer = 3
+            S.eng_ham(layer)
         
-        r2 = range(4)
+        @staticmethod
+        def op_heisenberg():
+            """ ---- pass """
+            from quantum_number import init_System_QSp
+            QN_idendity, QSp_base, QSp_null= init_System_QSp("U1")
 
-        print "before"
-        print M.__repr__(layers=r1, which=w1)
-        print sys.__repr__(layers=r2, which=w2)
+            h0 = System.op_heisenberg()
+            print h0[2]
+            #print h0[2]  #.data.round(5)
+            #results
+            """
+                625 ---pass
+                    ----Begin iTensor----------------------------------------------
+                        rank:	4
+                        idx_dim:	81
+                        nidx:	19
+                        totQN:	(    0)
+                        QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
+                        Dims:	array([4, 4, 4, 4])
+                        totDim:	70
+                        idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
+                               81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
+                               81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
+                               81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
+                               16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
+                        Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
+                            [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
+                            [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+
+                        Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
+                         [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
+                         [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
+                         [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
+                        data:	[0 0 0 0]: [ 0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.  0.]
+                        [2 1 0 0]: [ 0.  0.  0.  0.]
+                        [1 2 0 0]: [ 0.  0.  0.  1.]
+                        [1 0 1 0]: [ 0.  0.  0.  0.]
+                        [0 1 1 0]: [ 0.  0.  0.  0.]
+                        [2 0 2 0]: [ 0.  0.  0.  0.]
+                        [0 2 2 0]: [ 0.  0.  1.  0.]
+                        [1 0 0 1]: [ 0.  0.  1.  0.]
+                        [0 1 0 1]: [ 0.  0.  0.  0.]
+                        [1 1 1 1]: [ 0.]
+                        [0 0 2 1]: [ 1.  0.  0.  0.]
+                        [2 1 2 1]: [ 0.]
+                        [1 2 2 1]: [ 0.]
+                        [2 0 0 2]: [ 0.  0.  0.  0.]
+                        [0 2 0 2]: [ 0.  0.  0.  0.]
+                        [0 0 1 2]: [ 0.  0.  0.  0.]
+                        [2 1 1 2]: [ 0.]
+                        [1 2 1 2]: [ 0.]
+                        [2 2 2 2]: [ 0.]
+
+                    ----End iTensor----------------------------------------------
+
+                    625----Begin Tensor-------------------------------------------
+                        T%rank=    4
+                        T%totQN=     0
+                        T%nQN=     3     3     3     3
+                        T%nIdx=   19
+                        T%QNs(:,1)     =     0     1    -1
+                        T%QNs%Dims(:,1)=     2     1     1
+                        T%QNs(:,2)     =     0     1    -1
+                        T%QNs%Dims(:,2)=     2     1     1
+                        T%QNs(:,3)     =     0    -1     1
+                        T%QNs%Dims(:,3)=     2     1     1
+                        T%QNs(:,4)     =     0    -1     1
+                        T%QNs%Dims(:,4)=     2     1     1
+                        Data=
+                        T%Block_QN=     0     0     0     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     1     0     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     2     0     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.1000E+01
+                        T%Block_QN=     1     0     1     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     1     1     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     0     2     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                    M    T%Block_QN=     0     2     2     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.1000E+01
+                        0.0000E+00
+                    M    T%Block_QN=     1     0     0     1
+                        0.0000E+00
+                        0.0000E+00
+                        0.1000E+01
+                        0.0000E+00
+                        T%Block_QN=     0     1     0     1
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     1     1     1
+                        0.0000E+00
+                        T%Block_QN=     0     0     2     1
+                        0.1000E+01
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     1     2     1
+                        0.0000E+00
+                        T%Block_QN=     1     2     2     1
+                        0.0000E+00
+                        T%Block_QN=     2     0     0     2
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     2     0     2
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     0     1     2
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     1     1     2
+                        0.0000E+00
+                        T%Block_QN=     1     2     1     2
+                        0.0000E+00
+                        T%Block_QN=     2     2     2     2
+                        0.0000E+00
+                    ----End   Tensor-------------------------------------------
+
+                622  --- pass absolutly
+                    hhh 622  ----Begin iTensor----------------------------------------------
+                        rank:	4
+                        idx_dim:	81
+                        nidx:	19
+                        totQN:	(    0)
+                        QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
+                        Dims:	array([4, 4, 4, 4])
+                        totDim:	70
+                        idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
+                               81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
+                               81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
+                               81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
+                               16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
+                        Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
+                            [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
+                            [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+
+                        Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
+                         [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
+                         [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
+                         [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
+                        data:	[0 0 0 0]: [-2.  1.  1.  0.  1.  0.  0.  1.  1.  0.  0.  1.  0.  1.  1. -2.]
+                        [2 1 0 0]: [ 2.  0.  0.  0.]
+                        [1 2 0 0]: [ 0.  0.  0.  0.]
+                        [1 0 1 0]: [-1.  1.  1.  1.]
+                        [0 1 1 0]: [ 0.  2.  0.  0.]
+                        [2 0 2 0]: [ 1.  1.  1. -1.]
+                        [0 2 2 0]: [ 0.  0.  0.  0.]
+                        [1 0 0 1]: [ 0.  0.  0.  0.]
+                        [0 1 0 1]: [ 1.  1.  1. -1.]
+                        [1 1 1 1]: [ 2.]
+                        [0 0 2 1]: [ 0.  0.  0.  0.]
+                        [2 1 2 1]: [ 0.]
+                        [1 2 2 1]: [ 0.]
+                        [2 0 0 2]: [ 0.  2.  0.  0.]
+                        [0 2 0 2]: [-1.  1.  1.  1.]
+                        [0 0 1 2]: [ 0.  0.  0.  2.]
+                        [2 1 1 2]: [ 0.]
+                        [1 2 1 2]: [ 0.]
+                        [2 2 2 2]: [ 2.]
+
+                    ----End iTensor----------------------------------------------
+
+
+                    622----Begin Tensor-------------------------------------------
+                        T%rank=    4
+                        T%totQN=     0
+                        T%nQN=     3     3     3     3
+                        T%nIdx=   19
+                        T%QNs(:,1)     =     0     1    -1
+                        T%QNs%Dims(:,1)=     2     1     1
+                        T%QNs(:,2)     =     0     1    -1
+                        T%QNs%Dims(:,2)=     2     1     1
+                        T%QNs(:,3)     =     0    -1     1
+                        T%QNs%Dims(:,3)=     2     1     1
+                        T%QNs(:,4)     =     0    -1     1
+                        T%QNs%Dims(:,4)=     2     1     1
+                        Data=
+                        T%Block_QN=     0     0     0     0
+                        -.2000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        0.1000E+01
+                        0.0000E+00
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        0.0000E+00
+                        0.1000E+01
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        -.2000E+01
+                        T%Block_QN=     2     1     0     0
+                        0.2000E+01
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     2     0     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     0     1     0
+                        -.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                    M    T%Block_QN=     0     1     1     0
+                        0.0000E+00
+                        0.2000E+01
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     0     2     0
+                        0.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        -.1000E+01
+                        T%Block_QN=     0     2     2     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     0     0     1
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     1     0     1
+                        0.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        -.1000E+01
+                        T%Block_QN=     1     1     1     1
+                        0.2000E+01
+                        T%Block_QN=     0     0     2     1
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     1     2     1
+                        0.0000E+00
+                        T%Block_QN=     1     2     2     1
+                        0.0000E+00
+                    M    T%Block_QN=     2     0     0     2
+                        0.0000E+00
+                        0.2000E+01
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     2     0     2
+                        -.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        T%Block_QN=     0     0     1     2
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.2000E+01
+                        T%Block_QN=     2     1     1     2
+                        0.0000E+00
+                        T%Block_QN=     1     2     1     2
+                        0.0000E+00
+                        T%Block_QN=     2     2     2     2
+                        0.2000E+01
+                    ----End   Tensor-------------------------------------------
+
+
+                641 --- pass
+                    641 ----Begin Tensor-------------------------------------------
+                        T%rank=    4
+                        T%totQN=     0
+                        T%nQN=     3     3     3     3
+                        T%nIdx=   19
+                        T%QNs(:,1)     =     0     1    -1
+                        T%QNs%Dims(:,1)=     2     1     1
+                        T%QNs(:,2)     =     0     1    -1
+                        T%QNs%Dims(:,2)=     2     1     1
+                        T%QNs(:,3)     =     0    -1     1
+                        T%QNs%Dims(:,3)=     2     1     1
+                        T%QNs(:,4)     =     0    -1     1
+                        T%QNs%Dims(:,4)=     2     1     1
+                        Data=
+                        T%Block_QN=     0     0     0     0
+                        -.1000E+01
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        0.1000E+01
+                        -.1000E+01
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        -.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        -.1000E+01
+                        T%Block_QN=     2     1     0     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     2     0     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     0     1     0
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        T%Block_QN=     0     1     1     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     0     2     0
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        T%Block_QN=     0     2     2     0
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     1     0     0     1
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     1     0     1
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        T%Block_QN=     1     1     1     1
+                        0.1000E+01
+                        T%Block_QN=     0     0     2     1
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     1     2     1
+                        0.1000E+01
+                        T%Block_QN=     1     2     2     1
+                        0.0000E+00
+                        T%Block_QN=     2     0     0     2
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     0     2     0     2
+                        0.0000E+00
+                        0.1000E+01
+                        0.1000E+01
+                        0.0000E+00
+                        T%Block_QN=     0     0     1     2
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        0.0000E+00
+                        T%Block_QN=     2     1     1     2
+                        0.0000E+00
+                        T%Block_QN=     1     2     1     2
+                        0.1000E+01
+                        T%Block_QN=     2     2     2     2
+                        0.1000E+01
+                    ----End   Tensor-------------------------------------------
+
+
+                    hhh 641  ----Begin iTensor----------------------------------------------
+                        rank:	4
+                        idx_dim:	81
+                        nidx:	19
+                        totQN:	(    0)
+                        QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
+                        Dims:	array([4, 4, 4, 4])
+                        totDim:	70
+                        idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
+                               81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
+                               81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
+                               81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
+                               16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
+                        Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
+                            [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
+                            [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+
+                        Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
+                         [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
+                         [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
+                         [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
+                        data:	[0 0 0 0]: [-1.  1.  1.  0.  1. -1.  0.  1.  1.  0. -1.  1.  0.  1.  1. -1.]
+                        [2 1 0 0]: [ 0.  0.  0.  0.]
+                        [1 2 0 0]: [ 0.  0.  0.  0.]
+                        [1 0 1 0]: [ 0.  1.  1.  0.]
+                        [0 1 1 0]: [ 0.  0.  0.  0.]
+                        [2 0 2 0]: [ 0.  1.  1.  0.]
+                        [0 2 2 0]: [ 0.  0.  0.  0.]
+                        [1 0 0 1]: [ 0.  0.  0.  0.]
+                        [0 1 0 1]: [ 0.  1.  1.  0.]
+                        [1 1 1 1]: [ 1.]
+                        [0 0 2 1]: [ 0.  0.  0.  0.]
+                        [2 1 2 1]: [ 1.]
+                        [1 2 2 1]: [ 0.]
+                        [2 0 0 2]: [ 0.  0.  0.  0.]
+                        [0 2 0 2]: [ 0.  1.  1.  0.]
+                        [0 0 1 2]: [ 0.  0.  0.  0.]
+                        [2 1 1 2]: [ 0.]
+                        [1 2 1 2]: [ 1.]
+                        [2 2 2 2]: [ 1.]
+
+                    ----End iTensor----------------------------------------------
+
+                635  ---pass
+                    ----Begin Tensor-------------------------------------------
+                        T%rank=    4
+                        T%totQN=     0
+                        T%nQN=     3     3     3     3
+                        T%nIdx=   19
+                        T%QNs(:,1)     =     0     1    -1
+                        T%QNs%Dims(:,1)=     2     1     1
+                        T%QNs(:,2)     =     0     1    -1
+                        T%QNs%Dims(:,2)=     2     1     1
+                        T%QNs(:,3)     =     0    -1     1
+                        T%QNs%Dims(:,3)=     2     1     1
+                        T%QNs(:,4)     =     0    -1     1
+                        T%QNs%Dims(:,4)=     2     1     1
+                        Data=
+                        T%Block_QN=     0     0     0     0
+                         -.10E+01 0.50E+00 0.50E+00 0.00E+00 0.50E+00 0.00E+00 0.00E+00 0.50E+00 0.50E+00 0.00E+00 0.00E+00 0.50E+00 0.00E+00 0.50E+00 0.50E+00 -.10E+01
+                        T%Block_QN=     2     1     0     0
+                         0.10E+01 0.00E+00 0.00E+00 0.00E+00
+                        T%Block_QN=     1     2     0     0
+                         0.00E+00 0.00E+00 0.00E+00 0.10E+01
+                        T%Block_QN=     1     0     1     0
+                         -.50E+00 0.50E+00 0.50E+00 0.50E+00
+                        T%Block_QN=     0     1     1     0
+                         0.00E+00 0.10E+01 0.00E+00 0.00E+00
+                        T%Block_QN=     2     0     2     0
+                         0.50E+00 0.50E+00 0.50E+00 -.50E+00
+                        T%Block_QN=     0     2     2     0
+                         0.00E+00 0.00E+00 0.10E+01 0.00E+00
+                        T%Block_QN=     1     0     0     1
+                         0.00E+00 0.00E+00 0.10E+01 0.00E+00
+                        T%Block_QN=     0     1     0     1
+                         0.50E+00 0.50E+00 0.50E+00 -.50E+00
+                        T%Block_QN=     1     1     1     1
+                         0.10E+01
+                        T%Block_QN=     0     0     2     1
+                         0.10E+01 0.00E+00 0.00E+00 0.00E+00
+                        T%Block_QN=     2     1     2     1
+                         0.00E+00
+                        T%Block_QN=     1     2     2     1
+                         0.00E+00
+                        T%Block_QN=     2     0     0     2
+                         0.00E+00 0.10E+01 0.00E+00 0.00E+00
+                        T%Block_QN=     0     2     0     2
+                         -.50E+00 0.50E+00 0.50E+00 0.50E+00
+                        T%Block_QN=     0     0     1     2
+                         0.00E+00 0.00E+00 0.00E+00 0.10E+01
+                        T%Block_QN=     2     1     1     2
+                         0.00E+00
+                        T%Block_QN=     1     2     1     2
+                         0.00E+00
+                        T%Block_QN=     2     2     2     2
+                         0.10E+01
+                    ----End   Tensor-------------------------------------------
+
+
+                    635 ----Begin iTensor----------------------------------------------
+                        rank:	4
+                        idx_dim:	81
+                        nidx:	19
+                        totQN:	(    0)
+                        QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
+                        Dims:	array([4, 4, 4, 4])
+                        totDim:	70
+                        idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
+                               81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
+                               81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
+                               81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
+                               16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
+                        Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
+                            [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
+                            [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+
+                        Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
+                         [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
+                         [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
+                         [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
+                        data:	[0 0 0 0]: [-1.   0.5  0.5  0.   0.5  0.   0.   0.5  0.5  0.   0.   0.5  0.   0.5  0.5
+                         -1. ]
+                        [2 1 0 0]: [ 1.  0.  0.  0.]
+                        [1 2 0 0]: [ 0.  0.  0.  1.]
+                        [1 0 1 0]: [-0.5  0.5  0.5  0.5]
+                        [0 1 1 0]: [ 0.  1.  0.  0.]
+                        [2 0 2 0]: [ 0.5  0.5  0.5 -0.5]
+                        [0 2 2 0]: [ 0.  0.  1.  0.]
+                        [1 0 0 1]: [ 0.  0.  1.  0.]
+                        [0 1 0 1]: [ 0.5  0.5  0.5 -0.5]
+                        [1 1 1 1]: [ 1.]
+                        [0 0 2 1]: [ 1.  0.  0.  0.]
+                        [2 1 2 1]: [ 0.]
+                        [1 2 2 1]: [ 0.]
+                        [2 0 0 2]: [ 0.  1.  0.  0.]
+                        [0 2 0 2]: [-0.5  0.5  0.5  0.5]
+                        [0 0 1 2]: [ 0.  0.  0.  1.]
+                        [2 1 1 2]: [ 0.]
+                        [1 2 1 2]: [ 0.]
+                        [2 2 2 2]: [ 1.]
+
+                    ----End iTensor----------------------------------------------
+
+
+                665 ---pass
+                    ----Begin Tensor-------------------------------------------
+                        T%rank=    4
+                        T%totQN=     0
+                        T%nQN=     3     3     3     3
+                        T%nIdx=   19
+                        T%QNs(:,1)     =     0     1    -1
+                        T%QNs%Dims(:,1)=     2     1     1
+                        T%QNs(:,2)     =     0     1    -1
+                        T%QNs%Dims(:,2)=     2     1     1
+                        T%QNs(:,3)     =     0    -1     1
+                        T%QNs%Dims(:,3)=     2     1     1
+                        T%QNs(:,4)     =     0    -1     1
+                        T%QNs%Dims(:,4)=     2     1     1
+                        Data=
+                        T%Block_QN=     0     0     0     0
+                         -.18E+01 0.50E+00 0.50E+00 0.00E+00 0.50E+00 -.12E+01 0.00E+00 0.50E+00 0.50E+00 0.00E+00 -.12E+01 0.50E+00 0.00E+00 0.50E+00 0.50E+00 -.18E+01
+                        T%Block_QN=     2     1     0     0
+                         0.10E+01 0.24E+00 0.24E+00 0.00E+00
+                        T%Block_QN=     1     2     0     0
+                         0.00E+00 0.24E+00 0.24E+00 0.10E+01
+                        T%Block_QN=     1     0     1     0
+                         -.15E+01 0.50E+00 0.50E+00 -.50E+00
+                        T%Block_QN=     0     1     1     0
+                         0.24E+00 0.10E+01 0.00E+00 0.24E+00
+                        T%Block_QN=     2     0     2     0
+                         -.50E+00 0.50E+00 0.50E+00 -.15E+01
+                        T%Block_QN=     0     2     2     0
+                         0.24E+00 0.00E+00 0.10E+01 0.24E+00
+                        T%Block_QN=     1     0     0     1
+                         0.24E+00 0.00E+00 0.10E+01 0.24E+00
+                        T%Block_QN=     0     1     0     1
+                         -.50E+00 0.50E+00 0.50E+00 -.15E+01
+                        T%Block_QN=     1     1     1     1
+                         0.24E+00
+                        T%Block_QN=     0     0     2     1
+                         0.10E+01 0.24E+00 0.24E+00 0.00E+00
+                        T%Block_QN=     2     1     2     1
+                         -.12E+01
+                        T%Block_QN=     1     2     2     1
+                         0.00E+00
+                        T%Block_QN=     2     0     0     2
+                         0.24E+00 0.10E+01 0.00E+00 0.24E+00
+                        T%Block_QN=     0     2     0     2
+                         -.15E+01 0.50E+00 0.50E+00 -.50E+00
+                        T%Block_QN=     0     0     1     2
+                         0.00E+00 0.24E+00 0.24E+00 0.10E+01
+                        T%Block_QN=     2     1     1     2
+                         0.00E+00
+                        T%Block_QN=     1     2     1     2
+                         -.12E+01
+                        T%Block_QN=     2     2     2     2
+                         0.24E+00
+                    ----End   Tensor-------------------------------------------
+
+                    ----Begin iTensor----------------------------------------------
+                        rank:	4
+                        idx_dim:	81
+                        nidx:	19
+                        totQN:	(    0)
+                        QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
+                        Dims:	array([4, 4, 4, 4])
+                        totDim:	70
+                        idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
+                               81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
+                               81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
+                               81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
+                               16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
+                        Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
+                            [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
+                            [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+
+                        Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
+                         [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
+                         [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
+                         [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
+                        data:	[0 0 0 0]: [-1.75881  0.5      0.5      0.       0.5     -1.24119  0.       0.5      0.5
+                          0.      -1.24119  0.5      0.       0.5      0.5     -1.75881]
+                        [2 1 0 0]: [ 1.       0.24119  0.24119  0.     ]
+                        [1 2 0 0]: [ 0.       0.24119  0.24119  1.     ]
+                        [1 0 1 0]: [-1.5  0.5  0.5 -0.5]
+                        [0 1 1 0]: [ 0.24119  1.       0.       0.24119]
+                        [2 0 2 0]: [-0.5  0.5  0.5 -1.5]
+                        [0 2 2 0]: [ 0.24119  0.       1.       0.24119]
+                        [1 0 0 1]: [ 0.24119  0.       1.       0.24119]
+                        [0 1 0 1]: [-0.5  0.5  0.5 -1.5]
+                        [1 1 1 1]: [ 0.24119]
+                        [0 0 2 1]: [ 1.       0.24119  0.24119  0.     ]
+                        [2 1 2 1]: [-1.24119]
+                        [1 2 2 1]: [ 0.]
+                        [2 0 0 2]: [ 0.24119  1.       0.       0.24119]
+                        [0 2 0 2]: [-1.5  0.5  0.5 -0.5]
+                        [0 0 1 2]: [ 0.       0.24119  0.24119  1.     ]
+                        [2 1 1 2]: [ 0.]
+                        [1 2 1 2]: [-1.24119]
+                        [2 2 2 2]: [ 0.24119]
+                    ----End iTensor----------------------------------------------
+            """
         
-        if func == None:
-            func = lambda a,b,c:None
-        func(M, sys, layer)
+        @staticmethod
+        def op_heisenberg_h3():
+            """ ---- pass """
+            from quantum_number import init_System_QSp
+            symmetry = "U1"
+
+            QN_idendity, QSp_base, QSp_null= init_System_QSp(symmetry)
+            h0 = System.op_heisenberg(QN_idendity=QN_idendity, 
+                    symmetry=symmetry, 
+                    only_NN=False, 
+                    QSp_base=QSp_base, only_NNN=False, )
+            #print h0[3]
+            #print h0[2]  #.data.round(5)
+
+
+        def H2(self):
+            """
+            ---pass  
+            when h = 1,  gamma = 1.0
+            final form of H0[2].data = [ 0., -1., -1., -1., -1., -1., -1., -2.]
+
+            """
+            S= self.instance()
+            h2 = S.H_2[0][0]
+            print h2.data
+
+
+
+        def H2_all(self):
+           for l in range(self.sys.layer):
+                print "H_2 at layer ", l
+                h2 = self.sys.H_2[l][0]
+                print h2
+
+
+        def rho2(self):
+            print "\n"*5                  
+            for l in range(sys.layer):
+                print "layer=", l
+                r2 = self.sys.rho_2[l][0]
+                #print r2.data.round(5)
+                print r2.QSp
+
+        def rho2_all(self):
+           import top_level
+           top_level.top_level_product_state(self.mera,self.sys)
+           for l in range(self.sys.layer):
+                print "rho_2 at layer ", l
+                r2 = self.sys.rho_2[l][0]
+                print r2
+
+        def apply_to_layer(self, layer, func=None, w1=["U", "V"], w2=["H_2", "rho_2"]):
+            print " =========================================="
+            if func:
+                print "apply "+func.__name__," to layer ", layer
+
+
+            M = self.M
+            sys=self.sys
+            #w1 = ["U", "V"]
+            r1 = range(4)
+            #w2 = ["H_2", "rho_2"]
+            
+            r2 = range(4)
+
+            print "before"
+            print M.__repr__(layers=r1, which=w1)
+            print sys.__repr__(layers=r2, which=w2)
+            
+            if func == None:
+                func = lambda a,b,c:None
+            func(M, sys, layer)
+            
+            print "\nafter"
+            print M.__repr__(layers=r1, which=w1)
+            print sys.__repr__(layers=r2, which=w2)
         
-        print "\nafter"
-        print M.__repr__(layers=r1, which=w1)
-        print sys.__repr__(layers=r2, which=w2)
-    
-    
-    #from merapy.decorators import timer
-    #@timer
-    def J_ising(self):
-        sys= ts.instance(M, symmetry="Z2", model="Ising")
-        param = {"alpha":1., "beta":1.0}
-        l = 3
-        tau = 5
-        #res=System.Jleg_tau_0l(l,tau, **param)
-        sys.J_long_ising_calc(tau, **param)
-        import pprint
-        pprint.pprint(System.Jleg_tau_0l_dic)
+        
+        #from merapy.decorators import timer
+        #@timer
+        def J_ising(self):
+            sys= ts.instance(M, symmetry="Z2", model="Ising")
+            param = {"alpha":1., "beta":1.0}
+            l = 3
+            tau = 5
+            #res=System.Jleg_tau_0l(l,tau, **param)
+            sys.J_long_ising_calc(tau, **param)
+            import pprint
+            pprint.pprint(System.Jleg_tau_0l_dic)
 
-    #@timer
-    def J_heisbg(self):
-        sys= ts.instance(M, symmetry="U1", model="Heisenberg")
-        param = {"alpha":1., "beta":1.0}
-        l = 3
-        tau = 5
-        #res=System.Jleg_tau_0l(l,tau, **param)
-        sys.J_long_ising_calc(tau, **param)
-        import pprint
-        pprint.pprint(System.Jleg_tau_0l_dic)
+        #@timer
+        def J_heisbg(self):
+            sys= ts.instance(M, symmetry="U1", model="Heisenberg")
+            param = {"alpha":1., "beta":1.0}
+            l = 3
+            tau = 5
+            #res=System.Jleg_tau_0l(l,tau, **param)
+            sys.J_long_ising_calc(tau, **param)
+            import pprint
+            pprint.pprint(System.Jleg_tau_0l_dic)
 
+    def tearDown(self): 
+        print 'set tensor_player.STATE = "stop" in tearDown'
+        tensor_player.STATE = 'stop'
 
 
 if __name__=='__main__':
@@ -3867,11 +3942,15 @@ if __name__=='__main__':
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_save', 
+           #'xtest_save', 
            #'test_load', 
-           #'test_example',  
+           #'xtest_example',  
+           'test_backup_path',  
+           #'test_minimize',  
+           #'test_resume',  
            #'test_minimize_finite_site',  
-           'test_minimize_scale_invar',  
+           #'test_minimize_scale_invar',  
+           #'test_expand_dim_and_layer',  
         ]
         for a in add_list: 
             suite.addTest(TestSystem(a))

@@ -866,6 +866,7 @@ def tensor_player(which):
         return wrapper
     return inner
 
+tensor_player.STATE = 'stop'   # this line is needed, because sometiems tensor_player.STATE is used but tensor_player has not been called as decorator 
 
 def set_STATE_end_simple(iter, q_iter=None, iter0=0, resume=False, power_on=True):
     if power_on:
