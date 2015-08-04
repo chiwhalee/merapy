@@ -281,7 +281,6 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
 
     backup_fn_local = kwargs.get('backup_fn_local', None)
     iter0 = S.iter1    #S.iter precisely means the state of S after iter times update, e.g. S.iter = 0 means original state
-
     
     if S.iter == 0:  #note here start is no longer controled by the passed in param start; remove that param in future
         if rho_top_func.__name__ in ["top_level_product_state", "top_level_product_state_u1", "top_level_product_state_u1_1site"]:
@@ -300,7 +299,9 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
             print str(iter) + "th iteratiion"
         
         if use_player:
+            
             verbose = 1 if iter - iter0< 10 else 0
+
             if iter0 == 0:
                 set_STATE_end_1(iter, record_at=iter0 + 2, power_on=True, verbose=verbose)
             else:
@@ -332,6 +333,7 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         
         S.iter += 1 
         S.iter1 += 1 
+        S.iter0 += 1 # newly added counter,  remove S.iter in future  
         S.eng_ham(M.num_of_layer-1)
         S.save_eng(S.iter)
         steps, dt_real= S.display(S.iter, filename)
@@ -347,6 +349,7 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
                 break
            
             if auto_resume: 
+                raise #just see this block is used or not 
                 path = backup_fn if not use_local_storage else backup_fn_local
                 try:
                     S0= System.load(path, use_local_storage)
@@ -379,19 +382,23 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         if S.iter%50 == 0: 
             if time.time()-last_save_time>3600: 
                 last_save_time = time.time()
-                if backup_fn is not None:
-                    if not use_local_storage: 
-                        S.save(fn=backup_fn)
-                    else: 
-                        S.save(fn=backup_fn_local, use_local_storage=use_local_storage)
+                temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
+                if temp is not None:
+                    S.save(fn=temp, use_local_storage=S.use_local_storage)
             
     iter_tot = S.iter1-iter0
     msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
     if iter_tot>0 : 
-        temp = backup_fn if not S.use_local_storage else backup_fn_local
+        temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
         if temp is not None: 
             print "\nS has been changed, save at final iter"
             S.save(fn=temp, use_local_storage=S.use_local_storage)
+        #if do_measure:  
+        #    ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
+        #    if ppp is not None : 
+        #        exclude_which = self.measurement_args.get('exclude_which', [])
+        #        exclude_which.append('scaling_dim')
+        #        self.measure_S(self, ppp, exclude_which=exclude_which)
 
 
 def FiniteRangeIter(Iteration): 
@@ -453,14 +460,14 @@ class ScaleInvar():
         M = S.mera
         info = self.info
 
-        if self.filename == "auto":
-            self.filename = self.output_fn_auto()
-            print "output_fn is set to %s"%self.filename
+        #if self.filename == "auto":
+        #    self.filename = self.output_fn_auto()
+        #    print "output_fn is set to %s"%self.filename
         if 1:
             aa = "\nSTART SCALE_INVARIANT ITERATION\n"
             print aa 
-            if self.filename is not None:
-                out = open(self.filename, "a"); out.write(aa); out.close()
+            #if self.filename is not None:
+            #    out = open(self.filename, "a"); out.write(aa); out.close()
             #print "use following ham ops: %s\n"%self.ham_op_names.keys()
         
        
@@ -488,6 +495,7 @@ class ScaleInvar():
             self.optimize_SIlayer()
             S.iter += 1 
             S.iter1 += 1 
+            S.iter0 += 1 # newly added counter,  remove S.iter in future  
             
             self.measure_and_control_new(S, iter , iter0, pace=20)
             if self.is_break: break
@@ -499,14 +507,16 @@ class ScaleInvar():
             if S.iter%50 == 0 and iter-iter0>10:
                 if time.time()-last_save_time>3600: 
                     last_save_time = time.time()
-                    temp = self.backup_fn if not self.use_local_storage else self.backup_fn_local
+                    #temp = self.backup_fn if not self.use_local_storage else self.backup_fn_local
+                    temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
                     if temp is not None: 
                         S.save(fn=temp, use_local_storage=self.use_local_storage)
         
         iter_tot = S.iter1-iter0
         msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
         if iter_tot>0 : 
-            temp = self.backup_fn if not self.use_local_storage else self.backup_fn_local
+            #temp = self.backup_fn if not self.use_local_storage else self.backup_fn_local
+            temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
             if temp is not None: 
                 print "\nS has been changed, save at final iter"
                 S.save(fn=temp, use_local_storage=self.use_local_storage)

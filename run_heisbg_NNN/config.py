@@ -160,13 +160,14 @@ def make_config(J2, algorithm='mera', alg_surfix='', which_top_state='scale_inva
     cfg['measurement_args'] = {
             'exclude_which': [
                 'entanglement_brute_force', 
-                #'entanglement_brute_force_6',  
                 'entanglement_brute_force_9', 
-                'entanglement_brute_force_9_aver'
+                'entanglement_brute_force_9_aver', 
+                
                 ], 
-            'which': None, 
-            } 
-    
+            'which': ['correlation', 'entanglement_entropy',  'correlation_extra', 
+                'entanglement_spectrum', 'magnetization',  'entanglement_brute_force_6',  
+                ], }
+
     
     if 1:
         exact = None 

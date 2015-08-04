@@ -183,7 +183,16 @@ class iTensor(TensorBase):
                 buffer = self.buffer_assign(data_size=self.totDim)
             
             self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
-
+    
+    def __getstate__del(self): 
+        d = dict(self.__dict__)
+        del d['buf_ref']
+        return d 
+    
+    def __setstate__(self, d): 
+        self.__dict__.update(d)
+        self.buf_ref = np.array([-1, -1], np.int)   # this is important 
+        
     def buffer_assign(self, data_size, n=None):
         """
             see use_tBuffer in f90
@@ -364,7 +373,7 @@ class iTensor(TensorBase):
         #assert self.data.dtype == data.dtype  
     
     @staticmethod 
-    def example(qsp=None, rank=4, symmetry='Z2', dtype=float, rand_seed=None): 
+    def example(qsp=None, rank=4, totqn=None, symmetry='Z2', dtype=float, rand_seed=None): 
         """
             convenient method for testing 
         """
@@ -380,7 +389,7 @@ class iTensor(TensorBase):
             elif symmetry == 'Travial' : 
                 qsp = cls.easy_init( [1], [5]).copy_many(rank)
                 
-        res= iTensor(QSp=qsp, dtype=dtype)
+        res= iTensor(QSp=qsp, dtype=dtype, totQN=totqn)
         if rand_seed is not None :
             np.random.seed(rand_seed)
         if dtype == float:  
@@ -1062,6 +1071,7 @@ class iTensor(TensorBase):
             this is only for convenience and a little bit slow. 
             for production use .merge_qsp and .split_qsp directly 
             note:
+                1. 
                 运行以下code
                     from tensor import iTensorFactory 
                     pau = pauli_mat()
@@ -1090,6 +1100,8 @@ class iTensor(TensorBase):
                      [ 1.  0.  0.  0.]]
                之所以不同，是因为，对称张量的reshape 和 ndarray的reshape 名字相同，但
                实质有差别， iTensor.reshape 包含了将量子数指标的合并 
+               2. 
+                    see the note in the doc string of merge_qsp 
                
         """
         #print_vars(vars(), ['self.QSp', 'qsp_new'])
@@ -1373,8 +1385,9 @@ class iTensor(TensorBase):
     def split_qsp(self, *args):
         """
             example: 
-            
                 t.split_qsp(1, [qb, qc], 3, [qe, qf, qg])
+            note: 
+                see the note in doc string of merge_qsp
         """
         legs_to_split = args[0::2]
         qq = args[1::2]  # a list of qsp list 
@@ -1394,7 +1407,7 @@ class iTensor(TensorBase):
                     
             temp = qq[i]
             qsp.extend(temp)
-            assert self.QSp[l] == qsp_class.prod_many(temp) 
+            assert self.QSp[l] == qsp_class.prod_many(temp), (self.QSp[l],  qsp_class.prod_many(temp)) 
             length = len(temp)
             leg_map[l] = xrange(ii, ii + length)
             ii +=  length
@@ -1472,6 +1485,46 @@ class iTensor(TensorBase):
     def merge_qsp(self, *args): 
         """
             args should be list tuples of coningueous legs
+            note: 
+                the merge/split of qsp may be tricky at some points.
+                several ATTENTION follows 
+                1. sometimes, one need conj_new a leg,  before reshape it 
+                2. reshape may change the memory of data
+                    ***A REMARKABLE fact is that, the final order of data depend
+                    on the course of reshape***: starting from a tensor t,  if
+                    reshape it se several times to a tensor t1; and reshape t
+                    several times to a t2 such that t1.qsp = t2.qsp. if the
+                    course of the reshape are different, then the memory of
+                    data of t1 and t2 may differ !!
+                    
+                    it seems that, in contrast, dense tensor dont depend on the course 
+                    merge qsp (final qsp 更粗) 容易出此问题，split qsp （更细) 可能无此问题。
+                    
+                    #code example     
+                        np.random.seed(1234)
+                        q = QspU1.easy_init([1, -1], [1, 1])
+                        qsp = q.copy_many(4) 
+                        
+                        t4 = iTensor.example(qsp=qsp)    # starting from a rank-4 tensor 
+                        t_13 = t4.merge_qsp((0, ), (1, 2, 3))
+                        t4_1 = t4.merge_qsp_all()
+                        t_13_1 = t_13.merge_qsp_all()
+                        t_13_1_4 = t_13_1.split_qsp(0, q.copy_many(4))
+                        
+                        print_vars(vars(),  ['t4.data', 't_13.data', 't4_1.data', 't_13_1.data', 
+                            't_13_1_4.data' , 't4_1.shape', 't_13_1.shape' ])
+                        
+                    #output 
+                         #t4.data=[-0.30848055  0.12210877 -0.06227226  0.28535858  0.27997581 -0.22740739]
+                         #t_13.data=[-0.30848055  0.12210877  0.28535858 -0.06227226  0.27997581 -0.22740739]
+                         #t4_1.data=[-0.30848055  0.12210877 -0.06227226  0.28535858  0.27997581 -0.22740739]
+                         #t_13_1.data=[-0.30848055  0.12210877  0.28535858 -0.06227226  0.27997581 -0.22740739]
+                         #t_13_1_4.data=[-0.30848055  0.12210877  0.28535858 -0.06227226  0.27997581 -0.22740739]
+                         #t4_1.shape=([4]1+[2]4+[0]6+[-2]4+[-4]1,)
+                         #t_13_1.shape=([4]1+[2]4+[0]6+[-2]4+[-4]1,)
+                    
+                    #t4_1 and t_13_1 have same qsp,  but their data differ 
+                
         """
         
         qsp_class = self.qsp_class
@@ -1568,7 +1621,10 @@ class iTensor(TensorBase):
             for j in matched_j_list: 
                 t3ind.remove(j)
         return  t2         
-        
+    
+    def merge_qsp_all(self): 
+        return self.merge_qsp(range(self.rank))
+    
     def split_2to3(self, which, qsp_list): 
         """
             I dont know how to split in general, 
@@ -2302,15 +2358,15 @@ class iTensor(TensorBase):
             label_u = [-1, 1000]
             #A, _ = self.contract(u, [0, 1, 2], [2, 3],  use_buf=use_buf)
             A, _ = self.contract(u, label, label_u, use_buf=use_buf)
+            if i != self.rank-1:  #need re-order the legs 
+               temp = range(i) + [A.rank-1] + range(i, self.rank-1)
+               A  = A.transpose(temp) 
         elif self.symmetry in ['Z2', 'Travial'] : 
             A = self.copy(use_buf=use_buf)
         else: 
             raise  ValueError('symmetry is %s'% self.symmetry)
             
         np.conj(A.data, out=A.data)
-        if i != self.rank-1:  #need re-order the legs 
-           temp = range(i) + [A.rank-1] + range(i, self.rank-1)
-           A  = A.transpose(temp) 
         return A 
 
     def reverse_qsp(self, inplace=True):
@@ -3045,9 +3101,10 @@ class iTensorFactory(object):
     @staticmethod
     def diagonal_tensor_rank2(qsp): 
         """
+            a tensor t satisfis:  tt* = t*t  =  I 
             not any qsp can make diagonal_tensor_rank2
             the condision is for each qn and -qn in the QNs, their dim
-            must equal.
+            must equal, otherwise, it is actually conceptially an isometry tensor 
             e.g.  q = QspU1.easy_init([0, 1, -1], [2, 3, 3]) will do
             while  q = QspU1.easy_init([0, 1, -1], [2, 3, 5]) will raise 
         """
@@ -4197,37 +4254,21 @@ class Test_iTensor(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        if 0: 
-            n = 5 
-            for i in xrange(n):
-                print_vars(vars(),  ['i'], '', ' ')
-                set_STATE_end_1(iter=i, record_at=0, stop_at=n, power_on=True) 
-                u = iTensor.example(rank=2, dtype=complex)
-                #u = iTensor.example(rank=2, dtype=float)
-                #u.contract_core(u, 2)
-                up = u.permutation([1, 0])
-                print_vars(vars(),  ['u.dtype', 'up.dtype'], '', ' ')
-            tensor_player.STATE = 'stop'
-            upp = up.permutation([1, 0])
-            np.set_printoptions(4)
-            print_vars(vars(),  ['u.to_ndarray()', 'up.to_ndarray()', 'upp.to_ndarray()'], key_val_sep='\n')
-            self.assertTrue(np.allclose(upp.data, u.data ))
-        if 1: 
-            n = 5 
-            for i in xrange(n):
-                print_vars(vars(),  ['i'], '', ' ')
-                set_STATE_end_1(iter=i, record_at=0, stop_at=n, power_on=True) 
-                u = iTensor.example(rank=2, symmetry='Z2', dtype=complex, rand_seed=1234)
-                #u = iTensor.example(rank=2, dtype=float)
-                up = u.dot(u)
-                
-            if 1: 
-                tensor_player.STATE = 'stop'
-                upp = u.dot(u)
-                np.set_printoptions(4)
-                print_vars(vars(),  ['u.to_ndarray()', 'upp.to_ndarray()', 'up.to_ndarray()'], key_val_sep='\n')
-                self.assertTrue(np.allclose(upp.data, up.data ))
-                
+        np.random.seed(1234)
+        #q = QspU1.easy_init([1, -1], [1, 1])
+        q = QspTravial.easy_init([1], [2])
+        qsp = q.copy_many(4) 
+        
+        t4 = iTensor.example(qsp=qsp)
+        #t13 = t4.merge_qsp((0, ), (1, 2, 3))
+        t13 = t4.merge_qsp((0, 1), (2, 3))
+        t4_1 = t4.merge_qsp_all()
+        t13_1 = t13.merge_qsp_all()
+        t13_1_4 = t13_1.split_qsp(0, q.copy_many(4))
+        
+        print_vars(vars(),  ['t4.data', 't13.data', 't4_1.data', 't13_1.data', 
+            't13_1_4.data' , 't4_1.shape', 't13_1.shape' ])
+        #print_vars(vars(),  ['t4_1', 't4'])
     
     def test_tensor_player(self): 
         for i in xrange(10):
@@ -4858,7 +4899,6 @@ if __name__== "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list_iTensor = [
-           #'test_temp', 
            #'test_tensor_player', 
            #'test_permutation', 
            #'test_to_ndarray', 
@@ -4880,10 +4920,11 @@ if __name__== "__main__":
            #'test_reshape_u1', 
            
            #'test_conj_new', 
+           'test_temp', 
         ]
         add_list_iTF = [
             #'test_diagonal_tensor_rank2', 
-            'test_spin_one_mat', 
+            #'test_spin_one_mat', 
                 ]
         
         for a in add_list_iTensor: 

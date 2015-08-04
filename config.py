@@ -118,7 +118,7 @@ CFG_MERA.update({
         'backup_relpath': [], 
         'backup_root': None, 
          
-        'do_measure': False, 
+        'do_measure': 1, 
         'measurement_args': {
             'exclude_which': [
                 'entanglement_brute_force', 

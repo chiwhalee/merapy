@@ -539,6 +539,13 @@ class QuantSpaceBase(object):
         see QSp_Reverse in f90"""
         for i in range(self.nQN):
             self.QNs[i].reverse()
+    def conj(self):
+        """
+            not inplace reverse 
+        """
+        res= self.copy()
+        res.reverse()
+        return res 
     
     
     #@tensor_player(which="Qsp_copy")

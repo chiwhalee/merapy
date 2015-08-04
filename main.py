@@ -1007,7 +1007,7 @@ class Main(Main_old):
         self.config = config
         self.initialized = False 
     
-    def init_mera(self): 
+    def init_alg(self): 
         config = self.config
         #print_vars(vars(),  ['USE_CUSTOM_RAND'], head='\n\nCCCCCCCC\n\n')
         if config['USE_CUSTOM_RAND']:
@@ -1026,13 +1026,9 @@ class Main(Main_old):
         args = config.copy()
         self.S = system_class(args['SYMMETRY'], None, args.get('MODEL'), **args )
     
-    def init_alg_del(self): 
-        self.init_mera()
-        self.initialized = True 
-    
     def run(self, **kwargs): 
         if not self.initialized: 
-            self.init_mera()
+            self.init_alg()
             self.initialized = True 
         
         Main.set_num_of_threads(self.NUM_OF_THREADS)
@@ -1041,7 +1037,7 @@ class Main(Main_old):
 
     def run_scale_invar(self, **kwargs): 
         if not self.initialized: 
-            self.init_mera()
+            self.init_alg()
             self.initialized = True 
         
         Main.set_num_of_threads(self.NUM_OF_THREADS)
@@ -1062,7 +1058,7 @@ class Main(Main_old):
         #super(self.__class__, self).run_schedule(**kwargs)
         if not self.initialized: 
             #self.init_alg()
-            self.init_mera()
+            self.init_alg()
             self.initialized = True 
             self.S.initialize()
         
@@ -1204,9 +1200,61 @@ class Main(Main_old):
             
     @classmethod
     def run_one(cls, config): 
-        return cls.__base__.run_one.im_func(cls, config)
+        schedule = config.get('schedule')
+        pid = os.getpid();  config.update(pid=pid)
+        #schedule = config['run_schedule_args']['schedule']
+        main = cls(**config)
+        msg = ''
+        is_registered = False 
+        job_status = ''
+        try: 
+            status = 'open'
+            if config.get('register_job'): 
+                job_id = config.get('job_id')
+                if job_id is None: 
+                    parpath = config['backup_parpath_local']
+                    job_id = (str(config.get('job_group_name')), hash(parpath))
+                with rpyc_conn('local', 'service', 17012) as conn:                
+                    status = conn.root.register_job(job_id, config)
+                if status  == 'open' : 
+                    is_registered = True
+            if status == 'open': 
+                if schedule is None: 
+                    main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
+                else: 
+                    #print_vars(vars(),  ['schedule']); raise 
+                    #if isinstance(schedule[0], dict):  #mera use this 
+                    if config['algorithm']== 'mera':  
+                        main.run_schedule(**config['schedule'])
+                    else:   #mps use this 
+                        main.run_schedule(schedule)  
+                job_status = 'COMPLETED'
+                msg += 'run one COMPLETED.' 
+            elif status== 'locked': 
+                msg += 'job %s exists'%(job_id, ) 
+        except KeyboardInterrupt: 
+            #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
+            msg += 'KeyboardInterrupt captured.'
+            job_status = 'FAILED'
+        except Exception, exception:
+            print exception
+            traceback.print_exc()
+            job_status = 'FAILED'
+        finally: 
+            msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
+            print msg
+            if is_registered:  
+                parpath = config['backup_parpath_local']
+                with rpyc_conn('local', 'service', 17012) as conn:                
+                    print 'iiiiiiiiiiiiiii', job_id 
+                    conn.root.update_job(job_id, 'status', job_status)
+                    #end_time = str(datetime.datetime.now()).split('.')[0]
+                    #conn.root.update_job(job_id, 'end_time', end_time)
+               
+            main.stop_player()        
+        return main 
 
-Main = Main_old 
+#Main = Main_old 
 
 class TestMain(unittest.TestCase): 
     def setUp(self): 
@@ -1305,6 +1353,8 @@ class TestMain(unittest.TestCase):
         config['backup_parpath'] = dir 
         main = Main(**config)
         main.run(q_iter=5)
+        
+        self.assertTrue(os.path.exists(dir + '/4.pickle'))
         
         if 1:  
             main = Main(**config)

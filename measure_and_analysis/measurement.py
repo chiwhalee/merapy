@@ -18,8 +18,8 @@ from  multiprocessing import Process
 import tempfile 
 
 from merapy.common_util import set_num_of_threads 
-from merapy.hamiltonian import System
-from merapy.utilities import load 
+#from merapy.hamiltonian import System
+from merapy.utilities import load , dict_to_object 
 from merapy.context_util import rpyc_load 
 #from merapy.brokest import queue 
 #from mera_wigner_crystal import ham_wigner_crystal
@@ -77,13 +77,22 @@ def measure_decorator(result_db_class=None):
         return wrapper
     return inner
 
-def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, force=0, 
+def measure_S(S=None, parpath=None, path=None,
+        measure_func=None, 
+        which=None, 
+        exclude_which=None, force=0, 
         fault_tolerant=1, num_of_threads=None,  param=None, check_convergence=True, 
         field_surfix='', rdb=None, **kwargs):
     """
         todo: 
             parpath should be deprecated, extract it from path instead  
+        params: 
+            measure_func: arbitrary function can be supported if it is provided 
+                it must have one positional arg  S 
     """
+    if measure_func is not None: 
+        which = measure_func.__name__ 
+        
     if num_of_threads is not None:  
         set_num_of_threads(num_of_threads)
     use_local_storage =  kwargs.get('use_local_storage', False)
@@ -116,19 +125,15 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
                 algorithm = 'mps'
             elif S.has_key('A'): 
                 algorithm = 'idmrg'
+            elif S.has_key('mera'): 
+                algorithm = 'mera'
+                S= dict_to_object(S)
         else: 
             algorithm = 'mera'
         
         if algorithm == 'mera':  
             field = list(FIELD_NAME_LIST)
             all_func = all_mera
-            if S.model == 'wigner_crystal': 
-                #db_version = 1.0 
-                pass 
-            else: 
-                #db_version = None
-                #db_version = rdb.get('version')
-                pass 
            
             if S.symmetry == 'U1': 
                 try: 
@@ -137,11 +142,17 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
                 except: 
                     pass
             
-            propt = S.key_property()
+            from merapy.hamiltonian import System 
+            propt = System.key_property.im_func(S)
+            #propt = S.key_property()
             dim,  layer = propt['trunc_dim'], propt['num_of_layer']
             nqn = len(propt['qns'])
             iter = S.iter
-            fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
+            if 1: 
+                #fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
+                fn = backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
+
+               
             path = parpath + '/' + fn
             
             #if db_version is None: 
@@ -218,7 +229,10 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         print  'exlude this from measure_S: ', exclude_which
         which = [i for i  in which if i not in exclude_which]
     
-    func = {i: all_func.__getattribute__(i) for i in which}
+    if measure_func is None: 
+        func = {i: all_func.__getattribute__(i) for i in which}
+    else: 
+        func = {measure_func.__name__: measure_func}
     
     if param is None:     
         param = {f: {} for f in which}
@@ -284,17 +298,12 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
     
     if algorithm == 'mera' :
         rdb['algorithm'] = 'mera'
-        #print '\tenergy...     done'
-        #if db_version is None: 
-        #    rdb[k].update({'energy': S.energy})
-        #elif db_version >= 1.0:
-        #    pass 
-        #    rdb.insert(field_name='energy', sh=shape, iter=-1, val=S.energy)
-        #    #if not rdb.has_key('energy'): rdb.add_key_list(['energy', shape])
-        #    #rdb['energy'][shape] = S.energy_record
     elif algorithm == 'mps': 
-       
         rdb['algorithm'] = 'mps'
+    elif algorithm == 'idmrg': 
+        rdb['algorithm'] = 'idmrg'
+        
+    if algorithm in ['mps', 'idmrg']: 
         if not rdb.has_key('dim_max'): 
             rdb['dim_max'] = {}
         if rdb.has_key_list(['dim_max', shape[0]]): 
@@ -303,16 +312,16 @@ def measure_S(S=None, parpath=None, path=None, which=None, exclude_which=None, f
         else: 
             dmax = shape[1]
         rdb['dim_max'][shape[0]] = dmax 
-        
-    elif algorithm == 'idmrg': 
-        
-        rdb['algorithm'] = 'idmrg'
-        #temp=all_idmrg.config(S)
-        #rdb.update(temp)
-        
+
     rdb.commit(info=1)
     if len(failed_list)>0: 
         print 'failed_list: %s'%failed_list
+
+def backup_fn_gen(dim, layer, nqn=None):
+    nqn = "5_" if nqn == 5 else "" 
+    layer = "-%dlay"%layer if layer != 3 else ""
+    res= "%(nqn)s%(dim)d%(layer)s.pickle"%vars()
+    return res
 
 def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,  
         which=None, exclude_which=None,  force=0, field_surfix='', 
@@ -335,7 +344,6 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     if algorithm is None: 
         if 'mera' in aaa: 
             algorithm = 'mera'
-            rdb_class= ResultDB_mera
         elif 'mps' in aaa and 'idmrg' not in aaa: 
             algorithm = 'mps'
             rdb_class= ResultDB_vmps
@@ -344,12 +352,19 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
             rdb_class= ResultDB_idmrg 
         else: 
             raise
+    if algorithm == 'mera' : 
+        rdb_class= ResultDB_mera
+    elif algorithm == 'mps' : 
+        rdb_class= ResultDB_vmps 
+    elif algorithm == 'idmrg' : 
+        rdb_class= ResultDB_idmrg 
+        
     
     path_list = []
     for dir in dir_list: 
-        #fori d in dim_list: 
+        db = rdb_class(dir, algorithm=algorithm)
+        
         if sh_list  == 'all': 
-            db = rdb_class(dir, algorithm=algorithm)
             #print_vars(vars(),  ['db.keys()', 'db["algorithm"]'])
             #raise 
             __sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
@@ -358,12 +373,17 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
             if algorithm  == 'mera':  
                 #sh[1] -= 1  #layer->layer-1
                 sh = list(sh);  sh[1] -= 1
-                fn = System.backup_fn_gen(*sh)
+                #fn = System.backup_fn_gen(*sh)
+                fn = backup_fn_gen(*sh)
             elif algorithm == 'mps': 
                 N, D = sh
+                if D == 'max' : 
+                    D = db.get_dim_max_for_N(N)
                 fn = "N=%d-D=%d.pickle"%(N, D)
             elif algorithm == 'idmrg': 
                 N, D = sh
+                if D == 'max' : 
+                    D = db.get_dim_max_for_N(N)
                 fn = "N=%d-D=%d.pickle"%(N, D)
             else: 
                 raise 
@@ -559,21 +579,12 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        from vmps.minimize import VMPS 
-        v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath='temp')
-        v.minimize()
-        dir = v.backup_parpath
-        args = self.args.copy()
-        which = ['correlation']
-        args.update(dir_list=[dir],which=which, force=0, show=0, 
-                param = {'correlation': {'i0': 1}}, 
-                algorithm='mps', mera_shape_list='all')
-        #measure_all( **args )
-        measure_all( **args )
-        db = ResultDB_vmps(dir)
-        print_vars(vars(),  ['db["correlation"]'])
+        from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
+        xx = an_vmps.an_main_symm 
         
-
+        aa=xx.filter_alpha(g=0.0)
+        #aa = [(0.3,  0.0)]
+        xx.measure_all(aa, [(60, 'max')], which='entanglement_entropy_ln', fault_tolerant=1)
 
 if __name__ == '__main__':
     

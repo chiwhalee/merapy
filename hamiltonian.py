@@ -50,7 +50,7 @@ class Operators(object):
     def __setitem__(self, i, x):
         self.O[i] = x
 
-class Operators(list):
+class Operators_new(list):
     """
         this may be deprecated,  
         for fortran define a tensor container is necessary,  but for python, 
@@ -62,8 +62,9 @@ class Operators(list):
         #self.O= None  #None indicates not "allocated" as in fortran  #[Tensor()]
         nSite = 1
         #self.O = [None]*nSite
-        list.__init__(self, [None])
-
+        #list.__init__(self, [None])
+        list.__new__(Operators, [None])
+ 
 class Hamiltonian(object):
     pass
 
@@ -98,6 +99,7 @@ class System(IterativeOptimize):
                 model_param: dict, specify parameters for Ising, Heisenberg, etc
 
         """
+
         IterativeOptimize.__init__(self, **kwargs)
         
         default_args = {
@@ -115,20 +117,23 @@ class System(IterativeOptimize):
             'which_minimize': 'prod_state', # in ['prod_state', 'eigen_state', 'scale_invar_state'], 
             #IO
                 'save_attr_list': self.save_attr_list + [
-                    'mera', 
+                    'mera',
+                    'only_NN', 'only_NNN', 
                     'H_2', 'H_3', 'rho_2', 'rho_3', 
                     'SpB', 'SpA', 'SmA', 'SmB', 'SzA', 'SzB' , 'SxA', 'SxB', 
                     'qsp_max', 'qsp_base', 
-                    'iter', 'iter0', 'iter1',  #?  
+                    'iter', 'iter1',  #?  
                     'energy', 'energy_err', 'energy_record', 'energy_diff_std', 'record', 'energy_diff', 
                     'Jleg_tau_0l_dic', 
                     'updaters', #?
+                    'pinning_term_def', #this is needed, or else cause problem for tensor_player 
                     ] , 
                 
                 '_not_resume_attr_list': self._not_resume_attr_list  + [
                     'precision',  'rho_correction_coeff_list', 
                     ], 
-            
+            #control
+                'energy_diff_min': 1e-9, 
             
             'USE_REFLECTION': False, 
             'mera_class': Mera, 
@@ -163,15 +168,18 @@ class System(IterativeOptimize):
                 'auto_resume': True, 
             
             #measure
-                'do_measure': 0, 
+                'do_measure': 1, 
                 'measurement_args': {
                     'exclude_which': [
                         'entanglement_brute_force', 
                         'entanglement_brute_force_6',  
                         'entanglement_brute_force_9', 
-                        'entanglement_brute_force_9_aver'
+                        'entanglement_brute_force_9_aver', 
+                        'correlation_extra', 
                         ], 
-                    'which': None, 
+                    'which': ['correlation', 'entanglement_entropy', 
+                        'entanglement_spectrum', 'magnetization', 
+                        ], 
                     }, 
            
             
@@ -185,6 +193,10 @@ class System(IterativeOptimize):
             
             for k, v in default_args.iteritems(): 
                 setattr(self, k, v)
+        
+        #computated attr
+        if 1:
+            self.set_computed_attr()
         
         self.model = model
         self.model_name = model
@@ -203,8 +215,6 @@ class System(IterativeOptimize):
         
         self.set_graph(graph_module)
         
-            
-            
         if 1:
             #some records of the system
             self.iter = 0   #state of the system after iter times update, when S continue  
@@ -257,7 +267,8 @@ class System(IterativeOptimize):
                 }
         
         for i in self.op_names:
-            self.__setattr__(i, [Operators() for i in range(Mera.MaxLayer)]) 
+            #self.__setattr__(i, [Operators() for i in range(Mera.MaxLayer)]) 
+            self.__setattr__(i, [[None] for i in range(Mera.MaxLayer)]) 
 
         mera_name_map = {"U":("U", 0), 
                "Up":("U_dag", 0), 
@@ -349,7 +360,12 @@ class System(IterativeOptimize):
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
+        
+        
+       
         if self.updaters is None: 
+            
+            
             from merapy.ascending import ascending_ham
             from merapy.descending import descending_ham
             from merapy.iteration import iterative_optimize_all
@@ -381,7 +397,7 @@ class System(IterativeOptimize):
         temp = ["model", "symmetry", "only_NN", "only_NNN", 'graph_module_name']
         res= {}
         for i in temp:
-            res[i] = self.__dict__[i]
+            res[i] = self.__dict__.get(i)#[i]
         res.update(self.mera.key_property())
         return res
 
@@ -397,7 +413,7 @@ class System(IterativeOptimize):
         for i in keys:
             res[i] = self.__dict__[i]
         return res
-
+    
     def __eq__(self, other):
         """
             test two systems formally equal
@@ -1381,7 +1397,7 @@ class System(IterativeOptimize):
             q_iter=None,  **kwargs):
         
         self.init_iteration()
-        from merapy.minimize_new import finite_site_u1  as finite_range_func 
+        from merapy.minimize import finite_site_u1  as finite_range_func 
         
         LayStart=0; q_one=1
         
@@ -1409,8 +1425,6 @@ class System(IterativeOptimize):
             self.filename = filename 
             
         self.set_backup_path()    
-        print_vars(vars(),  ['self.backup_path', 'self.backup_path_local', 
-            'self.backup_parpath_local'])
         
         if 1:   
             q_iter = q_iter if q_iter is not None else self.q_iter 
@@ -1420,14 +1434,15 @@ class System(IterativeOptimize):
             if self.resume and self.backup_path is not None:
                 self.resume_func()
                     
-                if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
-                    energy_diff_min = kwargs.get('energy_diff_min')
+                #if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                #    energy_diff_min = kwargs.get('energy_diff_min')
+                #if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                if 1: 
                     if  self.energy_diff_std is not None: 
-                        if self.energy_diff_std <= energy_diff_min: 
+                        if self.energy_diff_std <= self.energy_diff_min: 
                             q_iter = 0
-                            
-                            msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
-                                    self.energy_diff_std, energy_diff_min)
+                            msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0'%(
+                                    self.energy_diff_std, self.energy_diff_min)
                             print msg
             
         if isinstance(self.updaters, list): #only for backward compatable
@@ -1453,26 +1468,20 @@ class System(IterativeOptimize):
                 filename=self.filename, backup_fn=self.backup_path, lstart = LayStart, lstep=0, 
                 resume=self.resume, auto_resume=self.auto_resume, info=self.info-1, **kwargs)
         
-        #if do_measure:  
-        #    ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-        #    if ppp is not None : 
-        #        exclude_which = self.measurement_args.get('exclude_which', [])
-        #        exclude_which.append('scaling_dim')
-        #        self.measure_S(self, ppp, exclude_which=exclude_which)
        
         return self.M, self
 
     def _minimize_scale_invar(self, resume=True, auto_resume=None, 
             backup_fn=None, filename="auto", 
-            num_of_SIlayer=3, q_lay=1, q_iter=5, do_measure=None,  **kwargs):
+            num_of_SIlayer=3, q_lay=1, q_iter=5, **kwargs):
         """ 
             taken from Main.run_scale_invar 
         """
         self.init_iteration()
         
-        from merapy.minimize_new import ScaleInvar 
+        from merapy.minimize import ScaleInvar 
         
-        do_measure  = do_measure if do_measure is not None else self.do_measure
+        
         
         q_one = 1
         if 0:         
@@ -1511,13 +1520,13 @@ class System(IterativeOptimize):
             self.resume_func()
             if not hasattr(self, 'iter1'):
                 self.iter1 = self.iter
-            energy_diff_min  = kwargs.get('energy_diff_min')
-            if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
-                if self.energy_diff_std <= energy_diff_min and self.energy_diff_std is not None  : 
+            #energy_diff_min  = kwargs.get('energy_diff_min')
+            #if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+            if 1: 
+                if self.energy_diff_std <= self.energy_diff_min and self.energy_diff_std is not None  : 
                     q_iter = 0
-                    do_measure = 0
-                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
-                            self.energy_diff_std, energy_diff_min)
+                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0'%(
+                            self.energy_diff_std, self.energy_diff_min)
                     print msg
                 
         if auto_resume is not None:   self.auto_resume = auto_resume
@@ -1534,17 +1543,9 @@ class System(IterativeOptimize):
         
         SI.scale_invariant()
         
-        #if do_measure:
-        #    try: 
-        #        ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-        #        if ppp is not None : 
-        #            exclude_which = self.measurement_args.get('exclude_which', [])
-        #            self.measure_S(self, ppp, exclude_which=exclude_which)
-        #    except Exception as err: 
-        #        warnings.warn(str(err))
         
-        if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
-            self.transfer_pickle_file()
+        #if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
+        #    self.transfer_pickle_file()
         
         return self
 
@@ -1552,6 +1553,9 @@ class System(IterativeOptimize):
         """
             this is a wraper 
         """
+        if kwargs.has_key('energy_diff_min'): 
+            self.energy_diff_min = kwargs['energy_diff_min']
+            
         if self.info>0: 
             print 'start minimize'
         which_minimize = which_minimize if which_minimize is not None else self.which_minimize     
@@ -1561,6 +1565,16 @@ class System(IterativeOptimize):
             self._minimize_scale_invar(**kwargs)
         else: 
             raise  ValueError(which_minimize)
+        
+        #if self.do_measure and self.iter1>0:  
+        #    ppp = self.backup_parpath if not self.use_local_storage else self.backup_parpath_local
+        #    if ppp is not None : 
+        #        exclude_which = self.measurement_args.get('exclude_which', [])
+        #        exclude_which.append('scaling_dim')
+        #        self.measure_S(self, ppp, exclude_which=exclude_which)
+        print_vars(vars(),  ['self.do_measure, self.iter0'])    
+        if self.do_measure and self.iter0>0:  
+            self.measure_state()
  
     def make_dir(self, dir, dir_local=None): 
         #this is taken form main.Main.make_dir 
@@ -2135,6 +2149,7 @@ class System(IterativeOptimize):
         #msg = ''
         try:
             S0= System.load(fn, use_local_storage)
+            pass 
         except IOError:
             msg += "file not exist, a new file is created."  
         else:
@@ -2158,7 +2173,7 @@ class System(IterativeOptimize):
             msg += ' ... save denied. raise' 
             raise Exception(msg)
 
-    def save_new(self, fn=None, use_local_storage=False): 
+    def save(self, fn=None, use_local_storage=False): 
         IterativeOptimize.save(self, path=fn, use_local_storage=use_local_storage) 
 
     @staticmethod    
@@ -2176,9 +2191,32 @@ class System(IterativeOptimize):
 
     @staticmethod
     def load(fn, use_local_storage=False):
-        res= rpyc_load(fn, use_local_storage)    
+        res = rpyc_load(fn, use_local_storage)    
         if not isinstance(res, dict):  #temporary work around 
             res = System.update_S(res)
+        else:
+            pass 
+            if not hasattr(res['mera'], 'USE_REFLECTION'): 
+                res['mera'].USE_REFLECTION = False 
+
+            #temp1 = ["U", "V", "U_dag", "V_dag"] 
+            #temp2 = ["rho_2", "rho_3"]
+
+            ##原因在save时，把iTensor.buf_ref 储存了，造成load后tBuffer引用错乱，see iTensor.__del__。加入如下代码，将其清空
+            ##this part is RATHER TRICKY!  whenever it is loaded, it will interfere the entire buff, so must unlink them from buffer
+            ##another solution may be remove buf_ref using __state???___ in iTensor for pickling
+            #for l in range(res.mera.num_of_layer):
+            #    for i in temp1:
+            #        try:
+            #            #res.mera.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
+            #            res['mera']__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
+            #        except: raise
+            #        #except: AttributeError
+            #    for i in temp2:
+            #        try:
+            #            res[i][l][0].buf_ref = np.array([-1, -1], np.int)
+            #        except: pass
+            #    
         
         return res
     
@@ -2290,8 +2328,14 @@ class System(IterativeOptimize):
             
         if not hasattr(res, 'use_pinning_term'): 
             res.use_pinning_term = False 
+        if not hasattr(res.mera, 'USE_REFLECTION'): 
+            res.mera.USE_REFLECTION = False 
             
+        res.__class__.save = System.save 
+        
         return res
+    
+    
     
     def resume_func(self):
         """
@@ -2304,16 +2348,21 @@ class System(IterativeOptimize):
                 LOCAL = '' if not self.use_local_storage else 'LOCAL file '
                 msg = "\nTRY TO RESUME from %s%s...  "%(LOCAL, backup_path[-30:])
                 try:
+                    
                     #self.S = self.__class__.load(backup_path, use_local_storage=use_local_storage)
                     temp = self.__class__.load(backup_path, use_local_storage=self.use_local_storage)
-                    print_vars(vars(),  ['type(temp)'])
                     
                     if not isinstance(temp, dict):  #temporary work around  for backward compatible                 
                         temp = temp.__dict__ 
-                        temp.pop('updaters')  
-                        temp.pop('backup_parpath')
-                        if temp.has_key('is_initialized'): 
-                            temp.pop('is_initialized')
+                        kk = ['updaters', 'backup_parpath', 
+                                'is_initialized', 'measurement_args']
+                        for k in kk: 
+                            if temp.has_key(k): 
+                                temp.pop(k)
+                        self.__dict__.update(temp)
+                    else: 
+                        self.set_state(temp)
+                        self.M = self.mera
                     
                     if 0:  #resume check 
                         if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
@@ -2322,17 +2371,17 @@ class System(IterativeOptimize):
                                 if self.energy_diff_std <= energy_diff_min: 
                                     q_iter = 0
                                     
-                                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
+                                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0'%(
                                             self.energy_diff_std, energy_diff_min)
                                     print msg
                     
-                    self.__dict__.update(temp)
                     #self.M = self.S.mera
                     #iter = self.S.iter1
                     #eng = self.S.energy
                     iter = self.iter1
                     eng = self.energy 
-                    msg  += "RESUMED successfully at iter=%s,  eng=%s"%(iter, eng)
+                    #print_vars(vars(),  ['temp.keys()', 'self.energy_diff'])
+                    msg  += "RESUMED successfully at iter=%s,  eng=%s, energy_diff=%1.2e"%(iter, eng, self.energy_diff)
                 except IOError as err:
                     if err.errno == 2: 
                         msg += str(err)
@@ -2485,7 +2534,7 @@ class System(IterativeOptimize):
                 print "in System.expand_dim ilayer = %(ilayer)d, name = %(name)s failed to beexpanded"%vars()
         
         dic = self.fetch_op_names(type=["H", "rho", "I"])
-        print "expand following System ops:  ", dic.keys()
+        print "\texpand following System ops:  ", dic.keys()
         
         #need not expand layer 0
         for ilayer in range(1, M.num_of_layer):
@@ -2495,9 +2544,10 @@ class System(IterativeOptimize):
         new_key_property = self.key_property()
         #if old_key_property != new_key_property: 
         self.iter1 = 0  #reset counting
+        self.iter0 = 0 
         
-        msg = "system qsp_max has been expanded to \n%s"%qsp_max
-        print msg, 
+        msg = "\tqsp_max has been expanded to %s \n"%qsp_max
+        print msg 
         #tensor_player.NEXT_STATE = "record"
         if out is not None:
             out.write("msg")
@@ -2567,6 +2617,7 @@ class System(IterativeOptimize):
         self.add_one_layer(ilayer, duplicate=True)
         self.add_top_layer()  # this is needed only when use top_level_eigenstate 
         self.iter1 = 0  #reset counting
+        self.iter0 = 0 
         msg = "\nEXPAND ONE LAYER, NOW NUM_OF_LAYER IS %d\n"%self.mera.num_of_layer
         print msg
         if out is not None:
@@ -2771,14 +2822,27 @@ class TestSystem(unittest.TestCase):
         print_vars(vars(),  ['m.backup_parpath', 
             'm.backup_path', 'm.backup_path_local'])
         m.minimize('prod_state')
+        self.assertTrue(os.path.exists(dir + '/4.pickle'))
       
     def test_minimize(self): 
-        m=System.example(model='Ising', symmetry='Travial', info=1)
+        dir = tempfile.mkdtemp()
+        m=System.example(model='Ising', symmetry='Travial', 
+                backup_parpath = dir, 
+                do_measure = 1, 
+                measure_only = ['correlation', 'entanglement_entropy'], 
+                info=1)
         m.minimize('prod_state')
         print_vars(vars(),  ['m.energy'])
         self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
         from merapy.decorators import tensor_player 
         tensor_player.STATE = 'stop'
+        
+        if 1: #test measure
+            from merapy.measure_and_analysis.result_db import ResultDB_mera
+            db = ResultDB_mera(dir)
+            print_vars(vars(),  ['db'])
+            self.assertTrue(db.has_key('correlation') and not db.has_key('magnetization'))
+        
     
     def test_resume(self):
         dir = tempfile.mkdtemp()
@@ -3934,7 +3998,7 @@ if __name__=='__main__':
         #ts.J_ising()
         #ts.J_heisbg()
 
-    if 0: 
+    if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -3945,9 +4009,9 @@ if __name__=='__main__':
            #'xtest_save', 
            #'test_load', 
            #'xtest_example',  
-           'test_backup_path',  
+           #'test_backup_path',  
            #'test_minimize',  
-           #'test_resume',  
+           'test_resume',  
            #'test_minimize_finite_site',  
            #'test_minimize_scale_invar',  
            #'test_expand_dim_and_layer',  

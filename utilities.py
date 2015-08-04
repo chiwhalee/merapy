@@ -220,7 +220,8 @@ def save(obj, path, compress=False, compress_level=2, as_str=False, info=0):
                     print '--pass'
                 except Exception as e: 
                     print '--fail'
-                    print e
+                    #print e
+                    print str(e)[: 50]
                 
             raise err 
         msg = 'compressing file ...'
@@ -245,9 +246,9 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
         lineno = inspect.currentframe().f_back.f_lineno
         frm = inspect.stack()[1]
         module_name = inspect.getmodule(frm[0]).__name__
+        #inspect.getfile(inspect.currentframe())
         caller_name =  frm[3] #inspect.stack()[1][3] 
-        head = 'print_vars from %s %s at line %s\n'%(
-                module_name, caller_name, lineno)
+        head = '\n---print at %s line %s---\n'%(module_name, lineno)
     dic['np'] = np  #inject np to the namespace so that it can be evaled 
     if var_name_list is None: 
         var_name_list = sorted(dic)
