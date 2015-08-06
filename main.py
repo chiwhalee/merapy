@@ -1476,7 +1476,7 @@ if __name__=="__main__":
     if 0: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
-        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        TestMain.test_temp=unittest.skip("skip test_temp")(TestMain.test_temp) 
         unittest.main()
        
     else:
@@ -1486,9 +1486,9 @@ if __name__=="__main__":
         
         #'test_run',
         #'test_run_scale_invar',
-        #'test_run_schedule',
+        'test_run_schedule',
         #'test_run_many',
-        'test_resume',
+        #'test_resume',
         
         #'xtest_make_dir',
         #'xtest_run_on_remote',

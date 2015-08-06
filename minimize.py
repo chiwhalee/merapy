@@ -14,76 +14,6 @@ from merapy.measure_and_analysis.measurement import measure_S
 from merapy.top_level import top_level_product_state, top_level_product_state_u1
 from merapy.hamiltonian import System
 
-
-class Iteration(object): 
-    def __init__(self, S, updaters, q_iter, q_one, q_lay, filename="auto", backup_fn='auto', 
-            run_time_max=None, energy_diff_min=None, q_iter_relative=False, use_player=False, 
-            info=0, **kwargs):
-        
-        #self.updaters= updaters
-        if isinstance(updaters, list):  #backward compatable
-            self.ascending_ham, self.descending_ham, self.iterative_optimize_all = updaters[:3]
-        elif isinstance(updaters, dict):
-            xx = ["ascending_func", "descending_func", "update_mera_func"]
-            yy = ["ascending_ham", "descending_ham", "iterative_optimize_all"]
-            for i in range(3):
-                setattr(self, yy[i], updaters[xx[i]])
-
-        self.q_iter = q_iter
-        self.q_one = q_one
-        self.q_lay = q_lay
-        self.use_player = use_player
-        self.run_time_max = run_time_max if run_time_max is not None else 86400*20  # unit is second
-        self.energy_diff_min = energy_diff_min if energy_diff_min is not None else 0.0
-        self.info = info
-        
-        self.filename = filename
-        self.backup_fn = backup_fn
-            
-        self.resume = resume
-        self.auto_resume = auto_resume if auto_resume is not None else True
-        
-        self.calc_scaling_dim = calc_scaling_dim
-        self.q_iter_relative = q_iter_relative
-        self.__dict__.update(**kwargs)
-   
-    def measure_and_control(self, S, iter, iter0,  pace):
-        if S.iter%pace == 0 or iter-iter0<pace: 
-            
-            self.eval_energy(iter, iter0, pace)
-
-        if S.iter%200 == 0 and self.calc_scaling_dim:    #measure scaling dim
-            calc_scaling_dim_1site(S=S, iterate=False)
-            #res = calc_scaling_dim_2site(ascending_func=self.ascending_ham, S=S, k=10, tol=1e-6)
-            try:
-                res = calc_scaling_dim_2site(ascending_func=self.ascending_ham, S=S, k=10, tol=1e-6)
-                for i in res: print i, res[i];  
-                print '\n'
-                S.scaling_dim_record[S.iter] = res
-            except Exception as err:
-                print err
-            
-        if self.auto_resume and self.backup_fn is not None:
-            self.resume_func(S, S.mera)
-    
-    def resume_func(self, S, M):
-        try:
-            S0= System.load(self.backup_fn)
-        except IOError:
-            print "try to resume but file %s not found"%self.backup_fn
-        else:
-            e = S.energy; e0 = S0.energy
-            if e> e0:
-                S.__dict__ = S0.__dict__
-                M.__dict__ = S0.mera.__dict__
-                self.S = S;  self.S.mera = M
-                
-                S.iter = S0.iter
-                S.iter1 = S0.iter1
-                print "\nAOTU_REASSUMED FROM %s AT A LOWER ENEGY.\nstored E=%2.15f, current E=%2.15f"%(
-                    self.backup_fn, e0, e)
-        finally:
-            self.auto_resume = False
    
 if 0: 
     def Rand_Seq():
@@ -164,7 +94,7 @@ if 0:
 def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
         q_one, q_lay, q_iter,  use_player=False, 
         filename=None, backup_fn=None, resume=False, 
-        auto_resume=True,  lstart=1, lstep=0, start=True, info=0, **kwargs):
+          lstart=1, lstep=0, start=True, info=0, **kwargs):
     """
         总的来说，要更新h2, rho, mera 这三部分，要合理安排三类算子，以及每类算子的每一曾的更新次序。
         更新h2, 必须要有mera；
@@ -250,7 +180,7 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
 def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func, 
         q_one, q_lay, q_iter, q_iter_relative=False, use_player=False, 
         filename=None, backup_fn=None, 
-        lstart=1, lstep=0, resume=False, auto_resume=True, before_scaleinvar=False, 
+        lstart=1, lstep=0, resume=False, before_scaleinvar=False, 
         run_time_max=None, energy_diff_min=0.0, info=0, **kwargs):
     """
         ref:
@@ -276,8 +206,6 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
 
     use_local_storage = kwargs.get('use_local_storage', False)
     last_save_time = time.time()
-    if resume:    
-        auto_resume = False
 
     backup_fn_local = kwargs.get('backup_fn_local', None)
     iter0 = S.iter1    #S.iter precisely means the state of S after iter times update, e.g. S.iter = 0 means original state
@@ -297,6 +225,17 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
     for iter  in xrange(iter0 + 1, q_iter):
         if info>0:
             print str(iter) + "th iteratiion"
+        if 1: 
+        #if iter-iter0>10:
+            #if run_time_max is not None: 
+            #    if steps*dt_real>run_time_max: #(10 days)
+            #        print "\nENERGY_DIFF IS TOO SMALL, BREAK AT HERE. steps= %(steps)d\n"%vars()
+            #        break
+            if abs(S.energy_diff_std) < energy_diff_min:
+                print "energy_diff lower than energy_diff_min = %1.2e. BREAK AT HERE."%energy_diff_min
+                #self.is_break = True
+                break
+            
         
         if use_player:
             
@@ -338,36 +277,6 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         S.save_eng(S.iter)
         steps, dt_real= S.display(S.iter, filename)
 
-        if iter-iter0>10:
-            if run_time_max is not None: 
-                if steps*dt_real>run_time_max: #(10 days)
-                    print "\nENERGY_DIFF IS TOO SMALL, BREAK AT HERE. steps= %(steps)d\n"%vars()
-                    break
-            if abs(S.energy_diff_std) < energy_diff_min:
-                print "energy_diff lower than energy_diff_min = %1.2e. BREAK AT HERE."%energy_diff_min
-                #self.is_break = True
-                break
-           
-            if auto_resume: 
-                raise #just see this block is used or not 
-                path = backup_fn if not use_local_storage else backup_fn_local
-                try:
-                    S0= System.load(path, use_local_storage)
-                except IOError:
-                    print "try to resume but file %s not found"%path
-                else:
-                    e = S.energy; e0 = S0.energy
-                    if e> e0:
-                        #S= S0
-                        #M = S0.mera
-                        S.__dict__ = S0.__dict__
-                        M.__dict__ = S0.mera.__dict__
-                        S.iter = S0.iter
-                        print "AOTU_REASSUMED FROM %s AT A LOWER ENERGY E=%2.10f LOWER THAN CURRENT E=%2.10f\n"%(
-                                path, e0, e)
-                finally:
-                    auto_resume = False
-
 
         #这一步更新rho[num_of_layer-2] ,..., [1]
         for ilayer  in range(M.num_of_layer-1, lstart + 1, -1):
@@ -393,23 +302,14 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
         if temp is not None: 
             print "\nS has been changed, save at final iter"
             S.save(fn=temp, use_local_storage=S.use_local_storage)
-        #if do_measure:  
-        #    ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-        #    if ppp is not None : 
-        #        exclude_which = self.measurement_args.get('exclude_which', [])
-        #        exclude_which.append('scaling_dim')
-        #        self.measure_S(self, ppp, exclude_which=exclude_which)
 
-
-def FiniteRangeIter(Iteration): 
-    pass
 
 class ScaleInvar():
     """
         tested by compareing  with Heisenberg/scaleinvariant.f90, the results coincide for all digits
     """
     def __init__(self, S, updaters, num_of_SIlayer, q_iter, q_one, q_lay, 
-            resume=False, auto_resume=True, filename="auto", backup_fn=None, 
+            resume=False, filename="auto", backup_fn=None, 
             run_time_max=None, energy_diff_min=None, q_iter_relative=True, use_player=False, 
             calc_scaling_dim=False, info=0, **kwargs):
         #print 'qqqqqqq', q_iter
@@ -437,7 +337,7 @@ class ScaleInvar():
         self.backup_fn = backup_fn
             
         self.resume = resume
-        #self.auto_resume = auto_resume 
+        
         self.is_resumed = False
         self.ham_op_names = S.fetch_op_names(type="H")
         self.calc_scaling_dim = calc_scaling_dim
@@ -480,6 +380,19 @@ class ScaleInvar():
             S.log[iter0] = S.get_info()
         
         for iter in range(iter0 + 1, q_iter):  #for iter in range(iter0 + 1, q_iter + iter0 + 1):
+            if 1: 
+            #if iter-iter0>10:
+                #if self.run_time_max is not None : 
+                #    if steps*dt_real>self.run_time_max : #(1days*?)
+                #        print "\nENERGY_DIFF IS TOO SMALL, BREAK AT HERE. total steps run = ", iter-iter0
+                #        self.is_break = True
+                        
+                #if abs(S.energy_diff) < self.energy_diff_min:
+                if abs(S.energy_diff_std) < self.energy_diff_min:
+                    print "energy_diff lower than energy_diff_min = %1.2e. BREAK at here."%self.energy_diff_min
+                    #self.is_break = True
+                    break 
+            
             if self.use_player:
                 record_at = iter0+2 if self.resume else iter0 + 1
                 set_STATE_end_1(iter, record_at=record_at, power_on=True)
@@ -498,7 +411,8 @@ class ScaleInvar():
             S.iter0 += 1 # newly added counter,  remove S.iter in future  
             
             self.measure_and_control_new(S, iter , iter0, pace=20)
-            if self.is_break: break
+            if self.is_break: 
+                break
                 
             #for ilayer in range(M.num_of_layer-2, 1, -1):
             for ilayer in range(self.SIlayer, 1, -1):
@@ -529,8 +443,6 @@ class ScaleInvar():
         #        for lay in [0, M.num_of_layer-2] update normally
         #        for lay in   [M.num_of_layer-2, M.num_of_layer-+ num_of_SIlayer] update scale invariantly 
         #    """
-        #    if self.resume:    
-        #        auto_resume = False
         #    self.is_break = False
 
         #    S= self.S
@@ -778,7 +690,7 @@ class ScaleInvar():
 
         tensor_player.STATE = 'record' if iter == iter0+1 else 'play'
 
-        #print 'iii', iter, tensor_player.STATE
+        
         self._eval_energy()
 
         for i in self.meth_bac:
@@ -791,18 +703,10 @@ class ScaleInvar():
             if iter-iter0<pace:   pace = 1
         
             steps, dt_real= S.display(S.iter, self.filename, pace=pace)
-            #is_break = False
-            if iter-iter0>10:
-                if self.run_time_max is not None : 
-                    if steps*dt_real>self.run_time_max : #(1days*?)
-                        print "\nENERGY_DIFF IS TOO SMALL, BREAK AT HERE. total steps run = ", iter-iter0
-                        self.is_break = True
-                #if abs(S.energy_diff) < self.energy_diff_min:
-                if abs(S.energy_diff_std) < self.energy_diff_min:
-                    print "energy_diff lower than energy_diff_min = %1.2e. BREAK AT HERE."%self.energy_diff_min
-                    self.is_break = True
+            
             
     def resume_func(self, S, M, use_local_storage):
+        raise #just for deprecate it 
         path = self.backup_fn_local if use_local_storage else self.backup_fn
         
         try:
@@ -840,9 +744,8 @@ class ScaleInvar():
             except Exception as err:
                 print err
             
-        #if self.auto_resume and self.backup_fn is not None:
-        if (not self.is_resumed) and self.backup_fn is not None:
-            self.resume_func(S, S.mera, self.use_local_storage)
+        #if (not self.is_resumed) and self.backup_fn is not None:
+        #    self.resume_func(S, S.mera, self.use_local_storage)
     
     def _fn_auto(self):
         dim = self.S.mera.qsp_max.totDim
@@ -856,7 +759,6 @@ class ScaleInvar():
         dim, nqn, lay = self._fn_auto()
         fn = "res-%(nqn)s%(dim)d%(lay)s.dat"%vars()
         return fn
-
 
 
 class TestScaleInvar(unittest.TestCase): 
@@ -896,20 +798,19 @@ class TestScaleInvar(unittest.TestCase):
                     MODEL="Heisenberg", SYMMETRY="Travial", only_NN=True, only_NNN=False, USE_REFLECTION=False, 
                     filename=filename, NUM_OF_THREADS=1, use_player=False, combine_2site=False, 
                     resume=False,  
+                    USE_CUSTOM_RAND = 1, rand_seed = 1234, 
                     unitary_init="random_unit_tensor", model_param = heisbg_model_param, message = None)
             from merapy.utilities import random_str
             import os
             backup_fn = random_str( )
-            S=main.run(q_iter=3, backup_fn=None, do_measure=0)
-            S=main.run_scale_invar(q_iter=10,  backup_fn=backup_fn, filename=None, do_measure=0)
+            S=main.run(q_iter=3,  do_measure=0)
+            S=main.run_scale_invar(q_iter=10, do_measure=0)
             res= {0: 0, 1: -0.14306831775876239, 2: -0.28302724810836422, 3: -0.37443146281546302, 4: -0.4519070431176464, 5: -0.52841563236836264, 6: -0.60836365005944959, 7: -0.69261165207729269, 8: -0.77380310057594426, 9: -0.84634118594060803, 10: -0.91177543745081024}
             S.examine_energy(res, delta=2e-14)
             
             print  'see if resumed successfully'
-            S=main.run_scale_invar(q_iter=10,  backup_fn=backup_fn, filename=None, do_measure=0)
+            S=main.run_scale_invar(q_iter=10,  do_measure=0)
             
-            os.remove(backup_fn)
-
 
 if __name__ == "__main__":
 
@@ -921,10 +822,8 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_save', 
-           #'test_load', 
-           #'test_example',  
-           #'test_heisbg',  
+           #'test_it', 
+           
         ]
         for a in add_list: 
             suite.addTest(TestScaleInvar(a))

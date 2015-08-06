@@ -12,6 +12,8 @@ from merapy.common_util import TestCommon
 from merapy.hamiltonian import TestSystem
 from merapy.tensor_network import TestIt as Test_tensor_network 
 from merapy.top_level import TestIt as Test_top_level 
+from merapy.minimize import TestScaleInvar 
+from merapy.main import TestMain 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)
 #python -m unittest discover --pattern=*.py
