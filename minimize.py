@@ -360,16 +360,9 @@ class ScaleInvar():
         M = S.mera
         info = self.info
 
-        #if self.filename == "auto":
-        #    self.filename = self.output_fn_auto()
-        #    print "output_fn is set to %s"%self.filename
-        if 1:
-            aa = "\nSTART SCALE_INVARIANT ITERATION\n"
-            print aa 
-            #if self.filename is not None:
-            #    out = open(self.filename, "a"); out.write(aa); out.close()
-            #print "use following ham ops: %s\n"%self.ham_op_names.keys()
         
+        aa = "\nSTART SCALE_INVARIANT ITERATION\n"
+        print aa 
        
         iter0 = S.iter1
         
@@ -451,9 +444,6 @@ class ScaleInvar():
         #    q_iter = self.q_iter
 
 
-        #    if self.filename == "auto":
-        #        self.filename = self.output_fn_auto()
-        #        print "output_fn is set to %s"%self.filename
         #    if 1:
         #        aa = "\nSTART SCALE_INVARIANT ITERATION\n"
         #        print aa 
@@ -704,30 +694,6 @@ class ScaleInvar():
         
             steps, dt_real= S.display(S.iter, self.filename, pace=pace)
             
-            
-    def resume_func(self, S, M, use_local_storage):
-        raise #just for deprecate it 
-        path = self.backup_fn_local if use_local_storage else self.backup_fn
-        
-        try:
-            S0= System.load(path, use_local_storage=use_local_storage)
-        except IOError:
-            print "try to resume but file %s not found"%path
-        else:
-            e = S.energy; e0 = S0.energy
-            if e> e0:
-                S.__dict__ = S0.__dict__
-                M.__dict__ = S0.mera.__dict__
-                self.S = S;  self.S.mera = M
-                
-                S.iter = S0.iter
-                S.iter1 = S0.iter1
-                print "\nAOTU_RESUMED FROM %s AT A LOWER ENEGY.\nstored E=%2.15f, current E=%2.15f"%(
-                    path, e0, e)
-        finally:
-            self.is_resumed = True
-            pass
-    
     def measure_and_control_new(self, S, iter, iter0,  pace):
         if S.iter%pace == 0 or iter-iter0<pace: 
             
@@ -744,22 +710,7 @@ class ScaleInvar():
             except Exception as err:
                 print err
             
-        #if (not self.is_resumed) and self.backup_fn is not None:
-        #    self.resume_func(S, S.mera, self.use_local_storage)
     
-    def _fn_auto(self):
-        dim = self.S.mera.qsp_max.totDim
-        nqn = self.S.mera.qsp_max.nQN
-        nqn = "5_" if nqn == 5 else "" 
-        lay = self.S.mera.num_of_layer-1
-        lay = "-%dlay"%lay if lay != 3 else ""
-        return dim, nqn, lay
-
-    def output_fn_auto(self):
-        dim, nqn, lay = self._fn_auto()
-        fn = "res-%(nqn)s%(dim)d%(lay)s.dat"%vars()
-        return fn
-
 
 class TestScaleInvar(unittest.TestCase): 
     def setUp(self): 

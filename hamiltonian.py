@@ -130,7 +130,7 @@ class System(IterativeOptimize):
                     ] , 
                 
                 '_not_resume_attr_list': self._not_resume_attr_list  + [
-                    'precision',  'rho_correction_coeff_list', 
+                    'precision',  
                     ], 
             #control
                 'energy_diff_min': 1e-9, 
@@ -166,6 +166,7 @@ class System(IterativeOptimize):
                 'backup_parpath': None, 
                 'backup_parpath_local': None, 
                 'auto_resume': True, 
+                'other_backup_path': None, #if not None, using other point to init mera, as a better init 
             
             #measure
                 'do_measure': 1, 
@@ -203,11 +204,12 @@ class System(IterativeOptimize):
         self.only_NN = only_NN
         self.only_NNN = only_NNN
         self.symmetry = symmetry
-        #self.combine_2site = combine_2site
-        #self.info = info
+        
+       
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry=self.symmetry, 
                 combine_2site=self.combine_2site)
-        if qsp_base is not None: self.qsp_base = qsp_base  #models like Potts need alternate qsp_base than default
+        if qsp_base is not None: 
+            self.qsp_base = qsp_base  #models like Potts need alternate qsp_base than default
         if model_param is not None:
             self.model_param = model_param
         else:
@@ -260,7 +262,7 @@ class System(IterativeOptimize):
         self.network_tensor_dic.update(sys_name_map)
         
         #tensors that cant fit into above cases
-        self.network_tensor_dic_extra= {
+        self.network_tensor_dic_extra = {
                 0:{"oo1":("SzA", 0), "oo2":("SzB", 0)}, 
                 1:{"oo1":("SpA", 0), "oo2":("SmB", 0)}, 
                 2:{"oo1":("SmA", 0), "oo2":("SpB", 0)} 
@@ -286,36 +288,26 @@ class System(IterativeOptimize):
             ham，mera，图
             
         """
-        
-        #below are tabken form main.Main.init_all 
-        qn_identity, qsp_base, qsp_null=init_System_QSp(
-                symmetry=self.symmetry, combine_2site=self.combine_2site)
-        
-        if self.qsp_base is None: 
-            self.qsp_base = qsp_base
-        self.qn_identity = qn_identity
-        self.qsp_null = qsp_null
-        qsp_0 = self.qsp_base.copy()
-        if not self.combine_2site and self.symmetry == "U1" :
-            qsp_max = qsp_base.__class__.max(self.trunc_dim, combine_2site=self.combine_2site)
-        else:
-            qsp_max= qsp_base.__class__.max(self.trunc_dim)
-        qsp_max2 = qsp_max.copy() 
-        
-        if self.qsp_max is not None:
-            qsp_max = self.qsp_max.copy()
-            qsp_max2 = None #self.qsp_max.copy()
-            print "trunc_dim is updated to %d"%qsp_max.totDim
-            self.trunc_dim = qsp_max.totDim
-
-        topQN = qn_identity.copy()
     
         if self.mera is None:
+            if not self.combine_2site and self.symmetry == "U1" :
+                qsp_max = self.qsp_base.__class__.max(self.trunc_dim, combine_2site=self.combine_2site)
+            else:
+                qsp_max = self.qsp_base.__class__.max(self.trunc_dim)
+            qsp_max2 = qsp_max.copy() 
+            
+            if self.qsp_max is not None:
+                qsp_max = self.qsp_max.copy()
+                qsp_max2 = None #self.qsp_max.copy()
+                print "trunc_dim is updated to %d"%qsp_max.totDim
+                self.trunc_dim = qsp_max.totDim
+            
             self.mera = self.mera_class(self.tot_layer, self.nTop, 
-                    qsp_0, qsp_max, qsp_max2, topQN, qsp_null, qn_identity, 
+                    self.qsp_base.copy(),  qsp_max, qsp_max2, 
+                    topQN=self.qn_identity.copy(), qsp_null=self.qsp_null.copy(), 
+                    qn_identity=self.qn_identity.copy(), 
                     unitary_init=self.unitary_init, **self.mera_kwargs)
             self.M = self.mera
-
             
             #每次更改耦合常数算新的值，要重新初始化
             if self.model == "Ising":
@@ -323,13 +315,38 @@ class System(IterativeOptimize):
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
-        
+       
         if not hasattr(self, 'H_2'): 
             self.init_Hamiltonian()
             #self.init_ham_eff()  # merapy 2.0,  replace init_Hamiltonian in future 
             #self.init_rho_eff()
-
-       
+        
+        self.set_backup_path()   #this should put after init mera
+        if self.other_backup_path is not None:  #using other optimized mera state to init. this is useful for circumvent metastable state, etc 
+            msg = '\ntry to INIT mera from other_backup_path ...{}'.format(
+                    self.other_backup_path[-30:], )
+            
+            temp = self.__class__.load(self.other_backup_path , 
+                    use_local_storage=self.use_local_storage)
+            if not isinstance(temp, dict): 
+                temp = temp.__dict__ 
+            m = temp['mera']
+            if self.mera == m:   # must be formally equal 
+                self.mera = m 
+                self.M = m 
+                for k in ['rho_2', 'rho_3']: 
+                    setattr(self, k, temp[k])
+                self.other_backup_path = None 
+                # it can be overide by the following resume_func if file exists, this is proper 
+                msg += '... done, then set it to None\n' 
+            else: 
+                msg += ' ...self.mera != m, not allowed, discard it \n' 
+            print msg 
+        
+        if self.auto_resume: 
+            self.resume_func()
+        
+        
         if self.updaters is None: 
             from merapy.ascending import ascending_ham
             from merapy.descending import descending_ham
@@ -340,13 +357,11 @@ class System(IterativeOptimize):
             self.updaters= {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
                 "finite_range_func":finite_site_u1, "rho_top_func":top_level_product_state_u1}
         
-        
         self.is_initialized = True     
         
     def init_iteration(self): 
         if not self.is_initialized: 
             self.initialize()
-        self.set_backup_path()    
     
     if 0: 
         @getter
@@ -1385,7 +1400,7 @@ class System(IterativeOptimize):
 
         return  h0, Sz, Sp, Sm, pinning_term 
     
-    def _minimize_finite_size(self, resume=True, q_iter=None,  **kwargs):
+    def _minimize_finite_size(self,  q_iter=None,  **kwargs):
         
         from merapy.minimize import finite_site_u1  as finite_range_func 
         self.init_iteration()
@@ -1393,8 +1408,6 @@ class System(IterativeOptimize):
         if 1:   
             q_iter = q_iter if q_iter is not None else self.q_iter 
             
-            if resume: 
-                self.resume_func()
                 
         if isinstance(self.updaters, list): #only for backward compatable
             ascending_func, descending_func, update_mera_func, finite_range_func, rho_top_func= tuple(self.updaters)
@@ -1410,29 +1423,24 @@ class System(IterativeOptimize):
         
         temp = ['use_local_storage' ]
         args = {t: self.__getattribute__(t) for t in temp}
-        #args.update(backup_fn_local=backup_fn_local)
         kwargs.update(args)
        
         finite_range_func(self.mera, self, ascending=ascending_func, descending=descending_func, 
                 update_mera=update_mera_func, rho_top_func = rho_top_func, 
                 q_one=1, q_lay=1, q_iter=q_iter, use_player=self.use_player, 
                 filename=self.filename, backup_fn=self.backup_path, lstart=0, lstep=0, 
-                resume=resume,  info=self.info-1, **kwargs)
+                resume=True, info=self.info-1, **kwargs)
         
        
         return self.M, self
 
-    def _minimize_scale_invar(self, resume=True, 
-            num_of_SIlayer=3, q_iter=5, **kwargs):
+    def _minimize_scale_invar(self, num_of_SIlayer=3, q_iter=5, **kwargs):
         """ 
             taken from Main.run_scale_invar 
         """
         from merapy.minimize import ScaleInvar 
         self.init_iteration()
         
-        if resume: 
-            self.resume_func()
-                
         
         temp = ['use_local_storage']
         args = {t: self.__getattribute__(t) for t in temp}
@@ -1442,7 +1450,7 @@ class System(IterativeOptimize):
         SI = ScaleInvar(self, self.updaters, num_of_SIlayer, q_iter, 
                 q_one=1, q_lay=1, 
                 filename=self.filename, backup_fn=self.backup_path, 
-                resume=resume, use_player=self.use_player, info=self.info,
+                resume=True, use_player=self.use_player, info=self.info,
                 **kwargs)
         
         SI.scale_invariant()
@@ -2238,8 +2246,6 @@ class System(IterativeOptimize):
         
         return res
     
-    
-    
     def resume_func(self):
         """
             
@@ -2480,7 +2486,10 @@ class System(IterativeOptimize):
         qsp = qspclass.max(trunc_dim, nqn)
         self._expand_dim(qsp_max=qsp)
         #expand 相当于构造一个新的 System instance, 一些东西需要初始化的！
+        
+        #reset attr
         self.energy_diff_std = np.inf 
+        self.is_initialized = False 
 
     def expand_layer(self, num_of_layer):
         msg  = 'issue: when using expand_layer together with main.run() error will occor, caused by tensor_palyer'
@@ -2492,7 +2501,11 @@ class System(IterativeOptimize):
         else:
             for i in range(num_of_layer-self.mera.num_of_layer):
                 self._expand_layer()
+    
+        #reset attr 
         self.energy_diff_std = np.inf 
+        self.is_initialized = False 
+        
         
     def _expand_layer(self, out=None):
         from decorators import tensor_player, set_STATE_end_1
@@ -2756,15 +2769,38 @@ class TestSystem(unittest.TestCase):
         print_vars(vars(),  ['m.energy'])
         #the following sometimes fails due conflict with main.TestMain  for random seed 
         #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
-        from merapy.decorators import tensor_player 
-        tensor_player.STATE = 'stop'
-        m=System.example(model='Ising',
-                backup_parpath = dir, 
-                symmetry='Travial', info=1)
-        
-        m.minimize('prod_state', q_iter=10)
-        print_vars(vars(),  ['m.energy', 'm.iter0', 'm.iter1'])
-        self.assertTrue(m.iter0==5 and m.iter1==10)
+        if 1: 
+            from merapy.decorators import tensor_player 
+            tensor_player.STATE = 'stop'
+            m=System.example(model='Ising',
+                    backup_parpath = dir, 
+                    symmetry='Travial', info=1)
+            
+            m.minimize('prod_state', q_iter=10)
+            print_vars(vars(),  ['m.energy', 'm.iter0', 'm.iter1'])
+            self.assertTrue(m.iter0==5 and m.iter1==10)
+            
+        if 1:  # test init mera using other_backup_path  
+            tensor_player.STATE = 'stop'
+            m1=System.example(model='Ising',
+                    backup_parpath = tempfile.mkdtemp(), 
+                    other_backup_path = dir + '/4.pickle', 
+                    symmetry='Travial', info=1)
+            
+            m1.minimize('prod_state', q_iter=6)
+            print_vars(vars(),  ['m1.energy', 'm1.iter0', 'm1.iter1'])
+            if 1: 
+                from merapy.decorators import tensor_player 
+                tensor_player.STATE = 'stop'
+                m=System.example(model='Ising',
+                        backup_parpath = dir, 
+                        symmetry='Travial', info=1)
+                
+                m.minimize('prod_state', q_iter=15)
+                print_vars(vars(),  ['m.energy', 'm.iter0', 'm.iter1'])
+                self.assertTrue(m.iter0==5 and m.iter1==15)
+                
+                self.assertAlmostEqual(m.energy, m1.energy, 10)
         
     
     def test_minimize_finite_site(self): 
@@ -3903,7 +3939,7 @@ if __name__=='__main__':
         #ts.J_ising()
         #ts.J_heisbg()
 
-    if 0: 
+    if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
