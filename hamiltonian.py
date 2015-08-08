@@ -2364,8 +2364,9 @@ class System(IterativeOptimize):
         self.energy_err = (self.energy - self.energy_exact)
         steps = -self.energy_err/self.energy_diff#*pace
         
-        print '%dth iter, energy=%2.11f,  eng_err=%1.1e, eng_diff=%1.1e, eng_diff_std=%1.1e, steps~%1.2e'%(iter, 
-                self.energy, self.energy_err, self.energy_diff, self.energy_diff_std, steps),  
+        print '\n%s %dth iter, energy=%2.11f,  eng_err=%1.1e, eng_diff=%1.1e, eng_diff_std=%1.1e, steps~%1.2e'%(
+                self.backup_parpath_name, iter, self.energy, 
+                self.energy_err, self.energy_diff, self.energy_diff_std, steps),  
         
         dt_real = eng_rec1[1] - eng_rec0[1]
         dt_cpu = eng_rec1[2] - eng_rec0[2]
@@ -2801,6 +2802,7 @@ class TestSystem(unittest.TestCase):
                 self.assertTrue(m.iter0==5 and m.iter1==15)
                 
                 self.assertAlmostEqual(m.energy, m1.energy, 10)
+                
         
     
     def test_minimize_finite_site(self): 
