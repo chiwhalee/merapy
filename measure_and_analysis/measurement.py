@@ -168,14 +168,9 @@ def measure_S(S=None, parpath=None, path=None,
             corr_param = dict(direction=None, force_update=False, distance_max=10**4)
             rdb_class= ResultDB_mera 
             
-            #if check_convergence: 
-            #    if abs(S.energy_diff_std) < energy_diff_min:
-            #        allow_measure = True
-            #    else: 
-            #        allow_measure = False 
             
         elif algorithm == 'mps': 
-            #field = ['energy', 'correlation']
+            
             field = all_mps.DEFAULT_FIELD_LISt 
             all_func = all_mps
             #S = S['mps']  #fuck, this is bad, but I like bad!

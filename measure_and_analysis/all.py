@@ -8,6 +8,9 @@ from merapy.measure_and_analysis.tabulate import tabulate
 
 
 def energy(S) : 
-    return S.energy 
+    if isinstance(S, dict): 
+        return S['energy']
+    else: 
+        return S.energy 
 
 

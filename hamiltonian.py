@@ -178,7 +178,7 @@ class System(IterativeOptimize):
                         'entanglement_brute_force_9_aver', 
                         'correlation_extra', 
                         ], 
-                    'which': ['correlation', 'entanglement_entropy', 
+                    'which': ['energy', 'correlation', 'entanglement_entropy', 
                         'entanglement_spectrum', 'magnetization', 
                         ], 
                     }, 
@@ -2346,7 +2346,7 @@ class System(IterativeOptimize):
             energy_exact = np.nan 
         return energy_exact
     
-    def display(self, iter, filename, pace=1, interval=150):
+    def display(self, iter, filename, pace=1, interval=100):
         #iter_last = iter-pace
         eng_rec1, eng_rec0 = self.energy_record.values()[-1:-3:-1]
         a, b = self.energy_record.keys()[-1:-3:-1]
@@ -2372,12 +2372,12 @@ class System(IterativeOptimize):
         dt_real = dt_real/pace;     dt_cpu = dt_cpu/pace
         
         print "\t", dt_cpu,"\t",  round(dt_real, 3)
-        if iter%100 == 0 or iter<= 5: 
-            if filename is not None:
-                out = open(filename, 'a')
-                out.write('\t%d, %2.11f, %1.1e, %1.1e, %f, %f\n'%(iter, 
-                    self.energy, self.energy_err, self.energy_diff, dt_cpu, dt_real))
-                out.close()
+        #if iter%100 == 0 or iter<= 5: 
+        #    if filename is not None:
+        #        out = open(filename, 'a')
+        #        out.write('\t%d, %2.11f, %1.1e, %1.1e, %f, %f\n'%(iter, 
+        #            self.energy, self.energy_err, self.energy_diff, dt_cpu, dt_real))
+        #        out.close()
         energy_last = self.energy
         return steps, dt_real
 
