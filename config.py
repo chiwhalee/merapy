@@ -119,15 +119,6 @@ CFG_MERA.update({
         'backup_root': None, 
          
         'do_measure': 1, 
-        'measurement_args': {
-            'exclude_which': [
-                'entanglement_brute_force', 
-                'entanglement_brute_force_6',  
-                'entanglement_brute_force_9', 
-                'entanglement_brute_force_9_aver'
-                ], 
-            'which': None, 
-            }, 
         
         'schedule':{
             #'schedule': None, 

@@ -212,8 +212,13 @@ def save(obj, path, compress=False, compress_level=2, as_str=False, info=0):
             s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
         except Exception as err: 
             print 'pickling error, diagonstic which value cant be dumped: '
-            print sorted(obj.keys())
-            for k, v in sorted(obj.items()): 
+            if isinstance(obj, dict): 
+                temp = obj 
+            else: 
+                temp = dir(obj)
+                temp = {t: getattr(obj, t) for t in temp if t[:2]!= '__'}
+            print sorted(temp.keys())
+            for k, v in sorted(temp.items()): 
                 try: 
                     print k,   
                     pickle_any.dumps(v)

@@ -29,7 +29,6 @@ import warnings
 import time
 import datetime 
 import pprint
-import inspect
 import pickle
 import os
 import sys
@@ -43,18 +42,17 @@ from multiprocessing import Pool
 import traceback 
 import psutil
 import pdb
-import rpyc
-from plumbum import SshMachine
 import itertools
 import signal 
 import tempfile 
 from tempfile import mkdtemp
 
+
 uname=os.uname()[1]
 if uname in ['QTG-WS1-ubuntu']: 
     import pp
 
-from merapy.utilities import print_vars
+from merapy.utilities import print_vars, save 
 from merapy.context_util import (make_temp_dir, rpyc_conn_local, 
         rpyc_conn_local_zerodeploy, rpyc_conn, rpyc_conn_zerodeploy)
 from merapy.quantum_number import *
@@ -68,6 +66,9 @@ import merapy.schedule
 from merapy.schedule import copy_schedule, schedule_scale_invar, schedule_prod_state
 from merapy.decorators import *
 from merapy.measure_and_analysis.measurement import measure_S
+import merapy.main 
+
+
 
 
 """
@@ -75,120 +76,31 @@ from merapy.measure_and_analysis.measurement import measure_S
         1. init all--- pass all params
         2. excute; 
         3. collect and manage result
-    Q:
-        should I use keyword args or kargs?
+        Q:
+            should I use keyword args or kargs?
+        
+    
+    parallel wraper for running programs
+    
+    one main problem involved is picklability.  
+        commone problems: 
+            under pickle under  __main__ module
+                it may fail when unpickle in another module, resulting AttributeError 
+                    
+                the reason is following: 
+                Remember that pickle doesn't actually store information about how a
+                class/object is constructed, and needs access to the class when
+                unpickling. 
+                the reason and workaround see 
+                    https://skycoders.wordpress.com/2014/04/19/python-pickle-cannot-be-used-properly-in-__main__/
+                    http://stackoverflow.com/questions/27732354/unable-to-load-files-using-pickle-and-multipile-modules
+    
+    
 """
 
-"""
-sys_param
-model_param
-mera_param = {"trunc_dim":2, "num_of_layer":6, "symmetry":None}
-iter_param
-other_param
-"""
 
-__all__ = ["Main"]
+#__all__ = ["Main"]
 
-if 0:  #archive
-    def run_many_1(common_cfg, param_name_list, custom_param_list,  
-            schedule_list, root_dir, q_iter_max = None, parallel=False, do_measure=True, **kwargs): 
-        num_param = len(param_name_list)
-        if not parallel: 
-            for i in range(len(custom_param_list)): 
-                #main = main_list[i]
-                cfg = common_cfg.copy()
-                param = custom_param_list[i]
-                if not hasattr(param, '__iter__'): param = [param]
-                dic = dict(zip(param_name_list, param))
-                cfg['model_param'].update(dic)
-                if 1: 
-                    param = map(str, param)
-                    temp = zip(param_name_list, param)
-                    temp=map(lambda x: '='.join(x), temp)
-                    dir = '-'.join(temp)
-                    dir = root_dir  + dir
-                    if not os.path.exists(dir): 
-                        os.system('mkdir %s'%dir)
-                schedule = schedule_list[i]
-                main = Main(**cfg)
-                main.run_schedule(schedule=schedule, q_iter_max=q_iter_max, backup_parpath=dir, do_measure=do_measure, **kwargs)
-                iTensor.buff_free()
-                main.stop_player()           
-                del main.S  # or else tensor buffer would exhaust?
-                del main
-                iTensor.buff_free()
-
-        else: 
-            # Create jobserver
-            job_server = pp.Server()
-            ncpu = 4
-            jobs = []
-            start_time = time.time()
-            job_server.submit(part_sum, (starti, endi))
-            print "Time elapsed: ", time.time() - start_time, "s"
-
-    def run_many_2(common_cfg, param_name_list, custom_param_list,  
-            schedule_list, root_dir, ncpu=1, q_iter_max=None, parallel=False, do_measure=True, **kwargs): 
-        
-        num_param = len(custom_param_list)
-        print 'nnnn', num_param
-        
-        def run_one(i): 
-                cfg = common_cfg.copy()
-                param = custom_param_list[i]
-                if not hasattr(param, '__iter__'): param = [param]
-                dic = dict(zip(param_name_list, param))
-                cfg['model_param'].update(dic)
-                if 1: 
-                    param = map(str, param)
-                    temp = zip(param_name_list, param)
-                    temp=map(lambda x: '='.join(x), temp)
-                    dir = '-'.join(temp)
-                    dir = root_dir  + dir
-                    if not os.path.exists(dir): 
-                        os.system('mkdir %s'%dir)
-                schedule = schedule_list[i]
-                main = Main(**cfg)
-                main.run_schedule(schedule=schedule, q_iter_max=q_iter_max, backup_parpath=dir, do_measure=do_measure, **kwargs)
-                iTensor.buff_free()
-                main.stop_player()           
-                del main.S  # or else tensor buffer would exhaust?
-                del main
-                iTensor.buff_free()
-        
-        def run_group(group): 
-            print 'gggggg', group
-            for i in group: 
-                #run_one(i)
-                print group
-        
-        #if not parallel: 
-        if ncpu == 1:  
-            for i in range(len(custom_param_list)): 
-                run_one(i)
-        else: 
-            # Create jobserver
-            job_server = pp.Server(ncpus=ncpu)
-            print "Starting pp with", job_server.get_ncpus(), "workers"
-            
-            start_time = time.time()
-            num_group = num_param/ncpu if num_param%ncpu == 0 else num_param/ncpu + 1 
-            
-            print 'num_param = %d, num_group = %d'%(num_param, num_group)
-            for g in range(num_group): 
-               
-                group = range(g*ncpu, (g+1)*ncpu)
-                print 'gggg', g, group
-                
-                #job_server.submit(run_group,  args=(group, ), depfuncs=(run_one, ), modules=())
-                job_server.submit(run_group,  args=(group, ), depfuncs=(), modules=())
-            print "Time elapsed: ", time.time() - start_time, "s"
-            job_server.print_stats()
-
-    def run_mainy_simple(config_list, schedule_list):
-        num_job = len(config_list)
-        job_server = pp.Server(ncpus=6)
-        job_server.submit
 
 
 if 1: 
@@ -196,65 +108,40 @@ if 1:
     import types
  
     # to make  multiprocessing compatable with pickleing of method funcs
-    if 0: 
-        def _pickle_method(method):
-            # Author: Steven Bethard
-            # http://bytes.com/topic/python/answers/552476-why-cant-you-pickle-instancemethods
-            func_name = method.im_func.__name__
-            obj = method.im_self
-            cls = method.im_class
-            cls_name = ''
-            if func_name.startswith('__') and not func_name.endswith('__'):
-                cls_name = cls.__name__.lstrip('_')
-            if cls_name:
-                func_name = '_' + cls_name + func_name
-            return _unpickle_method, (func_name, obj, cls)
-
-        def _unpickle_method(func_name, obj, cls):
-            # Author: Steven Bethard
-            # http://bytes.com/topic/python/answers/552476-why-cant-you-pickle-instancemethods
-            for cls in cls.mro():
-                try:
-                    func = cls.__dict__[func_name]
-                except KeyError:
-                    pass
-                else:
-                    break
-            return func.__get__(obj, cls)
-
         # This call to copy_reg.pickle allows you to pass methods as the first arg to
         # mp.Pool methods. If you comment out this line, `pool.map(self.foo, ...)` results in
         # PicklingError: Can't pickle <type 'instancemethod'>: attribute lookup
         # __builtin__.instancemethod failed
-
-        copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method)
     
-    else: 
-        #the following correctly handling classmethods
-        def _pickle_method(method):
-            func_name = method.im_func.__name__
-            obj = method.im_self
-            cls = method.im_class
-            if func_name.startswith('__') and not func_name.endswith('__'):
-                #deal with mangled names
-                cls_name = cls.__name__.lstrip('_')
-                func_name = '_%s%s' % (cls_name, func_name)
-            return _unpickle_method, (func_name, obj, cls)
+    #the following correctly handling classmethods
+    def _pickle_method(method):
+        # Author: Steven Bethard
+        # http://bytes.com/topic/python/answers/552476-why-cant-you-pickle-instancemethods
+        func_name = method.im_func.__name__
+        obj = method.im_self
+        cls = method.im_class
+        if func_name.startswith('__') and not func_name.endswith('__'):
+            #deal with mangled names
+            cls_name = cls.__name__.lstrip('_')
+            func_name = '_%s%s' % (cls_name, func_name)
+        return _unpickle_method, (func_name, obj, cls)
 
-        def _unpickle_method(func_name, obj, cls):
-            if obj and func_name in obj.__dict__:
-                cls, obj = obj, None # if func_name is classmethod
-            for cls in cls.__mro__:
-                try:
-                    func = cls.__dict__[func_name]
-                except KeyError:
-                    pass
-                else:
-                    break
-            return func.__get__(obj, cls)
+    def _unpickle_method(func_name, obj, cls):
+        # Author: Steven Bethard
+        # http://bytes.com/topic/python/answers/552476-why-cant-you-pickle-instancemethods
+        if obj and func_name in obj.__dict__:
+            cls, obj = obj, None # if func_name is classmethod
+        for cls in cls.__mro__:
+            try:
+                func = cls.__dict__[func_name]
+            except KeyError:
+                pass
+            else:
+                break
+        return func.__get__(obj, cls)
 
-        copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method) 
-        
+    copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method) 
+    
 
 class Main_old(object):
     LOCALHOSTNAME = 'QTG-WS1-ubuntu'  #used in distributed computing 
@@ -867,6 +754,94 @@ class Main_old(object):
                 res.append(func(i))
         return res 
     
+    @classmethod #@staticmethod 
+    def run_many_dist(cls, config_group, servers=None, func=None, **kwargs): 
+        """
+            status: workable now!
+                I dont know why cant run run_many_dist under main.py.
+                This will cause problem in serialization  
+                so Iam not able to unittest it under __main__ 
+                
+        """
+        #if func is None: 
+        #    #func = cls.run_one
+        #    func = run_one_dist 
+        from brokest.brokest import queue, run_many 
+        if servers is None: 
+            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
+                    ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
+            servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
+            servers.extend(sugon_list)
+        if 1: 
+            def run_one_dist(config): 
+                schedule = config.get('schedule')
+                pid = os.getpid();  config.update(pid=pid)
+                #schedule = config['run_schedule_args']['schedule']
+                main = Main(**config)
+                msg = ''
+                is_registered = False 
+                job_status = ''
+                try: 
+                    status = 'open'
+                    if config.get('register_job'): 
+                        job_id = config.get('job_id')
+                        if job_id is None: 
+                            parpath = config['backup_parpath_local']
+                            job_id = (str(config.get('job_group_name')), hash(parpath))
+                        with rpyc_conn('local', 'service', 17012) as conn:                
+                            status = conn.root.register_job(job_id, config)
+                        if status  == 'open' : 
+                            is_registered = True
+                    if status == 'open': 
+                        if schedule is None: 
+                            main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
+                        else: 
+                            #print_vars(vars(),  ['schedule']); raise 
+                            #if isinstance(schedule[0], dict):  #mera use this 
+                            if config['algorithm']== 'mera':  
+                                main.run_schedule(**config['schedule'])
+                            else:   #mps use this 
+                                main.run_schedule(schedule)  
+                        job_status = 'COMPLETED'
+                        msg += 'run one COMPLETED.' 
+                    elif status== 'locked': 
+                        msg += 'job %s exists'%(job_id, ) 
+                        
+                except KeyboardInterrupt: 
+                    #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
+                    msg += 'KeyboardInterrupt captured.'
+                    job_status = 'FAILED'
+                except Exception, exception:
+                    print exception
+                    traceback.print_exc()
+                    job_status = 'FAILED'
+                finally: 
+                    msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
+                    print msg
+                    if is_registered:  
+                        parpath = config['backup_parpath_local']
+                        with rpyc_conn('local', 'service', 17012) as conn:                
+                            print 'iiiiiiiiiiiiiii', job_id 
+                            conn.root.update_job(job_id, 'status', job_status)
+                            #end_time = str(datetime.datetime.now()).split('.')[0]
+                            #conn.root.update_job(job_id, 'end_time', end_time)
+                       
+                    main.stop_player()        
+                return main 
+            #tasks = [(run_one_dist, (c, )) for c in config_group] 
+            tasks = [(cls.run_one, (c, )) for c in config_group] 
+            
+        else: 
+            def run_one_dist(main): 
+                main.run()
+                return 
+            
+            from merapy.utilities import pickle_any 
+            main_list = [Main(**c) for c in config_group]
+            tasks = [(run_one_dist, (m, )) for m in main_list] 
+            
+        run_many(tasks, servers, info=kwargs.get('info', 10), querry=0, try_period=kwargs.get('try_period', 1))
+    
     @staticmethod
     def make_grid(*args): 
         grid = itertools.product(*args)
@@ -996,8 +971,10 @@ class Main_old(object):
         smtp.quit()
 
     def __del__(self, ): 
+        
         print 'exit main, and run main.stop_player'
         self.stop_player()
+
 
 class Main(Main_old): 
     pass 
@@ -1254,6 +1231,8 @@ class Main(Main_old):
             main.stop_player()        
         return main 
 
+
+
 #Main = Main_old 
 
 class TestMain(unittest.TestCase): 
@@ -1280,24 +1259,6 @@ class TestMain(unittest.TestCase):
             pass 
         
         self.config_heisbg = cfg_heisbg
-    
-    def test_temp(self): 
-        from merapy.run_ising.config import make_config 
-        import numpy as np 
-        hh = np.arange(0, 2.2, 0.1)
-        #hh = []
-        config_group = []
-        for h in hh: 
-            c = make_config(h, root1= '')
-            c['schedule'].update(mera_shape_min=(4, 4), mera_shape_max=(4, 4), 
-                    q_iter_max = 5, do_measure = 0)
-            c['NUM_OF_THREADS'] = 1
-            config_group.append(c)
-            c['backup_parpath_local'] = '/tmp/sdfjl'
-            c['register_job'] = 1
-            print  c['backup_parpath']
-
-        Main.run_many(config_group, nproc=8)
 
     def test_grid(self): 
         a = [1, 2]
@@ -1382,7 +1343,7 @@ class TestMain(unittest.TestCase):
         config = self.config_heisbg
         #config['SYMMETRY'] = 'U1'
         config['SYMMETRY'] = 'Travial'
-        config['measurement_args']['exclude_which'].append('correlation_extra')  # too slow
+        #config['measurement_args']['exclude_which'].append('correlation_extra')  # too slow
         main = Main(**config)
         with make_temp_dir() as dd: 
             main.run_scale_invar(q_iter=5, backup_parpath=dd, do_measure=1)
@@ -1462,7 +1423,34 @@ class TestMain(unittest.TestCase):
         print 'file exits  ---pass '
         Main.LOCALHOSTNAME = bac
     
-    
+    def xtest_run_many_dist(self): 
+        if 1: 
+            h = [1.0, 1.1] 
+            NNN = len(h)
+            from merapy.config import CFG_ISING_BASIC, copy_config, updaters_u1 
+            config = copy_config(CFG_ISING_BASIC) 
+            from merapy.finite_site import finite_site_u1
+            config['updaters'] = updaters_u1
+            config_group = [copy_config(config) for i in range(NNN)]
+            
+            for c in config_group: 
+                c['SYMMETRY'] = 'Travial'
+                c.update(tot_layer=3)
+                c['backup_parpath'] = mkdtemp()
+                c['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+                c['schedule'].update(q_iter_max=10, mera_shape_min=(3, 3),  mera_shape_max=(4, 3))
+            servers=[('localhost', 90900),] 
+            Main.run_many_dist(config_group, servers=servers)
+        
+        
+    def test_temp(self): 
+        
+        if 0: 
+            from merapy import save 
+            save(Main, '/tmp/xxxxxxx', compress=1)
+        
+        
+        
 class TestRpyc(unittest.TestCase): 
     def setUp(self): 
         pass
@@ -1482,12 +1470,13 @@ if __name__=="__main__":
     else:
         suite = unittest.TestSuite()
         add_list = [
-        #'test_temp',
+        'test_temp',
         
         #'test_run',
         #'test_run_scale_invar',
-        'test_run_schedule',
+        #'test_run_schedule',
         #'test_run_many',
+        #'xtest_run_many_dist',
         #'test_resume',
         
         #'xtest_make_dir',
