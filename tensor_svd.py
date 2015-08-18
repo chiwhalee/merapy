@@ -400,10 +400,16 @@ class Tensor_svd(object):
         return val_largest, last_list, empty_list  
     
     @staticmethod 
-    def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, full_matrices=False, compute_uv=True, return_trunc_err=False, 
+    def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, 
+            full_matrices=False, compute_uv=True, 
+            return_trunc_err=False, totqn_on_which='s', 
         normalize_singular_val=False):  
         """
             itensor should be prepare into a rank 2 tensor 
+            
+            this func also support the case when tensor.totqn not identity.
+                tensor.totqn is finally carried by S by default
+                but this can also be changed by param: totqn_on_which 
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 10000
         num_blocks = tensor.nidx 
@@ -536,14 +542,27 @@ class Tensor_svd(object):
         #U = iTensor(QSp=[tt.QSp[0], qsp_sr])
         #S = iTensor(QSp=[qsp_sl, qsp_sr])
         #V = iTensor(QSp=[qsp_sl, tt.QSp[1]])
-        
+        totqn = tt.totQN 
         qsp_l = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
         qsp_r = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
         qsp_l_rev = qsp_l.copy(); qsp_l_rev.reverse()
         qsp_r_rev = qsp_r.copy(); qsp_r_rev.reverse()
         U = iTensor(QSp=[tt.QSp[0], qsp_l_rev])
         V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]])
-        S = iTensor(QSp=[qsp_l, qsp_r], totQN=tt.totQN.copy())
+        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy())
+        if totqn != totqn.__class__.qn_id():  # when itensor carry non-travial totqn  
+            if totqn_on_which == 's' : 
+                pass
+            elif totqn_on_which == 'u':
+                S.shift_qn(totqn, 0)
+                U.shift_qn(totqn.conj(), 1)
+            elif totqn_on_which == 'v':
+                S.shift_qn(totqn, 1)
+                V.shift_qn(totqn.conj(), 0)
+            else: 
+                raise ValueError(totqn_on_which) 
+                
+            
         
         
         for i in xrange(U.nidx): 
@@ -700,6 +719,10 @@ class Tensor_svd(object):
             return:
                 Vg: eigen vec of itensor with greatest eigval
                 Eg: eigen energy 
+            issue: the param and return is correct but not very proper, 
+                it should not return a tensor with a dummy leg, but should 
+                with a totqn
+            
         """
         rank = itensor.rank
         div = rank//2
@@ -919,30 +942,6 @@ class TestIt(unittest.TestCase):
         self.u = u 
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry='Z2')
     
-    def test_temp(self): 
-        from merapy import QspU1 
-        np.random.seed(1234)
-        
-        if 1: 
-            np.set_printoptions(5)
-            np.random.seed(1234)
-            q = QspU1.easy_init([ 1, -1, ], [2, 2])
-            qsp = q.copy_many(5)
-            totqn = QspU1.QnClass(1)
-            t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
-            t = t.merge_qsp((0, 1), (2, 3, 4))
-            print_vars(vars(),  ['t'])
-            
-            if 1: 
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
-            
-            if 1: 
-                U, t, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
-                t.data /= np.linalg.norm(t.data)
-            
-            if 1: 
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=10, return_trunc_err=1)
-                self.assertAlmostEqual(err, 0.12761304163092035)
         
     def test_group_legs(self, rank=3):
         """
@@ -1106,7 +1105,22 @@ class TestIt(unittest.TestCase):
             
             if 1: 
                 U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
+                a = U.dot(S).dot(V) 
+                self.assertTrue(np.allclose(a.data, t.data))
             
+            if 1: 
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, 
+                        return_trunc_err=1, totqn_on_which='u')
+                a = U.dot(S).dot(V) 
+                self.assertTrue(np.allclose(a.data, t.data))
+            
+            if 1: 
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, 
+                        return_trunc_err=1, totqn_on_which='v')
+                a = U.dot(S).dot(V) 
+                self.assertTrue(np.allclose(a.data, t.data))
+    
+    
             if 1: 
                 U, t, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
                 t.data /= np.linalg.norm(t.data)
@@ -1172,7 +1186,64 @@ class TestIt(unittest.TestCase):
                 c, _ = tt.contract(tt.conj(), [0, 1], [-1, 1])
                 c.show_data()
                 self.assertTrue(c.is_close_to(1))
-    
+
+    def test_temp(self): 
+        from merapy import QspU1 
+        np.random.seed(1234)
+        
+        if 0: 
+            np.set_printoptions(5)
+            np.random.seed(1234)
+            q = QspU1.easy_init([ 1, -1, ], [2, 2])
+            qsp = q.copy_many(5)
+            totqn = QspU1.QnClass(1)
+            t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
+            t = t.merge_qsp((0, 1), (2, 3, 4))
+            print_vars(vars(),  ['t'])
+            
+            if 1: 
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
+            
+            if 1: 
+                U, t, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
+                t.data /= np.linalg.norm(t.data)
+            
+            if 1: 
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=10, return_trunc_err=1)
+                self.assertAlmostEqual(err, 0.12761304163092035)
+
+        if 1: 
+            np.set_printoptions(5)
+            np.random.seed(1234)
+            q = QspU1.easy_init([ 1, -1, ], [2, 2])
+            qsp = q.copy_many(5)
+            totqn = QspU1.QnClass(1)
+            t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
+            t = t.merge_qsp((0, 1), (2, 3, 4))
+            print_vars(vars(),  ['t'])
+            
+            if 1: 
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
+            
+            a = U.dot(S).dot(V) 
+            self.assertTrue(np.allclose(a.data, t.data))
+            if 0:     
+                qn_delta = totqn.copy()
+                S.shift_qn(qn_delta, 0)
+                U.shift_qn(qn_delta.conj(), 1)
+               
+                a = U.dot(S).dot(V) 
+                self.assertTrue(np.allclose(a.data, t.data))
+            
+            if 1:     
+                qn_delta = totqn.copy()
+                S.shift_qn(qn_delta, 1)
+                V.shift_qn(qn_delta.conj(), 0)
+               
+                a = U.dot(S).dot(V) 
+                self.assertTrue(np.allclose(a.data, t.data))
+                print_vars(vars(),  ['V'])
+
 if __name__ == "__main__":
     if 0: 
         tt = test_Tensor_svd(symmetry="Travial")
@@ -1198,7 +1269,7 @@ if __name__ == "__main__":
            #'test_eig_rank2', 
            #'test_group_legs', 
            'test_svd_rank2_totqn_not_id', 
-           'test_temp', 
+           #'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
