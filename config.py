@@ -300,7 +300,7 @@ def check_config(cfg):
 # eventually,  I would make config into a class
 class Config(dict): 
     @staticmethod
-    def set_backup_parpath_old(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
+    def set_backup_parpath_old_del(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
         if cfg['algorithm'] == 'mera':  
             ROOT = cfg['MERA_BACKUP_DIR']
             ROOT_LOCAL = cfg['MERA_BACKUP_DIR_LOCAL']

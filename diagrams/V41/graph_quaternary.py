@@ -1,3 +1,4 @@
+import warnings 
 from merapy.graphics import Graphics
 
 """
@@ -9,7 +10,8 @@ some Gotchas:
     G_2_2[01=>1] has not U tensor, so one cnt update U for that graph. G_22_2[01-45=>01] also has no U
 """
 
-print "issue: in graph_quaternary.py Im not sure wether use G_2_2[2, 6] both or only 2, since they are symmetric"
+msg =  "issue: in graph_quaternary.py Im not sure wether use G_2_2[2, 6] both or only 2, since they are symmetric"
+warnings.warn(msg)
 
 
 __all__ = ["G_2_2", "G_3_3", "G_3_2", "G_22_2", "G_22_3"]
@@ -209,7 +211,8 @@ if 0:
     print "i am not sure should there be key 6 in G_2_2, just remove it at present, see ./merapy/diagrams/V41/graph_quaternary.py"
     G_2_2.pop(6)
 else:
-    print "in graph_quaternary G_2_2[2 and 6] are averaged"
+    msg = "in graph_quaternary G_2_2[2 and 6] are averaged"
+    warnings.warn(msg)
     G_2_2[2].weight = 1./8
     G_2_2[6].weight = 1./8
 

@@ -32,16 +32,16 @@ def make_config(h, backup_parpath=None, which_top_state='scale_invar_state',  su
     else: 
         raise 
     cfg['do_measure'] = 1
-    cfg['measurement_args'] = {
-            'exclude_which': [
-                'entanglement_brute_force', 
-                #'entanglement_brute_force_6',  
-                'entanglement_brute_force_9', 
-                'entanglement_brute_force_9_aver'
-                ], 
-            'which': None, 
-            } 
-    
+    #cfg['measurement_args'] = {
+    #        'exclude_which': [
+    #            'entanglement_brute_force', 
+    #            #'entanglement_brute_force_6',  
+    #            'entanglement_brute_force_9', 
+    #            'entanglement_brute_force_9_aver'
+    #            ], 
+    #        'which': None, 
+    #        } 
+    #
     project_name =  'run-ising'
     dir_name = 'h=%s'%h 
     cfg['model_param'].update(h=h)
