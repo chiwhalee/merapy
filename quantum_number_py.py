@@ -144,6 +144,11 @@ class QnBase():
     def qsp_class(self): 
         return symmetry_to_Qsp(self.SYMMETRY)
     
+    def conj(self): 
+        res = self.copy()
+        res.reverse()
+        return res 
+    
 class QnTravial(QnBase):
     SYMMETRY = "Travial"
     #this may be an issue NUM_OF_SYMM should be 0?
@@ -539,6 +544,7 @@ class QuantSpaceBase(object):
         see QSp_Reverse in f90"""
         for i in range(self.nQN):
             self.QNs[i].reverse()
+    
     def conj(self):
         """
             not inplace reverse 
