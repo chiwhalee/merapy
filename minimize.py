@@ -296,7 +296,7 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
                     S.save(fn=temp, use_local_storage=S.use_local_storage)
             
     iter_tot = S.iter1-iter0
-    msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
+    if info>-1: msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
     if iter_tot>0 : 
         temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
         if temp is not None: 

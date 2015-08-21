@@ -840,7 +840,7 @@ class Main_old(object):
             main_list = [Main(**c) for c in config_group]
             tasks = [(run_one_dist, (m, )) for m in main_list] 
             
-        run_many(tasks, servers, info=kwargs.get('info', 10), querry=0, try_period=kwargs.get('try_period', 1))
+        run_many(tasks, servers, info=kwargs.get('info', 10), querry=1, try_period=kwargs.get('try_period', 1))
     
     @staticmethod
     def make_grid(*args): 
@@ -987,7 +987,7 @@ class Main(Main_old):
     def init_alg(self): 
         config = self.config
         #print_vars(vars(),  ['USE_CUSTOM_RAND'], head='\n\nCCCCCCCC\n\n')
-        if config['USE_CUSTOM_RAND']:
+        if config.get('USE_CUSTOM_RAND'):
             crandom.mrandom.csrand(config['rand_seed'])
         else:
             random.seed()

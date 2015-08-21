@@ -83,7 +83,7 @@ class System(IterativeOptimize):
     ALGORITHM = 'mera'
     TNet_sys = TensorNetwork() 
     
-    def __init__(self, symmetry, mera=None, model=None, qsp_base=None, 
+    def __init__(self, symmetry=None, mera=None, model=None, qsp_base=None, 
             graph_module=None, model_param=None, 
             only_NN=True, only_NNN=False, 
             energy_exact=None, j_power_r_max=None, **kwargs):
@@ -117,6 +117,7 @@ class System(IterativeOptimize):
             'which_minimize': 'prod_state', # in ['prod_state', 'eigen_state', 'scale_invar_state'], 
             #IO
                 'save_attr_list': self.save_attr_list + [
+                    'symmetry', 
                     'mera',
                     'only_NN', 'only_NNN', 
                     'H_2', 'H_3', 'rho_2', 'rho_3', 
@@ -127,6 +128,7 @@ class System(IterativeOptimize):
                     'Jleg_tau_0l_dic', 
                     'updaters', #?
                     'pinning_term_def', #this is needed, or else cause problem for tensor_player 
+                    'graph_module_name', 
                     ] , 
                 
                 '_not_resume_attr_list': self._not_resume_attr_list  + [
@@ -144,7 +146,7 @@ class System(IterativeOptimize):
             
             'tot_layer': 4,
             'nTop': 2, 
-            'unitary_init': 'unit_tensor',
+            'unitary_init': 'unit_tensor', # or 'random_unit_tensor'
             'mera_kwargs': {}, 
             
             'translation_invariant': 1, 
@@ -288,6 +290,10 @@ class System(IterativeOptimize):
             ham，mera，图
             
         """
+        if self.init_state is not None: 
+            self.__dict__.update(self.init_state)   # use resume_func to realize this later, which is better. cf. iDMRG_mcc.initialize 
+            self.is_initialized = True
+            return 
     
         if self.mera is None:
             if not self.combine_2site and self.symmetry == "U1" :
@@ -463,24 +469,26 @@ class System(IterativeOptimize):
         elif isinstance(module, str): 
             module = importlib.import_module(module)
             #todo: in config, change all graph_modul into str of the path 
-
         xx = ["G_2_2", "G_2_3", "G_3_2", "G_3_3", "G_22_2", "G_22_3"]  #G_2_3 occurs in binary graph
         found = []
         not_found = []
         for i in xx:
             try:
                 g = module.__getattribute__(i)
-                self.__setattr__(i, g)
+                #self.__setattr__(i, g)
+                setattr(self, i, g)
                 found.append(i)
-                #print_vars(vars(),  ['i', 'g.keys()'])
+                
             except AttributeError as err:
+                
                 warnings.warn(str(err))
                 not_found.append(i)
-                #print err
+                print i, err  
         if self.info>0: 
             print "loading graphs in file %s, \n\tfound these %s, \n\tnot found and omit these%s"%(module.__file__, 
                     found, not_found)
-        self.graph_module_name = module.__name__.split('.')[-1]
+        #self.graph_module_name = module.__name__.split('.')[-1]
+        self.graph_module_name = module#.__name__.split('.')[-1]
 
     def fetch_op_names(self, type, range=None):
         """
@@ -1456,8 +1464,8 @@ class System(IterativeOptimize):
         SI.scale_invariant()
         
         
-        #if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
-        #    self.transfer_pickle_file()
+        
+        #self.transfer_pickle_file()
         
         return self
 
@@ -1478,12 +1486,6 @@ class System(IterativeOptimize):
         else: 
             raise  ValueError(which_minimize)
         
-        #if self.do_measure and self.iter1>0:  
-        #    ppp = self.backup_parpath if not self.use_local_storage else self.backup_parpath_local
-        #    if ppp is not None : 
-        #        exclude_which = self.measurement_args.get('exclude_which', [])
-        #        exclude_which.append('scaling_dim')
-        #        self.measure_S(self, ppp, exclude_which=exclude_which)
         
         if self.do_measure and self.iter0>0:  
             self.measure_state()
@@ -2106,9 +2108,10 @@ class System(IterativeOptimize):
         if not isinstance(res, dict):  #temporary work around 
             res = System.update_S(res)
         else:
-            pass 
             if not hasattr(res['mera'], 'USE_REFLECTION'): 
                 res['mera'].USE_REFLECTION = False 
+            if not hasattr(res, 'symmetry'): 
+                res['symmetry'] = 'U1'
 
             #temp1 = ["U", "V", "U_dag", "V_dag"] 
             #temp2 = ["rho_2", "rho_3"]
@@ -2248,61 +2251,60 @@ class System(IterativeOptimize):
     
     def resume_func(self):
         """
-            
+            issue: use IterativeOptimize.resume_func later 
         """
         #if not use_local_storage: 
         backup_path = self.backup_path if not self.use_local_storage else self.backup_path_local 
-        if 1: 
-            if backup_path is not None : 
-                LOCAL = '' if not self.use_local_storage else 'LOCAL file '
-                msg = "\nTRY TO RESUME from %s%s...  "%(LOCAL, backup_path[-30:])
-                try:
-                    
-                    #self.S = self.__class__.load(backup_path, use_local_storage=use_local_storage)
-                    temp = self.__class__.load(backup_path, use_local_storage=self.use_local_storage)
-                    
-                    if not isinstance(temp, dict):  #temporary work around  for backward compatible                 
-                        temp = temp.__dict__ 
-                        kk = ['updaters', 'backup_parpath', 
-                                'is_initialized', 'measurement_args']
-                        for k in kk: 
-                            if temp.has_key(k): 
-                                temp.pop(k)
-                        self.__dict__.update(temp)
-                    else: 
-                        self.set_state(temp)
-                        self.M = self.mera
-                    
-                    if 0:  #resume check 
-                        if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
-                            energy_diff_min = kwargs.get('energy_diff_min')
-                            if  self.energy_diff_std is not None: 
-                                if self.energy_diff_std <= energy_diff_min: 
-                                    q_iter = 0
-                                    
-                                    msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0'%(
-                                            self.energy_diff_std, energy_diff_min)
-                                    print msg
-                    
-                    #self.M = self.S.mera
-                    #iter = self.S.iter1
-                    #eng = self.S.energy
-                    iter = self.iter1
-                    eng = self.energy 
-                    #print_vars(vars(),  ['temp.keys()', 'self.energy_diff'])
-                    msg  += "RESUMED successfully at iter=%s,  eng=%s, energy_diff=%1.2e"%(iter, eng, self.energy_diff)
-                except IOError as err:
-                    if err.errno == 2: 
-                        msg += str(err)
-                        msg += "discard manually resume"
-                    else:
-                        raise IOError
-                except TypeError as err:
+        if backup_path is not None : 
+            LOCAL = '' if not self.use_local_storage else 'LOCAL file '
+            msg = "\nTRY TO RESUME from %s%s...  "%(LOCAL, backup_path[-30:])
+            try:
+                
+                #self.S = self.__class__.load(backup_path, use_local_storage=use_local_storage)
+                temp = self.__class__.load(backup_path, use_local_storage=self.use_local_storage)
+                
+                if not isinstance(temp, dict):  #temporary work around  for backward compatible                 
+                    temp = temp.__dict__ 
+                    kk = ['updaters', 'backup_parpath', 
+                            'is_initialized', 'measurement_args']
+                    for k in kk: 
+                        if temp.has_key(k): 
+                            temp.pop(k)
+                    self.__dict__.update(temp)
+                else: 
+                    self.set_state(temp)
+                    self.M = self.mera
+                
+                if 0:  #resume check 
+                    if hasattr(self, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
+                        energy_diff_min = kwargs.get('energy_diff_min')
+                        if  self.energy_diff_std is not None: 
+                            if self.energy_diff_std <= energy_diff_min: 
+                                q_iter = 0
+                                
+                                msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0'%(
+                                        self.energy_diff_std, energy_diff_min)
+                                print msg
+                
+                #self.M = self.S.mera
+                #iter = self.S.iter1
+                #eng = self.S.energy
+                iter = self.iter1
+                eng = self.energy 
+                #print_vars(vars(),  ['temp.keys()', 'self.energy_diff'])
+                msg  += "RESUMED successfully at iter=%s,  eng=%s, energy_diff=%1.2e"%(iter, eng, self.energy_diff)
+            except IOError as err:
+                if err.errno == 2: 
                     msg += str(err)
                     msg += "discard manually resume"
-                except Exception: 
-                    raise 
-                print(msg)
+                else:
+                    raise IOError
+            except TypeError as err:
+                msg += str(err)
+                msg += "discard manually resume"
+            except Exception: 
+                raise 
+            print(msg)
     
     def resume_check(self, old_state): 
         allow_resume = 1
