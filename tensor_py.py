@@ -2107,7 +2107,7 @@ class iTensor(TensorBase):
         
         return V_1n2, Vp1, Vp2, V3 
 
-    def contract(self,T2, V1, V2, order_final=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
+    def contract(self, T2, V1=None, V2=None, order_final=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
         """
             see Tensor_Contraction2 in f90
             V1,2,3 are arrays (maps) 张量指标 —> 自然数。用自然数来标记所有张量的指标
@@ -2139,6 +2139,10 @@ class iTensor(TensorBase):
             #to impletement in the future
             #self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
             #T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
+        if V1 is None: 
+            V1 = self.ind_labels 
+        if V2 is None: 
+            V2 = T2.ind_labels
         
         V_1n2, Vp1, Vp2, V3 = self.prepare_leg(T2, V1, V2)        
         
@@ -2201,7 +2205,18 @@ class iTensor(TensorBase):
             return  T3, V3, Vc 
         else:
             return T3, V3
-
+    
+    @staticmethod 
+    def contract_tensor_list(tlist): 
+        """
+            requirs each t.ind_labels is not None 
+        """
+        head = tlist[0]
+        for t in tlist[1: ]: 
+            print_vars(vars(),  ['t.ind_labels'])
+            head, _= head.contract(t)
+        return head 
+    
     def dot(self, other): 
         """
             mainly for compatible with numpy 
