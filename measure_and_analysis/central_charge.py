@@ -12,7 +12,7 @@ import unittest
 import tempfile 
 
 import merapy 
-from merapy.utilities import print_vars
+from merapy.utilities import print_vars, dict_to_object 
 from merapy import load 
 from merapy.hamiltonian import System
 from merapy.tensor_svd import Tensor_svd
@@ -27,7 +27,9 @@ __all__ = ['entanglement_entropy', 'entanglement_spectrum', 'central_charge',
     'entanglement_extra', 
     'entanglement_brute_force', 'entanglement_brute_force_aver',
     'entanglement_brute_force_9', 'entanglement_brute_force_6', 
-    'entanglement_brute_force_9_aver', 'entanglement_brute_force_6_aver' ]
+    'entanglement_brute_force_9_aver', 'entanglement_brute_force_6_aver' , 
+    'entanglement_special'
+    ]
 
 """
 
@@ -43,7 +45,10 @@ __all__ = ['entanglement_entropy', 'entanglement_spectrum', 'central_charge',
 
 
 
-def rho_eig(rho, k, info=0): 
+def rho_eig(rho, k=None, info=0): 
+    """
+        k: number of eigen vals during sparse diag 
+    """
     symmetry = rho.QSp[0].QnClass.SYMMETRY
     qn_list = symmetry_to_Qn(symmetry).QNS
     if symmetry == "U1":
@@ -164,6 +169,77 @@ def entanglement_entropy(S, spectrum=0, info=0, path=None, verbose=False):
     for l in range(numl-1): 
        res[l]=__entanglement_entropy(S, layer=l, spectrum=spectrum)
     return res
+
+def entanglement_special(S, ): 
+    """
+        this one is used in U1 symm when combine 2site, 
+        rho = rho_{i1 i2 i3 i4}
+        this func trace out [i1, i4]
+        for calc the valence bond effect on entanglement in AFM 
+    """
+    from merapy.hamiltonian import System 
+
+    if not isinstance(S, dict): 
+        S= S.__dict__ 
+    if isinstance(S, dict): 
+        S = System(symmetry='U1', init_state=S)
+        S.info = 2
+        System.set_graph.im_func(S, getattr(S, 'graph_module_name', None))
+        S.initialize()
+  
+    layer = 0 
+    if layer == 0 :   #rho at 0th layer is not updated during optimization, so update it here
+        descending_ham(S.mera, S, ilayer=1)
+    H2 = S.H_2[0][0]
+    rho_2 = S.rho_2[layer][0].copy()
+    d = rho_2.qsp_class.easy_init([1, -1], [1, 1]) 
+    
+    def re_index(t): 
+        d = t.qsp_class.easy_init([1, -1], [1, 1]) 
+        d2 = d**2 
+        qsp = d2.copy_many(4, reverse=[2, 3])
+        res = t.__class__(QSp=qsp)
+        
+        for i in range(t.nidx): 
+            qn_id_tuple = t.Addr_idx[:, i]
+            temp = (qn_id_tuple + 1)%3 
+            #print_vars(vars(),  ['i ','qn_id_tuple', 'temp'], head='', sep=', ')
+            data = t[qn_id_tuple][0]
+            j=res.ravel_qn_id_tuple(temp)
+            j = res.idx[j] 
+            res.set_block(j, data)
+        return res 
+    
+    rho4 = re_index(rho_2)
+    dc = d.conj()
+    rho8 = rho4.split_qsp(0, (d, d), 1, (d, d), (2), (dc, dc), 3, (dc, dc))
+    res= {}
+    if 1: 
+        rho6 = rho8.merge_qsp((1, 2), (5, 6))
+        rho_red = rho6.partial_trace([0, 2])
+        ee, _ = rho_eig(rho_red)
+        res[12] = ee
+    if 1: 
+        rho6 = rho8.merge_qsp((2, 3), (6, 7))
+        rho_red = rho6.partial_trace([0, 1])
+        ee, _ = rho_eig(rho_red)
+        res[23] = ee
+    if 1: 
+        #rho6 = rho8.merge_qsp((0, 1), (4, 5))
+        #rho_red = rho6.partial_trace([1, 2])
+        rho6 = rho8.merge_qsp((0, 1), (2, 3), (4, 5), (6, 7))
+        rho_red = rho6.partial_trace([1])
+        ee, _ = rho_eig(rho_red)
+        #res[01] = ee
+        res[1] = ee
+    
+    
+    #print_vars(vars(),  ['EE, lam'])
+    #res= OrderedDict()    
+    #EE = {}
+    #EE[1] =  ee  
+    #res[0] = EE
+    return res 
 
 
 def central_charge(S, force_update=False, verbose=True, info=0):
@@ -750,17 +826,13 @@ class TestIt(unittest.TestCase):
         print res['EE']
     
     def test_temp(self): 
-        if 0: 
-            self.initialize()
-        if 1: 
-            path='/tmp/tmphvKfKt/4.pickle'
-            s= load(path)
-            EE = xxxx(s, 0)
-            print_vars(vars(),  ['EE'])
+   
+        #path= '/home/zhli/backup_tensor_dir/run-long-heisbg/mera/test/rmax12_4812125/alpha=0.88-init1p44/8.pickle'
+        path= '/home/zhli/backup_tensor_dir/run-heisbg-NNN/mera/test/prod_state/J2=0.02-pin2_lamm1_xi2000/4.pickle'
+        S = load(path)
+        ee=entanglement_special(S)
+        #print_vars(vars(),  ['ee'])
             
-            
-        
-        pass
 
 
 if __name__ == '__main__':
