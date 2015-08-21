@@ -147,6 +147,7 @@ class System(IterativeOptimize):
             'tot_layer': 4,
             'nTop': 2, 
             'unitary_init': 'unit_tensor', # or 'random_unit_tensor'
+            'isometry_init': 'random',  # or 'AFM'
             'mera_kwargs': {}, 
             
             'translation_invariant': 1, 
@@ -312,7 +313,9 @@ class System(IterativeOptimize):
                     self.qsp_base.copy(),  qsp_max, qsp_max2, 
                     topQN=self.qn_identity.copy(), qsp_null=self.qsp_null.copy(), 
                     qn_identity=self.qn_identity.copy(), 
-                    unitary_init=self.unitary_init, **self.mera_kwargs)
+                    unitary_init=self.unitary_init, 
+                    isometry_init=self.isometry_init, 
+                    **self.mera_kwargs)
             self.M = self.mera
             
             #每次更改耦合常数算新的值，要重新初始化
@@ -321,7 +324,8 @@ class System(IterativeOptimize):
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
-       
+        print_vars(vars(),  ['self.mera'])   
+        
         if not hasattr(self, 'H_2'): 
             self.init_Hamiltonian()
             #self.init_ham_eff()  # merapy 2.0,  replace init_Hamiltonian in future 
@@ -2712,6 +2716,10 @@ class TestSystem(unittest.TestCase):
             self.sys= sys
             self.M = M
     
+    def tearDown(self): 
+        print 'set tensor_player.STATE = "stop" in tearDown'
+        tensor_player.STATE = 'stop'
+    
     def xtest_example(self): 
         if 1: 
             M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); 
@@ -2804,7 +2812,6 @@ class TestSystem(unittest.TestCase):
                 self.assertTrue(m.iter0==5 and m.iter1==15)
                 
                 self.assertAlmostEqual(m.energy, m1.energy, 10)
-                
         
     
     def test_minimize_finite_site(self): 
@@ -3883,9 +3890,9 @@ class TestSystem(unittest.TestCase):
             import pprint
             pprint.pprint(System.Jleg_tau_0l_dic)
 
-    def tearDown(self): 
-        print 'set tensor_player.STATE = "stop" in tearDown'
-        tensor_player.STATE = 'stop'
+    def test_temp(self) : 
+        s= System.example(symmetry='U1', isometry_init='AFM' )
+        print_vars(vars(),  ['s.mera'])
 
 
 if __name__=='__main__':
@@ -3943,11 +3950,12 @@ if __name__=='__main__':
         #ts.J_ising()
         #ts.J_heisbg()
 
-    if 1: 
+    if 0: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
+        TestSystem.test_temp=unittest.skip("skip test_temp")(TestVMPS.test_temp) 
         unittest.main()
-        
+                
     else: 
         suite = unittest.TestSuite()
         add_list = [
@@ -3956,10 +3964,11 @@ if __name__=='__main__':
            #'xtest_example',  
            #'test_backup_path',  
            #'test_minimize',  
-           'test_resume',  
+           #'test_resume',  
            #'test_minimize_finite_site',  
            #'test_minimize_scale_invar',  
-           #'test_expand_dim_and_layer',  
+           #'test_expand_dim_and_layer',
+           'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestSystem(a))

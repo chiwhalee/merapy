@@ -321,7 +321,7 @@ class Mera(object):
     def __init__(self, layer, nTop, qsp_0, qsp_max, qsp_max2, 
             topQN, qsp_null, qn_identity, tensor_defs=None, 
             rand_seed=None, USE_CUSTOM_RAND=False, USE_REFLECTION=False,   
-            unitary_init=None):
+            unitary_init=None, isometry_init='random'):
         """
             see init_Mera in f90
             给所有的tensor allocate space
@@ -347,6 +347,8 @@ class Mera(object):
         self.qn_identity = qn_identity 
         self.symmetry = self.qsp_0.QNs[0].SYMMETRY 
         self.USE_REFLECTION = USE_REFLECTION 
+        
+        self.isometry_init = isometry_init 
 
         self.tensor_defs= {
                 "U":        {"type":(2, 2),    "type_1":"unitary",	        "dual":False,}, 
@@ -406,7 +408,8 @@ class Mera(object):
         return not self.__eq__(other)
     
     @classmethod 
-    def example(cls, trunc_dim=2, tot_layer=4, symmetry="Z2", combine_2site=False):
+    def example(cls, trunc_dim=None, 
+            tot_layer=4, symmetry="Z2", combine_2site=False, **kwargs):
         """
         
         """
@@ -418,13 +421,12 @@ class Mera(object):
         QN_idendity, QSp_base , QSp_null = init_System_QSp(symmetry=symmetry)
 
 
-        #tensor.init_Buffer()
-
         qsp_0= QSp_base.copy()
         qsp_0.update()
 
         
         if symmetry == "Z2" :
+            trunc_dim = trunc_dim if trunc_dim is not None else 2  
             qsp_max = qsp_0.copy()
             print_vars(vars(),  ['trunc_dim'])
             qsp_max.Dims[0:2] = trunc_dim/2
@@ -438,13 +440,16 @@ class Mera(object):
             qsp_max2.RefQN[0,0:2] = [2,1]
             qsp_max2.RefQN[1,0:2] = [0,1]
             qsp_max2.update()
+        
         elif symmetry == "U1":  
-            qsp_max =QspU1.max(trunc_dim)
+            trunc_dim = trunc_dim if trunc_dim is not None else 4  
+            qsp_max =QspU1.max(trunc_dim, 3)
             qsp_max2 = qsp_max.copy()
             
         elif symmetry == "Travial" :
             qsp_max= QSp_base.max(trunc_dim)
             qsp_max2 = qsp_max.copy()
+        
         elif symmetry == "Z3":
             qsp_max= QSp_base.max(trunc_dim)
             qsp_max2 = qsp_max.copy()
@@ -456,7 +461,8 @@ class Mera(object):
         
         crandom.mrandom.csrand(1234)
         nTop = 2
-        M= Mera(tot_layer, nTop, qsp_0, qsp_max, qsp_max2, topQN, QSp_null, QN_idendity)
+        M= Mera(tot_layer, nTop, qsp_0, qsp_max, qsp_max2, 
+                topQN, QSp_null, QN_idendity, **kwargs)
         #sys.init_Hamiltonian(M)
         return M
    
@@ -547,41 +553,48 @@ class Mera(object):
         for i in self.tensor_defs:
             self.__getattribute__(i).append([None])
 
-        #给self.U[layer][:]赋值
-        #rank = 4
-        rank = sum(self.tensor_defs["U"]["type"])
-        totQN = self.qn_identity.copy()
-        for j in range(0, 1):
-            #self.U[ilayer][j] = iTensor(rank, QSp_U, totQN)
-            self.U[ilayer][j] = iTensor(rank, QSp_U, totQN)
-            ndiv = self.U[ilayer][j].rank//2
-            self.U[ilayer][j].ndiv = ndiv
-            #initialize data of tensors
-            if rand_init:                  
-                #seems that rand_init always true
-                temp = self.U[ilayer][j]
-                if unitary_init == "unit_tensor": 
-                    self.U[ilayer][j] = iTensor.unit_tensor(temp.rank, temp.QSp, temp.totQN)
-                elif unitary_init == "random_unit_tensor":
-                    Tensor_svd.random_unit_tensor(self.U[ilayer][j],2)
+        if 1: #init unitary tensors 给self.U[layer][:]赋值
+            rank = sum(self.tensor_defs["U"]["type"])
+            totQN = self.qn_identity.copy()
+            for j in range(0, 1):
+                #self.U[ilayer][j] = iTensor(rank, QSp_U, totQN)
+                self.U[ilayer][j] = iTensor(rank, QSp_U, totQN)
+                ndiv = self.U[ilayer][j].rank//2
+                self.U[ilayer][j].ndiv = ndiv
+                #initialize data of tensors
+                if rand_init:                  
+                    #seems that rand_init always true
+                    temp = self.U[ilayer][j]
+                    if unitary_init == "unit_tensor": 
+                        self.U[ilayer][j] = iTensor.unit_tensor(temp.rank, temp.QSp, temp.totQN)
+                    elif unitary_init == "random_unit_tensor":
+                        Tensor_svd.random_unit_tensor(self.U[ilayer][j],2)
+                    else:
+                        raise ValueError("unitary_init is: %s"%unitary_init)
+                    #self.U[ilayer][j] = unit_tensor(temp.rank, temp.QSp, temp.totQN)
                 else:
-                    raise ValueError("unitary_init is: %s"%unitary_init)
-                #self.U[ilayer][j] = unit_tensor(temp.rank, temp.QSp, temp.totQN)
-            else:
-                self.U[ilayer][j]=self.U[ilayer-1][j].copy()
+                    self.U[ilayer][j]=self.U[ilayer-1][j].copy()
 
-            self.U_dag[ilayer][j]=self.U[ilayer][j].conjugate(2 )
+                self.U_dag[ilayer][j]=self.U[ilayer][j].conjugate(2 )
 
-        #给self.V[layer][:]赋值        
-        #rank = 4
-        rank = sum(self.tensor_defs["V"]["type"])
-        for j in range(0, 1):
+        if 1: #init isometry tensor 给self.V[layer][:]赋值        
+            rank = sum(self.tensor_defs["V"]["type"])
+            #for j in range(0, 1):
+            j = 0
             self.V[ilayer][j]=iTensor(rank, QSp_V, totQN)
             ndiv = self.V[ilayer][j].rank-1
             self.V[ilayer][j].ndiv = ndiv
             if rand_init:  
-                #attention_low_efficiency   random_unit_tensor may use buffer
-                Tensor_svd.random_unit_tensor(self.V[ilayer][j], ndiv)
+                if self.isometry_init == 'random': 
+                    Tensor_svd.random_unit_tensor(self.V[ilayer][j], ndiv)
+                elif self.isometry_init == 'AFM':  
+                    assert self.symmetry == 'U1'  # only for special sys 
+                    q = QspU1.easy_init([0, 1, -1], [2, 1, 1])
+                    assert self.V[0][0].shape[0] == q, self.V[0][0].shape[0]
+                    self.V[ilayer][j].data[: ] = 0.0
+                    self.V[ilayer][j].data[0] = 1.0
+                else: 
+                    raise ValueError(self.isometry_init)
             else:
                 self.V[ilayer][j] = self.V[ilayer-1][j].copy()
             
@@ -591,6 +604,7 @@ class Mera(object):
             
             self.V_dag[ilayer][j] = self.V[ilayer][j].conjugate(ndiv)
 
+    
     def add_top_layer(self,rand_init=True):
         """
             这个 top layer V, 在Finite range mera中并没有用到
@@ -631,8 +645,13 @@ class Mera(object):
         rank = 3
         self.V[ilayer][j]=iTensor(rank, QSp[:rank], totQN )
 
-        if rand_init:  
-            Tensor_svd.random_unit_tensor(self.V[ilayer][j], self.V[ilayer][j].rank-1)
+        if rand_init:
+            if self.isometry_init == 'random': 
+                Tensor_svd.random_unit_tensor(self.V[ilayer][j], self.V[ilayer][j].rank-1)
+            elif self.isometry_init == 'AFM' : 
+                self.V[ilayer][j].data[: ] = 0.0
+                self.V[ilayer][j].data[0] = 1.0
+            
         else:
             self.V[ilayer][j] = self.V[ilayer-1][j].copy()
         
@@ -910,7 +929,7 @@ def reset_mera(M):
         t.data[:] = 0.0
         t.set_element(qDims, iDims, 1.0)
 
-class test_Mera(object):
+class xtest_Mera(object):
     @classmethod
     def instance(cls, trunc_dim=2, tot_layer=4, symmetry="Z2", combine_2site=False):
         """
@@ -966,8 +985,10 @@ class test_Mera(object):
         return M
 
 class TestIt(unittest.TestCase): 
+    
     def setUp(self): 
         pass
+    
     def test_example(self): 
         m = Mera.example() 
         print_vars(vars(),  ['m.num_of_input'])
@@ -988,14 +1009,64 @@ class TestIt(unittest.TestCase):
         res = SupportSet.split_disconnect(((1, 2, 3,  5, 6, 7, 10, 11)))
         self.assertEqual(res, ((1, 2, 3), (5, 6, 7), (10, 11)))
 
+    def test_isometry_init(self): 
+        if 1: 
+            m = Mera.example(symmetry='U1', unitary_init='unit_tensor', 
+                    isometry_init = 'AFM')        
+            print_vars(vars(),  ['m'])
+            print_vars(vars(),  ['m.V[0][0]'])
+            print_vars(vars(),  ['m'])
+        raise 
+            
+        q = QspU1.easy_init([0, 1, -1], [2, 1, 1])
+        qsp = q.copy_many(3)  +  [QspU1.null()]
+        v = iTensor(QSp=qsp)
+        v.data[: ] = 0.0
+        v.data[0] = 1.0
+        vd = v.conjugate(3)
+        
+        from merapy import iTensorFactory 
+        pau = iTensorFactory.pauli_mat_2site('U1')
+        print_vars(vars(),  ['pau.keys()'])
+        sz1 = pau['sigma_z1']
+        sz2 = pau['sigma_z2']
+        szz = pau['szz']
+        print_vars(vars(),  ['szz.shape'])
+        if 1: 
+            v.ind_labels = ['c', 1, 2, 3]
+            vd.ind_labels= [3, 'd', 1, 2]
+            szz.ind_labels = ['d', 'c']
+            c=iTensor.contract_tensor_list([v, szz, vd])
+            print_vars(vars(),  ['c'])
+            self.assertTrue(c.data[0] == -1.0 )  # for AFM,  two NN spins anti-parralell so, -1.0, this is correct
+        
+        if 1: 
+            v.ind_labels = [0, 'c', 2, 3]
+            vd.ind_labels= [3, 0, 'd', 2]
+            szz.ind_labels = ['d', 'c']
+            c=iTensor.contract_tensor_list([v, szz, vd])
+            print_vars(vars(),  ['c'])
+            self.assertTrue(c.data[0] == -1.0 ) 
+            
+        if 1: 
+            v.ind_labels = ['c1', 'd1', 2, 3]
+            vd.ind_labels= [3, 'c2', 'd2', 2]
+            sza = sz1.copy()
+            szb = sz1.copy()
+            sza.ind_labels = ['c2', 'c1']
+            szb.ind_labels = ['d2', 'd1']
+            c=iTensor.contract_tensor_list([v, sza, szb, vd])
+            print_vars(vars(),  ['c'])
+            self.assertTrue(c.data[0] == 1.0 )  # two NNN spins parallel 
+            
+    
     def test_temp(self): 
         
-        X = [1, 2, 3]; tau = 0; n = 1
-        for i in range(6): 
-            #X = range(i, i + 3)
-            X = [0, 1, 4, 5,  18, 19, 22]
-            res = coarse_grain_map(X, tau, n) 
-            print X, res 
+        #m = Mera.example(symmetry='Z2')        
+        m = Mera.example(symmetry='U1', unitary_init='unit_tensor', 
+                isometry_init = 'AFM')        
+        print_vars(vars(),  ['m'])
+        print_vars(vars(),  ['m.V[0][0]'])
         
         
     
@@ -1119,7 +1190,7 @@ if __name__=='__main__':
 
     pass
     if 0: 
-        tm = test_Mera
+        tm = xtest_Mera
         #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="U1")
         #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="Travial")
         M = tm.instance(trunc_dim=6, tot_layer=4, symmetry="Z3")
@@ -1147,7 +1218,8 @@ if __name__=='__main__':
         
            #'test_example',  
            #'test_coarse_grain_map',  
-           'test_temp',  
+           'test_isometry_init',  
+           #'test_temp',  
            
         ]
         for a in add_list: 
