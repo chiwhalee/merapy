@@ -347,6 +347,11 @@ class iTensor(TensorBase):
     def ravel_qn_id_tuple(self, qn_id_tuple):
         """
             from 量子数组合 的多维编号 to 一维编号的映射
+            it may be used as follows: 
+                temp = self.ravel_qn_id_tuple(qn_id_tuple)
+                i = self.idx[temp]
+                i is the id of the qn_id_tuple  in self.Addr_idx, self.Block_idx 
+                can use it to self.get_block(i),  etc 
         """
         pq = 0     
         assert len(qn_id_tuple)==self.rank 
@@ -515,7 +520,8 @@ class iTensor(TensorBase):
         if rank == 0:
             rank = 0
         if keys is None:
-            keys=["rank", "type_name", 'ind_labels', "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
+            #keys=["rank", "type_name", 'ind_labels', "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
+            keys=["rank", "type_name", 'ind_labels', "nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
 
         str0="----Begin iTensor----------------------------------------------\n"
 
@@ -2257,6 +2263,8 @@ class iTensor(TensorBase):
 
     def partial_trace(self, site_list):
         """
+            self is assumed to be a density matrix 
+            
             this is a temporary implementation during calc central charge
             a full and fast implementation should not use tensor contraction, but direct sum uing index of sparse tensor
         """
@@ -2955,6 +2963,53 @@ class iTensor(TensorBase):
     
     def set_data_to_zero(self): 
         self.data[: ] = 0.0
+        
+    def reduce_1d_qsp(self, i): 
+        """
+            suppose t has a qsp[i] whose totDim is 1. reduce it, such that 
+            totqn of t is qsp[i].qn
+            performance issue: 
+                use contract is slow, direct operate on Addr_idx is better.
+                only use this func for none production use 
+        """
+        qsp = self.QSp[i].conj()
+        assert qsp.totDim == 1 
+        qn = qsp.QNs[0].copy(); qn.reverse()
+        leg = iTensor(QSp=[qsp], totQN=qn)
+        leg.data[0] = 1.0 
+        res, _ = self.contract(leg, xrange(self.rank), [i])
+        return res 
+    
+    def insert_1d_qsp(self, i, qn): 
+        """
+            performance issue: 
+                see that under reduce_1d_qsp 
+        
+        """
+        if isinstance(qn, int): 
+            qn = self.qsp_class.QnClass(qn)
+            
+        qsp = self.qsp_class(1, [qn], [1])
+        qnr = qn.copy()
+        qnr.reverse()
+        leg = iTensor(QSp=[qsp], totQN=qnr)
+        leg.data[0] = 1.0
+        res, _ = self.contract(leg, range(self.rank), [self.rank])
+        res= res.transpose(range(i+1)  + [self.rank]  + range(i+1, self.rank))
+        return res 
+            
+    def shift_qn(self, qn_delta, qsp_id): 
+        """
+            shift qn of a qsp and totqn also, not changing data 
+            an inplace operation
+            this is efficient enough for production use 
+            
+        """
+        qsp_delta = self.qsp_class(1, [qn_delta], [1])
+        self.QSp[qsp_id] = self.QSp[qsp_id]*qsp_delta 
+        qn_delta_r = qn_delta.copy(); qn_delta_r.reverse()
+        self.totQN = self.totQN + qn_delta_r  
+        
     
 class iTensor_new(TensorBase):
     def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
@@ -4253,22 +4308,6 @@ class Test_iTensor(unittest.TestCase):
     def setUp(self): 
         pass
     
-    def test_temp(self): 
-        np.random.seed(1234)
-        #q = QspU1.easy_init([1, -1], [1, 1])
-        q = QspTravial.easy_init([1], [2])
-        qsp = q.copy_many(4) 
-        
-        t4 = iTensor.example(qsp=qsp)
-        #t13 = t4.merge_qsp((0, ), (1, 2, 3))
-        t13 = t4.merge_qsp((0, 1), (2, 3))
-        t4_1 = t4.merge_qsp_all()
-        t13_1 = t13.merge_qsp_all()
-        t13_1_4 = t13_1.split_qsp(0, q.copy_many(4))
-        
-        print_vars(vars(),  ['t4.data', 't13.data', 't4_1.data', 't13_1.data', 
-            't13_1_4.data' , 't4_1.shape', 't13_1.shape' ])
-        #print_vars(vars(),  ['t4_1', 't4'])
     
     def test_tensor_player(self): 
         for i in xrange(10):
@@ -4663,10 +4702,33 @@ class Test_iTensor(unittest.TestCase):
         t1_old = np.array([ 0.19151945,  0.62210877,  0.43772774,  0.78535858,  0.77997581, 0.27259261,  0.27646426,  0.80187218,  0.95813935,  0.87593263])
         self.assertTrue(np.allclose(t1.data, t1_old, atol=1e-8))
     
+    def test_reduce_and_insert_1d_qsp(self): 
+        pass
+        if 1: 
+            q1 = QspU1.easy_init([1, -1], [1, 1]) 
+            q3 = QspU1.easy_init([2], [1]) 
+            qsp = q1.copy_many(2)  + [q3]  + q1.copy_many(2)
+            t = iTensor(QSp= qsp)
+            t.data[: ] = np.random.random(t.size)
+            t1=t.reduce_1d_qsp(2)
+            self.assertTrue(t1.totQN._val==q3.QNs[0]._val)
+        if 1: 
+            t2 = t1.insert_1d_qsp(1, q3.QNs[0]._val)
+            print_vars(vars(),  ['t.data', 't2.data'])
+            self.assertTrue(np.allclose(t.data, t2.data))
+            print_vars(vars(),  ['t.shape', 't2.shape'])
+            self.assertTrue(t.shape==t2.shape)
+    
+    def test_temp(self): 
+        t = iTensor.example(rank=2)
+        print_vars(vars(),  ['t'])
+        qn = QspU1.QnClass(2)
+        t.shift_qn(qn, 0)
+        print_vars(vars(),  ['t'])
+        pass
+    
         
 class Test_iTensorFactory(unittest.TestCase): 
-    def test_temp(self): 
-        pass
     def test_diagonal_tensor_rank2(self): 
         qsp = QspU1.easy_init([0, 1, -1], [4, 2, 2])
         t = iTensorFactory.diagonal_tensor_rank2(qsp )
@@ -4782,7 +4844,7 @@ class performance_iTensor(object):
                 NUM_OF_THREADS=6, iter_times=10)
 
 
-if __name__== "__main__":
+if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
     if 0: 
         if 0: 
@@ -4920,6 +4982,7 @@ if __name__== "__main__":
            #'test_reshape_u1', 
            
            #'test_conj_new', 
+           #'test_reduce_and_insert_1d_qsp', 
            'test_temp', 
         ]
         add_list_iTF = [
