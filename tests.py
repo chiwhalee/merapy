@@ -7,6 +7,7 @@ from merapy.graphics import TestIt as Test_graphics
 from merapy.run import TestIt as Test_run 
 from merapy.utilities import TestIt as Test_util 
 from merapy.context_util import TestIt as Test_context 
+from merapy.tensor_py import test_iTensor, Test_iTensorFactory 
 from merapy.tensor_svd import TestIt as Test_svd 
 from merapy.common_util import TestCommon 
 from merapy.hamiltonian import TestSystem

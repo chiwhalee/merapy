@@ -1530,6 +1530,8 @@ class iTensor(TensorBase):
                          #t_13_1.shape=([4]1+[2]4+[0]6+[-2]4+[-4]1,)
                     
                     #t4_1 and t_13_1 have same qsp,  but their data differ 
+                    
+                    a drastic example of this can be found in vmps.mps.split_ksites, the order to split matters
                 
         """
         
@@ -1688,7 +1690,7 @@ class iTensor(TensorBase):
         """
         
         """
-        warnings.warn(u"todo: 避免重复比较")
+        warnings.warn("todo: 避免重复比较")
         args= [which]
         
         qsp_class = self.qsp_class
@@ -3192,6 +3194,13 @@ class iTensorFactory(object):
     
     @staticmethod
     def pauli_mat_2site(symmetry, which=None):
+        """
+            todo: 
+                it is better to implement 2site through 1site and merge_qsp
+                in this way, not only code easier, but also the totqn of the ops 
+                are more well defiend 
+            
+        """
         qspclass=symmetry_to_Qsp(symmetry)
         qn_identity, qsp_base, qsp_null = qspclass.set_base(dim=4)  #combine 2site
         temp = lambda: (2, qsp_base.copy_many(2, reverse=[1]),  qn_identity.copy())
@@ -3594,10 +3603,6 @@ class iTensorFactory(object):
             sigma_p = iTensor(rank, qsp, totqn)
             sigma_p.data[0] = 1.0
             sigma_m = sigma_p.conjugate(1)
-            if 0:
-                print sigma_z #.matrix_view()
-                print sigma_p.matrix_view()
-                print sigma_m.matrix_view()
             
             szz = sigma_z.tensor_prod(sigma_z)
             spm = sigma_p.tensor_prod(sigma_m)
@@ -4332,6 +4337,8 @@ class Test_iTensor(unittest.TestCase):
             u = iTensor.example()
             #u.contract_core(u, 2)
             u.permutation([1, 3, 2, 0])
+        tensor_player.STATE = 'stop'
+        
            
     def test_permutation(self): 
         t = iTensor.example()
@@ -4735,13 +4742,23 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
-        t = iTensor.example(rank=2)
-        print_vars(vars(),  ['t'])
-        qn = QspU1.QnClass(2)
-        t.shift_qn(qn, 0)
-        print_vars(vars(),  ['t'])
-        pass
-    
+        pau  = iTensorFactory.pauli_mat_1site('U1')
+        if 0: 
+            sz = pau['sz']
+            print_vars(vars(),  ['sz'])
+            print_vars(vars(),  ['sz.matrix_view()'])
+            q = QspU1.easy_init([1, -1], [1, 1])
+            qn = q.QnClass(1)
+            spin_up = iTensor(QSp=[q], totQN=qn)
+            spin_up.data[0] = 1.0
+            print_vars(vars(),  ['spin_up'])
+        
+        if 1: 
+            sp = pau['sp']
+            print_vars(vars(),  ['sp'])
+            print_vars(vars(),  ['sp.matrix_view()'])
+            print_vars(vars(),  ['sp.to_ndarray()'])
+            
         
 class Test_iTensorFactory(unittest.TestCase): 
     def test_diagonal_tensor_rank2(self): 
@@ -4968,7 +4985,7 @@ if __name__ == "__main__":
                 print syi_mer.matrix_view()
                 print pau2['syi'].matrix_view()
   
-    if 0: #examine
+    if 1: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -4976,14 +4993,14 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list_iTensor = [
-           #'test_tensor_player', 
-           #'test_permutation', 
+           'test_tensor_player', 
+           'test_permutation', 
            #'test_to_ndarray', 
            #'test_rank_zero', 
            #'test_rank_zero_1', 
-           
+           #
            #'test_matrix_view', 
-           
+           #
            #'test_split_2to3', 
            #'test_split_qsp', 
            #'test_split_qsp_2', 
@@ -4995,11 +5012,12 @@ if __name__ == "__main__":
            #'test_merge_qsp_by_contract', 
            #'test_reshape', 
            #'test_reshape_u1', 
-           
+           #
            #'test_conj_new', 
            #'test_reduce_and_insert_1d_qsp', 
-           'test_temp', 
+           #'test_temp', 
         ]
+        
         add_list_iTF = [
             #'test_diagonal_tensor_rank2', 
             #'test_spin_one_mat', 

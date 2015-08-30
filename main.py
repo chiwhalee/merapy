@@ -612,10 +612,11 @@ class Main_old(object):
         pprint.pprint(res) 
     
     @staticmethod
-    def set_num_of_threads(n):
+    def set_num_of_threads(n, info=1):
         #import common_64_ifort as c64
         common_util.set_num_of_threads(n)
-        print 'set_num_of_threads to %d'%n
+        if info>0: 
+            print 'set_num_of_threads to %d'%n
     
     @staticmethod
     def get_num_of_threads(): 
@@ -925,55 +926,6 @@ class Main_old(object):
         # and then
         client.transfer('/etc/local/filename', '/etc/remote/filename') 
     
-    @staticmethod
-    def email(): 
-        import smtplib
-        import email.mime.text
-        # my test mail
-        #mail_username='chiwhalee@gmail.com'
-        mail_username='zhihuali@mail.ustc.edu.cn'
-        mail_password='****'
-        from_addr = mail_username
-        to_addrs=('chiwhalee@gmail.com')
-
-        # HOST & PORT
-        #HOST = 'smtp.gmail.com'
-        HOST = 'smtp.ustc.edu.cn'
-        PORT = 25
-
-        # Create SMTP Object
-        smtp = smtplib.SMTP()
-        print 'connecting ...'
-
-        # show the debug log
-        smtp.set_debuglevel(1)
-
-        # connet
-        try:
-            print smtp.connect(HOST,PORT)
-        except:
-            print 'CONNECT ERROR ****'
-        # gmail uses ssl
-        #smtp.starttls()
-        # login with username & password
-        try:
-            print 'loginning ...'
-            smtp.login(mail_username,mail_password)
-        except:
-            print 'LOGIN ERROR ****'
-        # fill content with MIMEText's object 
-        msg = email.mime.text.MIMEText('Hi ,I am leehark')
-        msg['From'] = from_addr
-        msg['To'] = ';'.join(to_addrs)
-        msg['Subject']='hello , today is a special day'
-        print msg.as_string()
-        smtp.sendmail(from_addr,to_addrs,msg.as_string())
-        smtp.quit()
-
-    def __del__(self, ): 
-        
-        print 'exit main, and run main.stop_player'
-        self.stop_player()
 
 
 class Main(Main_old): 
@@ -996,7 +948,7 @@ class Main(Main_old):
         args = self.config.copy()
         args['info'] = self.info - 1
         #self.show_config()
-        Main.set_num_of_threads(self.NUM_OF_THREADS)
+        Main.set_num_of_threads(self.NUM_OF_THREADS, config.get('info', 1))
         
         system_class = config.get('system_class', System)
         #self.S = system_class(None, ham, **args )
@@ -1008,7 +960,7 @@ class Main(Main_old):
             self.init_alg()
             self.initialized = True 
         
-        Main.set_num_of_threads(self.NUM_OF_THREADS)
+        #Main.set_num_of_threads(self.NUM_OF_THREADS)
         self.S._minimize_finite_size(**kwargs)
         return self.S
 
@@ -1017,7 +969,7 @@ class Main(Main_old):
             self.init_alg()
             self.initialized = True 
         
-        Main.set_num_of_threads(self.NUM_OF_THREADS)
+        #Main.set_num_of_threads(self.NUM_OF_THREADS)
         self.S._minimize_scale_invar(**kwargs)
         return self.S
 
@@ -1231,6 +1183,56 @@ class Main(Main_old):
             main.stop_player()        
         return main 
 
+    @staticmethod
+    def email(): 
+        import smtplib
+        import email.mime.text
+        # my test mail
+        #mail_username='chiwhalee@gmail.com'
+        mail_username='zhihuali@mail.ustc.edu.cn'
+        mail_password='****'
+        from_addr = mail_username
+        to_addrs=('chiwhalee@gmail.com')
+
+        # HOST & PORT
+        #HOST = 'smtp.gmail.com'
+        HOST = 'smtp.ustc.edu.cn'
+        PORT = 25
+
+        # Create SMTP Object
+        smtp = smtplib.SMTP()
+        print 'connecting ...'
+
+        # show the debug log
+        smtp.set_debuglevel(1)
+
+        # connet
+        try:
+            print smtp.connect(HOST,PORT)
+        except:
+            print 'CONNECT ERROR ****'
+        # gmail uses ssl
+        #smtp.starttls()
+        # login with username & password
+        try:
+            print 'loginning ...'
+            smtp.login(mail_username,mail_password)
+        except:
+            print 'LOGIN ERROR ****'
+        # fill content with MIMEText's object 
+        msg = email.mime.text.MIMEText('Hi ,I am leehark')
+        msg['From'] = from_addr
+        msg['To'] = ';'.join(to_addrs)
+        msg['Subject']='hello , today is a special day'
+        print msg.as_string()
+        smtp.sendmail(from_addr,to_addrs,msg.as_string())
+        smtp.quit()
+
+    def __del__(self, ): 
+        
+        if self.config.get('info', 1)>-1: 
+            print 'exit main, and run main.stop_player'
+        self.stop_player()
 
 
 #Main = Main_old 
