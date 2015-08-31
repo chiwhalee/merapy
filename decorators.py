@@ -170,7 +170,7 @@ def tensor_player(which):
                 totDim=0
                     
                 tQN_r= self.totQN.copy()  # here must copy
-                tQN_r.reverse()
+                #tQN_r.reverse()
 
                 for p in xrange(self.idx_dim):
                     tQN = QSp[0].QNs[iQN[0]]

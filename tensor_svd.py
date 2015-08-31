@@ -554,16 +554,17 @@ class Tensor_svd(object):
             if totqn_on_which == 's' : 
                 pass
             elif totqn_on_which == 'u':
-                S.shift_qn(totqn, 0)
-                U.shift_qn(totqn.conj(), 1)
+                #S.shift_qn(totqn, 0)
+                #U.shift_qn(totqn.conj(), 1)
+                S.shift_qn(totqn.conj(), 0)
+                U.shift_qn(totqn, 1)
             elif totqn_on_which == 'v':
-                S.shift_qn(totqn, 1)
-                V.shift_qn(totqn.conj(), 0)
+                #S.shift_qn(totqn, 1)
+                #V.shift_qn(totqn.conj(), 0)
+                S.shift_qn(totqn.conj(), 1)
+                V.shift_qn(totqn, 0)
             else: 
                 raise ValueError(totqn_on_which) 
-                
-            
-        
         
         for i in xrange(U.nidx): 
             p  = U.Block_idx[0, i]
@@ -1107,27 +1108,33 @@ class TestIt(unittest.TestCase):
                 U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
                 a = U.dot(S).dot(V) 
                 self.assertTrue(np.allclose(a.data, t.data))
+                self.assertTrue(S.totQN==t.totQN and V.totQN._val==0, U.totQN._val==0)
             
             if 1: 
                 U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, 
                         return_trunc_err=1, totqn_on_which='u')
                 a = U.dot(S).dot(V) 
                 self.assertTrue(np.allclose(a.data, t.data))
+                self.assertTrue(U.totQN==t.totQN and V.totQN._val==0, S.totQN._val==0)
             
             if 1: 
                 U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, 
                         return_trunc_err=1, totqn_on_which='v')
+                #print_vars(vars(),  ['U', 'S', 'V'])
+                self.assertTrue(V.totQN==t.totQN and U.totQN._val==0, S.totQN._val==0)
                 a = U.dot(S).dot(V) 
                 self.assertTrue(np.allclose(a.data, t.data))
     
-    
             if 1: 
-                U, t, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
                 t.data /= np.linalg.norm(t.data)
-            
-            if 1: 
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=10, return_trunc_err=1)
-                self.assertAlmostEqual(err, 0.12761304163092035)
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=11, return_trunc_err=1)
+                #self.assertAlmostEqual(err, 0.12761304163092035)
+                self.assertAlmostEqual(err, 0.082730611863203851, 10)
+                a = U.dot(S).dot(V) 
+                xx = a.ravel().dot(t.ravel())
+                self.assertAlmostEqual(xx, 0.957741817056, 10)
+
+                
                 
     def random_unit_tensor(cls):
         u = self.u
@@ -1191,58 +1198,19 @@ class TestIt(unittest.TestCase):
         from merapy import QspU1 
         np.random.seed(1234)
         
-        if 0: 
-            np.set_printoptions(5)
-            np.random.seed(1234)
-            q = QspU1.easy_init([ 1, -1, ], [2, 2])
-            qsp = q.copy_many(5)
-            totqn = QspU1.QnClass(1)
-            t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
-            t = t.merge_qsp((0, 1), (2, 3, 4))
-            print_vars(vars(),  ['t'])
-            
-            if 1: 
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
-            
-            if 1: 
-                U, t, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
-                t.data /= np.linalg.norm(t.data)
-            
-            if 1: 
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=10, return_trunc_err=1)
-                self.assertAlmostEqual(err, 0.12761304163092035)
-
         if 1: 
             np.set_printoptions(5)
-            np.random.seed(1234)
             q = QspU1.easy_init([ 1, -1, ], [2, 2])
             qsp = q.copy_many(5)
             totqn = QspU1.QnClass(1)
             t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
             t = t.merge_qsp((0, 1), (2, 3, 4))
-            print_vars(vars(),  ['t'])
+            t.show_data()
             
-            if 1: 
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=None, return_trunc_err=1)
-            
-            a = U.dot(S).dot(V) 
-            self.assertTrue(np.allclose(a.data, t.data))
-            if 0:     
-                qn_delta = totqn.copy()
-                S.shift_qn(qn_delta, 0)
-                U.shift_qn(qn_delta.conj(), 1)
-               
-                a = U.dot(S).dot(V) 
-                self.assertTrue(np.allclose(a.data, t.data))
-            
-            if 1:     
-                qn_delta = totqn.copy()
-                S.shift_qn(qn_delta, 1)
-                V.shift_qn(qn_delta.conj(), 0)
-               
-                a = U.dot(S).dot(V) 
-                self.assertTrue(np.allclose(a.data, t.data))
-                print_vars(vars(),  ['V'])
+            if 0: 
+                t.data /= np.linalg.norm(t.data)
+                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=10, return_trunc_err=1)
+                self.assertAlmostEqual(err, 0.12761304163092035)
 
 if __name__ == "__main__":
     if 0: 

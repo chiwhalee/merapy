@@ -229,6 +229,13 @@ class iTensor(TensorBase):
             this step is in effect 把Qsp 中的信息提取出来，变成更容易读取操作的信息，故
             Qsp 中包含的信息和 Block_idx, Addr_idx 等是等价的(不完全等价, 差一个对称性限制条件)，不同在存储顺序和方式
             Block_idx: is a map from idx to block info
+            
+            note1: 
+                at 2015-8-31, I changed the def of iTensor. The previous weng's treatment
+                let sum(qn of each leg) = reverse(totqn),  now change to 
+                    sum(qn of each leg) = totqn
+                前者其实绕了个弯，把totqn理解成了一个dummy leg 并且是conj的，完全没有必要这么做
+                它会造成一定概念上的混乱。后者更加 well defined 
         
         """
         rank, QSp, totQN = self.rank, self.QSp, self.totQN
@@ -259,8 +266,9 @@ class iTensor(TensorBase):
         nidx=0
         totDim=0
         
-        tQN_r= self.totQN.copy()  # here must copy
-        tQN_r.reverse()
+        #tQN_r= self.totQN.copy()  # here must copy
+        #tQN_r.reverse()
+        tQN_r= self.totQN   #note1  see doc str 
 
         for p in xrange(self.idx_dim):
             tQN = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tQN
@@ -2991,7 +2999,8 @@ class iTensor(TensorBase):
         """
         qsp = self.QSp[i].conj()
         assert qsp.totDim == 1 
-        qn = qsp.QNs[0].copy(); qn.reverse()
+        qn = qsp.QNs[0].copy()
+        #qn.reverse()
         leg = iTensor(QSp=[qsp], totQN=qn)
         leg.data[0] = 1.0 
         res, _ = self.contract(leg, xrange(self.rank), [i])
@@ -3008,7 +3017,7 @@ class iTensor(TensorBase):
             
         qsp = self.qsp_class(1, [qn], [1])
         qnr = qn.copy()
-        qnr.reverse()
+        #qnr.reverse()
         leg = iTensor(QSp=[qsp], totQN=qnr)
         leg.data[0] = 1.0
         res, _ = self.contract(leg, range(self.rank), [self.rank])
@@ -3024,8 +3033,9 @@ class iTensor(TensorBase):
         """
         qsp_delta = self.qsp_class(1, [qn_delta], [1])
         self.QSp[qsp_id] = self.QSp[qsp_id]*qsp_delta 
-        qn_delta_r = qn_delta.copy(); qn_delta_r.reverse()
-        self.totQN = self.totQN + qn_delta_r  
+        #qn_delta_r = qn_delta.conj()
+        #self.totQN = self.totQN + qn_delta_r  
+        self.totQN = self.totQN + qn_delta
         
     
 class iTensor_new(TensorBase):
@@ -3422,25 +3432,48 @@ class iTensorFactory(object):
                 #sigma_p1 := sp×I
                 sigma_p1.data[:] = 0.0
                 sigma_p2 = sigma_p1.copy()
+                #print_vars(vars(),  ['sigma_p1'])
                 
-                # [-1,-1]->[1,-1]
-                qDims[0:2] = [2,0]   #|ud><dd|
-                iDims[0:2] = [0,1]
-                sigma_p1.set_element(qDims, iDims, 1.0)
+                if 0:  # old def of iTensor with totQN reversed 
+                    # [-1,-1]->[1,-1]
+                    qDims[0:2] = [2,0]   #|ud><dd|
+                    iDims[0:2] = [0,1]
+                    sigma_p1.set_element(qDims, iDims, 1.0)
+                    
+                    # [-1,1]->[1,1]
+                    qDims[0:2] = [0,1]  #|uu><du|
+                    iDims[0:2] = [0,0]
+                    sigma_p1.set_element(qDims, iDims, 1.0)
+                else: 
+                    # [-1,-1]->[1,-1]
+                    qDims[0:2] = [1,0]   #|ud><dd|
+                    iDims[0:2] = [0,0]
+                    sigma_p1.set_element(qDims, iDims, 1.0)
+                    
+                    # [-1,1]->[1,1]
+                    qDims[0:2] = [0,2]  #|uu><du|
+                    iDims[0:2] = [1,0]
+                    sigma_p1.set_element(qDims, iDims, 1.0)
                 
-                # [-1,1]->[1,1]
-                qDims[0:2] = [0,1]  #|uu><du|
-                iDims[0:2] = [0,0]
-                sigma_p1.set_element(qDims, iDims, 1.0)
-                
-                # [-1,-1]->[-1,1]
-                qDims[0:2] = [2,0]  
-                iDims[0:2] = [0,0]
-                sigma_p2.set_element(qDims, iDims, 1.0)
-                # [1,-1]->[1,1]        
-                qDims[0:2] = [0,1]  
-                iDims[0:2] = [1,0]
-                sigma_p2.set_element(qDims, iDims, 1.0)
+                if 0: 
+                    # [-1,-1]->[-1,1]
+                    qDims[0:2] = [2,0]  
+                    iDims[0:2] = [0,0]
+                    sigma_p2.set_element(qDims, iDims, 1.0)
+                    # [1,-1]->[1,1]        
+                    qDims[0:2] = [0,1]  
+                    iDims[0:2] = [1,0]
+                    sigma_p2.set_element(qDims, iDims, 1.0)
+                else: 
+                    # [-1,-1]->[-1,1]
+                    qDims[0:2] = [1,0]  
+                    iDims[0:2] = [0,1]
+                    sigma_p2.set_element(qDims, iDims, 1.0)
+                    # [1,-1]->[1,1]        
+                    qDims[0:2] = [0,2]  
+                    iDims[0:2] = [0,0]
+                    sigma_p2.set_element(qDims, iDims, 1.0)
+                    
                 
                 sigma_m1=sigma_p1.conjugate(1)
                 sigma_m2=sigma_p2.conjugate(1)
@@ -4733,7 +4766,7 @@ class Test_iTensor(unittest.TestCase):
             t = iTensor(QSp= qsp)
             t.data[: ] = np.random.random(t.size)
             t1=t.reduce_1d_qsp(2)
-            self.assertTrue(t1.totQN._val==q3.QNs[0]._val)
+            self.assertTrue(t1.totQN._val==-2)
         if 1: 
             t2 = t1.insert_1d_qsp(1, q3.QNs[0]._val)
             print_vars(vars(),  ['t.data', 't2.data'])
@@ -4742,7 +4775,7 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
-        pau  = iTensorFactory.pauli_mat_1site('U1')
+        #pau  = iTensorFactory.pauli_mat_1site('U1')
         if 0: 
             sz = pau['sz']
             print_vars(vars(),  ['sz'])
@@ -4753,11 +4786,12 @@ class Test_iTensor(unittest.TestCase):
             spin_up.data[0] = 1.0
             print_vars(vars(),  ['spin_up'])
         
-        if 1: 
+        if 0: 
             sp = pau['sp']
             print_vars(vars(),  ['sp'])
             print_vars(vars(),  ['sp.matrix_view()'])
             print_vars(vars(),  ['sp.to_ndarray()'])
+        pau  = iTensorFactory.pauli_mat_2site('U1')
             
         
 class Test_iTensorFactory(unittest.TestCase): 
@@ -4985,7 +5019,7 @@ if __name__ == "__main__":
                 print syi_mer.matrix_view()
                 print pau2['syi'].matrix_view()
   
-    if 1: #examine
+    if 0: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -4993,8 +5027,8 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list_iTensor = [
-           'test_tensor_player', 
-           'test_permutation', 
+           #'test_tensor_player', 
+           #'test_permutation', 
            #'test_to_ndarray', 
            #'test_rank_zero', 
            #'test_rank_zero_1', 
@@ -5014,7 +5048,7 @@ if __name__ == "__main__":
            #'test_reshape_u1', 
            #
            #'test_conj_new', 
-           #'test_reduce_and_insert_1d_qsp', 
+           'test_reduce_and_insert_1d_qsp', 
            #'test_temp', 
         ]
         
