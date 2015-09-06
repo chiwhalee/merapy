@@ -28,7 +28,7 @@ import unittest
 
 
 from merapy.utilities import dict_to_object , load , print_vars
-from merapy.hamiltonian import System
+#from merapy.hamiltonian import System
 from merapy.context_util import rpyc_load, rpyc_save
 
 if 1: 
@@ -40,6 +40,7 @@ if 1:
             'legend.alpha': 0,    # this will make the box totally transparent 
             'legend.edege_color': 'white',   # this will make the edges of the border white to match the background instead 
             'legend.frameon': 0,# whether or not to draw a frame around legend    
+            'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
             
             }
     mpl.rcParams.update(MATPLOTLIBRC)
@@ -87,11 +88,11 @@ if 1:
 
     MARKER_LIST = [ 'o', 's', 'd',  'x', '*','+', 'D', '^',  '>', '.', '<', 'h']  #s=squre
     MARKER_CYCLE = itertools.cycle(MARKER_LIST)
-    #COLOR_LIST = ['gold', 'hotpink', 'firebrick', 'indianred', 'yellow', 'mistyrose', 'darkolivegreen', 'olive', 'darkseagreen', 'pink', 'tomato', 'lightcoral', 'orangered', 'navajowhite', 'lime', 'palegreen', 'darkslategrey', 'greenyellow', 'burlywood', 'seashell', 'mediumspringgreen', 'fuchsia', 'papayawhip', 'blanchedalmond', 'chartreuse', 'dimgray', 'black', 'peachpuff', 'springgreen', 'aquamarine', 'white', 'orange', 'lightsalmon', 'darkslategray', 'brown', 'ivory', 'dodgerblue', 'peru', 'darkgrey', 'lawngreen', 'chocolate', 'crimson', 'forestgreen', 'slateblue', 'lightseagreen', 'cyan', 'mintcream', 'silver', 'antiquewhite', 'mediumorchid', 'skyblue', 'gray', 'darkturquoise', 'goldenrod', 'darkgreen', 'floralwhite', 'darkviolet', 'darkgray', 'moccasin', 'saddlebrown', 'grey', 'darkslateblue', 'lightskyblue', 'lightpink', 'mediumvioletred', 'slategrey', 'red', 'deeppink', 'limegreen', 'darkmagenta', 'palegoldenrod', 'plum', 'turquoise', 'lightgrey', 'lightgoldenrodyellow', 'darkgoldenrod', 'lavender', 'maroon', 'yellowgreen', 'sandybrown', 'thistle', 'violet', 'navy', 'magenta', 'dimgrey', 'tan', 'rosybrown', 'olivedrab', 'blue', 'lightblue', 'ghostwhite', 'honeydew', 'cornflowerblue', 'linen', 'darkblue', 'powderblue', 'seagreen', 'darkkhaki', 'snow', 'sienna', 'mediumblue', 'royalblue', 'lightcyan', 'green', 'mediumpurple', 'midnightblue', 'cornsilk', 'paleturquoise', 'bisque', 'slategray', 'darkcyan', 'khaki', 'wheat', 'teal', 'darkorchid', 'deepskyblue', 'salmon', 'darkred', 'steelblue', 'palevioletred', 'lightslategray', 'aliceblue', 'lightslategrey', 'lightgreen', 'orchid', 'gainsboro', 'mediumseagreen', 'lightgray', 'mediumturquoise', 'lemonchiffon', 'cadetblue', 'lightyellow', 'lavenderblush', 'coral', 'purple', 'aqua', 'whitesmoke', 'mediumslateblue', 'darkorange', 'mediumaquamarine', 'darksalmon', 'beige', 'blueviolet', 'azure', 'lightsteelblue', 'oldlace']
-    COLOR_LIST = ['gold', 'red', 'green',  'yellow',  'olive',  'pink',
-            'black',  'aquamarine',  'orange',  'brown',  'darkgrey',
+    
+    COLOR_LIST = [ 'black', 'red', 'green',  'yellow',  'olive',  'pink',
+             'orange',  'brown',  'darkgrey',
             'silver',   'skyblue', 'gray',   'darkgreen',  'grey',  'violet',
-            'blue', 'darkblue',  'purple',  ]
+            'blue', 'purple',  ]
     COLOR_CYCLE = itertools.cycle(COLOR_LIST)
     lines = ["-","--","-.",":"]
     LINE_CYCLE= itertools.cycle(lines)
@@ -171,6 +172,8 @@ class AnalysisTools(object):
                 func = lambda x, k, a: k*np.log(x) + a 
             elif func == 'power' : 
                 func = lambda x, k, eta: k*x**(eta)
+            else: 
+                raise 
         if not isinstance(x, np.ndarray): 
             x = np.asarray(x)
         if not isinstance(y, np.ndarray): 
@@ -199,7 +202,7 @@ class AnalysisTools(object):
         return res 
     
     def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
-            add_text=False, fault_tol=True,  **kwargs): 
+            add_text=False, return_all_params=False, x_extra=None,  fault_tol=True,  **kwargs): 
         ll = list(ax.lines)
         which_lines = range(len(ll)) if which_lines is None else which_lines 
         #for l in ax.lines[:len(aa)]:
@@ -215,7 +218,6 @@ class AnalysisTools(object):
                 a = None 
             try: 
                 res=self.fit_line(l, func, **fit_line_args) 
-                #k, b= res['param']
                 k = res['param'][0]
             except Exception as err: 
                 k = np.nan 
@@ -232,11 +234,15 @@ class AnalysisTools(object):
                 label = ' '.join([l.get_label(), '%1.2f'%k])
                 l.set_label(label)
             #temp.append((a, round(k, 2)))
-            temp.append((a, k))
+            if return_all_params: 
+                temp.append((a, res['param']))
+            else: 
+                temp.append((a, k))
             
             if plot_fit: 
                 args= kwargs.copy()
-                args.update(color=l.get_color(), marker=None)
+                color = kwargs['color'] if kwargs.has_key('color') else l.get_color()
+                args.update(color=color, marker=None)
                 #_ = self._plot.im_func(None, res['x'], res['y'], 
                 #        ax=ax, color=l.get_color(), label='', marker=None)        
                 _ = self._plot.im_func(None, res['x'], res['y'], 
@@ -261,9 +267,9 @@ class AnalysisTools(object):
             axes= axes[0]
         return fig, axes 
 
-    def add_ax(self, fig=None, direct='h'): 
+    def add_ax(self, fig=None, size=None, direct='h'): 
         if fig is None: 
-            fig, ax=self.fig_layout()
+            fig, ax=self.fig_layout(size=size)
             return ax 
             
         n = len(fig.axes)
@@ -344,12 +350,45 @@ class AnalysisTools(object):
             labels, loc, val = None, None, None 
         return labels, loc, val 
 
-    def hide_lines(self, ax, lines): 
-        for l in lines:
-            l.set_marker(None)
-            l.set_alpha(0)
-            l.set_label('')
-        ax.legend()        
+
+    def plot_sign(self, ax, line_id=0, center=0.0, magnitude=None, **kwargs):
+        l = ax.lines[line_id]
+        x, y = l.get_data()
+        magnitude = magnitude if magnitude is not None else np.max(np.abs(y)) *0.8 
+        yy = np.sign(y)*magnitude  + center 
+        self._plot.im_func(None, x, yy, ax=ax, **kwargs)
+    
+    def compare_two_lines(self, line1, line2, plot_sign=True, **kwargs): 
+        """
+           plot y1-y2 
+        """
+        x1, y1 = line1.get_data()
+        x2, y2 = line2.get_data()
+        if 1:   #here asumes no duplicate elements in x1 or x2  
+            #ind12 = np.intersect1d(x1, x2, )
+            ind12 = np.in1d(x1, x2)
+            ind21 = np.in1d(x2, x1)
+            x_common = x1[ind12]
+            y12 = y1[ind12]
+            y21 = y2[ind21]
+            y_diff = y12 -y21
+        axes= line1.get_axes()   
+        if not kwargs.has_key('ylabel'): 
+            ylabel = axes.get_ylabel()
+            ylabel = '_'.join([ylabel, 'diff'])
+            kwargs['ylabel'] = ylabel
+        if not kwargs.has_key('xlabel'): 
+            kwargs['xlabel'] = axes.get_xlabel()
+        #self._plot.im_func(None, x1, y1-y2, **kwargs)
+        if not kwargs.has_key('label'): 
+            label = '-'.join([line1.get_label(), line2.get_label()])
+            kwargs['label'] = label 
+        if plot_sign: 
+            kwargs.update(yfunc=np.abs, yscale='log')
+        
+        fig=self._plot.im_func(None, x_common, y_diff, **kwargs)
+        if plot_sign: 
+            self.plot_sign(fig.axes[-1])
     
     def html_border(self, s): 
         return display.HTML(html_border(s))
@@ -360,7 +399,31 @@ class AnalysisTools(object):
         if border: 
             s= html_border(s)
         return display.HTML(s)
-
+    
+    @staticmethod 
+    def ax_fewer_legend(ax, line_id_list):
+        n = len(ax.lines)
+        line_id_list = [l for l in line_id_list if l <  n]
+        ll=[ax.lines[i] for i in line_id_list]
+        temp=[(l, l.get_label()) for l in ll if '_line' not in l.get_label()]
+        x, y= zip(*temp)
+        ax.legend(x, y, loc=0)
+    
+    @staticmethod 
+    def ax_hide_lines(ax, line_id_list, reverse=False):
+        n = len(ax.lines)
+        line_id_list = [i for i in line_id_list if i<n]
+        if reverse: 
+            ll = range(len(ax.lines))
+            temp = list(line_id_list)
+            line_id_list = [i for i in ll if i not in temp]
+        lines  = [ax.lines[i] for i in line_id_list]
+        for l in lines:
+            l.set_marker(None)
+            l.set_alpha(0)
+            l.set_label('')
+        ax.legend(loc=0)        
+        
 #class ResultDB_Utills
 
 class ResultDB(OrderedDict, AnalysisTools): 
@@ -376,11 +439,16 @@ class ResultDB(OrderedDict, AnalysisTools):
             STRUCT = {
                     'entanglement': ['shape', 'iter', num_sites], 
                     }
+        design: 
+            fields are of two kinds,  
+            first,  like 'version', 'status' is not dependent on sh 
+            second, physical quantities, like 'energy', 'correlation'
         
     """
     DBNAME = 'RESULT.pickle.db'   #fix the name of db
     AUTO_UPDATE = True 
     VERSION = 1.0 
+    ALL_FIELD_NAMES = ['energy', 'magnetization']
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
             use_local_storage=False, create_empty_db=False,  upgrade=0):
         """
@@ -430,6 +498,8 @@ class ResultDB(OrderedDict, AnalysisTools):
          
         if not self.has_key('version'): 
             self['version'] = self.VERSION 
+        if not self.has_key('status'):   # means is the data correct。these make init slow, better make it lazy eval 
+            self['status'] = 'good'   # default is good 
 
         if self['version'] >= 1.0:  
             self.fetch_easy = self.fetch_easy_new
@@ -453,7 +523,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         return res 
     
     def __str__(self): 
-        
         temp = []
         temp.append(self.parpath)
         temp.append(str(self.keys()))
@@ -509,7 +578,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         cmd = 'mkdir %s'%self.parpath
         os.system(cmd)
         msg = 'parpath not exist, so %s'%cmd
-   
 
     def has_shape(self, sh, system_class): 
         fn = system_class.shape_to_backup_fn.im_func(None, sh)
@@ -900,6 +968,51 @@ class ResultDB(OrderedDict, AnalysisTools):
                     raise
         return rec
     
+    def search_field_name(self, search_str, only_first=False, only_one=False, assert_found=False): 
+        """
+        """
+        if isinstance(self, type): 
+            all_field_names = self.ALL_FIELD_NAMES 
+        else: 
+            all_field_names = self.iterkeys()
+        ss = search_str.split(' ')
+        ss_len = len(ss)
+        found = False
+        res= []
+        for fn in all_field_names: 
+            match_count = 0
+            for n in ss: 
+                if n not in fn: 
+                    break 
+                else: 
+                    match_count += 1
+            if match_count == ss_len: 
+                res.append(fn)
+                found = True 
+                if only_first: 
+                    break 
+        if only_one: 
+            if len(res)>0: 
+                res= [r for r in res if r == search_str]
+        if assert_found: 
+            assert len(res)>0, '"{}" matches no field'.format(search_str)
+        return res 
+    
+    def fetch_easier(self, name_str, sh, sub_key_list=None): 
+        """
+            status: 
+                not completed 
+                
+            compare with fetch_easy, it allows fuzzy field_name, default sub_key_list, etc 
+            the interface is easier than fetch_easy, but it is slower 
+        """
+        
+        #raise NotImplemented  #at present search_field_name is only implemented in plot_field_vs_alpha 
+        field_name = self.search_field_name(name_str, only_first=True, assert_found=True)[0]
+        return self.fetch_easy(field_name, sh)
+    
+      
+    
     def insert(self, field_name, sh, iter, val, sub_key_list=None): 
         if not self.has_key(field_name): 
             self[field_name] = OrderedDict()
@@ -916,7 +1029,27 @@ class ResultDB(OrderedDict, AnalysisTools):
             dic=self.__class__.make_nested_dict(
                     [iter] + sub_key_list, old_dic=self[field_name][sh],val=val)
             self[field_name][sh] = dic 
-           
+
+    def insert_new(self, field_name, sh, val, sub_key_list=None): 
+        """
+            remove param iter
+        """
+        if not self.has_key(field_name): 
+            self[field_name] = OrderedDict()
+        if not self[field_name].has_key(sh): 
+            self[field_name][sh] = OrderedDict()
+            
+        if sub_key_list is None: 
+            self[field_name][sh] = val
+        else:
+            #self[field_name][sh][iter]  = OrderedDict()
+            #dic=self.__class__.make_nested_dict(
+            #        sub_key_list, old_dic=self[field_name][sh][iter],val=val)
+            #self[field_name][sh][iter] = dic 
+            dic=self.__class__.make_nested_dict(
+                    sub_key_list, old_dic=self[field_name][sh],val=val)
+            self[field_name][sh] = dic 
+
     def put(self, field_name, key, res, sub_key_list=None): 
         self[key].update({field_name:res})
     
@@ -926,6 +1059,57 @@ class ResultDB(OrderedDict, AnalysisTools):
         self.pop(field_name_old)
         self.commit()
     
+    def rename_folder_surfix(self, new_surfix=None): 
+        """
+            opeation on the parpath !! 
+        """
+        root = os.path.dirname(self.parpath)
+        old_name = os.path.basename(self.parpath)
+        
+        temp = old_name.split('-')[-1]
+        if '=' in temp: 
+            old_sur = ''
+            new_name = '-'.join([old_name, new_surfix])
+        else: 
+            old_sur = temp
+            new_name = old_name.replace(old_sur, new_surfix)
+        new_parpath = '/'.join([root, new_name])
+        print 'rename ...%s -> ...%s'%(self.parpath[-20:], new_parpath[-20: ])
+        os.rename(self.parpath, new_parpath)
+        #print_vars(vars(),  ['root', 'old_name', 'temp', 'old_sur', 'new_name'])
+    
+    def move_folder(self, local_root): 
+        dir = self.parpath 
+        cmd = 'mv %s %s/'%(dir, local_root)
+        status=os.system(cmd)
+        msg = 'mv ...%s -> ...%s/'%(dir[-20: ], local_root[-20: ])
+        if status== 0:  
+            msg += '   ... done' 
+        else: 
+            raise 
+        print msg 
+    
+    def get_surfix(self): 
+        pass 
+        root = os.path.dirname(self.parpath)
+        name = os.path.basename(self.parpath)
+        temp = name.split('-')[-1]
+        if '=' in temp: 
+            sur = ''
+        else: 
+            sur = temp
+        return sur 
+    
+    def mark_bad(self): 
+        if 0: 
+            sur = self.get_surfix()
+            if sur  == '' : 
+                new_sur = '-bad'
+            else: 
+                new_sur = '_'.join([sur, 'bad'])
+            print_vars(vars(),  ['new_sur'])
+            db.rename_folder(new_surfix=new_sur)
+            
     def fit_correlation(self, sh, func_type='power', which='correlation_extra', 
             direct='pm', r_min=None, r_max=None, period=None,  plot=0, plot_orig=1, show_label=1, **kwargs): 
         if 1: 
@@ -1067,20 +1251,35 @@ class ResultDB(OrderedDict, AnalysisTools):
         except Exception:
             raise 
 
-    def _get_EE_ln_from_log2(self, sh, i, info=0):
+    def _get_EE_ln_from_log2(self, sh, i=None, info=0, **kwargs):
         """
             temporary work around 
         """
-        try:
-            qn_spect_dic=self.fetch_easy('entanglement_entropy', sh, ['spectrum', i, 1])
-            EE = 0.0
-            for v in qn_spect_dic.values(): 
-                EE += -np.sum(v*np.log(v))
-        except Exception as err:
-            if info>0: 
+        assert i is not None 
+        if i != 'all': 
+            try:
+                qn_spect_dic=self.fetch_easy('entanglement_entropy', sh, ['spectrum', i, 1])
+                res = 0.0
+                for v in qn_spect_dic.values(): 
+                    res += -np.sum(v*np.log(v))
+            except Exception as err:
+                if info>0: 
+                    warnings.warn(str(err))
+                res=None
+        else: 
+            res=[(0, 0.0)]
+            try:
+                rec=self.fetch_easy('entanglement_entropy', sh, ['spectrum'])
+
+                for i, dic in rec[1:]:
+                    EE=0.0
+                    for v in dic.values(): 
+                        EE += -np.sum(v*np.log(v))
+                    res.append((i, EE))
+            except Exception as err:
                 warnings.warn(str(err))
-            EE=None
-        return EE
+                res=None
+        return res 
 
     def delete_rec(self, key): 
         self.pop(key)
@@ -1091,16 +1290,21 @@ class ResultDB(OrderedDict, AnalysisTools):
         msg = 'db is removed'
         print(msg)
     
-    def delete_file(self, sh): 
-        fn=self.__class__.shape_to_backup_fn(sh)
-        path = '/'.join([self.parpath, fn])
-        msg='rm file %s'%(path[-30: ])
-        try: 
-            os.remove(path)
-            msg += '  ... done' 
-        except Exception as err: 
-            msg += '  ... failed. '  +  str(err)
-        print msg 
+    def delete_file(self, sh):
+        if sh == 'all' : 
+            ss = self.get_shape_list() 
+        else: 
+            ss= [sh]
+        for sh in ss: 
+            fn=self.__class__.shape_to_backup_fn(sh)
+            path = '/'.join([self.parpath, fn])
+            msg='rm file %s'%(path[-30: ])
+            try: 
+                os.remove(path)
+                msg += '  ... done' 
+            except Exception as err: 
+                msg += '  ... failed. '  +  str(err)
+            print msg 
     
     def dump(self, file=None): 
         print '---'*30
@@ -1289,7 +1493,10 @@ class ResultDB(OrderedDict, AnalysisTools):
             try: 
                 x,y=zip(*data)        
                 x = np.asarray(x)
-                x = 1./x 
+                if xfunc is None: 
+                    x = 1./x 
+                else: 
+                    x = xfunc(x)
             except ValueError as err: 
                 print err
                 #x, y = np.nan, np.nan 
@@ -2149,19 +2356,21 @@ class ResultDB(OrderedDict, AnalysisTools):
     def show_fig(self): 
         plt.show()
     
-    def measure(self, sh, state=None, sh_min=None, sh_max=None, param=None,  which=None, field_surfix='', 
+    def measure(self, sh, state=None, sh_min=None, sh_max=None, measure_func=None, param=None,  which=None, field_surfix='', 
             exclude_which=None, force=0, fault_tolerant=1, recursive=False,  **kwargs): 
         from merapy.measure_and_analysis.measurement import measure_S 
         if state is None: 
             state = self.load_S(sh)
         parpath = self.parpath 
-        measure_S(state, parpath, rdb=self, which=which, 
+        measure_S(state, parpath, rdb=self, which=which, measure_func=measure_func, 
                 field_surfix=field_surfix, param=param, 
                 exclude_which=exclude_which, force=force, 
             fault_tolerant=fault_tolerant, **kwargs)
 
 class ResultDB_mera(ResultDB): 
     AUTO_UPDATE = False 
+    ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
+    ALL_FIELD_NAMES.extend([ 'entanglement_entropy', 'entanglement_special'])
     def __init__(self, parpath,  **kwargs): 
         kwargs.update(algorithm='mera')
         ResultDB.__init__(self, parpath,  **kwargs)
@@ -2169,8 +2378,31 @@ class ResultDB_mera(ResultDB):
     def update_db_structure(self): 
         pass 
     
-    def parse_fn(self, fn):
+    def parse_fn_bac(self, fn):
         return System.backup_fn_parse(fn)
+    
+    def parse_fn(self, fn):
+        nqn = None
+        if "transition" in fn or 'transtion' in fn: #'12-transition.pickle'
+            dim = "0"
+        elif "_" in fn:  #like "5_13.pickle or 5_13-4lay.pickle"
+            dim = fn.split("-")[0].split("_")[1].split(".")[0]
+            nqn = fn.split("-")[0].split("_")[0]
+        else:
+            if "lay" in fn: #"like "8-4lay.pickle""
+                dim = fn.split("-")[0]
+            else:   
+                 #like "8.pickle"
+                dim = fn.split(".")[0]
+        
+        i = fn.find("lay")
+        layer = fn[i-1] if i>0 else "3"
+        
+        #return eval(dim), eval(layer) + 1  #  layer= mera.num_of_layer large than actual layer by 1 
+        if nqn is None : 
+            return eval(dim), eval(layer) + 1  #  layer= mera.num_of_layer large than actual layer by 1 
+        else: 
+            return eval(dim), eval(layer) + 1, eval(nqn)#  layer= mera.num_of_layer large than actual layer by 1 
 
     @staticmethod
     def shape_to_backup_fn(sh,  nqn=None):
@@ -2251,24 +2483,16 @@ class ResultDB_mera(ResultDB):
         iter_min = 0 if iter_min is None else iter_min
         iter_max = 1e6 if iter_max is None else iter_max
         if not self.has_key_list(aa, info=1): 
-        #if 1: 
-            if 0: 
-                if system_class is None: 
-                    from merapy.hamiltonian import System as system_class
-                if len(sh)==2: 
-                    sh = sh[0], sh[1]-1
-                else: 
-                    sh = sh[0], sh[1]-1, sh[2]
-                
-                path = '/'.join([self.parpath, system_class.shape_to_backup_fn(*sh)])
-                res = system_class.load(path)
+            
+            if len(sh)==2: 
+                sh = sh[0], sh[1]-1
             else: 
-                if len(sh)==2: 
-                    sh = sh[0], sh[1]-1
-                else: 
-                    sh = sh[0], sh[1]-1, sh[2]
-                res = self.load_S(sh)
-            recs = res.energy_record
+                sh = sh[0], sh[1]-1, sh[2]
+            res = self.load_S(sh)
+            if isinstance(res, dict): 
+                recs= res['energy_record']
+            else: 
+                recs = res.energy_record
             #self.add_key_list(aa, val=recs, verbose=1)
             #self.commit(info=1)
         else:
@@ -2285,9 +2509,8 @@ class ResultDB_mera(ResultDB):
             diff = eng[1: ] -eng[0: -1]
             return diff
         else: 
+            
             raise
-        
-
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.02 
@@ -2393,8 +2616,14 @@ class ResultDB_vmps(ResultDB):
         return x, y    
 
 class ResultDB_idmrg(ResultDB): 
+    
+    VERSION = 1.01 
+    ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
+    ALL_FIELD_NAMES.extend(['length', 'entanglement', 'correlation_length'])
+    ALL_FIELD_NAMES= list(set(ALL_FIELD_NAMES))
+    
     def __init__(self, parpath,  **kwargs): 
-        kwargs['version'] = 1.0
+        #kwargs['version'] = 1.0
         kwargs.update(algorithm='idmrg')
         ResultDB.__init__(self, parpath,  **kwargs)
     
@@ -2587,10 +2816,18 @@ class ResultDB_idmrg(ResultDB):
         if kwargs.get('return_ax'): 
             return fig, ax
     
-    def calc_EE_from_finite_mps(self, sh, force=0, which_log='ln', fault_tol=1, info=0):
-        field = '_'.join([field, which_log])
+    def calc_EE_from_finite_mps(self, sh, small_size=0, force=0, which_log='ln', fault_tol=1, info=0):
+        
         field = 'EE_from_finite_mps'
-        rec=self.fetch_easy(field, sh)
+        field = '_'.join([field, which_log])
+        if small_size: 
+            sh_finite = small_size, sh[1]
+        else: 
+            sh_finite = sh
+        
+        #rec=self.fetch_easy(field, sh_finite, fault_tolerant=fault_tol)
+        rec=self.fetch_easy(field, sh_finite)
+        
         if rec is None or force:
             try:
                 state=self.load_S(sh, to_obj=1)
@@ -2598,6 +2835,23 @@ class ResultDB_idmrg(ResultDB):
                 from vmps.idmrg_mcc import iDMRG_mcc
                 state.N_max=1
                 temp=iDMRG_mcc.generate_finite_mps_func.im_func(state)
+                
+                size = len(temp)
+                if state.combine_2site: 
+                    size = size*2 
+                if small_size: 
+                    if 1: #注意这个函数仅仅是临时使用, 参数都很特殊 
+                        state.is_calc_Heff = 0 
+                        state.site_dim = state.Wi.shape[2].copy()
+                        state.which_eig = 'eigsh'
+                        state.eigs_tol = 1e-12 
+                        state.eigs_failure_lim = 0 
+                        state.is_calc_v0_overlap = 0
+                        state.trunc_err_tol = 1e-9 
+                    temp = iDMRG_mcc.reduce_finite_mps_size.im_func(state, small_size, temp)
+                    
+                    
+                    
                 mps = temp.to_normal_form('right', inplace=0)
                 #assert abs(abs(MPS.overlap(temp, mps)) -1.0 ) <= 1e-13
                 if 1:
@@ -2616,19 +2870,53 @@ class ResultDB_idmrg(ResultDB):
                     raise ValueError(which_log)
                     
                 rec = OrderedDict(rec['EE'])
-                self.insert(field, sh, -1, rec)
+                self.insert(field, sh_finite, -1, rec)
                 self.commit(info=info)
             except:
                 if not fault_tol:
                     raise 
+        #print_vars(vars(),  ['rec'])
         return rec
 
-class ResultDB_idmrg_mcc(ResultDB): 
+    def update_db_structure(self): 
+        
+        ver = 1.01
+        if self['version'] <  ver: 
+            print 'update version from %s to %s'%(self['version'], ver)
+            sh_list = self.get_shape_list()
+            
+           
+            self.get_dim_max_for_N(0, update_db=1)  
+            self['version'] = ver 
+            self.commit(info=1)
+
+class ResultDB_idmrg_mcc_del(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
         kwargs.update(algorithm='idmrg-mcc')
         ResultDB.__init__(self, parpath,  **kwargs)
 
+class ResultDB_ed(ResultDB): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs['version'] = 1.0
+        kwargs.update(algorithm='ED')
+        ResultDB.__init__(self, parpath,  **kwargs)
+    
+    def get_energy_lowest(self, sh, i, qn_exclude=None, qn_only=None): 
+        
+        qn_exclude = qn_exclude if qn_exclude is not None else [] 
+        rec = self.fetch_easy('energy', sh)
+        temp = []
+        if rec is not None:  
+            for k, v in rec.items(): 
+                if k not in qn_exclude: 
+                    temp.extend(v)
+        else: 
+            temp = [None]*10
+        temp.sort()
+        return temp[i]
+        
+        
 class TestResultDB(unittest.TestCase): 
     def setUp(self):
         self.seq = range(10)
@@ -2650,24 +2938,19 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        #from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
-        #from current.run_long_better.analysis_long import an_mera 
-        from merapy.run_heisbg_NNN.analysis import  an_mera as an_nnn
-        xx=an_nnn.an_main    
-        fig=None 
-        sh=(8, 4)
-        aa = xx.filter_alpha(resolution=0.2)
-        fig, ax = xx.fig_layout()
-        for a in aa:
-            #ax=xx.add_ax(fig); fig=ax.figure
-            db=xx[a]
-            try: 
-                db.plot_energy_vs_time(sh, 'diff', label=a,  title=a, only_sign=1,   ax=ax)           
-            except: 
-                raise 
-        ax.set_ylim(-2, 2)
-
-        xx.show_fig()
+        #from current.run_long_better.analysis import an_mera 
+        from merapy.run_heisbg_NNN.analysis import an_mera 
+        
+        # 为了验证稳定性，进行独立的run，分别用后缀 ‘a', 'b' 看它们能否重合
+        #xx=an_mera.an_test.an_eigen_state
+        xx=an_mera.an_main 
+        db = xx[0.5]
+        e = db.fetch_easier('er xg', (4, 4))
+        print_vars(vars(),  ['db', 'e'])
+        
+        #db.move_folder(an_mera.an_test.local_root)
+       
+        #xx.show_fig()
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -2787,14 +3070,14 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               TestResultDB('test_temp'), 
-               #TestResultDB('test_insert_and_fetch'), 
-               #TestResultDB('test_add_key_list'), 
-               #TestResultDB('test_idmrg_get_EE'), 
+               'test_temp', 
+               #'test_insert_and_fetch', 
+               #'test_add_key_list', 
+               #'test_idmrg_get_EE', 
   
             ]
             for a in add_list: 
-                suite.addTest(a)
+                suite.addTest(TestResultDB(a))
             unittest.TextTestRunner().run(suite)
            
           
