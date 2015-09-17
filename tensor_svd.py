@@ -594,6 +594,9 @@ class Tensor_svd(object):
         """
             为了在mps中 对角化密度矩阵 而写此函数
             exact diagonalizetion of a rank-2 symmetric tensor 
+            given A such that A = A^+, find V such that 
+                AV = lam V
+            lam is diagnal. A, lam, V are matrix
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 10000
         num_blocks = tensor.nidx 
@@ -602,7 +605,7 @@ class Tensor_svd(object):
         VAL = np.ndarray(num_blocks, dtype=np.object)
         
         dim_list = np.ndarray(num_blocks, dtype=np.int)
-        dim_list_trun = np.ndarray(num_blocks, dtype=np.int)   #truncated dim_list 
+        dim_list_trunc = np.ndarray(num_blocks, dtype=np.int)   #truncated dim_list 
         qn_list_l = np.ndarray(num_blocks, dtype=np.object)
         qn_list_r = np.ndarray(num_blocks, dtype=np.object)
         
@@ -657,7 +660,7 @@ class Tensor_svd(object):
                     VEC[i] = VEC[i][:, ind]
                 else: 
                     empty_list.append(i)
-                dim_list_trun[i] = D 
+                dim_list_trunc[i] = D 
                 
             if empty_list: 
                 for i in empty_list: 
@@ -665,23 +668,25 @@ class Tensor_svd(object):
                 #qn_list_l = qn_list_l[index]
                 #qn_list_r = qn_list_r[index]
                 #dim_list = dim_list[index]
-                dim_list_trun = dim_list_trun[index]
+                dim_list_trunc = dim_list_trunc[index]
                 VEC = VEC[index]
                 if return_val: 
                     VAL = VAL[index]
         else: 
-            dim_list_trun = dim_list 
+            dim_list_trunc = dim_list 
             trunc_err = np.nan 
         if trunc_which == 'left': 
             qn_list_l = qn_list_l[index]
-            q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_trun)
+            q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_trunc)
             q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
             for i in xrange(VEC.size): 
                 VEC[i] = VEC[i].T 
         elif trunc_which == 'right' : 
             qn_list_r = qn_list_r[index]
             q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
-            q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trun)
+            q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trunc)
+        else: 
+            raise 
         
         res = iTensor(QSp=[q1, q2], use_buf=use_buff)
         #print_vars(vars(),  ['res.shape', 'empty_list', 'dim_list'], '')
@@ -943,7 +948,6 @@ class TestIt(unittest.TestCase):
         self.u = u 
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry='Z2')
     
-        
     def test_group_legs(self, rank=3):
         """
             --- pass 
@@ -1133,8 +1137,6 @@ class TestIt(unittest.TestCase):
                 a = U.dot(S).dot(V) 
                 xx = a.ravel().dot(t.ravel())
                 self.assertAlmostEqual(xx, 0.957741817056, 10)
-
-                
                 
     def random_unit_tensor(cls):
         u = self.u
@@ -1197,20 +1199,47 @@ class TestIt(unittest.TestCase):
     def test_temp(self): 
         from merapy import QspU1 
         np.random.seed(1234)
-        
         if 1: 
-            np.set_printoptions(5)
-            q = QspU1.easy_init([ 1, -1, ], [2, 2])
-            qsp = q.copy_many(5)
-            totqn = QspU1.QnClass(1)
-            t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
-            t = t.merge_qsp((0, 1), (2, 3, 4))
-            t.show_data()
+            #np.set_printoptions(5)
+            np.random.seed(1234)
+            q1 = QspU1.easy_init([ 1], [4])
+            q2 = QspU1.easy_init([ 0], [4])
             
-            if 0: 
-                t.data /= np.linalg.norm(t.data)
-                U, S, V, err=Tensor_svd.svd_rank2(t, trunc_dim=10, return_trunc_err=1)
-                self.assertAlmostEqual(err, 0.12761304163092035)
+            totqn = QspU1.QnClass(1)
+            t = iTensor.example(qsp=[q1, q2], totqn=totqn, symmetry='U1')
+
+            print_vars(vars(),  ['t'])
+            
+            res=Tensor_svd.eig_rank2(t, 
+                    #trunc_dim = 2, 
+                    trunc_which='left', 
+                    #trunc_which='right'
+                    )
+            vec = res['vec_mat']
+            print_vars(vars(),  ['vec'])
+            print_vars(vars(),  ['repr(vec.data)'])
+            val = res['val_mat']
+            print_vars(vars(),  ['val'])
+        
+        if 0: 
+            #np.set_printoptions(5)
+            np.random.seed(1234)
+            q1 = QspU1.easy_init([ 1, -1, -2], [4, 3, 2])
+            q2 = QspU1.easy_init([ 0, 2, 3], [4, 3, 2])
+            
+            totqn = QspU1.QnClass(1)
+            t = iTensor.example(qsp=[q1, q2], totqn=totqn, symmetry='U1')
+
+            print_vars(vars(),  ['t'])
+            
+            res=Tensor_svd.eig_rank2(t, 
+                    #trunc_dim = 2, 
+                    trunc_which='left')
+            t1 = res['vec_mat']
+            print_vars(vars(),  ['t1'])
+            print_vars(vars(),  ['repr(t1.data)'])
+            
+            
 
 if __name__ == "__main__":
     if 0: 
@@ -1236,8 +1265,8 @@ if __name__ == "__main__":
            #'test_svd_rank2_fix_err', 
            #'test_eig_rank2', 
            #'test_group_legs', 
-           'test_svd_rank2_totqn_not_id', 
-           #'test_temp', 
+           #'test_svd_rank2_totqn_not_id', 
+           'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
