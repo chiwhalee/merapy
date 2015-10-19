@@ -42,8 +42,16 @@ __all__ = ['entanglement_entropy', 'entanglement_spectrum', 'central_charge',
         num of quantum num is not enough when eig_sparse
         Z2 symm is not properly treated
 """
-
-
+def initialize_S(S): 
+    from merapy.hamiltonian import System 
+    if not isinstance(S, dict) and not isinstance(S, System): 
+        S= S.__dict__ 
+    if isinstance(S, dict): 
+        S = System(symmetry='U1', init_state=S)
+        S.info = 2
+        System.set_graph.im_func(S, getattr(S, 'graph_module_name', None))
+        S.initialize()
+    return S
 
 def rho_eig(rho, k=None, info=0): 
     """
@@ -178,7 +186,6 @@ def entanglement_special(S, ):
         for calc the valence bond effect on entanglement in AFM 
     """
     from merapy.hamiltonian import System 
-
     if not isinstance(S, dict): 
         S= S.__dict__ 
     if isinstance(S, dict): 
@@ -859,7 +866,7 @@ if __name__ == '__main__':
                 res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
                 #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
     
-    if 0: #examine
+    if 1: #examine
         TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     if 1: 

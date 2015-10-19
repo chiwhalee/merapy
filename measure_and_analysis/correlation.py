@@ -32,6 +32,7 @@ from merapy.diagrams.V31 import graph_ternary
 from merapy.descending import descending_ham
   
 from magnetization import __magnetization  
+from central_charge import initialize_S 
 
 
 def ascending_middle_site(S, o1, ilayer):
@@ -421,6 +422,7 @@ def __correlation_extra(S, r, direct, info=0):
     return res
 
 def correlation_extra(S, r_list=None, direct_list=None, fail_skip=1, **kwargs): 
+    S = initialize_S(S) 
     num_of_layer = S.mera.num_of_layer
     if num_of_layer >= 7: 
         #return None

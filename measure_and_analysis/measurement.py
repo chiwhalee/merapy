@@ -160,7 +160,7 @@ def measure_S(S=None, parpath=None, path=None,
             #    if not rdb.has_key(k): 
             #        raise NotImplemented   #后来修改了，不支持，需要再修改
             #        rdb[k] = OrderedDict()
-            print_vars(vars(),  ['nqn'])
+            
             if nqn <= 3: 
                 shape = (dim, layer)
             else: 
