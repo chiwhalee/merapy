@@ -52,6 +52,7 @@ uname=os.uname()[1]
 if uname in ['QTG-WS1-ubuntu']: 
     import pp
 
+
 from merapy.utilities import print_vars, save 
 from merapy.context_util import (make_temp_dir, rpyc_conn_local, 
         rpyc_conn_local_zerodeploy, rpyc_conn, rpyc_conn_zerodeploy)
@@ -695,153 +696,6 @@ class Main_old(object):
             main.stop_player()        
         return main 
     
-    @classmethod #@staticmethod 
-    def run_many(cls, config_group, nproc=None, func=None, parallel=True): 
-        """
-            How to about multiprocessing: 
-                map is used for one unique function, while apply for different functions
-                the former is simple,  while the later is more flexible
-        """
-        res= []
-        #init_worker = lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
-        if func is None: 
-            func = cls.run_one
-        
-        if parallel:
-            #nproc = nproc if nproc is not None else len(config_group)
-            if nproc is None:   #setting default values of nproc of each machine. this assume NUM_OF_THREADS is uniform for each process
-                hostname = socket.gethostname()
-                nt = config_group[0]['NUM_OF_THREADS']
-                ncpu_tot = psutil.NUM_CPUS 
-                if 'node' in hostname:
-                    ncpu_tot = min(ncpu_tot, 12)
-                    nproc = ncpu_tot//nt 
-                elif 'qtg' in hostname: 
-                    nproc = ncpu_tot/2//nt
-                elif hostname == Main.LOCALHOSTNAME: 
-                    #nproc = 2
-                    nproc = ncpu_tot/2//nt
-                else: 
-                    warnings.warn('unfamiliar hostname %s'%(hostname, ))
-                    nproc = ncpu_tot/2//nt 
-                assert nproc>0, 'nproc=%d'%(nproc, )
-                
-                nproc = min(nproc, 12)
-                print 'nproc is auto set to %d'%(nproc, )
-                
-            try: 
-                pool = Pool(processes=nproc, initializer=None)
-                if 0: 
-                    pool.map(func, config_group)
-                else: 
-                    for arg in config_group: 
-                        #print 'aaaaa', arg 
-                        pool.apply_async(func,  (arg, ))
-                    pool.close()   
-                    pool.join()   # the above two lines are needed to prevent main thread exit
-            except KeyboardInterrupt: 
-                print 'KeyboardInterrupt in main exit'
-            except Exception:
-                print 'EEEEE'*10
-                sys.exit(0)
-            finally: 
-                #pool.terminate()
-                #pool.join()
-                #sys.exit(0)
-                pass
-                
-        else: 
-            for i in config_group: 
-                res.append(func(i))
-        return res 
-    
-    @classmethod #@staticmethod 
-    def run_many_dist(cls, config_group, servers=None, func=None, **kwargs): 
-        """
-            status: workable now!
-                I dont know why cant run run_many_dist under main.py.
-                This will cause problem in serialization  
-                so Iam not able to unittest it under __main__ 
-                
-        """
-        #if func is None: 
-        #    #func = cls.run_one
-        #    func = run_one_dist 
-        from brokest.brokest import queue, run_many 
-        if servers is None: 
-            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
-                    ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
-            servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
-            servers.extend(sugon_list)
-        if 1: 
-            def run_one_dist(config): 
-                schedule = config.get('schedule')
-                pid = os.getpid();  config.update(pid=pid)
-                #schedule = config['run_schedule_args']['schedule']
-                main = Main(**config)
-                msg = ''
-                is_registered = False 
-                job_status = ''
-                try: 
-                    status = 'open'
-                    if config.get('register_job'): 
-                        job_id = config.get('job_id')
-                        if job_id is None: 
-                            parpath = config['backup_parpath_local']
-                            job_id = (str(config.get('job_group_name')), hash(parpath))
-                        with rpyc_conn('local', 'service', 17012) as conn:                
-                            status = conn.root.register_job(job_id, config)
-                        if status  == 'open' : 
-                            is_registered = True
-                    if status == 'open': 
-                        if schedule is None: 
-                            main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
-                        else: 
-                            #print_vars(vars(),  ['schedule']); raise 
-                            #if isinstance(schedule[0], dict):  #mera use this 
-                            if config['algorithm']== 'mera':  
-                                main.run_schedule(**config['schedule'])
-                            else:   #mps use this 
-                                main.run_schedule(schedule)  
-                        job_status = 'COMPLETED'
-                        msg += 'run one COMPLETED.' 
-                    elif status== 'locked': 
-                        msg += 'job %s exists'%(job_id, ) 
-                        
-                except KeyboardInterrupt: 
-                    #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
-                    msg += 'KeyboardInterrupt captured.'
-                    job_status = 'FAILED'
-                except Exception, exception:
-                    print exception
-                    traceback.print_exc()
-                    job_status = 'FAILED'
-                finally: 
-                    msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
-                    print msg
-                    if is_registered:  
-                        parpath = config['backup_parpath_local']
-                        with rpyc_conn('local', 'service', 17012) as conn:                
-                            print 'iiiiiiiiiiiiiii', job_id 
-                            conn.root.update_job(job_id, 'status', job_status)
-                            #end_time = str(datetime.datetime.now()).split('.')[0]
-                            #conn.root.update_job(job_id, 'end_time', end_time)
-                       
-                    main.stop_player()        
-                return main 
-            #tasks = [(run_one_dist, (c, )) for c in config_group] 
-            tasks = [(cls.run_one, (c, )) for c in config_group] 
-            
-        else: 
-            def run_one_dist(main): 
-                main.run()
-                return 
-            
-            from merapy.utilities import pickle_any 
-            main_list = [Main(**c) for c in config_group]
-            tasks = [(run_one_dist, (m, )) for m in main_list] 
-            
-        run_many(tasks, servers, info=kwargs.get('info', 10), querry=1, try_period=kwargs.get('try_period', 1))
     
     @staticmethod
     def make_grid(*args): 
@@ -1182,7 +1036,162 @@ class Main(Main_old):
                
             main.stop_player()        
         return main 
-
+    
+    @classmethod #@staticmethod 
+    def run_many(cls, config_group, nproc=None, func=None, parallel=True): 
+        """
+            How to about multiprocessing: 
+                map is used for one unique function, while apply for different functions
+                the former is simple,  while the later is more flexible
+        """
+        res= []
+        #init_worker = lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
+        if func is None: 
+            func = cls.run_one
+        
+        if parallel:
+            #nproc = nproc if nproc is not None else len(config_group)
+            if nproc is None:   #setting default values of nproc of each machine. this assume NUM_OF_THREADS is uniform for each process
+                hostname = socket.gethostname()
+                nt = config_group[0]['NUM_OF_THREADS']
+                ncpu_tot = psutil.NUM_CPUS 
+                if 'node' in hostname:
+                    ncpu_tot = min(ncpu_tot, 12)
+                    nproc = ncpu_tot//nt 
+                elif 'qtg' in hostname: 
+                    nproc = ncpu_tot/2//nt
+                elif hostname == Main.LOCALHOSTNAME: 
+                    #nproc = 2
+                    nproc = ncpu_tot/2//nt
+                else: 
+                    warnings.warn('unfamiliar hostname %s'%(hostname, ))
+                    nproc = ncpu_tot/2//nt 
+                assert nproc>0, 'nproc=%d'%(nproc, )
+                
+                nproc = min(nproc, 12)
+                print 'nproc is auto set to %d'%(nproc, )
+                
+            try: 
+                pool = Pool(processes=nproc, initializer=None)
+                if 0: 
+                    pool.map(func, config_group)
+                else: 
+                    for arg in config_group: 
+                        #print 'aaaaa', arg 
+                        pool.apply_async(func,  (arg, ))
+                    pool.close()   
+                    pool.join()   # the above two lines are needed to prevent main thread exit
+            except KeyboardInterrupt: 
+                print 'KeyboardInterrupt in main exit'
+            except Exception:
+                print 'EEEEE'*10
+                sys.exit(0)
+            finally: 
+                #pool.terminate()
+                #pool.join()
+                #sys.exit(0)
+                pass
+                
+        else: 
+            for i in config_group: 
+                res.append(func(i))
+        return res 
+    
+    @classmethod #@staticmethod 
+    def run_many_dist(cls, config_group, servers=None, func=None, **kwargs): 
+        """
+            status: workable now!
+                I dont know why cant run run_many_dist under main.py.
+                This will cause problem in serialization  
+                so Iam not able to unittest it under __main__ 
+                
+        """
+        #if func is None: 
+        #    #func = cls.run_one
+        #    func = run_one_dist 
+        from brokest.brokest import queue, run_many 
+        #if servers is None: 
+        #    sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
+        #            ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
+        #    servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
+        #    servers.extend(sugon_list)
+        if 1: 
+            def run_one_dist(config): 
+                schedule = config.get('schedule')
+                pid = os.getpid();  config.update(pid=pid)
+                #schedule = config['run_schedule_args']['schedule']
+                main = Main(**config)
+                msg = ''
+                is_registered = False 
+                job_status = ''
+                try: 
+                    status = 'open'
+                    if config.get('register_job'): 
+                        job_id = config.get('job_id')
+                        if job_id is None: 
+                            parpath = config['backup_parpath_local']
+                            job_id = (str(config.get('job_group_name')), hash(parpath))
+                        with rpyc_conn('local', 'service', 17012) as conn:                
+                            status = conn.root.register_job(job_id, config)
+                        if status  == 'open' : 
+                            is_registered = True
+                    if status == 'open': 
+                        if schedule is None: 
+                            main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
+                        else: 
+                            #print_vars(vars(),  ['schedule']); raise 
+                            #if isinstance(schedule[0], dict):  #mera use this 
+                            if config['algorithm']== 'mera':  
+                                main.run_schedule(**config['schedule'])
+                            else:   #mps use this 
+                                main.run_schedule(schedule)  
+                        job_status = 'COMPLETED'
+                        msg += 'run one COMPLETED.' 
+                    elif status== 'locked': 
+                        msg += 'job %s exists'%(job_id, ) 
+                        
+                except KeyboardInterrupt: 
+                    #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
+                    msg += 'KeyboardInterrupt captured.'
+                    job_status = 'FAILED'
+                except Exception, exception:
+                    print exception
+                    traceback.print_exc()
+                    job_status = 'FAILED'
+                finally: 
+                    msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
+                    print msg
+                    if is_registered:  
+                        parpath = config['backup_parpath_local']
+                        with rpyc_conn('local', 'service', 17012) as conn:                
+                            print 'iiiiiiiiiiiiiii', job_id 
+                            conn.root.update_job(job_id, 'status', job_status)
+                            #end_time = str(datetime.datetime.now()).split('.')[0]
+                            #conn.root.update_job(job_id, 'end_time', end_time)
+                       
+                    main.stop_player()        
+                return main 
+            #tasks = [(run_one_dist, (c, )) for c in config_group] 
+            tasks = [(cls.run_one, (c, )) for c in config_group] 
+            
+        else: 
+            def run_one_dist(main): 
+                main.run()
+                return 
+            
+            from merapy.utilities import pickle_any 
+            main_list = [Main(**c) for c in config_group]
+            tasks = [(run_one_dist, (m, )) for m in main_list] 
+            
+        run_many(tasks, servers, 
+                info=kwargs.get('info', 10), querry=1, 
+                try_period=kwargs.get('try_period', 1))
+    
+    @staticmethod 
+    def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 
+        from brokest.brokest import server_discover 
+        return server_discover(servers=servers, exclude_patterns=exclude_patterns, querry_timeout=querry_timeout, qsize=qsize, info=info)
+        
     @staticmethod
     def email(): 
         import smtplib
