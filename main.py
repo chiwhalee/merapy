@@ -1,30 +1,6 @@
 #!/usr/bin/env python
 #coding=UTF8
 
-"""
-    methodology: 
-        WHAT IS THE ESSENSE OF A MAIN FUNC OR CLASS?
-            1. main func is the interface that connect the program and the hardware 
-                e.g. determing the runtime resorces for parallel runing 
-            2. it explicitly indicates where the program starts
-            3. parallel computing and distribute computing
-    q:
-        gamma=1.0 or 0.2
-        in hamiltonian.py
-            q387,  
-        main.py
-            q895
-        Finisite.f90
-            a.call TopLevel_EigenState(M,S)
-            b. ascending,  descending
-    issue:
-        in mera.py:
-            following is not complete
-            #QSp_V[3] = QSp_U[0].copy()
-            QSp_V[3]=QSp_V[0].add(QSp_V[1]).add(QSp_V[2])
-            QSp_V[3].update(qsp_max = qsp_max)
-        
-"""
 import warnings 
 import time
 import datetime 
@@ -57,7 +33,7 @@ from merapy.utilities import print_vars, save
 from merapy.context_util import (make_temp_dir, rpyc_conn_local, 
         rpyc_conn_local_zerodeploy, rpyc_conn, rpyc_conn_zerodeploy)
 from merapy.quantum_number import *
-from merapy.mera import Mera
+
 from merapy.hamiltonian import System
 from merapy.tensor_py import iTensor, iTensorFactory
 from merapy.scale_invariant import ScaleInvar
@@ -65,14 +41,34 @@ from merapy import common_util
 from merapy import crandom
 import merapy.schedule
 from merapy.schedule import copy_schedule, schedule_scale_invar, schedule_prod_state
-from merapy.decorators import *
-from merapy.measure_and_analysis.measurement import measure_S
+from merapy.decorators import * #tensor_player
 import merapy.main 
 
 
-
-
 """
+    methodology: 
+        WHAT IS THE ESSENSE OF A MAIN FUNC OR CLASS?
+            1. main func is the interface that connect the program and the hardware 
+                e.g. determing the runtime resorces for parallel runing 
+            2. it explicitly indicates where the program starts
+            3. parallel computing and distribute computing
+    q:
+        gamma=1.0 or 0.2
+        in hamiltonian.py
+            q387,  
+        main.py
+            q895
+        Finisite.f90
+            a.call TopLevel_EigenState(M,S)
+            b. ascending,  descending
+    issue:
+        in mera.py:
+            following is not complete
+            #QSp_V[3] = QSp_U[0].copy()
+            QSp_V[3]=QSp_V[0].add(QSp_V[1]).add(QSp_V[2])
+            QSp_V[3].update(qsp_max = qsp_max)
+        
+
     generally, main func has 3 effects: 
         1. init all--- pass all params
         2. excute; 
@@ -98,10 +94,6 @@ import merapy.main
     
     
 """
-
-
-#__all__ = ["Main"]
-
 
 
 if 1: 
@@ -143,647 +135,8 @@ if 1:
 
     copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method) 
     
-
-class Main_old(object):
+class Main(object): 
     LOCALHOSTNAME = 'QTG-WS1-ubuntu'  #used in distributed computing 
-    
-    def __init__(self, system_class=None, mera_class=None, updaters=None, trunc_dim=None, tot_layer=None, unitary_init=None, q_iter=8, q_lay=3, info=0,
-        MODEL="Heisenberg", SYMMETRY="Z2", only_NN=True, only_NNN=False, use_player=True, message=None, 
-        filename=None, backup_fn='auto', backup_parpath=None, resume=False, auto_resume=True, J_NNN = None, USE_REFLECTION=None, 
-        NUM_OF_THREADS=1, rand_seed=1234, USE_CUSTOM_RAND=True, 
-        model_param=None, energy_exact=None, combine_2site=True, qsp_base=None, qsp_max=None, 
-        mera_kwargs={}, sys_kwargs={}, **kwargs):
-        self.hostname = socket.gethostname()
-        if 1: 
-            self.system_class = system_class if system_class is not None else System
-            self.mera_class = mera_class if mera_class is not None else Mera
-            self.updaters= updaters
-            self.trunc_dim = trunc_dim
-            self.tot_layer = tot_layer
-            self.unitary_init = unitary_init
-            self.q_iter = q_iter
-            self.q_lay = q_lay
-            self.info = info
-            self.MODEL= MODEL
-            self.SYMMETRY= SYMMETRY
-            self.only_NN = only_NN
-            self.only_NNN = only_NNN
-            self.use_player = use_player
-            self.message = message
-            self.filename = filename
-            self.backup_fn = backup_fn
-            self.backup_parpath = backup_parpath
-            self.USE_REFLECTION = USE_REFLECTION
-            self.NUM_OF_THREADS= NUM_OF_THREADS
-            self.rand_seed = rand_seed
-            self.USE_CUSTOM_RAND = USE_CUSTOM_RAND
-            self.model_param = model_param
-            self.resume = resume
-            self.auto_resume = auto_resume
-            self.energy_exact = energy_exact
-            self.combine_2site = combine_2site
-            self.qsp_base = qsp_base
-            self.qsp_max = qsp_max
-            self.mera_kwargs = mera_kwargs
-            self.sys_kwargs= sys_kwargs
-            self.sys_kwargs.update(kwargs)
-            self.do_measure = kwargs.get('do_measure')
-            #self.j_power_r_max = kwargs.get('j_power_r_max', None)
-            
-            if self.do_measure is None: 
-                self.do_measure = False
-        
-        #above is tedious, below init self in a more auto fashion
-        temp = ['backup_parpath_local', 'measurement_args', 'use_local_storage']
-        for t in temp: 
-            setattr(self, t, kwargs.get(t))
-
-        if 1: 
-            #issue in each main, should use independent random state!     
-            if USE_CUSTOM_RAND:
-                crandom.mrandom.csrand(rand_seed)
-            else:
-                random.seed()
-                crandom.rand = random.random
-
-
-            
-        if self.USE_REFLECTION  and self.trunc_dim != 2:
-            raise ValueError("USE_REFLECTION is not compatable with trunc_dim")
-             
-        #os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
-        Main.set_num_of_threads(NUM_OF_THREADS)
-        
-        self.init_all()
-
-    def init_all(self):
-        qn_identity, qsp_base, qsp_null=init_System_QSp(symmetry = self.SYMMETRY, combine_2site=self.combine_2site)
-        
-        if self.qsp_base is None: self.qsp_base = qsp_base
-        self.qn_identity = qn_identity
-        self.qsp_null = qsp_null
-        qsp_0 = self.qsp_base.copy()
-        if not self.combine_2site and self.SYMMETRY == "U1" :
-            qsp_max = qsp_base.__class__.max(self.trunc_dim, combine_2site=self.combine_2site)
-        else:
-            qsp_max= qsp_base.__class__.max(self.trunc_dim)
-        qsp_max2 = qsp_max.copy() 
-        
-        if self.qsp_max is not None:
-            qsp_max = self.qsp_max.copy()
-            qsp_max2 = None #self.qsp_max.copy()
-            print "trunc_dim is updated to %d"%qsp_max.totDim
-            self.trunc_dim = qsp_max.totDim
-
-        topQN = qn_identity.copy()
-
-
-        if 1:
-            nTop = 2 #not used at all
-            self.M= self.mera_class(self.tot_layer, nTop, 
-                    qsp_0, qsp_max, qsp_max2, topQN, qsp_null, qn_identity, 
-                    #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
-                    unitary_init=self.unitary_init,
-                    USE_REFLECTION=self.USE_REFLECTION, 
-                    **self.mera_kwargs)
-            #print 'sssss', type(self.system_class),  self.sys_kwargs
-            
-            
-            self.S = self.system_class(mera=self.M, model_param=self.model_param,  
-                    symmetry=self.SYMMETRY, model=self.MODEL, 
-                    only_NN = self.only_NN, only_NNN = self.only_NNN,  
-                    energy_exact=self.energy_exact, combine_2site=self.combine_2site, 
-                    USE_REFLECTION=self.USE_REFLECTION, 
-                    #j_power_r_max=self.j_power_r_max, 
-                    #USE_CUSTOM_RAND=self.USE_CUSTOM_RAND, rand_seed=self.rand_seed, 
-                    **self.sys_kwargs)
-            
-            self.S.init_Hamiltonian()
-            
-
-            #每次更改耦合常数算新的值，要重新初始化
-            if self.S.model == "Ising":
-                self.S.init_Hamiltonian()
-                for iLayer in range(self.M.num_of_layer-1): 
-                    #top V shouldn't inited by init_layer
-                    self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
-        
-        LayStart=0
-        q_one=1 
-
-    #@profileit(fn="profile.tmp")
-    def run(self, resume=True, auto_resume=None, backup_fn=None, filename=None, 
-            q_iter=None, do_measure=None, **kwargs):
-        LayStart=0
-        q_one=1
-        
-        backup_fn_local = None
-        do_measure  = do_measure if do_measure is not None else self.do_measure
-        
-        backup_parpath = self.backup_parpath
-        backup_parpath_local = self.backup_parpath_local
-        if kwargs.get('backup_parpath') is not None : 
-            backup_parpath = kwargs.get('backup_parpath')    
-        self.make_dir(backup_parpath, backup_parpath_local)
-        
-        fn = self.S.backup_fn_auto() 
-        if backup_parpath is not None:
-            
-            backup_fn = backup_parpath  + '/' +  fn
-        if backup_parpath_local is not None: 
-            backup_fn_local = '/'.join([backup_parpath_local, fn])
-           
-        filename = 'res-'  + self.S.backup_fn_auto()
-        filename = filename.split('.')[0] + '.dat'
-        if backup_parpath is not None: 
-            filename = backup_parpath + '/' + filename
-        self.filename = filename 
-
-        if q_iter is None:
-            q_iter = self.q_iter
-        if resume is not None:
-            self.resume  = resume
-                
-        
-        if self.resume and backup_fn is not None:
-            if not self.use_local_storage: 
-                self.resume_func(backup_fn)
-            else: 
-                self.resume_func(backup_fn_local, use_local_storage=self.use_local_storage)
-            if hasattr(self.S, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
-                energy_diff_min = kwargs.get('energy_diff_min')
-                if  self.S.energy_diff_std is not None: 
-                    if self.S.energy_diff_std <= energy_diff_min: 
-                        q_iter = 0
-                        do_measure = 0
-                        msg = 'self.S.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
-                                self.S.energy_diff_std, energy_diff_min)
-                        print msg
-           
-        if auto_resume is not None:   self.auto_resume = auto_resume
-        
-        
-        if isinstance(self.updaters, list): #only for backward compatable
-            
-            ascending_func, descending_func, update_mera_func, finite_range_func, rho_top_func= tuple(self.updaters)
-        elif isinstance(self.updaters, dict):
-            
-            finite_range_func = self.updaters["finite_range_func"]
-            ascending_func = self.updaters["ascending_func"]
-            descending_func = self.updaters["descending_func"]
-            update_mera_func = self.updaters["update_mera_func"]
-            rho_top_func = self.updaters["rho_top_func"]
-        else: 
-            raise ValueError(str(self.updaters))
-        
-        
-        temp = ['use_local_storage' ]
-        args = {t: self.__getattribute__(t) for t in temp}
-        args.update(backup_fn_local=backup_fn_local)
-        kwargs.update(args)
-       
-        finite_range_func(self.M, self.S, ascending=ascending_func, descending=descending_func, 
-                update_mera=update_mera_func, rho_top_func = rho_top_func, 
-                q_one=q_one, q_lay=self.q_lay, q_iter=q_iter, use_player=self.use_player, 
-                filename=self.filename, backup_fn=backup_fn, lstart = LayStart, lstep=0, 
-                resume=self.resume, auto_resume=self.auto_resume, info=self.info-1, **kwargs)
-        
-        
-        if do_measure:
-            try: 
-                ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-                print_vars(vars(),  ['self.measurement_args'])
-                if ppp is not None : 
-                    exclude_which = self.measurement_args.get('exclude_which', [])
-                    exclude_which.append('scaling_dim')
-                    self.measure_S(self.S, ppp, exclude_which=exclude_which)
-            except Exception as err: 
-                warnings.warn(str(err))
-                
-       
-        return self.M, self.S
-   
-    def run_scale_invar(self, resume=True, auto_resume=None, backup_fn=None, filename="auto", 
-            num_of_SIlayer=3, q_lay=1, q_iter=5, do_measure=None,  **kwargs):
-        
-        do_measure  = do_measure if do_measure is not None else self.do_measure
-        
-        q_one = 1
-        
-        backup_parpath = self.backup_parpath
-        backup_parpath_local = self.backup_parpath_local
-        if kwargs.get('backup_parpath') is not None : 
-            backup_parpath = kwargs.get('backup_parpath')
-        if kwargs.get('backup_parpath_local') is not None : 
-            backup_parpath_local = kwargs.get('backup_parpath_local')
-        
-                
-        fn = self.S.backup_fn_auto() 
-        if backup_parpath is not None : 
-           
-            backup_fn  = backup_parpath + '/' + fn
-        backup_fn_local = None
-        if backup_parpath_local is not None: 
-            backup_fn_local = '/'.join([backup_parpath_local, fn])
-            
-
-        #if filename is not None:   self.filename = filename
-        filename = 'res-'  + self.S.backup_fn_auto()
-        filename = filename.split('.')[0] + '.dat'
-        
-        
-        if backup_parpath is not None: 
-            filename = backup_parpath + '/' + filename
-        self.filename = filename 
-      
-
-        self.make_dir(backup_parpath, backup_parpath_local)
-        temp = backup_fn if not self.use_local_storage else backup_fn_local
-        if resume and temp is not None:  
-            self.resume_func(temp, use_local_storage=self.use_local_storage)
-            if not hasattr(self.S, 'iter1'):
-                self.S.iter1 = self.S.iter
-            energy_diff_min  = kwargs.get('energy_diff_min')
-            if hasattr(self.S, 'energy_diff_std') and kwargs.get('energy_diff_min') is not None : 
-                if self.S.energy_diff_std <= energy_diff_min and self.S.energy_diff_std is not None  : 
-                    q_iter = 0
-                    do_measure = 0
-                    msg = 'self.S.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0, do_measure=0'%(
-                            self.S.energy_diff_std, energy_diff_min)
-                    print msg
-                
-        if auto_resume is not None:   self.auto_resume = auto_resume
-        
-        temp = ['use_local_storage']
-        args = {t: self.__getattribute__(t) for t in temp}
-        args['backup_fn_local'] = backup_fn_local
-        kwargs.update(args)
-
-        SI = ScaleInvar(self.S, self.updaters, num_of_SIlayer, q_iter, q_one, q_lay=q_lay, 
-                filename=filename, backup_fn=backup_fn, 
-                resume=resume, auto_resume=auto_resume, 
-                use_player=self.use_player, info=self.info, **kwargs)
-        
-        SI.scale_invariant()
-        
-        if do_measure:
-            try: 
-                ppp = backup_parpath if not self.use_local_storage else backup_parpath_local
-                if ppp is not None : 
-                    exclude_which = self.measurement_args.get('exclude_which', [])
-                    self.measure_S(self.S, ppp, exclude_which=exclude_which)
-            except Exception as err: 
-                warnings.warn(str(err))
-        
-        if self.backup_parpath is not None and self.backup_parpath_local is not None and not self.use_local_storage: 
-            self.transfer_pickle_file()
-        
-        return self.S
-
-    def run_schedule(self, schedule=None, mera_shape_min=(4, 4), mera_shape_max=(12, 4), 
-            q_iter_max=None, backup_parpath=None,  filename='auto', backup_fn='auto', 
-           do_measure=None, skip_list=[],  skip_dim_list=[],  dim_diff_remap={}, info=0):
-        """
-            schedule is a OrderedDict like
-            (ansatz, dim, layer, q_iter, run_time_max, energy_diff_min)
-            
-            { 4:  ('ScaleInvar', '')}
-            
-            }
-        """
-        
-        if schedule is None: 
-            schedule = schedule_scale_invar
-        schedule = copy_schedule(schedule, skip_list=skip_list)
-        do_measure  = do_measure if do_measure is not None else self.do_measure
-        
-        if len(dim_diff_remap)>0: 
-            #print dim_diff_remap; exit()
-            print 'remap of dim with energy_diff_min is %s'%dim_diff_remap
-            for i in range(len(schedule)): 
-                dim = schedule[i]['shape'][0]
-                for d in sorted(dim_diff_remap.keys()): 
-                    #print 'ddddd', i, d, dim
-                    if dim >= d: 
-                        diff  = dim_diff_remap[d]
-                        schedule[i]['energy_diff_min'] = diff
-            
-        symmetry = self.S.symmetry
-        #symmetry = self.config['SYMMETRY']
-        qsp_class=symmetry_to_QspClass(symmetry)
-        
-        #for key, val in schedule.items():
-        for task in schedule: 
-            if task['ansatz'] == 'prod_state':  
-                run_func = self.run
-                run_param_name = ('q_iter', 'energy_diff_min')
-            elif task['ansatz'] == 'scale_invar': 
-                run_func = self.run_scale_invar
-                run_param_name = ('q_iter', 'run_time_max', 'energy_diff_min')
-            elif task['ansatz'] == 'eigenstate': 
-                raise NotImplemented
-            else: 
-                raise
-            
-            if q_iter_max is not None : 
-                if task['q_iter'] > q_iter_max: 
-                    task['q_iter']  = q_iter_max
-                    
-            shape = task['shape']
-            
-            msg = '\nSTARTING TASK %s'%(task, )
-            if info>0: print msg
-            
-            dim, layer = shape[:2]
-            nqn = None
-            if len(shape)>2: nqn = shape[2]
-            
-            if dim in skip_dim_list: 
-                msg='dim=%d is in skip_dim_list, skip it'%(dim, )
-                if info>0: print msg
-                continue
-            try: 
-                qsp_destination = qsp_class.max(dim, nqn)
-            except ValueError as err:
-                msg = 'error occurred, skip %s'%(shape, )
-                if info>0: print err, '\n',  msg
-                continue
-            
-            if 1: 
-                if mera_shape_min is not None : 
-                    dim_min, layer_min = mera_shape_min[: 2]
-                    nqn_min = None
-                    if len(mera_shape_min)>2: nqn_min = mera_shape_min[2]
-                    qsp_min = qsp_class.max(dim_min, nqn_min)
-                    
-                    
-                    #if qsp_destination < qsp_min or layer <layer_min: 
-                    if (not  qsp_destination >= qsp_min)   or layer <layer_min: 
-                        #msg = 'shape (%d, %d) smaller than mera_shape_min %s, skip it'%(dim, layer, mera_shape_min, )
-                        msg = 'shape %s smaller than mera_shape_min %s, skip it'%(shape, mera_shape_min, )
-                        if info>0: print msg
-                        continue
-                
-                if mera_shape_max is not None :    
-                    dim_max, layer_max = mera_shape_max[: 2]
-                    nqn_max = None
-                    if len(mera_shape_max)>2: nqn_max = mera_shape_max[2]
-                    qsp_max = qsp_class.max(dim_max, nqn_max)
-                    if 0: 
-                        print qsp_destination
-                        print qsp_max
-                        print  'qsp_destination>qsp_max', qsp_destination>qsp_max
-                        exit()
-                    
-                    if qsp_destination>qsp_max or (nqn> nqn_max and self.SYMMETRY=='U1')  or layer> layer_max: 
-                    #if qsp_destination>qsp_max or nqn> nqn_max or layer> layer_max: 
-                    #if qsp_destination>qsp_max  or layer> layer_max: 
-                        
-                        msg = 'shape %s exceeds mera_shape_max %s, skip it'%(shape, mera_shape_max, )
-                        if info>0: 
-                            print msg
-                        continue
-
-                propt = self.S.key_property()
-                dim_current = propt['trunc_dim']
-                layer_current = propt['num_of_layer']
-                nqn_current = propt['nqn']
-                qsp_current = qsp_class.max(dim_current, nqn_current)
-                shape_current = (dim_current, layer_current, nqn_current)
-                
-                
-                if qsp_current < qsp_destination: 
-                    self.S.expand_dim(dim, nqn)
-                
-                if layer_current <layer: 
-                    self.S.expand_layer(layer)
-                
-                
-                #if dim_current>dim or layer_current> layer: 
-                if qsp_current> qsp_destination or layer_current> layer: 
-                    msg = 'shape %s smaller than current shape = %s, skip it'%(shape, shape_current)
-                    print msg
-                    continue
-                   
-            run_param = dict([(i, task.get(i)) for i in run_param_name])
-            run_func(self, backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, 
-                    do_measure=do_measure, **run_param)
-    
-    def make_dir(self, dir, dir_local=None): 
-        if dir is not None : 
-            if not os.path.exists(dir): 
-                os.makedirs(dir)
-                print 'dir not found, mkdir %s'%dir
-        
-        if dir_local is not None: 
-            with rpyc_conn_local_zerodeploy() as conn: 
-                os_local = conn.modules.os
-                if not os_local.path.exists(dir_local): 
-                    msg = 'dir %s not found'%(dir_local[-30: ])
-                    cmd = 'mkdir %s'%dir_local
-                    os_local.makedirs(dir_local)
-                    print '\n'.join([msg, cmd])
-    
-    def measure_S(self, S, parpath, exclude_which=None):
-        #state_bac = tensor_player.STATE
-        self.stop_player()
-        msg = '\nmeasurement after final iter: '
-         
-        measure_S(S,  parpath, exclude_which=exclude_which, use_local_storage=self.use_local_storage)
-        #tensor_player.STATE = state_bac
-
-    def stop_player(self):
-        set_STATE_end_1(iter=None, record_at=None, stop_at=None, power_on=False)
-
-    def thread_compare(self, func, args, thread_list):
-        """  this idea is stupid and not work!!"""
-        raise NotImplemented  
-        res= []
-        for i in thread_list:
-            NUM_OF_THREADS = i
-            os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
-            t1 = time.time()
-            ta = time.clock()
-            func(**args)
-            tb = time.clock()
-            t2 = time.time()
-            temp = (i, tb-ta, t2-t1)
-            
-            res.append(temp)
-        pprint.pprint(res) 
-    
-    @staticmethod
-    def set_num_of_threads(n, info=1):
-        #import common_64_ifort as c64
-        common_util.set_num_of_threads(n)
-        if info>0: 
-            print 'set_num_of_threads to %d'%n
-    
-    @staticmethod
-    def get_num_of_threads(): 
-        #import common_64_ifort as c64
-        raise NotImplemented('not pass test')
-        n=common_util.get_num_of_threads()
-        print 'get_num_of_threads %d'%n
-        return n
-    
-    @staticmethod
-    def get_cpu_usage(): 
-        p = psutil.Process(os.getpid())
-        #p.get_cpu_times()
-        #cputimes(user=0.06, system=0.03)
-        res=p.get_cpu_percent(interval=0.01)
-        return res
-    
-    @staticmethod
-    def get_num_threads_max(): 
-        return psutil.NUM_CPUS
-    
-    @classmethod
-    def run_one(cls, config): 
-        schedule = config.get('schedule')
-        pid = os.getpid();  config.update(pid=pid)
-        #schedule = config['run_schedule_args']['schedule']
-        main = cls(**config)
-        msg = ''
-        is_registered = False 
-        job_status = ''
-        try: 
-            status = 'open'
-            if config.get('register_job'): 
-                job_id = config.get('job_id')
-                if job_id is None: 
-                    parpath = config['backup_parpath_local']
-                    job_id = (str(config.get('job_group_name')), hash(parpath))
-                with rpyc_conn('local', 'service', 17012) as conn:                
-                    status = conn.root.register_job(job_id, config)
-                if status  == 'open' : 
-                    is_registered = True
-            if status == 'open': 
-                if schedule is None: 
-                    main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
-                else: 
-                    #print_vars(vars(),  ['schedule']); raise 
-                    #if isinstance(schedule[0], dict):  #mera use this 
-                    if config['algorithm']== 'mera':  
-                        main.run_schedule(**config['schedule'])
-                    else:   #mps use this 
-                        main.run_schedule(schedule)  
-                job_status = 'COMPLETED'
-                msg += 'run one COMPLETED.' 
-            elif status== 'locked': 
-                msg += 'job %s exists'%(job_id, ) 
-                
-        except KeyboardInterrupt: 
-            #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
-            msg += 'KeyboardInterrupt captured.'
-            job_status = 'FAILED'
-        except Exception, exception:
-            print exception
-            traceback.print_exc()
-            job_status = 'FAILED'
-        finally: 
-            msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
-            print msg
-            if is_registered:  
-                parpath = config['backup_parpath_local']
-                with rpyc_conn('local', 'service', 17012) as conn:                
-                    print 'iiiiiiiiiiiiiii', job_id 
-                    conn.root.update_job(job_id, 'status', job_status)
-                    #end_time = str(datetime.datetime.now()).split('.')[0]
-                    #conn.root.update_job(job_id, 'end_time', end_time)
-               
-            main.stop_player()        
-        return main 
-    
-    
-    @staticmethod
-    def make_grid(*args): 
-        grid = itertools.product(*args)
-        return list(grid)  #efficiency doesnt matter,  list is better
-    grid = make_grid  # another name
-    
-    @staticmethod
-    def grid_merger(*args): 
-        return itertools.chain(*args)
-    
-    def transfer_pickle_file(self, fn=None): 
-        """
-            when complete, transfer file back to QTG-WS1-ubuntu
-            result is always supposed transfer back to center after computation
-            
-            to make it work, 强制要求 远程和local 的 backup tensor目录结构必须完全一致！！！ 这牺牲了一点灵活性，但是值得的
-            具体地remote and local 的目录都必须有 mera_backup_tensor 这一层; 在这一层的左侧，目录依赖于系统，
-            而在右侧，必须相同
-            
-        """
-        if self.hostname != self.LOCALHOSTNAME: 
-            if fn is None: 
-                fn = self.S.backup_fn_auto()
-            remote_path = '/'.join([self.backup_parpath, fn])
-            local_path = '/'.join([self.backup_parpath_local, fn]) 
-            temp = self.config['LOCAL_USERNAME']  + '@'  + self.config['LOCAL_IP']  + ":"
-            #local_path = 'zhli@210.45.117.30:' + local_path
-            local_path = temp + local_path
-            cmd = 'scp %s %s'%(remote_path, local_path)
-            msg = 'try to transfer pickle file back to local:  '
-            msg += cmd  
-            status = os.system(cmd)
-            if status == 0: 
-                msg += '---succeed'
-            else: 
-                msg += '---failed'
-            print msg
-            with open(self.filename, 'a') as inn: 
-                inn.write(msg)
-    
-    def resume_func(self, backup_path, use_local_storage=False):
-        #if not use_local_storage: 
-        if 1: 
-            if backup_path is not None : 
-                LOCAL = '' if not use_local_storage else 'LOCAL file '
-                msg = "\nTRY TO RESUME from %s%s...  "%(LOCAL, backup_path[-30:])
-                try:
-                    self.S = self.system_class.load(backup_path, use_local_storage=use_local_storage)
-                    self.M = self.S.mera
-                    iter = self.S.iter1
-                    eng = self.S.energy
-                    msg  += "RESUMED successfully at iter=%s,  eng=%s"%(iter, eng)
-                except IOError as err:
-                    if err.errno == 2: 
-                        msg += str(err)
-                        msg += "discard manually resume"
-                    else:
-                        raise IOError
-                except TypeError as err:
-                    msg += str(err)
-                    msg += "discard manually resume"
-                print(msg)
-
-    def transfer_result(self): 
-        host_current = socket.gethostname() 
-        if host_current == 'QTG-WS1-ubuntu': 
-            return
-        else: 
-            host1 = socket.gethostname()  
-            host2 = 'QTG-WS1-ubuntu'
-
-        client = scp.Client(host=host, user=user, keyfile=keyfile)
-        
-        #option 2
-        client = scp.Client(host=host, user=user)
-        client.use_system_keys()
-        
-        #option 3
-        client = scp.Client(host=host, user=user, password=password)
-
-        # and then
-        client.transfer('/etc/local/filename', '/etc/remote/filename') 
-    
-
-
-class Main(Main_old): 
-    pass 
     def __init__(self, **config): 
         for k, v in config.iteritems(): 
             setattr(self, k, v)
@@ -962,7 +315,7 @@ class Main(Main_old):
             
             #run_func(self, backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, 
             #        do_measure=do_measure, **run_param)
-            #print_vars(vars(),  ['self.S.mera', 'self.S.mera.qsp_max'])
+            
             #run_func(self.S, backup_parpath=backup_parpath, filename=filename, backup_fn=backup_fn, do_measure=do_measure, **run_param)
             self.S.minimize(which_minimize, **run_param)
 
@@ -1191,6 +544,56 @@ class Main(Main_old):
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 
         from brokest.brokest import server_discover 
         return server_discover(servers=servers, exclude_patterns=exclude_patterns, querry_timeout=querry_timeout, qsize=qsize, info=info)
+
+    @staticmethod
+    def make_grid(*args): 
+        grid = itertools.product(*args)
+        return list(grid)  #efficiency doesnt matter,  list is better
+    grid = make_grid  # another name
+    
+    @staticmethod
+    def grid_merger(*args): 
+        return itertools.chain(*args)
+
+    def thread_compare(self, func, args, thread_list):
+        """  this idea is stupid and not work!!"""
+        raise NotImplemented  
+        res= []
+        for i in thread_list:
+            NUM_OF_THREADS = i
+            os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
+            t1 = time.time()
+            ta = time.clock()
+            func(**args)
+            tb = time.clock()
+            t2 = time.time()
+            temp = (i, tb-ta, t2-t1)
+            
+            res.append(temp)
+        pprint.pprint(res) 
+    
+    @staticmethod
+    def set_num_of_threads(n, info=1):
+        #import common_64_ifort as c64
+        common_util.set_num_of_threads(n)
+        if info>0: 
+            print 'set_num_of_threads to %d'%n
+    
+    @staticmethod
+    def get_num_of_threads(): 
+        #import common_64_ifort as c64
+        raise NotImplemented('not pass test')
+        n=common_util.get_num_of_threads()
+        print 'get_num_of_threads %d'%n
+        return n
+    
+    @staticmethod
+    def get_cpu_usage(): 
+        p = psutil.Process(os.getpid())
+        #p.get_cpu_times()
+        #cputimes(user=0.06, system=0.03)
+        res=p.get_cpu_percent(interval=0.01)
+        return res
         
     @staticmethod
     def email(): 
@@ -1237,14 +640,65 @@ class Main(Main_old):
         smtp.sendmail(from_addr,to_addrs,msg.as_string())
         smtp.quit()
 
+    def transfer_pickle_file(self, fn=None): 
+        """
+            when complete, transfer file back to QTG-WS1-ubuntu
+            result is always supposed transfer back to center after computation
+            
+            to make it work, 强制要求 远程和local 的 backup tensor目录结构必须完全一致！！！ 这牺牲了一点灵活性，但是值得的
+            具体地remote and local 的目录都必须有 mera_backup_tensor 这一层; 在这一层的左侧，目录依赖于系统，
+            而在右侧，必须相同
+            
+        """
+        if self.hostname != self.LOCALHOSTNAME: 
+            if fn is None: 
+                fn = self.S.backup_fn_auto()
+            remote_path = '/'.join([self.backup_parpath, fn])
+            local_path = '/'.join([self.backup_parpath_local, fn]) 
+            temp = self.config['LOCAL_USERNAME']  + '@'  + self.config['LOCAL_IP']  + ":"
+            #local_path = 'zhli@210.45.117.30:' + local_path
+            local_path = temp + local_path
+            cmd = 'scp %s %s'%(remote_path, local_path)
+            msg = 'try to transfer pickle file back to local:  '
+            msg += cmd  
+            status = os.system(cmd)
+            if status == 0: 
+                msg += '---succeed'
+            else: 
+                msg += '---failed'
+            print msg
+            with open(self.filename, 'a') as inn: 
+                inn.write(msg)
+
+    def transfer_result(self): 
+        host_current = socket.gethostname() 
+        if host_current == 'QTG-WS1-ubuntu': 
+            return
+        else: 
+            host1 = socket.gethostname()  
+            host2 = 'QTG-WS1-ubuntu'
+
+        client = scp.Client(host=host, user=user, keyfile=keyfile)
+        
+        #option 2
+        client = scp.Client(host=host, user=user)
+        client.use_system_keys()
+        
+        #option 3
+        client = scp.Client(host=host, user=user, password=password)
+
+        # and then
+        client.transfer('/etc/local/filename', '/etc/remote/filename') 
+    
+    def stop_player(self):
+        set_STATE_end_1(iter=None, record_at=None, stop_at=None, power_on=False)
+
     def __del__(self, ): 
         
         if self.config.get('info', 1)>-1: 
             print 'exit main, and run main.stop_player'
         self.stop_player()
 
-
-#Main = Main_old 
 
 class TestMain(unittest.TestCase): 
     def setUp(self): 
@@ -1459,7 +913,6 @@ class TestMain(unittest.TestCase):
         if 0: 
             from merapy import save 
             save(Main, '/tmp/xxxxxxx', compress=1)
-        
         
         
 class TestRpyc(unittest.TestCase): 
