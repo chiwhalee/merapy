@@ -23,15 +23,15 @@ __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_mode
 
 uname=platform.uname()[1]
 home = os.path.expanduser('~')
-if uname  ==  'QTG-WS1-ubuntu': 
-    MERA_BACKUP_DIR = '/home/zhli/Documents/mera_backup_tensor' 
-else: 
-    MERA_BACKUP_DIR = '/'.join([home, 'mera_backup_tensor'])
+#if uname  ==  'QTG-WS1-ubuntu': 
+#    MERA_BACKUP_DIR = '/home/zhli/Documents/mera_backup_tensor' 
+#else: 
+#    MERA_BACKUP_DIR = '/'.join([home, 'mera_backup_tensor'])
+#MERA_BACKUP_DIR_LOCAL = '/home/zhli/Documents/mera_backup_tensor' 
 
 BACKUP_BASE_DIR =  '/'.join([home, 'backup_tensor_dir'])
 BACKUP_BASE_DIR_LOCAL = '/home/zhli/backup_tensor_dir' #'/'.join([home, 'backup_tensor_dir'])
 
-MERA_BACKUP_DIR_LOCAL = '/home/zhli/Documents/mera_backup_tensor' 
 
 
 updaters_u1 = {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
@@ -129,8 +129,8 @@ CFG_MERA.update({
             } , 
         #'BACKUP_BASE_DIR': MERA_BACKUP_DIR,         
         #'BACKUP_BASE_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL,         
-        'MERA_BACKUP_DIR': MERA_BACKUP_DIR, 
-        'MERA_BACKUP_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL, 
+        #'MERA_BACKUP_DIR': MERA_BACKUP_DIR, 
+        #'MERA_BACKUP_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL, 
  })
 
 
@@ -299,34 +299,6 @@ def check_config(cfg):
 
 # eventually,  I would make config into a class
 class Config(dict): 
-    @staticmethod
-    def set_backup_parpath_old_del(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
-        if cfg['algorithm'] == 'mera':  
-            ROOT = cfg['MERA_BACKUP_DIR']
-            ROOT_LOCAL = cfg['MERA_BACKUP_DIR_LOCAL']
-        elif cfg['algorithm'] in ['vmps', 'idmrg']: 
-            ROOT = cfg['MPS_BACKUP_DIR']
-            ROOT_LOCAL = cfg['MPS_BACKUP_DIR_LOCAL']
-        else: 
-            raise
-           
-            #ROOT = cfg['BACKUP_BASE_DIR']
-            #ROOT_LOCAL = cfg['BACKUP_BASE_DIR_LOCAL']
-        root = '/'.join([ROOT, project_name, root1]) 
-        root_local = '/'.join([ROOT_LOCAL, project_name, root1])  
-        cfg['root'] = root
-        cfg['root_local'] = root_local
-        if backup_parpath != 0: #CONVENTION: 0 means not set it
-            if backup_parpath is None :  
-                #fn =  'alpha=%s'%alpha  + surfix
-                backup_parpath = '/'.join([root, fn]).replace('//', '/')
-                backup_parpath_local = '/'.join([root_local, fn]).replace('//', '/')
-                
-            cfg['backup_parpath'] = backup_parpath
-            cfg['backup_parpath_local'] = locals().get('backup_parpath_local')
-            
-            if cfg['hostname'] != cfg['LOCALHOSTNAME'] : 
-                cfg['use_local_storage'] = 1
     
     @staticmethod       
     def set_backup_parpath(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
@@ -343,7 +315,8 @@ class Config(dict):
         #surfix  = '-'+surfix if surfix != ''  else ''
         if surfix != '': 
             fn = '-'.join([fn, surfix])
-        if backup_parpath != 0: #CONVENTION: 0 means not set it
+        #if backup_parpath != 0: #CONVENTION: 0 means not set it
+        if 1: 
             if backup_parpath is None :  
                 #fn =  'alpha=%s'%alpha  + surfix
                 backup_parpath = '/'.join([root, fn ]).replace('//', '/')
@@ -352,8 +325,11 @@ class Config(dict):
             cfg['backup_parpath'] = backup_parpath
             cfg['backup_parpath_local'] = locals().get('backup_parpath_local')
             
-            if cfg['hostname'] != cfg['LOCALHOSTNAME'] : 
-                cfg['use_local_storage'] = 1
+        if 1:    
+            #if cfg['hostname'] != cfg['LOCALHOSTNAME'] : 
+            #    cfg['use_local_storage'] = 1
+            #because there is issue in brokest, so always use_local_storage 
+            cfg['use_local_storage'] = 1
            
 
 class TestIt(unittest.TestCase): 
