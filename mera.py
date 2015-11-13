@@ -309,7 +309,6 @@ class SupportPaternEff(object):
         print s 
         
 SPE = SupportPaternEff 
-
     
 
 class Mera(object):
@@ -336,8 +335,6 @@ class Mera(object):
             Qsp_max是U tensor出去的腿的Quantum space
             qsp_max2是V tensor的
         """
-        #self.nNeigh = nNeigh
-        #self.NSize = nNeigh**layer
         self.nTop = nTop  #this param is not used at all 
         self.qsp_0 = qsp_0
         self.qsp_max = qsp_max #.copy()
@@ -387,7 +384,6 @@ class Mera(object):
         #else:
         #    np.random.seed(rand_seed)
         #    crandom.rand = np.random.random
-        
 
     def __eq__(self, other):
         """
@@ -913,21 +909,21 @@ class Mera(object):
             t.data[:] = 0.0
             t.set_element(qDims, iDims, 1.0)
         
-    
-def reset_mera(M):
-    """
-        
-    """
-    import numpy as np
-    for i in range(M.num_of_layer-1):
-        t = M.V[i].tensor[0]
-        rank = t.rank
-        qDims= np.empty(rank, "int")
-        iDims= np.empty(rank, "int")
-        qDims[:]= [0, 0, 0, 0]
-        iDims[:] = 0
-        t.data[:] = 0.0
-        t.set_element(qDims, iDims, 1.0)
+    @staticmethod    
+    def reset_mera(M):
+        """
+            
+        """
+        import numpy as np
+        for i in range(M.num_of_layer-1):
+            t = M.V[i].tensor[0]
+            rank = t.rank
+            qDims= np.empty(rank, "int")
+            iDims= np.empty(rank, "int")
+            qDims[:]= [0, 0, 0, 0]
+            iDims[:] = 0
+            t.data[:] = 0.0
+            t.set_element(qDims, iDims, 1.0)
 
 class xtest_Mera(object):
     @classmethod
@@ -991,7 +987,8 @@ class TestIt(unittest.TestCase):
     
     def test_example(self): 
         m = Mera.example() 
-        print_vars(vars(),  ['m.num_of_input'])
+        self.assertTrue(m.num_of_layer==4 and m.num_of_input==162)
+        print_vars(vars(),  ['m.V[0][0].data[20]'])
     
     def test_coarse_grain_map(self): 
         
@@ -1216,9 +1213,9 @@ if __name__=='__main__':
         suite = unittest.TestSuite()
         add_list = [
         
-           #'test_example',  
+           'test_example',  
            #'test_coarse_grain_map',  
-           'test_isometry_init',  
+           #'test_isometry_init',  
            #'test_temp',  
            
         ]

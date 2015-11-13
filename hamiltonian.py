@@ -1,8 +1,8 @@
 #coding= UTF8
 """
 see Hamiltonian.f90
-q:
-    q517 
+
+    
 """
 import unittest
 import numpy as np
@@ -25,52 +25,50 @@ from merapy.utilities import print_vars
 import merapy.crandom as crandom 
 from merapy.models import *
 from merapy.context_util import rpyc_conn_local, rpyc_conn_local_zerodeploy, rpyc_load
-from merapy.mera import *
+from merapy.mera import Mera
 from merapy.tensor import *
 from merapy.tensor_network import *
 from merapy.quantum_number import *
 
-
-__ISING__ = True
-
-class Operators(object):
-    """
-        this may be deprecated,  
-        for fortran define a tensor container is necessary,  but for python, 
-        use list or dict instead
-    """
-    def __init__(self):
-        self.start_site= None
-        self.num_of_site= None
-        #self.O= None  #None indicates not "allocated" as in fortran  #[Tensor()]
-        nSite = 1
-        self.O = [None]*nSite
-    def __getitem__(self, i):
-        return self.O[i]
-    def __setitem__(self, i, x):
-        self.O[i] = x
-
-class Operators_new(list):
-    """
-        this may be deprecated,  
-        for fortran define a tensor container is necessary,  but for python, 
-        use list or dict instead
-    """
-    def __init__(self):
-        self.start_site= None
-        self.num_of_site= None
-        #self.O= None  #None indicates not "allocated" as in fortran  #[Tensor()]
-        nSite = 1
-        #self.O = [None]*nSite
-        #list.__init__(self, [None])
-        list.__new__(Operators, [None])
- 
-class Hamiltonian(object):
-    pass
-
-class OperatorDict(dict):
-    def __init__(self):
+if 1:  # not used , BUT, not able to remove it now !!! because pickle need it for old backup files
+    class Operators(object):
+        """
+            this may be deprecated,  
+            for fortran define a tensor container is necessary,  but for python, 
+            use list or dict instead
+        """
+        def __init__(self):
+            self.start_site= None
+            self.num_of_site= None
+            #self.O= None  #None indicates not "allocated" as in fortran  #[Tensor()]
+            nSite = 1
+            self.O = [None]*nSite
+        def __getitem__(self, i):
+            return self.O[i]
+        def __setitem__(self, i, x):
+            self.O[i] = x
+if 0: 
+    class Operators_new(list):
+        """
+            this may be deprecated,  
+            for fortran define a tensor container is necessary,  but for python, 
+            use list or dict instead
+        """
+        def __init__(self):
+            self.start_site= None
+            self.num_of_site= None
+            #self.O= None  #None indicates not "allocated" as in fortran  #[Tensor()]
+            nSite = 1
+            #self.O = [None]*nSite
+            #list.__init__(self, [None])
+            list.__new__(Operators, [None])
+     
+    class Hamiltonian(object):
         pass
+
+    class OperatorDict(dict):
+        def __init__(self):
+            pass
 
 class System(IterativeOptimize):
     """
@@ -324,7 +322,7 @@ class System(IterativeOptimize):
                 for iLayer in range(self.M.num_of_layer-1): 
                     #top V shouldn't inited by init_layer
                     self.M.init_layer(iLayer, rand_init=True, unitary_init=self.unitary_init)
-        print_vars(vars(),  ['self.mera'])   
+        
         
         if not hasattr(self, 'H_2'): 
             self.init_Hamiltonian()
@@ -546,7 +544,6 @@ class System(IterativeOptimize):
                 }
         
             for i in self.op_names:
-                #self.__setattr__(i, [Operators() for i in range(Mera.MaxLayer)]) 
                 self.__setattr__(i, [[None] for i in range(Mera.MaxLayer)]) 
             
 
@@ -1416,7 +1413,7 @@ class System(IterativeOptimize):
         
         from merapy.minimize import finite_site_u1  as finite_range_func 
         self.init_iteration()
-        
+       
         if 1:   
             q_iter = q_iter if q_iter is not None else self.q_iter 
             
@@ -2630,75 +2627,74 @@ class System(IterativeOptimize):
          
         measure_S(S,  parpath, exclude_which=exclude_which, use_local_storage=self.use_local_storage)
         #tensor_player.STATE = state_bac
-
-def set_ham_to_identity(sys):
-    """
-    for debugging 
-    """
-    print "hamiltonian set to identity  "*10
-    SYMMETRY = sys.symmetry
-    
-    sys.H_2[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-    #sys.H_2[0][0].data[:] = 0.0
-    sys.H_3[0][0] = iTensorFactory(SYMMETRY).unit_tensor(6)
-    #sys.H_3[0][0].data[:] = 0.0
-
-    if sys.model == "Ising":        
-        sys.SxA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-        sys.SxB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-    else:
-        if 1:
-            sys.SzA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-            sys.SzB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+    @staticmethod
+    def set_ham_to_identity(sys):  #for testing
+        """
+        for debugging 
+        """
+        print "hamiltonian set to identity  "*10
+        SYMMETRY = sys.symmetry
         
-        if not sys.only_NN and not sys.only_NNN:
-            raise Exception("set_ham_to_identity is not compatible to ops like SpA, SmA with U1 symm")
-            sys.SpA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-            sys.SpB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-            sys.SmA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
-            sys.SmB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+        sys.H_2[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+        #sys.H_2[0][0].data[:] = 0.0
+        sys.H_3[0][0] = iTensorFactory(SYMMETRY).unit_tensor(6)
+        #sys.H_3[0][0].data[:] = 0.0
 
-if 0: 
-    def check_symm(T2):
-        """
-        status_0p9_translated_formally
-        """
-        #ifdef __NONONO__        
-        ME = 0.0; mp=1
-        for p  in range(T2.totDim):
-            X = T2.data[p]
-            Get_Position(T2, p, pos)
-            iSwap(pos[1], pos[2])
-            iSwap(pos[3], pos[4])
-    #            Y = GetElement[T2, pos]
-            if abs[X-Y] == ME:  
-                ME = abs[X-Y]
-                mp = p
-        Get_Position(T2,mp,pos)
-        print "[4[1x,I4],2x,E15.8]", pos[0:4], ME
-        #endif
+        if sys.model == "Ising":        
+            sys.SxA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+            sys.SxB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+        else:
+            if 1:
+                sys.SzA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+                sys.SzB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+            
+            if not sys.only_NN and not sys.only_NNN:
+                raise Exception("set_ham_to_identity is not compatible to ops like SpA, SmA with U1 symm")
+                sys.SpA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+                sys.SpB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+                sys.SmA[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
+                sys.SmB[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
 
-    def check_symm3(T3):
-        """
-        status_0p9_translated_formally
-        """
-        #ifdef __NONONO__        
-        ME = 0.0;mp=1
-        for p  in range(T3.totDim):
-            X = T3.data[p]
-            Get_Position(T3, p, pos)
-            iSwap(pos[1], pos[3])
-            iSwap(pos[4], pos[6])
-            #            Y = GetElement[T3, pos]
-            if abs[X-Y] == ME:  
-                ME = abs[X-Y]
-                mp = p
-        Get_Position(T3,mp, pos)
-        print "[6[1x,I4], E15.8]", pos[0:6], ME
-        #endif        
+    if 0: 
+        def check_symm(T2):
+            """
+            status_0p9_translated_formally
+            """
+            #ifdef __NONONO__        
+            ME = 0.0; mp=1
+            for p  in range(T2.totDim):
+                X = T2.data[p]
+                Get_Position(T2, p, pos)
+                iSwap(pos[1], pos[2])
+                iSwap(pos[3], pos[4])
+        #            Y = GetElement[T2, pos]
+                if abs[X-Y] == ME:  
+                    ME = abs[X-Y]
+                    mp = p
+            Get_Position(T2,mp,pos)
+            print "[4[1x,I4],2x,E15.8]", pos[0:4], ME
+            #endif
+
+        def check_symm3(T3):
+            """
+            status_0p9_translated_formally
+            """
+            #ifdef __NONONO__        
+            ME = 0.0;mp=1
+            for p  in range(T3.totDim):
+                X = T3.data[p]
+                Get_Position(T3, p, pos)
+                iSwap(pos[1], pos[3])
+                iSwap(pos[4], pos[6])
+                #            Y = GetElement[T3, pos]
+                if abs[X-Y] == ME:  
+                    ME = abs[X-Y]
+                    mp = p
+            Get_Position(T3,mp, pos)
+            print "[6[1x,I4], E15.8]", pos[0:6], ME
+            #endif        
   
 class TestSystem(unittest.TestCase):
-    
     def setUp(self): 
         if 0: 
             import mera
@@ -3891,7 +3887,7 @@ class TestSystem(unittest.TestCase):
             pprint.pprint(System.Jleg_tau_0l_dic)
 
     def test_temp(self) : 
-        s= System.example(symmetry='U1', isometry_init='AFM' )
+        s = System.example(symmetry='U1', isometry_init='AFM' )
         print_vars(vars(),  ['s.mera'])
 
 
