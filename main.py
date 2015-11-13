@@ -182,7 +182,7 @@ class Main(object):
 
     def run_schedule(self, schedule=None, mera_shape_min=(4, 4), mera_shape_max=(12, 4), 
             q_iter_max=None, backup_parpath=None,  filename='auto', backup_fn='auto', 
-           do_measure=None, skip_list=[],  skip_dim_list=[],  dim_diff_remap={}, info=0):
+           do_measure=None, skip_list=[],  skip_dim_list=[],  dim_diff_remap=None, info=0):
         """
             schedule is a OrderedDict like
             (ansatz, dim, layer, q_iter, run_time_max, energy_diff_min)
@@ -193,7 +193,6 @@ class Main(object):
         """
         #super(self.__class__, self).run_schedule(**kwargs)
         if not self.initialized: 
-            #self.init_alg()
             self.init_alg()
             self.initialized = True 
             self.S.initialize()
@@ -203,7 +202,8 @@ class Main(object):
         schedule = copy_schedule(schedule, skip_list=skip_list)
         do_measure  = do_measure if do_measure is not None else self.do_measure
         
-        if len(dim_diff_remap)>0: 
+        #if len(dim_diff_remap)>0: 
+        if dim_diff_remap is not None:  
             #print dim_diff_remap; exit()
             print 'remap of dim with energy_diff_min is %s'%dim_diff_remap
             for i in range(len(schedule)): 
@@ -237,12 +237,13 @@ class Main(object):
                     task['q_iter']  = q_iter_max
             shape = task['shape']
             
-            msg = '\nSTARTING TASK %s'%(task, )
-            if info>0: print msg
             
             dim, layer = shape[:2]
             nqn = None
             if len(shape)>2: nqn = shape[2]
+            
+            msg = '\nSTARTING TASK %s'%(task, )
+            if info>0: print msg
             
             if dim in skip_dim_list: 
                 msg='dim=%d is in skip_dim_list, skip it'%(dim, )
@@ -272,7 +273,7 @@ class Main(object):
                 
                 if mera_shape_max is not None :    
                     dim_max, layer_max = mera_shape_max[: 2]
-                    nqn_max = None
+                    nqn_max = 3
                     if len(mera_shape_max)>2: nqn_max = mera_shape_max[2]
                     qsp_max = qsp_class.max(dim_max, nqn_max)
                     if 0: 
@@ -451,7 +452,7 @@ class Main(object):
         return res 
     
     @classmethod #@staticmethod 
-    def run_many_dist(cls, config_group, servers=None, func=None, **kwargs): 
+    def run_many_dist(cls, config_group, submit=True, servers=None, func=None, **kwargs): 
         """
             status: workable now!
                 I dont know why cant run run_many_dist under main.py.
@@ -463,13 +464,10 @@ class Main(object):
         #    #func = cls.run_one
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
-        #if servers is None: 
-        #    sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
-        #            ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
-        #    servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
-        #    servers.extend(sugon_list)
-        if 1: 
-            def run_one_dist(config): 
+        from brokest.task_center import submit_one, submit_many 
+        
+        if not submit: 
+            def run_one_dist_del(config): 
                 schedule = config.get('schedule')
                 pid = os.getpid();  config.update(pid=pid)
                 #schedule = config['run_schedule_args']['schedule']
@@ -526,25 +524,23 @@ class Main(object):
                 return main 
             #tasks = [(run_one_dist, (c, )) for c in config_group] 
             tasks = [(cls.run_one, (c, )) for c in config_group] 
-            
+            run_many(tasks, servers, 
+                    info=kwargs.get('info', 10), querry=1, 
+                    try_period=kwargs.get('try_period', 1))
         else: 
-            def run_one_dist(main): 
-                main.run()
-                return 
-            
-            from merapy.utilities import pickle_any 
-            main_list = [Main(**c) for c in config_group]
-            tasks = [(run_one_dist, (m, )) for m in main_list] 
-            
-        run_many(tasks, servers, 
-                info=kwargs.get('info', 10), querry=1, 
-                try_period=kwargs.get('try_period', 1))
+            for c in config_group: 
+                submit_one(cls.run_one, (c, ))
     
     @staticmethod 
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 
         from brokest.brokest import server_discover 
         return server_discover(servers=servers, exclude_patterns=exclude_patterns, querry_timeout=querry_timeout, qsize=qsize, info=info)
-
+    
+    @staticmethod
+    def stop_servers(servers): 
+        from brokest.brokest import stop_servers 
+        stop_servers(servers)
+    
     @staticmethod
     def make_grid(*args): 
         grid = itertools.product(*args)
@@ -889,6 +885,8 @@ class TestMain(unittest.TestCase):
         Main.LOCALHOSTNAME = bac
     
     def xtest_run_many_dist(self): 
+        ################## NOTE that it will raise if run this test under main.py  #################
+        #### see the doc string of the module for details 
         if 1: 
             h = [1.0, 1.1] 
             NNN = len(h)
@@ -907,12 +905,41 @@ class TestMain(unittest.TestCase):
             servers=[('localhost', 90900),] 
             Main.run_many_dist(config_group, servers=servers)
         
+        if 0:  #submit 
+            h = [1.0, 1.1] 
+            NNN = len(h)
+            from merapy.config import CFG_ISING_BASIC, copy_config, updaters_u1 
+            config = copy_config(CFG_ISING_BASIC) 
+            from merapy.finite_site import finite_site_u1
+            config['updaters'] = updaters_u1
+            config_group = [copy_config(config) for i in range(NNN)]
+            
+            for c in config_group: 
+                c['SYMMETRY'] = 'Travial'
+                c.update(tot_layer=3)
+                c['backup_parpath'] = mkdtemp()
+                c['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+                c['schedule'].update(q_iter_max=10, mera_shape_min=(3, 3),  mera_shape_max=(4, 3))
+            Main.run_many_dist(config_group, submit=1)
+        
         
     def test_temp(self): 
-        
+
+        config = self.config_heisbg
+        config['SYMMETRY'] = 'Travial'
+        config['schedule']['schedule'] = copy_schedule(schedule_prod_state)
+        dir = tempfile.mkdtemp()
+        config.update(tot_layer=8, backup_parpath=dir )
+        main = Main(**config)
+        #main.run_schedule(schedule=schedule_prod_state, do_measure=0, 
+        #        q_iter_max = 5, mera_shape_min = (4, 3), mera_shape_max=(8, 8), 
+        #        skip_dim_list=[14])
+        main.run()
         if 0: 
-            from merapy import save 
-            save(Main, '/tmp/xxxxxxx', compress=1)
+            S = main.S
+            self.assertEqual(S.iter, 15)
+            self.assertEqual(S.iter1, 5)
+
         
         
 class TestRpyc(unittest.TestCase): 
@@ -934,13 +961,12 @@ if __name__=="__main__":
     else:
         suite = unittest.TestSuite()
         add_list = [
-        'test_temp',
         
         #'test_run',
         #'test_run_scale_invar',
         #'test_run_schedule',
         #'test_run_many',
-        #'xtest_run_many_dist',
+        'xtest_run_many_dist',
         #'test_resume',
         
         #'xtest_make_dir',
@@ -949,6 +975,8 @@ if __name__=="__main__":
         #'xtest_resume_func',
         #'xtest_transfer_pickle_file',
         #'xtest_set_num_of_threads_1',
+        
+        #'test_temp',
                 ]
         for a in add_list: 
             suite.addTest(TestMain(a))

@@ -431,7 +431,7 @@ def correlation_extra(S, r_list=None, direct_list=None, fail_skip=1, **kwargs):
     r_min = 1
     r_max = 3**(num_of_layer-1)
     if S.combine_2site and S.symmetry in ['U1', 'Z2']: 
-        r_min *= 2
+        #r_min *= 2
         r_max *=  2
         
     if r_list is None: 

@@ -98,9 +98,10 @@ def measure_S(S=None, parpath=None, path=None,
     use_local_storage =  kwargs.get('use_local_storage', False)
     if S is None: 
         assert path is not None
-        #S= load(path)
+        
         try: 
             S = rpyc_load(path, use_local_storage=use_local_storage)
+            #S = load(path)
             parpath = os.path.dirname(os.path.abspath(path))
         except IOError as err: 
             if fault_tolerant: 
@@ -109,7 +110,8 @@ def measure_S(S=None, parpath=None, path=None,
                 raise 
         except Exception as err:  # 比如 pickle file danmaged, exist but still cant load 
             if fault_tolerant: 
-                warnings.warn('error'  + str(err))
+                err_str = str(err)
+                warnings.warn('error'  + err_str[: 300]  + '......'  + err_str[-300: ])
                 return 
             else: 
                 raise 
@@ -278,7 +280,7 @@ def measure_S(S=None, parpath=None, path=None,
                 msg = '%20s'%('done')
                 if kwargs.get('show', False): 
                     pprint.pprint(res, indent=1, width=200)
-                #if w in ['entanglement_entropy', 'entanglement_spectrum', 'correlation_extra']: 
+                
                 if db_version is None: 
                     rdb.put(field_name=field_name, key=k, res=res, sub_key_list=None)
                 else: 
@@ -291,12 +293,7 @@ def measure_S(S=None, parpath=None, path=None,
                     raise 
         print msg
     
-    if algorithm == 'mera' :
-        rdb['algorithm'] = 'mera'
-    elif algorithm == 'mps': 
-        rdb['algorithm'] = 'mps'
-    elif algorithm == 'idmrg': 
-        rdb['algorithm'] = 'idmrg'
+    rdb['algorithm'] = algorithm
         
     if algorithm in ['mps', 'idmrg']: 
         if not rdb.has_key('dim_max'): 
@@ -323,7 +320,7 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
         fault_tolerant=1, algorithm=None, recursive=False,  **kwargs): 
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
-    __sh_list = sh_list
+    
     if isinstance(which, str): 
         which = [which]
     if isinstance(dir_list, str): 
@@ -360,11 +357,9 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
         db = rdb_class(dir, algorithm=algorithm)
         
         if sh_list  == 'all': 
-            #print_vars(vars(),  ['db.keys()', 'db["algorithm"]'])
-            #raise 
-            __sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
+            sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
         
-        for sh in __sh_list: 
+        for sh in sh_list: 
             if algorithm  == 'mera':  
                 #sh[1] -= 1  #layer->layer-1
                 sh = list(sh);  sh[1] -= 1
@@ -401,7 +396,6 @@ def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **
     arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
     if not use_dist_comp: 
         for i in arg_group: 
-            
             measure_S(**i)
     else: 
         from mypy.brokest.brokest import queue, run_many 
