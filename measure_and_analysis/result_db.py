@@ -16,7 +16,6 @@ from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
 import socket 
-import IPython.display as display
 
 import importlib
 from matplotlib.lines import Line2D
@@ -163,17 +162,6 @@ class AnalysisTools(object):
             just a wrapper 
         """
         
-        if isinstance(func, str): 
-            if func == 'EE_vs_L' : 
-                func = lambda x, c, a: c/6.*np.log(x) + a
-            elif func  == 'EE_vs_D': 
-                #c=12*(1./k - 1)**(-2); k=1/(math.sqrt(12/c) + 1)
-                #func = lambda x, c, a:  1/(math.sqrt(12/c) + 1)*np.log(x) + a 
-                func = lambda x, k, a: k*np.log(x) + a 
-            elif func == 'power' : 
-                func = lambda x, k, eta: k*x**(eta)
-            else: 
-                raise 
         if not isinstance(x, np.ndarray): 
             x = np.asarray(x)
         if not isinstance(y, np.ndarray): 
@@ -183,6 +171,19 @@ class AnalysisTools(object):
         return func, param, cov 
     
     def fit_line(self, line, func=None, x_min=None, x_max=None, x_extra=None, period=None, x1=None):
+        if isinstance(func, str): 
+            if func == 'EE_vs_L' : 
+                func = lambda x, c, a: c/6.*np.log(x) + a
+            elif func  == 'EE_vs_D': 
+                #c=12*(1./k - 1)**(-2); k=1/(math.sqrt(12/c) + 1)
+                #func = lambda x, c, a:  1/(math.sqrt(12/c) + 1)*np.log(x) + a 
+                func = lambda x, k, a: k*np.log(x) + a 
+            elif func == 'power' : 
+                #func = lambda x, k, eta: k*x**(eta)
+                func = lambda x, eta, k: k*x**(-eta)
+            else: 
+                raise 
+        
         x, y = line.get_data()
         x = x.astype(float); y=y.astype(float)
 
@@ -271,13 +272,52 @@ class AnalysisTools(object):
         if fig is None: 
             fig, ax=self.fig_layout(size=size)
             return ax 
-            
+        
         n = len(fig.axes)
+        #the following excludes bars of imshows 
+        #temp = [a for a in fig.axes if a.get_aspect()=='auto' or a.get_aspect()<5]  
+        temp = []
+        bars= []
+        for i, a in enumerate(fig.axes):
+            if a.get_aspect()=='auto' or a.get_aspect()<5: 
+                temp.append((i, a))
+            else: 
+                bars.append((i, a))
+        n1 = len(temp)
+        
         if direct == 'h' : 
-            fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
-            for i, ax in enumerate(fig.axes): 
-                ax.change_geometry(1, n+1, i+1)
-            ax = fig.add_subplot(1, n + 1, n + 1)
+            if 1: 
+                fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
+                for i, ax in enumerate(fig.axes): 
+                    ax.change_geometry(1, n+1, i+1)
+                ax = fig.add_subplot(1, n + 1, n + 1)
+            if 0: 
+                n = n1
+                #fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
+                print_vars(vars(),  ['fig.get_figwidth()'])
+                fw = fig.get_figwidth()*(n1 + 1.)/n1
+                print_vars(vars(),  ['fw'])
+                fig.set_figwidth(fw)
+                #for i, ax in enumerate(fig.axes): 
+                for i, ax in temp: 
+                    ax.change_geometry(1, n+1, i+1)
+                print_vars(vars(),  ['fig.get_figwidth()'])
+                ax = fig.add_subplot(1, n + 1, n1 + 1)
+                print_vars(vars(),  ['fig.get_figwidth()'])
+            if 0: 
+                #fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
+                fw = fig.get_figwidth()*(n1 + 1.)/n1
+                fig.set_figwidth(fw)
+                temp = [t[1] for t in temp]
+                bars = [t[1] for t in bars]
+                for i, ax in enumerate(temp): 
+                    ax.change_geometry(1, n+1, i+1)
+                ax = fig.add_subplot(1, n+1, n1 + 1)
+                for i, ax in enumerate(bars): 
+                    ax.change_geometry(1, n+1, n1 + 1 + i)
+                
+                print_vars(vars(),  ['fig.get_figwidth()'])
+                
         elif direct == 'v' : 
             fig.set_figheight(fig.get_figheight()*(n + 1.)/n)
             for i, ax in enumerate(fig.axes): 
@@ -286,16 +326,24 @@ class AnalysisTools(object):
         
         return ax 
         
-    def plot_alpha_2d(self, aa=None, rotate=False, **kwargs):
+    def plot_alpha_2d(self, aa=None, xparam=None, yparam=None, rotate=False, **kwargs):
         aa = aa if aa is not None  else self.alpha_list 
         n = len(self.param_list)
         if len(aa)>0: 
-            aa = [a[: n] for a in aa]
-            x, y = zip(*aa)
+            xparam = xparam if xparam is not None else self.param_list[0]
+            yparam = yparam if yparam is not None else self.param_list[1]
+            xparam_id = self.param_list.index(xparam)
+            yparam_id = self.param_list.index(yparam)
+            x = [a[xparam_id] for a in aa]
+            y = [a[yparam_id] for a in aa]
+            #aa = [a[: n] for a in aa]
+            #x, y = zip(*aa)
         else: 
             x, y = np.nan, np.nan 
-        xlabel = self.param_list[0]
-        ylabel = self.param_list[1]
+        #xlabel = self.param_list[0]
+        #ylabel = self.param_list[1]
+        xlabel = xparam
+        ylabel = yparam
         #kwargs= kwargs.copy()
         if rotate: 
             temp = x
@@ -390,10 +438,9 @@ class AnalysisTools(object):
         if plot_sign: 
             self.plot_sign(fig.axes[-1])
     
-    def html_border(self, s): 
-        return display.HTML(html_border(s))
     
     def remark(self, s, style=None, color=None,  border=0): 
+        import IPython.display as display
         if color is not None: 
             s= '<font color=%s> %s </font>'%(color, s)
         if border: 
@@ -423,7 +470,34 @@ class AnalysisTools(object):
             l.set_alpha(0)
             l.set_label('')
         ax.legend(loc=0)        
-        
+
+    def search_str(self, input_str, str_list=None, 
+            only_first=False, only_one=False, assert_found=False): 
+        """
+        """
+        ss = input_str.split(' ')
+        ss_len = len(ss)
+        found = False
+        res= []
+        for fn in str_list: 
+            match_count = 0
+            for n in ss: 
+                if n not in fn: 
+                    break 
+                else: 
+                    match_count += 1
+            if match_count == ss_len: 
+                res.append(fn)
+                found = True 
+                if only_first: 
+                    break 
+        if only_one: 
+            if len(res)>0: 
+                res= [r for r in res if r == input_str]
+        if assert_found: 
+            assert len(res)>0, '"{}" matches no field'.format(input_str)
+        return res 
+
 #class ResultDB_Utills
 
 class ResultDB(OrderedDict, AnalysisTools): 
@@ -446,6 +520,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         
     """
     DBNAME = 'RESULT.pickle.db'   #fix the name of db
+    ALGORITHM = 'all'
     AUTO_UPDATE = True 
     VERSION = 1.0 
     ALL_FIELD_NAMES = ['energy', 'magnetization']
@@ -706,12 +781,12 @@ class ResultDB(OrderedDict, AnalysisTools):
         D = D.split('=')[1]; D=eval(D)
         return N, D 
 
-    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None): 
-        if socket.gethostname()=='QTG-WS1-ubuntu': 
+    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, from_energy_rec=False): 
+        if socket.gethostname()=='QTG-WS1-ubuntu' and not from_energy_rec: 
             fn = self.get_fn_list()
             sh = [self.parse_fn(f) for f in fn]
         else:
-            warnings.warn('host not  QTG-WS1-ubuntu, get_shape_list using energy rec')
+            warnings.warn('get_shape_list using energy rec')
             sh = self.get('energy', {}).keys()
        
         if N is not None:
@@ -968,13 +1043,16 @@ class ResultDB(OrderedDict, AnalysisTools):
                     raise
         return rec
     
-    def search_field_name(self, search_str, only_first=False, only_one=False, assert_found=False): 
+    def search_field_name_bac(self, search_str, all_field_names=None, only_first=False, only_one=False, assert_found=False): 
         """
+            #issue:  use AnalysisTools.search_str to implementate this
+            avoid duplicated code 
         """
-        if isinstance(self, type): 
-            all_field_names = self.ALL_FIELD_NAMES 
-        else: 
-            all_field_names = self.iterkeys()
+        #if isinstance(self, type): 
+        #    all_field_names = self.ALL_FIELD_NAMES 
+        #else: 
+        #    all_field_names = self.iterkeys()
+        all_field_names = all_field_names if all_field_names is not None else self.iterkeys()
         ss = search_str.split(' ')
         ss_len = len(ss)
         found = False
@@ -997,7 +1075,18 @@ class ResultDB(OrderedDict, AnalysisTools):
         if assert_found: 
             assert len(res)>0, '"{}" matches no field'.format(search_str)
         return res 
-    
+
+    def search_field_name(self, name, has_sh=None, only_first=False, only_one=False, assert_found=False): 
+        """
+           
+        """
+        all_field_names =  self.iterkeys()
+        res = self.search_str(name, all_field_names, only_first=only_first, 
+                only_one = only_one, assert_found = assert_found,) 
+        if has_sh is not None: 
+            res= [r for r in res if isinstance(self[r], dict) and self[r].has_key(has_sh)]
+        return res 
+
     def fetch_easier(self, name_str, sh, sub_key_list=None): 
         """
             status: 
@@ -1009,9 +1098,20 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         #raise NotImplemented  #at present search_field_name is only implemented in plot_field_vs_alpha 
         field_name = self.search_field_name(name_str, only_first=True, assert_found=True)[0]
-        return self.fetch_easy(field_name, sh)
-    
-      
+        if sub_key_list is None: 
+            if field_name in ['energy' ]: 
+                pass 
+            elif field_name in ['entanglement_entropy', 'entanglement']: 
+                if self.ALGORITHM == 'mera' : 
+                    sub_key_list = [0, 1]
+                elif self.ALGORITHM == 'vmps' : 
+                    sub_key_list = ['EE', sh[0]//2, 1] 
+                else: 
+                    raise NotImplemented
+            else: 
+                raise NotImplemented 
+        res = self.fetch_easy(field_name, sh, sub_key_list)
+        return res 
     
     def insert(self, field_name, sh, iter, val, sub_key_list=None): 
         if not self.has_key(field_name): 
@@ -1059,10 +1159,12 @@ class ResultDB(OrderedDict, AnalysisTools):
         self.pop(field_name_old)
         self.commit()
     
-    def rename_folder_surfix(self, new_surfix=None): 
+    def rename_folder_surfix(self, new_surfix=None, dry_run=1): 
         """
             opeation on the parpath !! 
         """
+        warnings.warn('still bug in some cases, so better dry_run first')
+        #raise NotImplemented  # bug in it 
         root = os.path.dirname(self.parpath)
         old_name = os.path.basename(self.parpath)
         
@@ -1075,7 +1177,8 @@ class ResultDB(OrderedDict, AnalysisTools):
             new_name = old_name.replace(old_sur, new_surfix)
         new_parpath = '/'.join([root, new_name])
         print 'rename ...%s -> ...%s'%(self.parpath[-20:], new_parpath[-20: ])
-        os.rename(self.parpath, new_parpath)
+        if not dry_run: 
+            os.rename(self.parpath, new_parpath)
         #print_vars(vars(),  ['root', 'old_name', 'temp', 'old_sur', 'new_name'])
     
     def move_folder(self, local_root): 
@@ -1281,21 +1384,34 @@ class ResultDB(OrderedDict, AnalysisTools):
                 res=None
         return res 
 
-    def delete_rec(self, key): 
-        self.pop(key)
+    def delete_rec(self, field_name_list, sh_list): 
+        print 'delete %s %s'%(field_name_list,  sh_list)
+        if sh_list == 'all' : 
+            for i in field_name_list: 
+                self.pop(i)
+        else:
+            if field_name_list == 'all' : 
+                field_name_list = self.keys()
+            for sh in sh_list: 
+                for f in field_name_list: 
+                    temp = self[f]
+                    if isinstance(temp, dict) and temp.has_key(sh): 
+                        temp.pop(sh)
         self.commit()
-    
-    def delete_db(self): 
+
+
+    def delete_db(self, info=1): 
         os.remove(self.path)
-        msg = 'db is removed'
-        print(msg)
+        if info>0: 
+            msg = 'db is removed'
+            print(msg)
     
-    def delete_file(self, sh):
-        if sh == 'all' : 
-            ss = self.get_shape_list() 
-        else: 
-            ss= [sh]
-        for sh in ss: 
+    def delete_file(self, sh_list, info=1):
+        if sh_list == 'all' : 
+            sh_list = self.get_shape_list() 
+        #else: 
+        #    sh_list= [sh]
+        for sh in sh_list: 
             fn=self.__class__.shape_to_backup_fn(sh)
             path = '/'.join([self.parpath, fn])
             msg='rm file %s'%(path[-30: ])
@@ -1304,7 +1420,8 @@ class ResultDB(OrderedDict, AnalysisTools):
                 msg += '  ... done' 
             except Exception as err: 
                 msg += '  ... failed. '  +  str(err)
-            print msg 
+            if info>0: 
+                print msg 
     
     def dump(self, file=None): 
         print '---'*30
@@ -2369,8 +2486,9 @@ class ResultDB(OrderedDict, AnalysisTools):
 
 class ResultDB_mera(ResultDB): 
     AUTO_UPDATE = False 
+    ALGORITHM = 'mera'
     ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
-    ALL_FIELD_NAMES.extend([ 'entanglement_entropy', 'entanglement_special'])
+    ALL_FIELD_NAMES.extend([ 'entanglement_entropy', 'entanglement_special', 'correlation_extra'])
     def __init__(self, parpath,  **kwargs): 
         kwargs.update(algorithm='mera')
         ResultDB.__init__(self, parpath,  **kwargs)
@@ -2409,7 +2527,9 @@ class ResultDB_mera(ResultDB):
         #layer, dim = sh
         dim, layer = sh
         nqn = "5_" if nqn == 5 else "" 
-        layer = "-%dlay"%layer if layer != 3 else ""
+        #layer = "-%dlay"%layer if layer != 3 else ""
+        #layer = "-%dlay"%layer if layer != 4 else ""
+        layer = "-%dlay"%(layer-1) if layer != 4 else ""
         res= "%(nqn)s%(dim)d%(layer)s.pickle"%vars()
         return res
     backup_fn_gen = shape_to_backup_fn 
@@ -2484,10 +2604,10 @@ class ResultDB_mera(ResultDB):
         iter_max = 1e6 if iter_max is None else iter_max
         if not self.has_key_list(aa, info=1): 
             
-            if len(sh)==2: 
-                sh = sh[0], sh[1]-1
-            else: 
-                sh = sh[0], sh[1]-1, sh[2]
+            #if len(sh)==2: 
+            #    sh = sh[0], sh[1]-1
+            #else: 
+            #    sh = sh[0], sh[1]-1, sh[2]
             res = self.load_S(sh)
             if isinstance(res, dict): 
                 recs= res['energy_record']
@@ -2514,6 +2634,7 @@ class ResultDB_mera(ResultDB):
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.02 
+    ALGORITHM = 'vmps'
     def __init__(self, parpath,  **kwargs): 
         #kwargs['version'] = 1.0    #version should det
         kwargs.update(algorithm='mps')
@@ -2618,6 +2739,7 @@ class ResultDB_vmps(ResultDB):
 class ResultDB_idmrg(ResultDB): 
     
     VERSION = 1.01 
+    ALGORITHM = 'idmrg'
     ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
     ALL_FIELD_NAMES.extend(['length', 'entanglement', 'correlation_length'])
     ALL_FIELD_NAMES= list(set(ALL_FIELD_NAMES))
