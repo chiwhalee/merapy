@@ -392,21 +392,20 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     return res 
 
 #now I undertand that, this func in fact realized a decorator for individal measure funcs!!
-def measure_all(dir_list, mera_shape_list, use_dist_comp=False, servers=None, **kwargs): 
+def measure_all(dir_list, mera_shape_list, use_dist_comp=False, submit=1,  servers=None, **kwargs): 
     arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
     if not use_dist_comp: 
         for i in arg_group: 
             measure_S(**i)
     else: 
         from mypy.brokest.brokest import queue, run_many 
-        if servers is None: 
-            sugon_list = [(node, 9090, 'zhihuali@211.86.151.102') for node in 
-                    ['node71', 'node93', 'node97', 'node99', 'node98', 'node96']]
-            servers=[('localhost', 90900), ('qtg7502', 90900),  ('qtg7501', 90900) ]
-            servers.extend(sugon_list)
-            
-        tasks = [(measure_S, (), i) for i in arg_group] 
-        run_many(tasks, servers, info=kwargs.get('info', 1), try_period=kwargs.get('try_period', 1))
+        from mypy.brokest.task_center import submit_one 
+        if not submit:     
+            tasks = [(measure_S, (), i) for i in arg_group] 
+            run_many(tasks, servers, info=kwargs.get('info', 1), try_period=kwargs.get('try_period', 1))
+        else: 
+            for c in arg_group: 
+                submit_one(measure_S, kwargs=c)
 
 def compute(n):
     import time, socket
