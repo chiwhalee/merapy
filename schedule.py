@@ -64,6 +64,7 @@ if 1:
 
     schedule_scale_invar = [
         {'ansatz':'prod_state',   'shape': (4, 4),  'q_iter':1000,  'energy_diff_min': 1e-10},  
+        #{'ansatz':'prod_state',   'shape': (4, 5),  'q_iter':1000,  'energy_diff_min': 1e-10},  
         {'ansatz':'scale_invar', 'shape': (4, 4),  'q_iter':50000,  'energy_diff_min': 1e-10},  
         
         {'ansatz':'scale_invar', 'shape': (8, 4),  'q_iter':50000,  'energy_diff_min': 1e-10}, 

@@ -377,6 +377,7 @@ class Main(object):
             print exception
             traceback.print_exc()
             job_status = 'FAILED'
+            raise
         finally: 
             msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
             print msg
