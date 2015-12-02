@@ -319,8 +319,8 @@ class Analysis(AnalysisTools):
         #aa = map(lambda a:  a if len(a)>1 else a[0], aa)
         
         if sh is not None : 
-            #todo: 改成不需要检查file，直接从db判断
-            if 1: 
+            #todo: 改成不需要检查file，直接从db['energy']判断
+            if 0: 
                 def func(a): 
                     dir = self.alpha_parpath_dict.get(a, 'nowhere')
                     fn = self.result_db_class.shape_to_backup_fn(sh)

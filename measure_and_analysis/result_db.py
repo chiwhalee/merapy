@@ -112,6 +112,9 @@ FIELD_NAME_LIST = [
     #'entanglement_brute_force_9_aver' , 
     ]
 
+BACKUP_STATE_DIR = 'backup_tensor_dir'
+RESULDB_DIR = 'resultdb_dir'
+
 def html_border(s, fontsize=20): 
    sss=  """
     <div id='page' style='width: 600px'>
@@ -632,7 +635,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         #fn = 'N=%d-D=%d.pickle'%(sh[0], sh[1])
         fn = self.__class__.shape_to_backup_fn(sh)
         path = '/'.join([self.parpath, fn])
-            
+        path = path.replace(RESULDB_DIR, BACKUP_STATE_DIR)
         #with open(path, 'rb') as inn: 
         #    res=pickle.load(inn)
         res= load(path)
@@ -747,6 +750,9 @@ class ResultDB(OrderedDict, AnalysisTools):
     
     def get_fn_list(self, dir=None):
         dir = dir if dir is not None else self.parpath
+        #issue: this could be slow if do this each time , find better way later 
+        dir = dir.replace('resultdb_dir', 'backup_tensor_dir')
+        
         nlist = os.listdir(dir) 
         pickle_files = [i for i in nlist if "pickle" == i.split('.')[-1]]
         #if not self.get('algorithm')=='mps': 
@@ -827,7 +833,7 @@ class ResultDB(OrderedDict, AnalysisTools):
             return D 
     
     
-    def get_energy_min_bac(self, sh=None, **kwargs): 
+    def get_energy_min_del(self, sh=None, **kwargs): 
         version = self.get('version')
         
         if version is None: 
@@ -1385,7 +1391,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         return res 
 
     def delete_rec(self, field_name_list, sh_list): 
-        print 'delete %s %s'%(field_name_list,  sh_list)
+        print 'delete fields "%s" for all sh in %s'%(field_name_list,  sh_list)
         if sh_list == 'all' : 
             for i in field_name_list: 
                 self.pop(i)
@@ -1413,7 +1419,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         #    sh_list= [sh]
         for sh in sh_list: 
             fn=self.__class__.shape_to_backup_fn(sh)
-            path = '/'.join([self.parpath, fn])
+            dir = self.parpath 
+            if 'resultdb_dir' in self.parpath:
+                dir = dir.replace('resultdb_dir', 'backup_tensor_dir')
+            path = '/'.join([dir, fn])
             msg='rm file %s'%(path[-30: ])
             try: 
                 os.remove(path)
@@ -2479,6 +2488,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         if state is None: 
             state = self.load_S(sh)
         parpath = self.parpath 
+        #parpath = parpath.replace(RESULDB_DIR, BACKUP_STATE_DIR)
         measure_S(state, parpath, rdb=self, which=which, measure_func=measure_func, 
                 field_surfix=field_surfix, param=param, 
                 exclude_which=exclude_which, force=force, 

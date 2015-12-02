@@ -258,54 +258,80 @@ def measure_S(S=None, parpath=None, path=None,
     
     #if algorithm == 'mera' :  # backward compatibiliy for ResultDB version = None
     db_version = rdb.get('version')
-        
+    if not force: 
+        found = []
+        for w in which: 
+            if db_version is None: 
+                is_found = rdb[k].has_key(w)
+            else:
+                key_list = [w] + [shape, iter]
+                is_found = rdb.has_entry(key_list)
+            if is_found: 
+                found.append(w)
+        print 'found these fields {}, omit them.'.format(found)
+        which = [w for w in which if w not in found]
      
     failed_list = []
+    results= []
     for w in which: 
         ff = func[w]
         w = func_name_map.get(ff.__name__, ff.__name__)
         field_name = w if field_surfix  == ''  else w + '_' +  field_surfix  
         print '\t%s...   '%field_name,
         
-        if db_version is None: 
-            is_found = rdb[k].has_key(field_name)
-        else:
-            key_list = [field_name] + [shape, iter]
-            is_found = rdb.has_entry(key_list)
-        if is_found and not force: 
-            msg ='%20s'%('found in db')
-        else: 
-            try:
-                res = ff(S, **param[w])
-                msg = '%20s'%('done')
-                if kwargs.get('show', False): 
-                    pprint.pprint(res, indent=1, width=200)
+        try:
+            res = ff(S, **param[w])
+            msg = '%20s'%('done')
+            if kwargs.get('show', False): 
+                pprint.pprint(res, indent=1, width=200)
+            
+            if db_version is None: 
+                results.append(dict(field_name=field_name, key=k, res=res, sub_key_list=None))
+            else: 
+                #rdb.insert(field_name=field_name, sh=shape, iter=iter, val=res)
+                results.append(dict(field_name=field_name, sh=shape, iter=iter, val=res))
                 
-                if db_version is None: 
-                    rdb.put(field_name=field_name, key=k, res=res, sub_key_list=None)
-                else: 
-                    rdb.insert(field_name=field_name, sh=shape, iter=iter, val=res)
-                    
-            except Exception as err:
-                failed_list.append((w, shape, iter, err))
-                msg = '%20s'%('FAILED skip')
-                if not fault_tolerant: 
-                    raise 
+        except Exception as err:
+            failed_list.append((w, shape, iter, err))
+            msg = '%20s'%('FAILED skip')
+            if not fault_tolerant: 
+                raise 
         print msg
     
-    rdb['algorithm'] = algorithm
+    if 1: 
+        #load rdb again! so that avoid chance of confliction 
+        rdb = rdb_class(parpath, use_local_storage=use_local_storage) 
+        changed = False
+        if len(results)>0:
+            for r in results: 
+                if db_version is None: 
+                    rdb.put(**r)
+                else: 
+                    rdb.insert(**r)
+            changed = True
         
-    if algorithm in ['mps', 'idmrg']: 
-        if not rdb.has_key('dim_max'): 
-            rdb['dim_max'] = {}
-        if rdb.has_key_list(['dim_max', shape[0]]): 
-            dmax = rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
-            dmax = max(dmax, shape[1])
+        if 1: 
+            if not rdb.has_key('algorithm'): 
+                rdb['algorithm'] = algorithm
+                changed = True
+                
+            if algorithm in ['mps', 'idmrg']: 
+                if not rdb.has_key('dim_max'): 
+                    rdb['dim_max'] = {}
+                if rdb.has_key_list(['dim_max', shape[0]], info=0): 
+                    dmax = rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
+                    if dmax<shape[1]: 
+                        rdb['dim_max'][shape[0]] = shape[1]
+                        changed = True
+                else: 
+                    dmax = shape[1]
+                    rdb['dim_max'][shape[0]] = dmax 
+                    changed = True
+        
+        if changed: 
+            rdb.commit(info=1)
         else: 
-            dmax = shape[1]
-        rdb['dim_max'][shape[0]] = dmax 
-
-    rdb.commit(info=1)
+            print 'No change to commit.'
     if len(failed_list)>0: 
         print 'failed_list: %s'%failed_list
 
@@ -472,8 +498,6 @@ class TestIt(unittest.TestCase):
             args['fault_tolerant'] = 0
         self.args= args 
     
-    def test_temp(self): 
-        pass 
     
     def test_measure_all(self): 
         from vmps.minimize import VMPS 
@@ -484,8 +508,9 @@ class TestIt(unittest.TestCase):
        
         args = self.args.copy()
         #which = ['variance', 'energy', 'entanglement_entropy', 'magnetization']
-        which = ['correlation']
-        args.update(dir_list=[dir],which=which, force=0, show=0, 
+        #which = ['correlation']
+        which = []
+        args.update(dir_list=[dir], which=which, force=0, show=0, 
                 algorithm='mps', mera_shape_list='all')
         #measure_all( **args )
         measure_all( **args )
@@ -567,12 +592,13 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
-        xx = an_vmps.an_main_symm 
-        
-        aa=xx.filter_alpha(g=0.0)
-        #aa = [(0.3,  0.0)]
-        xx.measure_all(aa, [(60, 'max')], which='entanglement_entropy_ln', fault_tolerant=1)
+        raise
+        #from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
+        #xx = an_vmps.an_main_symm 
+        #
+        #aa=xx.filter_alpha(g=0.0)
+        ##aa = [(0.3,  0.0)]
+        #xx.measure_all(aa, [(60, 'max')], which='entanglement_entropy_ln', fault_tolerant=1)
 
 if __name__ == '__main__':
     
@@ -626,8 +652,8 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                'test_temp', 
-                #'test_measure_all', 
+                #'test_temp', 
+                'test_measure_all', 
                 #'test_vmps_all', 
                 #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
