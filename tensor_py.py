@@ -2292,6 +2292,8 @@ class iTensor(TensorBase):
             
             this is a temporary implementation during calc central charge
             a full and fast implementation should not use tensor contraction, but direct sum uing index of sparse tensor
+            param: 
+                site_list  ranges in [0, self.rank-1]
         """
         rank = self.rank
         assert rank%2 == 0 

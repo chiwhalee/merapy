@@ -18,7 +18,10 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
         this is the average desending operator  \bar D =1/3(D_R + R_C + R_L) for ternary 
         act on S.rho_2[ilayer].O[j], obtain S.H_2[ilayer-1].O[j].data
         注意这里与f90中不同，f90中是把 ilayer+1 desending 到 ilayer 
-    """
+        note: rho_2 in mera is not physical RDM, it is actually \bar rho_2, the
+        average of rho_2 on three not identicle positions
+        
+        """
     G_2_2 = S.G_2_2
 
     if info>0:

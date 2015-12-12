@@ -13,7 +13,7 @@ import tempfile
 
 import merapy 
 from merapy.utilities import print_vars, dict_to_object 
-from merapy import load 
+from merapy import load, iTensorFactory
 from merapy.hamiltonian import System
 from merapy.tensor_svd import Tensor_svd
 from merapy.quantum_number_py import *
@@ -28,7 +28,7 @@ __all__ = ['entanglement_entropy', 'entanglement_spectrum', 'central_charge',
     'entanglement_brute_force', 'entanglement_brute_force_aver',
     'entanglement_brute_force_9', 'entanglement_brute_force_6', 
     'entanglement_brute_force_9_aver', 'entanglement_brute_force_6_aver' , 
-    'entanglement_special'
+    'entanglement_special', 'concurrence'
     ]
 
 """
@@ -122,6 +122,41 @@ def partial_trace_rho(rho, n, average=0):
     else: 
         res = rho.partial_trace(site_right)
     return res
+
+def concurrence(S, Jzz=None): 
+    """
+        below only suitble for xxz model  
+        the exact value for the xxx point is 2ln(2)-1 almost equal 0.386
+        ref: 
+            Gu sj 2003 entanglement, pra
+    """
+    
+    #rho at 0th layer is not updated during optimization, so update it here
+    from merapy.hamiltonian import System 
+    if not isinstance(S, dict): 
+        S= S.__dict__ 
+    if isinstance(S, dict): 
+        S = System(symmetry='U1', init_state=S)
+        S.info = 2
+        System.set_graph.im_func(S, getattr(S, 'graph_module_name', None))
+        S.initialize()
+    
+    descending_ham(S.mera, S, ilayer=1)
+    rho_01 = S.rho_2[0][0].copy()
+    rho_0 = rho_01.partial_trace([1])
+    pauli = iTensorFactory.pauli_mat_2site(S.symmetry)
+    szz = pauli['szz']
+    #the correaltion function, C^zz_{01}
+    C01, _= szz.contract(rho_0, ['d', 'u'], ['u', 'd'])
+    C01 = C01.data[0]
+    
+    eng = S.energy 
+    if Jzz is None: 
+        Jzz = S.model_param['Jzz']
+    
+    res= 0.5*max(0.0, abs(eng-Jzz*C01)-C01-1.0)
+    return res 
+    
 
 def __entanglement_entropy(S, layer, k=None, spectrum=0, info=0): 
     """
@@ -765,8 +800,6 @@ def test_wave_func():
     """
     pass
     
-def concurrence(): 
-    pass
 
 def negativity(): 
     pass
@@ -799,7 +832,7 @@ class TestIt(unittest.TestCase):
             main.run(q_iter=10, do_measure=0)
             #res= {0: 0, 1: -0.15447477974680113, 2: -0.27316843978691985, 3: -0.38435891607150841, 4: -0.49142890463353184, 5: -0.59574502419909914, 6: -0.69595138685370195, 7: -0.78927036090526448, 8: -0.87373436401172677, 9: -0.9490632254128426, 10: -1.015790781309708}
             #main.S.examine_energy(res)
-            
+            self.S= main.S 
             TestIt.INITED = True 
        
     def test_central_charge(self): 
@@ -831,14 +864,39 @@ class TestIt(unittest.TestCase):
         
         res = entanglement_brute_force_6(S=S, k=80, plot=0, info=2);  
         print res['EE']
-    
+
+    def test_concurrence(self): 
+        #path= '/home/zhli/backup_tensor_dir/run-long-heisbg/mera/test/rmax12_4812125/alpha=0.88-init1p44/8.pickle'
+        #path= '/home/zhli/backup_tensor_dir/run-heisbg-NNN/mera/test/prod_state/J2=0.02-pin2_lamm1_xi2000/4.pickle'
+        #from merapy.run_heisbg.analysis import an_mera, an_vmps 
+        #xx = an_mera.an_main
+        #db = xx[1.0, 'a']
+        #sh = (20, 4)
+        #S= db.load_S(sh)
+        #S = load(path)
+        #ee=entanglement_special(S)
+        self.initialize()
+        S= self.S 
+        cc=concurrence(S)
+        print_vars(vars(),  ['cc'])
+        self.assertAlmostEqual(cc, 0.0236695468515, 10)
+        
+            
+
+
     def test_temp(self): 
    
         #path= '/home/zhli/backup_tensor_dir/run-long-heisbg/mera/test/rmax12_4812125/alpha=0.88-init1p44/8.pickle'
-        path= '/home/zhli/backup_tensor_dir/run-heisbg-NNN/mera/test/prod_state/J2=0.02-pin2_lamm1_xi2000/4.pickle'
-        S = load(path)
-        ee=entanglement_special(S)
-        #print_vars(vars(),  ['ee'])
+        #path= '/home/zhli/backup_tensor_dir/run-heisbg-NNN/mera/test/prod_state/J2=0.02-pin2_lamm1_xi2000/4.pickle'
+        from merapy.run_heisbg.analysis import an_mera, an_vmps 
+        xx = an_mera.an_main
+        db = xx[1.0, 'a']
+        sh = (20, 4)
+        S= db.load_S(sh)
+        #S = load(path)
+        #ee=entanglement_special(S)
+        ee=concurrence(S, 1.0)
+        print_vars(vars(),  ['ee'])
             
 
 
@@ -866,14 +924,15 @@ if __name__ == '__main__':
                 res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
                 #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
     
-    if 1: #examine
+    if 0: #examine
         TestIt.test_temp = unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     if 1: 
         suite = unittest.TestSuite()
         add_list = [
            #'test_entanglement_brute_force_6', 
-           'test_temp', 
+           'test_concurrence', 
+           #'test_temp', 
        
         ]
         for a in add_list: 

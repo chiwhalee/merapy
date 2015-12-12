@@ -127,6 +127,7 @@ class System(IterativeOptimize):
                     'updaters', #?
                     'pinning_term_def', #this is needed, or else cause problem for tensor_player 
                     'graph_module_name', 
+                    'model_param', 
                     ] , 
                 
                 '_not_resume_attr_list': self._not_resume_attr_list  + [
@@ -1039,6 +1040,7 @@ class System(IterativeOptimize):
         
         only_NNN = param['only_NNN']
         only_NN = param['only_NN']
+
 
 
         h0, Sz, Sp, Sm = {}, {}, {}, {}
@@ -2052,7 +2054,7 @@ class System(IterativeOptimize):
     
     shape_to_backup_fn = backup_fn_gen  # another name
 
-    def save(self, fn, check=True, use_local_storage=False):
+    def save_del(self, fn, check=True, use_local_storage=False):
         """
             it turns out QnZ2, QnU1 can't be pickled, the reason is not sure
         """

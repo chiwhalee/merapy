@@ -231,16 +231,16 @@ def measure_S(S=None, parpath=None, path=None,
     else: 
         func = {measure_func.__name__: measure_func}
     
+
     if param is None:     
         param = {f: {} for f in which}
         corr_param.update(param.get('correlation', {}))
         param.update(correlation=corr_param)
-        
     else: 
         for f in which: 
             if not param.has_key(f):  
                 param[f] = {}
-                
+    
     func_name_map = {
             'calc_scaling_dim_2site': 'scaling_dim', 
             }

@@ -79,9 +79,15 @@ def fetch_correlation(S, direction, info=0):
 
 def get_spin_ops_2(S, direct, r_mod2):
     """
+    this is only used in correlation_extra 
     s1, s2
     params: 
         r_mod2: used when combine_2site,  to distinguish s2 = is or si
+    return: o1, o2, sigma_0
+        for combine_2site = True
+            o1 is always 'si'
+            o2 depende on r_mod2, could be 'si' or 'is'
+        
     
     """
     direction = direct
@@ -349,6 +355,8 @@ def __correlation_extra(S, r, direct, info=0):
         two point correlation
         direct: either be 'pm', 'xx', 'x0', etc
         correlation for more s0sr cases
+        if combine_2site = True: 
+            r is no smaller than 2 
     """
     
     #print 'dont forget magnetization'
@@ -431,7 +439,7 @@ def correlation_extra(S, r_list=None, direct_list=None, fail_skip=1, **kwargs):
     r_min = 1
     r_max = 3**(num_of_layer-1)
     if S.combine_2site and S.symmetry in ['U1', 'Z2']: 
-        #r_min *= 2
+        r_min *= 2
         r_max *=  2
         
     if r_list is None: 

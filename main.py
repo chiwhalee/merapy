@@ -453,7 +453,8 @@ class Main(object):
         return res 
     
     @classmethod #@staticmethod 
-    def run_many_dist(cls, config_group, submit=True, servers=None, func=None, **kwargs): 
+    def run_many_dist(cls, config_group, 
+            submit=True, servers=None, func=None, **kwargs): 
         """
             status: workable now!
                 I dont know why cant run run_many_dist under main.py.
@@ -468,69 +469,18 @@ class Main(object):
         from brokest.task_center import submit_one, submit_many 
         
         if not submit: 
-            def run_one_dist_del(config): 
-                schedule = config.get('schedule')
-                pid = os.getpid();  config.update(pid=pid)
-                #schedule = config['run_schedule_args']['schedule']
-                main = Main(**config)
-                msg = ''
-                is_registered = False 
-                job_status = ''
-                try: 
-                    status = 'open'
-                    if config.get('register_job'): 
-                        job_id = config.get('job_id')
-                        if job_id is None: 
-                            parpath = config['backup_parpath_local']
-                            job_id = (str(config.get('job_group_name')), hash(parpath))
-                        with rpyc_conn('local', 'service', 17012) as conn:                
-                            status = conn.root.register_job(job_id, config)
-                        if status  == 'open' : 
-                            is_registered = True
-                    if status == 'open': 
-                        if schedule is None: 
-                            main.run(q_iter=None, backup_parpath=None, resume=0, auto_resume=0 )
-                        else: 
-                            #print_vars(vars(),  ['schedule']); raise 
-                            #if isinstance(schedule[0], dict):  #mera use this 
-                            if config['algorithm']== 'mera':  
-                                main.run_schedule(**config['schedule'])
-                            else:   #mps use this 
-                                main.run_schedule(schedule)  
-                        job_status = 'COMPLETED'
-                        msg += 'run one COMPLETED.' 
-                    elif status== 'locked': 
-                        msg += 'job %s exists'%(job_id, ) 
-                        
-                except KeyboardInterrupt: 
-                    #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
-                    msg += 'KeyboardInterrupt captured.'
-                    job_status = 'FAILED'
-                except Exception, exception:
-                    print exception
-                    traceback.print_exc()
-                    job_status = 'FAILED'
-                finally: 
-                    msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
-                    print msg
-                    if is_registered:  
-                        parpath = config['backup_parpath_local']
-                        with rpyc_conn('local', 'service', 17012) as conn:                
-                            print 'iiiiiiiiiiiiiii', job_id 
-                            conn.root.update_job(job_id, 'status', job_status)
-                            #end_time = str(datetime.datetime.now()).split('.')[0]
-                            #conn.root.update_job(job_id, 'end_time', end_time)
-                       
-                    main.stop_player()        
-                return main 
-            #tasks = [(run_one_dist, (c, )) for c in config_group] 
             tasks = [(cls.run_one, (c, )) for c in config_group] 
             run_many(tasks, servers, 
                     info=kwargs.get('info', 10), querry=1, 
                     try_period=kwargs.get('try_period', 1))
         else: 
+            job_info = {}
+            temp = ['delay_send', 'priority', 'job_group_name']
+            for t in temp: 
+                if kwargs.has_key(t): 
+                    job_info[t] = kwargs[t]
             for c in config_group: 
-                submit_one(cls.run_one, (c, ))
+                submit_one(cls.run_one, (c, ),  job_info=job_info)
     
     @staticmethod 
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 
