@@ -131,7 +131,7 @@ class System(IterativeOptimize):
                     ] , 
                 
                 '_not_resume_attr_list': self._not_resume_attr_list  + [
-                    'precision',  
+                    'precision',  'model_param', 
                     ], 
             #control
                 'energy_diff_min': 1e-9, 

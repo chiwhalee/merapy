@@ -44,7 +44,8 @@ try:
 except ImportError as err: 
     print err 
 
-from merapy.measure_and_analysis.result_db import ResultDB, ResultDB_vmps, ResultDB_mera, ResultDB_idmrg, FIELD_NAME_LIST
+from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_vmps, ResultDB_mera, 
+        ResultDB_idmrg, FIELD_NAME_LIST, BACKUP_STATE_DIR, RESULTDB_DIR)
 from merapy.decorators import timer
 
 
@@ -101,8 +102,9 @@ def measure_S(S=None, parpath=None, path=None,
         
         try: 
             S = rpyc_load(path, use_local_storage=use_local_storage)
-            #S = load(path)
+            
             parpath = os.path.dirname(os.path.abspath(path))
+            parpath = parpath.replace(BACKUP_STATE_DIR, RESULTDB_DIR)
         except IOError as err: 
             if fault_tolerant: 
                 return 
@@ -167,7 +169,7 @@ def measure_S(S=None, parpath=None, path=None,
                 shape = (dim, layer)
             else: 
                 shape = (dim, layer, nqn)
-            corr_param = dict(direction=None, force_update=False, distance_max=10**4)
+            
             rdb_class= ResultDB_mera 
             
             
@@ -189,7 +191,7 @@ def measure_S(S=None, parpath=None, path=None,
             shape =  N,  D
             iter = -1
             #field = ['correlation']
-            corr_param = {}
+            
             rdb_class= ResultDB_vmps
             
         elif algorithm == 'idmrg': 
@@ -216,7 +218,7 @@ def measure_S(S=None, parpath=None, path=None,
             path = '/'.join([parpath, fn])
             shape =  N, D 
             iter = -1
-            corr_param = {}
+            
             rdb_class= ResultDB_idmrg 
             
     which = which if which is not None else field 
@@ -232,14 +234,21 @@ def measure_S(S=None, parpath=None, path=None,
         func = {measure_func.__name__: measure_func}
     
 
-    if param is None:     
-        param = {f: {} for f in which}
-        corr_param.update(param.get('correlation', {}))
-        param.update(correlation=corr_param)
+    #if param is None:     
+    #    param = {f: {} for f in which}
+    #    corr_param.update(param.get('correlation', {}))
+    #    param.update(correlation=corr_param)
+    #else: 
+    #    for f in which: 
+    #        if not param.has_key(f):  
+    #            param[f] = {}
+    
+    if param is None: 
+        param = {}
+    elif isinstance(param, dict): 
+        assert len(which)==1, 'when param is provided, only allow measure one field at a time'
     else: 
-        for f in which: 
-            if not param.has_key(f):  
-                param[f] = {}
+        raise 
     
     func_name_map = {
             'calc_scaling_dim_2site': 'scaling_dim', 
@@ -280,7 +289,7 @@ def measure_S(S=None, parpath=None, path=None,
         print '\t%s...   '%field_name,
         
         try:
-            res = ff(S, **param[w])
+            res = ff(S, **param)
             msg = '%20s'%('done')
             if kwargs.get('show', False): 
                 pprint.pprint(res, indent=1, width=200)
@@ -308,6 +317,7 @@ def measure_S(S=None, parpath=None, path=None,
                     rdb.put(**r)
                 else: 
                     rdb.insert(**r)
+                
             changed = True
         
         if 1: 
@@ -509,7 +519,7 @@ class TestIt(unittest.TestCase):
         args = self.args.copy()
         #which = ['variance', 'energy', 'entanglement_entropy', 'magnetization']
         #which = ['correlation']
-        which = []
+        which = ['energy']
         args.update(dir_list=[dir], which=which, force=0, show=0, 
                 algorithm='mps', mera_shape_list='all')
         #measure_all( **args )

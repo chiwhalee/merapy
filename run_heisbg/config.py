@@ -7,9 +7,6 @@ from merapy.config import CFG_HEISBG_BASIC, copy_config, Config
 from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
 from merapy.schedule import schedule_prod_state, copy_schedule
 
-if 1: 
-    from merapy.quantum_number_py import init_System_QSp, symmetry_to_Qsp 
-    from merapy.tensor_py import iTensor, iTensorFactory 
 
 
 def make_config(Jzz, algorithm='mera', alg_surfix='', which_top_state='scale_invar_state',  backup_parpath=None, root1='', surfix=''): 
@@ -39,8 +36,14 @@ def make_config(Jzz, algorithm='mera', alg_surfix='', which_top_state='scale_inv
                 'entanglement_brute_force_9_aver', 
                 
                 ], 
-            'which': ['correlation', 'entanglement_entropy',  'correlation_extra', 
-                'entanglement_spectrum', 'magnetization',  'entanglement_brute_force_6',  
+            'which': ['correlation', 
+                'entanglement_entropy',  
+                #'correlation_extra', 
+                'energy', 
+                #'entanglement_spectrum', 
+                'magnetization',  
+                'concurrence', 
+                #'entanglement_brute_force_6',  
                 ], }
 
     

@@ -98,7 +98,9 @@ if 1:
     
 
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
-    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', ]
+    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
+    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 
+    ]
 
 FIELD_NAME_LIST = [
         'energy', 
@@ -113,7 +115,7 @@ FIELD_NAME_LIST = [
     ]
 
 BACKUP_STATE_DIR = 'backup_tensor_dir'
-RESULDB_DIR = 'resultdb_dir'
+RESULTDB_DIR = 'resultdb_dir'
 
 def html_border(s, fontsize=20): 
    sss=  """
@@ -377,13 +379,16 @@ class AnalysisTools(object):
             labels, loc, val = None, None, None 
         return labels, loc, val 
     
-    def find_lines_extreme(self, ax, which='max', add_text=False, font_dict=None, rounding=2): 
+    def find_lines_extreme(self, ax, which='max', add_text=False, zoom_scale=None, font_dict=None, rounding=2): 
         temp=[]        
         fd = {'color': 'r', 'size': 14} 
         if font_dict is not None: 
             fd.update(font_dict)
         for l in ax.lines:
             x, y= l.get_data()
+            if np.all(np.isnan(y)):
+                warnings.warn("omit empty line %s in find_extreme "%(l.get_label()))
+                continue 
             if which == 'max' : 
                 #min_ind =y.argmax()
                 min_ind =np.nanargmax(y)
@@ -399,6 +404,21 @@ class AnalysisTools(object):
             labels, loc, val= zip(*temp)
         else: 
             labels, loc, val = None, None, None 
+            
+        if zoom_scale and len(ax.lines)==1: 
+            #temp=temp[1][0]
+            temp = loc[0]
+            #delta=0.5
+            delta = zoom_scale
+            x1=temp-delta; x2=temp+delta
+            ax.set_xlim(x1, x2)
+            l=ax.lines[0]
+            x,y=l.get_data()
+            ind=np.bitwise_and(x>x1, x<x2)
+            y=y[ind]
+            y1=np.nanmin(y); y2=np.nanmax(y)
+            #print y1, y2
+            ax.set_ylim(y1, y2)            
         return labels, loc, val 
 
 
@@ -526,7 +546,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     ALGORITHM = 'all'
     AUTO_UPDATE = True 
     VERSION = 1.0 
-    ALL_FIELD_NAMES = ['energy', 'magnetization']
+    ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence']
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
             use_local_storage=False, create_empty_db=False,  upgrade=0):
         """
@@ -592,6 +612,11 @@ class ResultDB(OrderedDict, AnalysisTools):
                 print 'update_db_structure ... '
                 self.update_db_structure()
     
+    @property
+    def state_parpath(self): 
+        dir = self.parpath.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+        return dir 
+
     def __repr__(self): 
         return self.keys()
         temp = []
@@ -632,10 +657,12 @@ class ResultDB(OrderedDict, AnalysisTools):
             todo: load 时，应该支持 update state 
         """
         
-        #fn = 'N=%d-D=%d.pickle'%(sh[0], sh[1])
-        fn = self.__class__.shape_to_backup_fn(sh)
-        path = '/'.join([self.parpath, fn])
-        path = path.replace(RESULDB_DIR, BACKUP_STATE_DIR)
+        
+        #fn = self.__class__.shape_to_backup_fn(sh)
+        #path = '/'.join([self.parpath, fn])
+        #path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+        path = self.shape_to_backup_path(sh)
+        
         #with open(path, 'rb') as inn: 
         #    res=pickle.load(inn)
         res= load(path)
@@ -914,7 +941,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         rpyc_save(self.path, OrderedDict(self), use_local_storage=self.use_local_storage)
         if info>0: 
             temp = str(self.path)
-            print '\tmodification in ...%s has been commited'%(temp[-40: ])
+            print '\tmodification in ...%s has been commited'%(temp[-60: ])
     
     def _fetch(self, dim, num_of_layer=None): 
         keys= self.iterkeys()
@@ -1049,7 +1076,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                     raise
         return rec
     
-    def search_field_name_bac(self, search_str, all_field_names=None, only_first=False, only_one=False, assert_found=False): 
+    def search_field_name_del(self, search_str, all_field_names=None, only_first=False, only_one=False, assert_found=False): 
         """
             #issue:  use AnalysisTools.search_str to implementate this
             avoid duplicated code 
@@ -1390,6 +1417,22 @@ class ResultDB(OrderedDict, AnalysisTools):
                 res=None
         return res 
 
+    def _get_concurence(self, sh, Jzz): 
+        """
+            this is only used for xxz model !
+            refs: 
+                Gu sj 2003 ent.. pra 
+        """
+        eng = self.fetch_easy('energy', sh)
+        if self.ALGORITHM == 'mera' : 
+            Czz = self.fetch_easy('correlation_extra', sh, sub_key_list=['zz'])
+        else: 
+            Czz = self.fetch_easy('correlation', sh, sub_key_list=['zz', 10, 0, 1])
+        #print_vars(vars(),  ['Czz'])
+        #raise
+        res= 0.5*max(0.0, abs(eng-Jzz*Czz)-Czz-1.0)
+        return res 
+
     def delete_rec(self, field_name_list, sh_list): 
         print 'delete fields "%s" for all sh in %s'%(field_name_list,  sh_list)
         if sh_list == 'all' : 
@@ -1415,13 +1458,13 @@ class ResultDB(OrderedDict, AnalysisTools):
     def delete_file(self, sh_list, info=1):
         if sh_list == 'all' : 
             sh_list = self.get_shape_list() 
-        #else: 
-        #    sh_list= [sh]
+        
+        dir = self.parpath 
+        if RESULTDB_DIR in self.parpath:
+            dir = dir.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+       
         for sh in sh_list: 
             fn=self.__class__.shape_to_backup_fn(sh)
-            dir = self.parpath 
-            if 'resultdb_dir' in self.parpath:
-                dir = dir.replace('resultdb_dir', 'backup_tensor_dir')
             path = '/'.join([dir, fn])
             msg='rm file %s'%(path[-30: ])
             try: 
@@ -2483,16 +2526,37 @@ class ResultDB(OrderedDict, AnalysisTools):
         plt.show()
     
     def measure(self, sh, state=None, sh_min=None, sh_max=None, measure_func=None, param=None,  which=None, field_surfix='', 
-            exclude_which=None, force=0, fault_tolerant=1, recursive=False,  **kwargs): 
+            exclude_which=None, force=0, fault_tolerant=1, recursive=False,  
+            submit=False, 
+            **kwargs): 
         from merapy.measure_and_analysis.measurement import measure_S 
-        if state is None: 
-            state = self.load_S(sh)
+        from mypy.brokest.task_center import submit_one 
+
         parpath = self.parpath 
-        #parpath = parpath.replace(RESULDB_DIR, BACKUP_STATE_DIR)
-        measure_S(state, parpath, rdb=self, which=which, measure_func=measure_func, 
-                field_surfix=field_surfix, param=param, 
-                exclude_which=exclude_which, force=force, 
-            fault_tolerant=fault_tolerant, **kwargs)
+        path = self.shape_to_backup_path(sh)
+        rdb = self 
+        temp = ['parpath', 'path', 'rdb', 'which', 'measure_func', 'field_surfix', 'param', 
+                'exclude_which', 'force', 'fault_tolerant']
+        dic = vars()
+        temp = {t: dic[t] for t in temp}
+        temp.update(kwargs)
+        if not submit: 
+            measure_S(**temp)
+        else: 
+            temp['rdb'] = None # or else it raises 
+            temp.update(use_local_storage=1)
+            submit_one(measure_S, kwargs=temp,
+                    job_info = {'priority': 1, 
+                        'job_group_name': 'measure', 
+                        'delay_send': 10, 
+                        })
+            
+            
+    def shape_to_backup_path(self, sh): 
+        fn = self.__class__.shape_to_backup_fn(sh)
+        path = '/'.join([self.parpath, fn])
+        path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+        return path 
 
 class ResultDB_mera(ResultDB): 
     AUTO_UPDATE = False 
@@ -2642,6 +2706,8 @@ class ResultDB_mera(ResultDB):
             
             raise
 
+        
+
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.02 
     ALGORITHM = 'vmps'
@@ -2705,46 +2771,6 @@ class ResultDB_vmps(ResultDB):
             self['version'] = 1.02
             self.commit(info=1)
         
-    def get_correlation(self, sh, key_list=None, 
-            r_min=None,  r_max=None, period=None,  field_surfix=None, fault_tolerant=1, info=0): 
-        algorithm = self.get('algorithm')
-        
-        if 1: 
-            if self.get('algorithm') == 'mps': 
-                
-                period = period if period is not None else 2            
-            rec = self.fetch_easy('correlation', mera_shape=sh, sub_key_list=key_list, 
-                    fault_tolerant=fault_tolerant, info=info-1) 
-            if rec is None: 
-                return None
-            
-            if algorithm == 'mps': 
-                #rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
-                x, y = zip(*rec)
-                r0 = key_list[-1]
-                x = np.asarray(x)
-                x -= r0 
-                
-            elif algorithm == 'idmrg' : 
-                #rec = map(lambda x: (x[1]-x[0], rec[x]), rec.iteritems()) 
-                rec = map(lambda k, v: (k[1]-k[0], v), rec.iteritems()) 
-            
-            x, y=zip(*rec[0:-1:period])
-        
-        if key_list[0] == 'pm':   
-            y=np.array(y);  y=y*2;  
-        
-        x = np.array(x)
-        a = 0
-        b = -1
-        if r_min is not None : 
-            temp = np.where(x>=r_min);  a=temp[0][0]
-        if r_max is not None : 
-            temp = np.where(x<=r_max);  b=temp[0][-1] + 1
-            x = x[a: b]
-            y = y[a: b]
-                   
-        return x, y    
 
 class ResultDB_idmrg(ResultDB): 
     
@@ -2768,18 +2794,6 @@ class ResultDB_idmrg(ResultDB):
         return res
     
     backup_fn_gen =shape_to_backup_fn 
-   
-    def calc_EE_del(self, S):
-        res=None
-        #lam = S['Lambda']
-        lam = S['lam']
-        U, s, V = np.linalg.svd(lam)
-        spect = s
-        #print np.sum(s**2)
-        spect2 = spect**2
-        EE = -np.sum(spect2*np.log2(spect2))
-        res = EE
-        return res 
     
     def calc_correlation(self, sh, direct,  r_list=None, force=False, info=0):
         """
@@ -2837,55 +2851,6 @@ class ResultDB_idmrg(ResultDB):
             #print a, path
         return eng
     
-    def get_correlation(self, sh, key_list=None, 
-            r=None, r_min=None, field_surfix=None, r_max=None, period=None, fault_tolerant=1,  info=0): 
-
-        which = 'correlation'  #not extra
-        if field_surfix is not None : 
-            which  = '_'.join([which, field_surfix])
-        key_list = ['zz'] if key_list is None else key_list 
-        period = period if period is not None else 2            
-        rec = self.fetch_easy(which, mera_shape=sh, sub_key_list=key_list, 
-                fault_tolerant=fault_tolerant, info=info-1) 
-        
-        if rec is None: 
-            return None
-       
-        rec = rec.items()
-        x, y = zip(*rec)
-    
-        if key_list[0] == 'pm':   
-            y=np.array(y);  y=y*2;  
-        if self.get('algorithm')=='idmrg' : 
-            x = [a[1] for a in x]
-        x = np.array(x); y=np.array(y)
-        if r is None: 
-            if r_min is None: 
-                r_min = x[0]
-            if r_max is None: 
-                r_max = x[-1]
-            temp = np.logical_and(x>=r_min, x<=r_max)
-            if period != 1:  
-                temp = np.logical_and(temp, (x-r_min)%period==0)
-            arg = np.argwhere(temp).ravel()
-        else:
-            #arg = np.argwhere()
-            arg = []
-            a = 0
-            for _r in r: 
-                ii = 0
-                for _x in x[a:]: 
-                    if _r == _x:
-                        arg.append(a + ii)
-                        #print _r, a + ii   
-                        a = ii 
-                        break 
-                    ii += 1  
-     
-        x = x[arg]
-        y = y[arg]
-                   
-        return x, y    
 
     def get_EE(self, dim): 
         res=self._measure(self.calc_EE, dim=dim)
@@ -3070,15 +3035,33 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        #from current.run_long_better.analysis import an_mera 
-        from merapy.run_heisbg_NNN.analysis import an_mera 
+        from merapy.run_heisbg.analysis import an_mera, an_vmps 
         
-        # 为了验证稳定性，进行独立的run，分别用后缀 ‘a', 'b' 看它们能否重合
-        #xx=an_mera.an_test.an_eigen_state
-        xx=an_mera.an_main 
-        db = xx[0.5]
-        e = db.fetch_easier('er xg', (4, 4))
-        print_vars(vars(),  ['db', 'e'])
+        if 1: 
+            xx = an_vmps.an_main_symm  
+            db = xx[1.0]
+            sh = (40, 40)
+            #print_vars(vars(),  ['db["concurrence"]'])
+            print_vars(vars(),  ['db'])
+            #db.pop('energy')
+            db.measure(sh=sh, which=['concurrence'], force=1, 
+                    param = {'Jzz': 1.2}, 
+                    )
+           
+        if 0: 
+            xx = an_mera.an_main
+            db = xx[1.2, 'a']
+            
+            #print_vars(vars(),  ['db.get_shape_list()'])
+            sh = (4, 4)
+            db.measure(sh=sh, which=['concurrence'], param={'Jzz': 1.2},  
+                    force=1, fault_tolerant=0, 
+                    submit = 0, 
+                    )
+            #cc=db._get_concurence(sh, 1.0)
+            #print_vars(vars(),  ['cc'])
+        
+        
         
         #db.move_folder(an_mera.an_test.local_root)
        
@@ -3196,7 +3179,6 @@ if __name__ == '__main__':
     if len(sys.argv)<=1 :   
       
         if 0:
-    
             TestResultDB.test_temp=unittest.skip("skip test_temp")(TestResultDB.test_temp) 
             unittest.main()
         else: 
