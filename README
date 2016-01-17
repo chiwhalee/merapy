@@ -1,4 +1,9 @@
 
+required packages:
+    argparse, argcomplete, 
+    plumbum, 
+    concurrencytest  
+
 installation guide:
     cd merapy
     bash lib/ftopy_ifort

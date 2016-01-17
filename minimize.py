@@ -757,7 +757,7 @@ class TestScaleInvar(unittest.TestCase):
             S=main.run(q_iter=3,  do_measure=0)
             S=main.run_scale_invar(q_iter=10, do_measure=0)
             res= {0: 0, 1: -0.14306831775876239, 2: -0.28302724810836422, 3: -0.37443146281546302, 4: -0.4519070431176464, 5: -0.52841563236836264, 6: -0.60836365005944959, 7: -0.69261165207729269, 8: -0.77380310057594426, 9: -0.84634118594060803, 10: -0.91177543745081024}
-            S.examine_energy(res, delta=2e-14)
+            S.examine_energy(res, delta=2e-12)
             
             print  'see if resumed successfully'
             S=main.run_scale_invar(q_iter=10,  do_measure=0)

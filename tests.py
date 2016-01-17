@@ -15,6 +15,7 @@ from merapy.tensor_network import TestIt as Test_tensor_network
 from merapy.top_level import TestIt as Test_top_level 
 from merapy.minimize import TestScaleInvar 
 from merapy.main import TestMain 
+import platform 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)
 #python -m unittest discover --pattern=*.py
@@ -34,14 +35,15 @@ if 1:  #skip all test_temp
 if 0: 
     unittest.main()
 else: 
-    from concurrencytest import ConcurrentTestSuite, fork_for_tests
     loader = unittest.TestLoader()
     suite = []
     for cls in all_cls: 
         temp = loader.loadTestsFromTestCase(cls)
         suite.append(temp)
     suite = unittest.TestSuite(suite)
-    suite = ConcurrentTestSuite(suite, fork_for_tests(8))
+    if platform.system() != 'Windows':
+        from concurrencytest import ConcurrentTestSuite, fork_for_tests
+        suite = ConcurrentTestSuite(suite, fork_for_tests(8))
     unittest.TextTestRunner(verbosity=0).run(suite)
 
 

@@ -16,6 +16,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
 import socket 
+import platform 
 
 import importlib
 from matplotlib.lines import Line2D
@@ -40,8 +41,11 @@ if 1:
             'legend.edege_color': 'white',   # this will make the edges of the border white to match the background instead 
             'legend.frameon': 0,# whether or not to draw a frame around legend    
             'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
-            
             }
+    if platform.system()=='Windows':
+        MATPLOTLIBRC.pop('legend.edege_color')
+        MATPLOTLIBRC.pop('legend.alpha')
+        MATPLOTLIBRC.update({'legend.framealpha':0})
     mpl.rcParams.update(MATPLOTLIBRC)
 
     from matplotlib.lines import Line2D
@@ -99,7 +103,7 @@ if 1:
 
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
     'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
-    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 
+    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 
     ]
 
 FIELD_NAME_LIST = [
@@ -116,6 +120,10 @@ FIELD_NAME_LIST = [
 
 BACKUP_STATE_DIR = 'backup_tensor_dir'
 RESULTDB_DIR = 'resultdb_dir'
+if platform.system()=='Linux':
+    RESULTDB_ROOT =  '/home/zhli/resultdb_dir/run-heisbg'  
+else:
+    RESULTDB_ROOT = 'C:/Users/zhihua/Dropbox/resultdb_dir/'
 
 def html_border(s, fontsize=20): 
    sss=  """
@@ -360,32 +368,20 @@ class AnalysisTools(object):
         args.update(kwargs)
         self._plot(x, y, **args)
     
-    def find_lines_min(self, ax, add_text=False, font_dict=None): 
+    def find_lines_extreme(self, ax, which='max', add_text=False, 
+            find_range=None, 
+            zoom_scale=None, font_dict=None, rounding=2): 
         temp=[]        
         fd = {'color': 'r', 'size': 14} 
         if font_dict is not None: 
             fd.update(font_dict)
         for l in ax.lines:
             x, y= l.get_data()
-            min_ind =y.argmin()
-            min_location = x[min_ind]
-            min_val = y[min_ind]
-            if add_text: 
-                ax.text(min_location, min_val, min_location, fontdict=fd,  )
-            temp.append((l.get_label(), round(min_location,2), min_val))
-        if temp: 
-            labels, loc, val= zip(*temp)
-        else: 
-            labels, loc, val = None, None, None 
-        return labels, loc, val 
-    
-    def find_lines_extreme(self, ax, which='max', add_text=False, zoom_scale=None, font_dict=None, rounding=2): 
-        temp=[]        
-        fd = {'color': 'r', 'size': 14} 
-        if font_dict is not None: 
-            fd.update(font_dict)
-        for l in ax.lines:
-            x, y= l.get_data()
+            if find_range is not None: 
+                x_ = np.logical_and(x>=find_range[0], x<=find_range[1])
+                arg = np.argwhere(x_).ravel()
+                x = x[arg]
+                y = y[arg]
             if np.all(np.isnan(y)):
                 warnings.warn("omit empty line %s in find_extreme "%(l.get_label()))
                 continue 
@@ -2295,26 +2291,29 @@ class ResultDB(OrderedDict, AnalysisTools):
         if len(not_found)>0: print 'not_found is ', not_found
         if return_fig: return fig
 
-    def plot_structure_factor(self, sh, direct=None, dist_max=100, show_fig=0, save_fig=1, **kwargs): 
+    def plot_structure_factor(self, sh, direct=None, dist_max=100, show_fig=0,  **kwargs): 
         fft = np.fft.fft
         algorithm = self.get('algorithm')
         if algorithm == 'mps': 
             name = 'correlation' 
             direct = 'xx' if direct is None else direct
-            ind = 2
+            ind = 1
+            key_list = [direct, 10]
         elif algorithm == 'idmrg' : 
             direct = 'xx' if direct is None else direct
             ind = 1
+            key_list = [direct]
         elif algorithm == 'mera': 
             name = 'correlation_extra'
             direct = 'zz' if direct is None else direct
             ind = 1
+            key_list = [direct]
         else: 
             raise 
-        rec = self.fetch_easy(name, sh, sub_key_list=[direct])
-        
+        rec = self.fetch_easy(name, sh, sub_key_list=key_list)
         if rec is None: 
-            print 'rec is None for sh %s, exit'%(sh, )
+            msg =  'rec is None for sh %s, exit'%(sh, )
+            warnings.warn(msg)
             return
         
         temp = [i[ind] for i in rec]
@@ -2324,10 +2323,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         fig = self._plot(range(len(sf)), sf, **kwargs)
         if kwargs.get('return_fig'): 
             return fig
-        if save_fig: 
-            fn = 'structure_factor-sh=%s.png'%(tuple(sh), )
-            path = self.parpath +'/' +   fn
-            fig.savefig(path)
         if show_fig: 
             plt.show()
 
@@ -2531,9 +2526,23 @@ class ResultDB(OrderedDict, AnalysisTools):
             **kwargs): 
         from merapy.measure_and_analysis.measurement import measure_S 
         from mypy.brokest.task_center import submit_one 
-
+        
+        if sh[1] == 'max' : 
+            D = self.get_dim_max_for_N(sh[0])
+            if D == 0: 
+                print('max D for %s is zero, skip it'%(sh, ))
+                return 
+            sh = sh[0], D 
+        
         parpath = self.parpath 
         path = self.shape_to_backup_path(sh)
+        if 'C:' in parpath:
+            xxx = [('C:', '/home/zhli/dropbox/'), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
+            for a, b in xxx:
+                parpath=parpath.replace(a, b)
+                path=path.replace(a, b)
+            path=path.replace('dropbox', '')
+           
         rdb = self 
         temp = ['parpath', 'path', 'rdb', 'which', 'measure_func', 'field_surfix', 'param', 
                 'exclude_which', 'force', 'fault_tolerant']
@@ -2544,11 +2553,12 @@ class ResultDB(OrderedDict, AnalysisTools):
             measure_S(**temp)
         else: 
             temp['rdb'] = None # or else it raises 
+            temp['fault_tolerant'] = 0
             temp.update(use_local_storage=1)
             submit_one(measure_S, kwargs=temp,
                     job_info = {'priority': 1, 
-                        'job_group_name': 'measure', 
-                        'delay_send': 10, 
+                        'job_group_name': 'measure-'+str(which), 
+                        'delay_send': 20, 
                         })
             
             
@@ -2597,10 +2607,15 @@ class ResultDB_mera(ResultDB):
             return eval(dim), eval(layer) + 1, eval(nqn)#  layer= mera.num_of_layer large than actual layer by 1 
 
     @staticmethod
-    def shape_to_backup_fn(sh,  nqn=None):
+    #def shape_to_backup_fn(sh,  nqn=None):
+    def shape_to_backup_fn(sh ):  
         #layer, dim = sh
-        dim, layer = sh
-        nqn = "5_" if nqn == 5 else "" 
+        dim, layer = sh[: 2]
+        if len(sh)==3: 
+            nqn = sh[2]
+            nqn = "5_" if nqn == 5 else "" 
+        else: 
+            nqn = ""
         #layer = "-%dlay"%layer if layer != 3 else ""
         #layer = "-%dlay"%layer if layer != 4 else ""
         layer = "-%dlay"%(layer-1) if layer != 4 else ""
@@ -2987,12 +3002,6 @@ class ResultDB_idmrg(ResultDB):
             self['version'] = ver 
             self.commit(info=1)
 
-class ResultDB_idmrg_mcc_del(ResultDB): 
-    def __init__(self, parpath,  **kwargs): 
-        kwargs['version'] = 1.0
-        kwargs.update(algorithm='idmrg-mcc')
-        ResultDB.__init__(self, parpath,  **kwargs)
-
 class ResultDB_ed(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
@@ -3035,37 +3044,16 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        from merapy.run_heisbg.analysis import an_mera, an_vmps 
-        
-        if 1: 
-            xx = an_vmps.an_main_symm  
-            db = xx[1.0]
-            sh = (40, 40)
-            #print_vars(vars(),  ['db["concurrence"]'])
-            print_vars(vars(),  ['db'])
-            #db.pop('energy')
-            db.measure(sh=sh, which=['concurrence'], force=1, 
-                    param = {'Jzz': 1.2}, 
-                    )
-           
-        if 0: 
-            xx = an_mera.an_main
-            db = xx[1.2, 'a']
-            
-            #print_vars(vars(),  ['db.get_shape_list()'])
-            sh = (4, 4)
-            db.measure(sh=sh, which=['concurrence'], param={'Jzz': 1.2},  
-                    force=1, fault_tolerant=0, 
-                    submit = 0, 
-                    )
-            #cc=db._get_concurence(sh, 1.0)
-            #print_vars(vars(),  ['cc'])
-        
-        
+        from mera_wigner_crystal.analysis import an_vmps
+        xx = an_vmps.an_main_alt 
+        sh=(60,40)
+        a = (0.5, 1.0, 1.0)
+        db = xx[a]
+        db.plot_structure_factor(sh, direct='zz', )
         
         #db.move_folder(an_mera.an_test.local_root)
        
-        #xx.show_fig()
+        xx.show_fig()
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]

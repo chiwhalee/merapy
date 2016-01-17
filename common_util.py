@@ -13,18 +13,19 @@ import socket
 #import matplotlib.pyplot as plt
 #from matplotlib.font_manager import FontProperties
 
-arch=  platform.architecture()[0]
-
+arch=  platform.architecture()[0]   #32 or 64 
 hostname = socket.gethostname()
+os1 = platform.system()
 
+if os1 == 'Linux':
+    from merapy.lib.common_64_ifort import *
+elif os1 == 'Windows':
+    from merapy.lib.win.common_gfort import *
 
 #if hostname == 'VirtualBox-Lab' and 0:
 #    from merapy.lib.common_64_ifort_virtual import *
 #else:
 #    from merapy.lib.common_64_ifort import *
-
-from merapy.lib.common_64_ifort import *
-
 
 del arch
 del platform

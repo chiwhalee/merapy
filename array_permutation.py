@@ -18,6 +18,8 @@ import unittest
 import socket
 from merapy.utilities import print_vars
 
+arch=  platform.architecture()[0]   #32 or 64 
+os1 = platform.system()
 hostname = socket.gethostname()
 
 try:            
@@ -29,14 +31,25 @@ try:
                permute_player_fort_parallel_dynamic as permute_player_fort  
                 )
     else:
-        from merapy.lib.array_permutation_64_ifort import (
-               array_permutation_fort_parallel , 
-               array_permutation_fort_parallel_complex, 
-               #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
-               #but it is not thoroughly tested against too mainy cases
-               permute_player_fort_parallel_dynamic as permute_player_fort, 
-               complex_permute_player_fort_parallel_dynamic as complex_permute_player_fort
-                )
+        if os1 == 'Linux':
+            from merapy.lib.array_permutation_64_ifort import (
+                   array_permutation_fort_parallel , 
+                   array_permutation_fort_parallel_complex, 
+                   #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
+                   #but it is not thoroughly tested against too mainy cases
+                   permute_player_fort_parallel_dynamic as permute_player_fort, 
+                   complex_permute_player_fort_parallel_dynamic as complex_permute_player_fort
+                    )
+        elif os1  == 'Windows':
+            from merapy.lib.win.array_permutation_gfort import (
+                   array_permutation_fort_parallel , 
+                   array_permutation_fort_parallel_complex, 
+                   #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
+                   #but it is not thoroughly tested against too mainy cases
+                   permute_player_fort_parallel_dynamic as permute_player_fort, 
+                   complex_permute_player_fort_parallel_dynamic as complex_permute_player_fort
+                    )
+
 
 except ImportError:
     raise

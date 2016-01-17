@@ -85,8 +85,6 @@ def measure_S(S=None, parpath=None, path=None,
         fault_tolerant=1, num_of_threads=None,  param=None, check_convergence=True, 
         field_surfix='', rdb=None, **kwargs):
     """
-        todo: 
-            parpath should be deprecated, extract it from path instead  
         params: 
             measure_func: arbitrary function can be supported if it is provided 
                 it must have one positional arg  S 
@@ -102,7 +100,6 @@ def measure_S(S=None, parpath=None, path=None,
         
         try: 
             S = rpyc_load(path, use_local_storage=use_local_storage)
-            
             parpath = os.path.dirname(os.path.abspath(path))
             parpath = parpath.replace(BACKUP_STATE_DIR, RESULTDB_DIR)
         except IOError as err: 
@@ -262,7 +259,6 @@ def measure_S(S=None, parpath=None, path=None,
         return 
 
     if rdb is None: 
-        #rdb = ResultDB(parpath, dbname=None, version=db_version, use_local_storage=use_local_storage)
         rdb = rdb_class(parpath, use_local_storage=use_local_storage)
     
     #if algorithm == 'mera' :  # backward compatibiliy for ResultDB version = None

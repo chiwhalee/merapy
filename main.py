@@ -22,9 +22,9 @@ import itertools
 import signal 
 import tempfile 
 from tempfile import mkdtemp
+import platform 
 
-
-uname=os.uname()[1]
+uname=platform.uname()[1]
 if uname in ['QTG-WS1-ubuntu']: 
     import pp
 

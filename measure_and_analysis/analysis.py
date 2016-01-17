@@ -35,7 +35,8 @@ from merapy.measure_and_analysis.measurement import mera_backup_dir_finder,  mea
 from merapy.context_util import rpyc_conn 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, 
-        ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border)
+        ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
+        BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT )
 from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE, 
         AnalysisTools, 
         )
@@ -126,7 +127,7 @@ class Analysis(AnalysisTools):
     """
     """
     REMOTE_HOST = 'zhihuali@211.86.151.102:'
-    ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 'correlation']
+    ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 'correlation', 'concurrence']
     
     #DISTANCE_LIST = [3**i for i in range(1, 9)]
     def __init__(self, fn=None, path=None, parpath=None, backup_tensor_root='./', 
@@ -564,6 +565,7 @@ class Analysis(AnalysisTools):
             aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
+        dir_list = [d.replace(RESULTDB_DIR, BACKUP_STATE_DIR) for d in dir_list]
         if use_dist_comp: 
             kwargs['use_local_storage'] = 1 
         measure_all_orig(dir_list, mera_shape_list=sh_list, sh_min=sh_min, sh_max=sh_max, which=which, 
@@ -919,9 +921,10 @@ class Analysis(AnalysisTools):
     def delete_dir(self, aa):
         for a in aa: 
             db = self[a]
-            msg = 'a=%s, rm dir %s and files ...'%(a, db.parpath[-30: ], )
+            msg = 'a=%s, rm dir %s ...'%(a, db.parpath[-30: ], )
             try: 
                 db.delete_file('all', info=0)
+                os.rmdir(db.state_parpath)
                 db.delete_db(info=0)
                 os.rmdir(db.parpath)
                 msg += 'done' 
@@ -2685,15 +2688,10 @@ class TestAnalsysis(unittest.TestCase):
     
     def test_temp(self): 
         #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
-        from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
-        xx = an_mera.an_test.an_prod_state
-        
-        xx=an_mera.an_test.an_prod_state
-        aa=xx.filter_alpha(surfix='rmax12', sh=(12, 4), field='correlation_extra')
-        bb=xx.filter_alpha(surfix='rmax12', sh=(12, 4))
-        print_vars(vars(),  ['bb'])
-        print_vars(vars(),  ['set(bb)-set(aa)']) 
-        print_vars(vars(),  ['set(aa)-set(bb)']) 
+        #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
+        from mera_wigner_crystal.analysis import an_vmps
+        xx = an_vmps.an_main_alt 
+        print xx.get_shape_list_all() 
         
         #xx.show_fig()
     
