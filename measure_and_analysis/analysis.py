@@ -35,7 +35,7 @@ from merapy.measure_and_analysis.measurement import mera_backup_dir_finder,  mea
 from merapy.context_util import rpyc_conn 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, 
-        ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
+        ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, ResultDB_proj_qmc, 
         BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT )
 from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE, 
         AnalysisTools, 
@@ -46,7 +46,7 @@ mpl.rcParams.update(MATPLOTLIBRC)
 from vmps.measure_and_analysis.measurement_idmrg_mcc import __all__  as ALL_IDMRG_FIELDS 
 
 
-__all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg',
+__all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 
         'MARKER_LIST', 'MARKER_CYCLE', ]
 
 class OrderedDictLazy(OrderedDict): 
@@ -2670,7 +2670,13 @@ class Analysis_idmrg(Analysis):
             path = '/'.join([dir, fn])
             save(new_state, path)
             print 'update file ... %s succeeded'%(path[-30: ])
-   
+  
+class Analysis_proj_qmc(Analysis): 
+     def __init__(self, **kwargs): 
+        #kwargs['result_db_class'] =  ResultDB_vmps
+        kwargs.update(algorithm='proj_qmc', result_db_class=ResultDB_proj_qmc)
+        Analysis.__init__(self, **kwargs)
+  
 
 class TestAnalsysis(unittest.TestCase): 
     def setUp(self): 

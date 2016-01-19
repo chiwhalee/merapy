@@ -121,7 +121,7 @@ FIELD_NAME_LIST = [
 BACKUP_STATE_DIR = 'backup_tensor_dir'
 RESULTDB_DIR = 'resultdb_dir'
 if platform.system()=='Linux':
-    RESULTDB_ROOT =  '/home/zhli/resultdb_dir/run-heisbg'  
+    RESULTDB_ROOT =  '/home/zhli/resultdb_dir/'  
 else:
     RESULTDB_ROOT = 'C:/Users/zhihua/Dropbox/resultdb_dir/'
 
@@ -937,7 +937,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         rpyc_save(self.path, OrderedDict(self), use_local_storage=self.use_local_storage)
         if info>0: 
             temp = str(self.path)
-            print '\tmodification in ...%s has been commited'%(temp[-60: ])
+            print '\tmodification in ...%s has been commited'%(temp[-90: ])
     
     def _fetch(self, dim, num_of_layer=None): 
         keys= self.iterkeys()
@@ -1787,7 +1787,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     
     plot_field_vs_length = plot_field_vs_position
     
-    def plot_field_vs_iter(self, attr_name, sh, x_min=None, x_max=None, period=None, sh_min=None, sh_max=None, 
+    def plot_field_vs_iter(self, attr_name, sh, data=None, x_min=None, x_max=None, period=None, sh_min=None, sh_max=None, 
             xfunc=None, yfunc=None,  sub_key_list=None, rec_getter=None, fault_tol=True,  rec_getter_args=None,    **kwargs): 
         db = self
         sub_key_list = sub_key_list if sub_key_list is not None else []
@@ -1796,15 +1796,20 @@ class ResultDB(OrderedDict, AnalysisTools):
         #sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
         #aa=list(self.alpha_list)
         
-        data=[]
         try:
-            ts=db.get_time_serials(sh)#[:100]
-            if hasattr(ts, 'N'):  # idmrg 
-                x=ts.N.values.astype(int)
-            else: 
-                x =  ts.index.astype(int) 
-            #y=ts.EE.values.astype(float)
-            y=ts[attr_name].values.astype(float)
+            if data is None:
+                ts=db.get_time_serials(sh)#[:100]
+                if hasattr(ts, 'N'):  # idmrg 
+                    x=ts.N.values.astype(int)
+                else: 
+                    x =  ts.index.astype(int) 
+                #y=ts.EE.values.astype(float)
+                y=ts[attr_name].values.astype(float)
+            else:
+                x,y=zip(*data)        
+                x = np.asarray(x)
+                y = np.asarray(y)
+            
             if x_min or x_max or period:
                 arg = db.filter_array(x, x_min, x_max, period)
                 x=x[arg]
@@ -3021,7 +3026,21 @@ class ResultDB_ed(ResultDB):
             temp = [None]*10
         temp.sort()
         return temp[i]
-        
+
+class ResultDB_proj_qmc(ResultDB): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs['version'] = 1.0
+        kwargs.update(algorithm='proj_qmc')
+        ResultDB.__init__(self, parpath,  **kwargs)
+    
+    @staticmethod
+    def shape_to_backup_fn(sh): 
+        N, m = sh
+        res = 'N=%(N)d-m=%(m)d.pickle'%vars()
+        return res
+    backup_fn_gen = shape_to_backup_fn 
+
+
         
 class TestResultDB(unittest.TestCase): 
     def setUp(self):
@@ -3044,13 +3063,16 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        from mera_wigner_crystal.analysis import an_vmps
-        xx = an_vmps.an_main_alt 
-        sh=(60,40)
-        a = (0.5, 1.0, 1.0)
-        db = xx[a]
-        db.plot_structure_factor(sh, direct='zz', )
-        
+        #from mera_wigner_crystal.analysis import an_vmps
+        from merapy.run_heisbg.analysis import an_qmc 
+        xx = an_qmc 
+        db = an_qmc[1.0]
+        print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
+        print_vars(vars(),  ['db.get_shape_list()'])
+        data = zip(range(10), range(10))
+        fig, ax=xx.fig_layout()
+        _=db.plot_field_vs_iter('', sh, data=data, ax=ax)
+       
         #db.move_folder(an_mera.an_test.local_root)
        
         xx.show_fig()
