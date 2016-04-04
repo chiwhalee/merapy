@@ -3,7 +3,7 @@ import os, argparse
 import platform
 import socket
 
-if 1: 
+if 1:   #issue: remove these from config !
     from merapy.ascending import ascending_ham
     from merapy.descending import descending_ham
     from merapy.iteration import iterative_optimize_all
@@ -11,11 +11,14 @@ if 1:
     from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
     from merapy.finite_site import finite_site, finite_site_u1
     #import merapy.finite_site as finite_site_module
-    
-    from merapy.context_util import LOCAL_IP, LOCAL_USERNAME 
-  
-import merapy.updaters_binary as upbin
-import merapy.schedule as schedule_module
+    import merapy.updaters_binary as upbin
+    import merapy.schedule as schedule_module
+
+from merapy.context_util import LOCAL_IP, LOCAL_USERNAME 
+#LOCAL_IP = '222.195.73.70'
+#LOCAL_USERNAME = 'zhli' 
+
+
 
 __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_model_param", "heisbg_model_param", 
         "updaters_z2", "updaters_u1", "updaters_binary", 

@@ -1042,7 +1042,6 @@ if 1:  #profilers
             return retval
         return wrapper
 
-
     def profileit(fn, filename, stats=True):
         """
             example usage:  @profileit("profile_for_func1_001") 

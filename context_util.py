@@ -20,8 +20,15 @@ import warnings
 
 from merapy.utilities import load, save 
 
-LOCAL_IP = '222.195.73.70'
-LOCAL_USERNAME = 'zhli' 
+#issue: move these to config.py  
+#from merapy.config import LOCAL_IP, LOCAL_USERNAME 
+#LOCAL_IP = '222.195.73.70'
+#LOCAL_USERNAME = 'zhli' 
+
+LOCAL_IP = '210.45.117.111'
+LOCAL_USERNAME = 'lizh' 
+
+LOCAL_MERA_PATH =  "/home/%s/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"%(LOCAL_USERNAME, )
 
 
 @contextmanager
@@ -111,7 +118,8 @@ def ssh_connect(hostname, info=0, timeout=None):
     """
     
     timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
-    if hostname in ['QTG-WS1-ubuntu', 'local']: 
+    #if hostname in ['QTG-WS1-ubuntu', 'local']: 
+    if hostname in ['ThinkStation-C30', 'local']: 
         args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=timeout)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
@@ -133,7 +141,7 @@ def rpyc_conn_zerodeploy(hostname):
         ssh = ssh_connect(hostname)
         server = DeployedServer(ssh)
         conn = server.classic_connect()
-        path = ["/home/zhli/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"]
+        path = [LOCAL_MERA_PATH]
         conn.modules.sys.path.extend(path)
         # see this link, may be can find a way out
         #http://stackoverflow.com/questions/856116/changing-ld-library-path-at-runtime-for-ctypes
@@ -151,7 +159,7 @@ def rpyc_conn_local_zerodeploy():
         ssh = ssh_connect('local')
         server = DeployedServer(ssh)
         conn = server.classic_connect()
-        path = ["/home/zhli/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"]
+        path = [LOCAL_MERA_PATH]
         conn.modules.sys.path.extend(path)
         
         # search this https://www.google.com.hk/search?newwindow=1&safe=off&q=python+change+ld_library_path+at+runtime&oq=python+change+ld_library_path+at+runtime&gs_l=serp.3...3045.4184.0.4379.7.7.0.0.0.1.327.327.3-1.1.0....0...1c.1.39.serp..7.0.0.umAiWXHnYYs
@@ -358,9 +366,6 @@ class TestIt(unittest.TestCase):
             rpyc_save(fn, obj, use_local_storage=1)
             a=rpyc_load(fn, use_local_storage=1)
             self.assertTrue(a==obj)
-            
-            #fn ='/home/zhli/backup_tensor_dir/run-long-heisbg/mera/alpha=2.0/4.pickle' 
-            #a=rpyc_load(fn, use_local_storage=1)
     
     def xtest_make_temp_dir(self): 
         with make_temp_dir() as dd: 
