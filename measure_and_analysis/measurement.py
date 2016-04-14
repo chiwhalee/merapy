@@ -35,6 +35,7 @@ from merapy.utilities import print_vars
 import merapy.measure_and_analysis as mmm 
 import merapy as kkk 
 import merapy.measure_and_analysis.all as all_mera
+#from merapy.config import BACKUP_BASE_DIR_LOCAL   #import error !
 
 try: 
     import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
@@ -101,6 +102,8 @@ def measure_S(S=None, parpath=None, path=None,
         try: 
             S = rpyc_load(path, use_local_storage=use_local_storage)
             parpath = os.path.dirname(os.path.abspath(path))
+            #issue: it can happen ~/backup_tensor_dir, ~/dropbox/resultdb_dir/ 
+            #then it becomes ~/resultdb_dir so cause mismatch !
             parpath = parpath.replace(BACKUP_STATE_DIR, RESULTDB_DIR)
         except IOError as err: 
             if fault_tolerant: 
@@ -390,7 +393,9 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
         
         if sh_list  == 'all': 
             sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
-        
+        else:
+            ss = set(db.get_shape_list())
+            sh_list = list(set(sh_list)-ss)
         for sh in sh_list: 
             if algorithm  == 'mera':  
                 #sh[1] -= 1  #layer->layer-1
@@ -424,7 +429,7 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     return res 
 
 #now I undertand that, this func in fact realized a decorator for individal measure funcs!!
-def measure_all(dir_list, mera_shape_list, use_dist_comp=False, submit=1,  servers=None, **kwargs): 
+def measure_all(dir_list, mera_shape_list, use_dist_comp=False, submit=1, delay_send=10, servers=None, **kwargs): 
     arg_group = make_measure_many_args(dir_list, mera_shape_list, **kwargs)
     if not use_dist_comp: 
         for i in arg_group: 
@@ -434,9 +439,11 @@ def measure_all(dir_list, mera_shape_list, use_dist_comp=False, submit=1,  serve
         from mypy.brokest.task_center import submit_one 
         if not submit:     
             tasks = [(measure_S, (), i) for i in arg_group] 
-            run_many(tasks, servers, info=kwargs.get('info', 1), try_period=kwargs.get('try_period', 1))
+            run_many(tasks, servers, info=kwargs.get('info', 1), 
+                    try_period=kwargs.get('try_period', 1))
         else: 
             for c in arg_group: 
+                c.update(delay_send=delay_send)
                 submit_one(measure_S, kwargs=c)
 
 def compute(n):
@@ -521,22 +528,6 @@ class TestIt(unittest.TestCase):
         #measure_all( **args )
         measure_all( **args )
    
-    def test_idmrg_correlation(self): 
-        args= self.args
-        dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
-        dir = '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
-        args.update(dir_list=[dir], mera_shape_list=[(0, 8)], which=['correlation'])
-        
-        measure_all( **args )
-   
-    def test_idmrg_magnetization(self): 
-        args= self.args
-        dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
-        dir = '/home/zhli/mps_backup_folder/run-ising/idmrg/h=1.0'
-        args.update(dir_list=[dir], mera_shape_list=[(0, 8)], which=['magnetization'])
-        
-        measure_all( **args )
-    
     def test_vmps_all(self): 
         from vmps.minimize import VMPS 
         v = VMPS.example(N=20, D=5, model_name='ising', backup_parpath='temp')
@@ -552,13 +543,6 @@ class TestIt(unittest.TestCase):
         print_vars(vars(),  ['db'])
     
     def test_idmrg_all(self): 
-        if 0: 
-            args = self.args
-            dir = '/home/zhli/mps_backup_folder/run-heisbg-long-spin1/alpha=2.0/'     
-            which = None
-            args.update(dir_list=[dir], which=which, force=0, mera_shape_list=[(40, 10)])
-            #measure_all( **args )
-            measure_all( **args )
         dir = tempfile.mkdtemp()
         from vmps.idmrg_mcc import iDMRG_mcc 
         i=iDMRG_mcc.example(model_name='ising', symmetry='Z2', backup_parpath=dir, 

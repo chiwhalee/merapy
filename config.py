@@ -25,15 +25,10 @@ __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_mode
         "cfg_graph", "cfg_binary", "cfg_modified_binary", "cfg_quaternary", "cfg_quinary"]
 
 uname=platform.uname()[1]
-home = os.path.expanduser('~')
-#if uname  ==  'QTG-WS1-ubuntu': 
-#    MERA_BACKUP_DIR = '/home/zhli/Documents/mera_backup_tensor' 
-#else: 
-#    MERA_BACKUP_DIR = '/'.join([home, 'mera_backup_tensor'])
-#MERA_BACKUP_DIR_LOCAL = '/home/zhli/Documents/mera_backup_tensor' 
-
-BACKUP_BASE_DIR =  '/'.join([home, 'backup_tensor_dir'])
-BACKUP_BASE_DIR_LOCAL = '/home/zhli/backup_tensor_dir' #'/'.join([home, 'backup_tensor_dir'])
+HOME = os.path.expanduser('~')
+LOCALHOSTNAME = 'QTG-WS1-ubuntu'
+BACKUP_BASE_DIR =  '/'.join([HOME, 'backup_tensor_dir'])
+BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
 
 
 
@@ -79,7 +74,7 @@ CFG_BASE = {
     #for dist comput
         'hostname': socket.gethostname(), 
         'pid': os.getpid(), 
-        'LOCALHOSTNAME': 'QTG-WS1-ubuntu',  
+        'LOCALHOSTNAME': LOCALHOSTNAME ,  
         'LOCAL_USERNAME': LOCAL_USERNAME, 
         'LOCAL_IP': LOCAL_IP, 
         'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
@@ -346,7 +341,7 @@ class TestIt(unittest.TestCase):
         cfg = copy_config(CFG_ISING_BASIC)
         Config.set_backup_parpath(cfg, 'proj', fn='h=1.0', root1='middle', surfix='surf')
         path  = cfg['backup_parpath_local']
-        a = '/home/zhli/backup_tensor_dir/proj/mera/middle/h=1.0-surf'
+        a = '/'.join([HOME, 'backup_tensor_dir/proj/mera/middle/h=1.0-surf']) 
         print path 
         self.assertTrue(path==a)
         

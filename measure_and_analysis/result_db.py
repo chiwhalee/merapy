@@ -29,7 +29,7 @@ import unittest
 
 from merapy.utilities import dict_to_object , load , print_vars
 #from merapy.hamiltonian import System
-from merapy.context_util import rpyc_load, rpyc_save
+from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME 
 
 if 1: 
     import matplotlib as mpl
@@ -118,12 +118,15 @@ FIELD_NAME_LIST = [
     #'entanglement_brute_force_9_aver' , 
     ]
 
+HOME = os.path.expanduser('~')
+HOME=HOME.replace('\\', '/') 
+
 BACKUP_STATE_DIR = 'backup_tensor_dir'
 RESULTDB_DIR = 'resultdb_dir'
 if platform.system()=='Linux':
-    RESULTDB_ROOT =  '/home/zhli/resultdb_dir/'  
+    RESULTDB_ROOT = '/'.join([HOME, RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
 else:
-    RESULTDB_ROOT = 'C:/Users/zhihua/Dropbox/resultdb_dir/'
+    RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
 
 def html_border(s, fontsize=20): 
    sss=  """
@@ -542,7 +545,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     ALGORITHM = 'all'
     AUTO_UPDATE = True 
     VERSION = 1.0 
-    ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence']
+    ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence', 'concurrence_2']
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
             use_local_storage=False, create_empty_db=False,  upgrade=0):
         """
@@ -628,6 +631,14 @@ class ResultDB(OrderedDict, AnalysisTools):
         res= '\n'.join(temp)
         return res 
     
+    @staticmethod 
+    def parpath_map(dir):
+        if 'C:' in dir:
+            xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
+            for a, b in xxx:
+                dir=dir.replace(a, b)
+        return dir 
+        
     if 0: 
         def __getitem__(self, k): 
             """
@@ -810,8 +821,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         D = D.split('=')[1]; D=eval(D)
         return N, D 
 
-    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, from_energy_rec=False): 
-        if socket.gethostname()=='QTG-WS1-ubuntu' and not from_energy_rec: 
+    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, from_energy_rec=False, 
+            only_return_N=False, 
+            ): 
+        if socket.gethostname()=='ThinkStation-C30' and not from_energy_rec: 
             fn = self.get_fn_list()
             sh = [self.parse_fn(f) for f in fn]
         else:
@@ -829,6 +842,9 @@ class ResultDB(OrderedDict, AnalysisTools):
             sh=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh)
         if sh_min is not None : 
             sh=filter(lambda x: x[0]>= sh_min[0] and x[1]>= sh_min[1] , sh)
+        if only_return_N:
+            sh = [i[0] for i in sh]
+            sh = list(set(sh))
         sh.sort()
         return sh
     
@@ -2525,7 +2541,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     def show_fig(self): 
         plt.show()
     
-    def measure(self, sh, state=None, sh_min=None, sh_max=None, measure_func=None, param=None,  which=None, field_surfix='', 
+    def measure(self, sh, state=None, measure_func=None, param=None,  which=None, field_surfix='', 
             exclude_which=None, force=0, fault_tolerant=1, recursive=False,  
             submit=False, 
             **kwargs): 
@@ -2542,7 +2558,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         parpath = self.parpath 
         path = self.shape_to_backup_path(sh)
         if 'C:' in parpath:
-            xxx = [('C:', '/home/zhli/dropbox/'), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
+            xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
             for a, b in xxx:
                 parpath=parpath.replace(a, b)
                 path=path.replace(a, b)
@@ -3063,17 +3079,12 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        #from mera_wigner_crystal.analysis import an_vmps
-        from merapy.run_heisbg.analysis import an_qmc 
-        xx = an_qmc 
-        db = an_qmc[1.0]
-        print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
-        print_vars(vars(),  ['db.get_shape_list()'])
-        data = zip(range(10), range(10))
-        fig, ax=xx.fig_layout()
-        _=db.plot_field_vs_iter('', sh, data=data, ax=ax)
-       
-        #db.move_folder(an_mera.an_test.local_root)
+        #from vmps.run_heisenberg.analysis import an_vmps
+        from merapy.run_heisbg.analysis import an_vmps
+        xx = an_vmps
+        db = xx.an_main_symm[1.0]
+        print db.get_shape_list(only_return_N=1, sh_min=(40, 0))
+        
        
         xx.show_fig()
 
