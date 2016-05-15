@@ -355,7 +355,6 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
         fault_tolerant=1, algorithm=None, recursive=False,  **kwargs): 
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
-    
     if isinstance(which, str): 
         which = [which]
     if isinstance(dir_list, str): 
@@ -386,17 +385,17 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     elif algorithm == 'idmrg' : 
         rdb_class= ResultDB_idmrg 
         
-    
+   
     path_list = []
     for dir in dir_list: 
-        db = rdb_class(dir, algorithm=algorithm)
-        
+        #db = rdb_class(dir, algorithm=algorithm)
+        db = rdb_class(dir.replace(BACKUP_STATE_DIR, RESULTDB_DIR), algorithm=algorithm)
         if sh_list  == 'all': 
-            sh_list = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
+            ss = db.get_shape_list(sh_max=sh_max, sh_min=sh_min)
         else:
-            ss = set(db.get_shape_list())
-            sh_list = list(set(sh_list)-ss)
-        for sh in sh_list: 
+            vv = set(db.get_shape_list())
+            ss = list(set(sh_list).intersection(vv))
+        for sh in ss: 
             if algorithm  == 'mera':  
                 #sh[1] -= 1  #layer->layer-1
                 sh = list(sh);  sh[1] -= 1

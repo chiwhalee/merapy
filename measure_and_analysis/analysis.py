@@ -27,6 +27,7 @@ import warnings
 import importlib
 import datetime
 import itertools 
+import socket 
 
 from merapy.utilities import print_vars, OrderedSet 
 from merapy.hamiltonian import System
@@ -36,7 +37,7 @@ from merapy.context_util import rpyc_conn
 
 from merapy.measure_and_analysis.result_db import (ResultDB, 
         ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, ResultDB_proj_qmc, 
-        BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT )
+        BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT)
 from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE, 
         AnalysisTools, 
         )
@@ -127,7 +128,8 @@ class Analysis(AnalysisTools):
     """
     """
     REMOTE_HOST = 'zhihuali@211.86.151.102:'
-    ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 'correlation', 'concurrence']
+    ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 
+            'correlation', 'concurrence', 'concurrence_2', 'concurrence_neighbour']
     
     #DISTANCE_LIST = [3**i for i in range(1, 9)]
     def __init__(self, fn=None, path=None, parpath=None, backup_tensor_root='./', 
@@ -320,13 +322,12 @@ class Analysis(AnalysisTools):
         #aa = map(lambda a:  a if len(a)>1 else a[0], aa)
         
         if sh is not None : 
-            #todo: 改成不需要检查file，直接从db['energy']判断
-            if 0: 
+            if 0:  #改成不需要检查file，直接从db['energy']判断
                 def func(a): 
                     dir = self.alpha_parpath_dict.get(a, 'nowhere')
                     fn = self.result_db_class.shape_to_backup_fn(sh)
                     path  = '/'.join([dir, fn])
-                    #print 'ppp', path 
+                    print 'ppp', path 
                     return os.path.exists(path)
             else: 
                 func = lambda a:  self[a].has_key_list(['energy', sh])
@@ -565,14 +566,18 @@ class Analysis(AnalysisTools):
             aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
+        if 'C:' in dir_list[0] and use_dist_comp:
+            func = ResultDB.parpath_map 
+            dir_list = [func(a).replace('dropbox', '') for a in dir_list]
         dir_list = [d.replace(RESULTDB_DIR, BACKUP_STATE_DIR) for d in dir_list]
+       
         if use_dist_comp: 
             kwargs['use_local_storage'] = 1 
         measure_all_orig(dir_list, mera_shape_list=sh_list, sh_min=sh_min, sh_max=sh_max, which=which, 
                 exclude_which = exclude_which, use_dist_comp=use_dist_comp,  
                 fault_tolerant = fault_tolerant, force=force, **kwargs)
         self.set_rdb_dict(aa)
-    
+        
     def measure_two(self, alpha_paier_list): 
         """
             status: 
@@ -748,12 +753,12 @@ class Analysis(AnalysisTools):
     
     def transfer_pickle_file(self, alpha_list, sh, overwrite=1): # remote_root, local_root): 
         #remote_root = 'zhihuali@211.86.151.102:mera_backup_tensor/run-long-better/'
-        #locale_root = '/home/zhli/Documents/mera_backup_tensor/run-long-better/'
+        #locale_root = '~/Documents/mera_backup_tensor/run-long-better/'
         
         #A_root = 'zhihuali@211.86.151.102:' + remote_root
         alpha_list = list(alpha_list)
         A_root = self.REMOTE_HOST + self.remote_root
-        #B_root = '/home/zhli/Documents/mera_backup_tensor/run-long-better/'
+        #B_root = '~/Documents/mera_backup_tensor/run-long-better/'
         B_root = self.local_root
         dim, layer  = sh[:2]
         if len(sh)>2:  
@@ -806,21 +811,31 @@ class Analysis(AnalysisTools):
                 S= System.load(path)
                 mm.measure_all(S, path, which=None, show=False, exclude_which=['scaling_dim'])
     
-    def get_shape_list_all(self, N=None, D=None, aa=None, sh_min=None, sh_max=None, force=0):
+    def get_shape_list_all(self, N=None, D=None, aa=None, sh_min=None, 
+            sh_max=None, from_energy_rec=False, only_return_N=False, force=0):
         if self.sh_list_max is not None and not force : 
             sh_list_max = list(self.sh_list_max)
         else:
             sh_list_max = set()
             aa = aa if aa is not None else list(self.alpha_list)
             rdb_cls = self.result_db_class 
-            for a in aa: 
-                #using db meth is slow 
-                #db = self[a]             
-                #sh_list = db.get_shape_list()  
-                dir = self.alpha_parpath_dict[a]
-                fn = rdb_cls.get_fn_list.im_func(self, dir)
-                sh_list = [rdb_cls.parse_fn.im_func(self, f) for f in fn]
-                sh_list_max = sh_list_max.union(sh_list)
+            #if not from_energy_rec:
+            if socket.gethostname()=='ThinkStation-C30' and not from_energy_rec: 
+                for a in aa: 
+                    #using db meth is slow 
+                    #db = self[a]             
+                    #sh_list = db.get_shape_list()  
+                    dir = self.alpha_parpath_dict[a]
+                    fn = rdb_cls.get_fn_list.im_func(self, dir)
+                    sh_list = [rdb_cls.parse_fn.im_func(self, f) for f in fn]
+                    sh_list_max = sh_list_max.union(sh_list)
+            else:
+                warnings.warn('get_shape_list_all using energy rec')
+                for a in aa: 
+                    db = self[a]
+                    sh_list = db.get('energy', {}).keys()
+                    sh_list_max = sh_list_max.union(sh_list)
+            
             sh_list_max = list(sh_list_max)
             self.sh_list_max = sh_list_max 
         if N is not None:
@@ -834,6 +849,9 @@ class Analysis(AnalysisTools):
             sh_list_max=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh_list_max)
         if sh_min is not None : 
             sh_list_max=filter(lambda x: x[0]>= sh_min[0] and x[1]>= sh_min[1] , sh_list_max)
+        if only_return_N:
+            sh_list_max = [i[0] for i in sh_list_max]
+            sh_list_max = list(set(sh_list_max))
         sh_list_max.sort()
         return sh_list_max  
     
@@ -2680,25 +2698,21 @@ class Analysis_proj_qmc(Analysis):
 
 class TestAnalsysis(unittest.TestCase): 
     def setUp(self): 
-        parpath = '/home/zhli/backup_tensor_dir/run-ising/mera/ternary/z2-symm/scale-invar/'
-        path = '/home/zhli/backup_tensor_dir/run-long-better/mera/alpha=1.5/8.pickle'
-        
-        an = Analysis_mera()
-        aa_dic = an.scan_alpha(root=parpath)
-        #print aa_dic
-        an.alpha_parpath_dict.update(aa_dic)
-        alpha_list = aa_dic.keys()
-        an.alpha_list = sorted(alpha_list)
-        
-        self.an = an
+        pass
     
     def test_temp(self): 
         #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
         #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
         from mera_wigner_crystal.analysis import an_vmps
-        xx = an_vmps.an_main_alt 
-        print xx.get_shape_list_all() 
-        
+        #from merapy.run_heisbg.analysis import *
+        sys.path.append(r"C:\Users\zhihua\Dropbox\My-documents\My-code\my-python")
+        xx=an_vmps.an_main_alt 
+        aa=xx.filter_alpha(nu=0.5, alpha=2.0, sh=(120, 40))
+        print_vars(vars(),  ['aa'])
+
+        #print_vars(vars(),  ['xx.get_shape_list_all(aa)'])
+        print xx.get_shape_list_all()
+        #xx.measure_all(aa, sh_list='all', sh_min=(60, 40),  use_dist_comp=1, fault_tolerant=0)        
         #xx.show_fig()
     
     def test_preprocess_alpha_list(self): 
@@ -2721,7 +2735,6 @@ class TestAnalsysis(unittest.TestCase):
     
     def test_plot_magnetization(self): 
         pass 
-        #dir = '/home/zhli/backup_tensor_dir/run-ising/idmrg-psi_guess/'
         
 
 if __name__ == '__main__':
