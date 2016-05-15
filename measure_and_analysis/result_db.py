@@ -31,6 +31,9 @@ from merapy.utilities import dict_to_object , load , print_vars
 #from merapy.hamiltonian import System
 from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME 
 
+from mypy.brokest.task_center import submit_one 
+from mypy.brokest.brokest import queue, run_many, pack_runnable_msg, send_msg 
+
 if 1: 
     import matplotlib as mpl
     mpl.rcParams['figure.figsize'] = (4, 3)
@@ -631,6 +634,21 @@ class ResultDB(OrderedDict, AnalysisTools):
         res= '\n'.join(temp)
         return res 
     
+    def __reduce__(self):
+        """
+            without this, it will raise if picking or unpickle resultdb instantce 
+            see also 
+                https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#newwindow=1&safe=off&q=python+subclass+ordereddict+pickle+   
+                http://stackoverflow.com/questions/22690729/pickling-an-ordereddict-derived-object
+                http://stackoverflow.com/questions/19855156/whats-the-exact-usage-of-reduce-in-pickler          
+                
+            Attention: 我写这个的目的仅仅是为了在远程计算时，可以把db作为args之一序列化传过去。
+            事实上，在pickle时，db中的多数内容都没有保存，只是保存了如何组装重建db, 这正好！！
+            如果想保存db内容到pickle，需要修改本函数，参考上面的链接
+                    
+        """
+        return (self.__class__, (self.parpath, ))
+    
     @staticmethod 
     def parpath_map(dir):
         if 'C:' in dir:
@@ -659,7 +677,7 @@ class ResultDB(OrderedDict, AnalysisTools):
             self._db[k] = v
             pass
     
-    def load_S(self, sh, path=None, to_obj=False):
+    def load_S(self, sh, path=None, to_obj=False, use_local_storage=False):
         """
             todo: load 时，应该支持 update state 
         """
@@ -672,7 +690,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         #with open(path, 'rb') as inn: 
         #    res=pickle.load(inn)
-        res= load(path)
+        #res= load(path)
+        res= rpyc_load(path, use_local_storage=use_local_storage)
         if to_obj: 
             res= dict_to_object(res)
         return res
@@ -691,8 +710,14 @@ class ResultDB(OrderedDict, AnalysisTools):
         os.system(cmd)
         msg = 'parpath not exist, so %s'%cmd
 
-    def has_shape(self, sh, system_class): 
-        fn = system_class.shape_to_backup_fn.im_func(None, sh)
+    def has_shape(self, sh, system_class=None, from_energy_rec=False): 
+        if from_energy_rec:
+            return self.has_key_list(['energy', sh])
+            
+        if system_class is None:
+            system_class= self.__class__ 
+        #fn = system_class.shape_to_backup_fn.im_func(None, sh)
+        fn = self.shape_to_backup_fn(sh)
         path = '/'.join([self.parpath, fn])
         return os.path.exists(path)
 
@@ -822,7 +847,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         return N, D 
 
     def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, from_energy_rec=False, 
-            only_return_N=False, 
+            only_return_N=False, only_return_D=False, 
             ): 
         if socket.gethostname()=='ThinkStation-C30' and not from_energy_rec: 
             fn = self.get_fn_list()
@@ -831,12 +856,16 @@ class ResultDB(OrderedDict, AnalysisTools):
             warnings.warn('get_shape_list using energy rec')
             sh = self.get('energy', {}).keys()
        
+        #if N is not None:
+        #    sh_min = (N, 0)
+        #    sh_max = (N, np.inf)
+        #if D is not None: 
+        #    sh_min = (0, D)
+        #    sh_max = (np.inf, D)
         if N is not None:
-            sh_min = (N, 0)
-            sh_max = (N, np.inf)
-        if D is not None: 
-            sh_min = (0, D)
-            sh_max = (np.inf, D)
+            sh=filter(lambda x: x[0]==N , sh)
+        if D is not None:
+            sh=filter(lambda x: x[1]==D , sh)
         
         if sh_max is not None : 
             sh=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh)
@@ -844,6 +873,9 @@ class ResultDB(OrderedDict, AnalysisTools):
             sh=filter(lambda x: x[0]>= sh_min[0] and x[1]>= sh_min[1] , sh)
         if only_return_N:
             sh = [i[0] for i in sh]
+            sh = list(set(sh))
+        if only_return_D:
+            sh = [i[1] for i in sh]
             sh = list(set(sh))
         sh.sort()
         return sh
@@ -1683,8 +1715,8 @@ class ResultDB(OrderedDict, AnalysisTools):
                 #x, y = np.nan, np.nan 
                 return 
         
-        if yfunc is not None : 
-            y = yfunc(y)
+        #if yfunc is not None : 
+        #    y = yfunc(y)
         
         #xx.fit_lines_many(ax, lambda k,c, x : k*x+c, add_text=1, plot_fit=0)
         kwargs.update(xlabel='1/N', ylabel=field_name, return_ax=1)
@@ -1742,8 +1774,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
             x = [a[1] for a in x]
         x = np.array(x); y=np.array(y)
-        if kwargs.get('yfunc'): 
-            y = kwargs['yfunc'](y)
+        #if kwargs.get('yfunc'): 
+        #    y = kwargs['yfunc'](y)
         if r is None: 
             if r_min is None: 
                 r_min = x[0]
@@ -2589,6 +2621,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         return path 
 
+
 class ResultDB_mera(ResultDB): 
     AUTO_UPDATE = False 
     ALGORITHM = 'mera'
@@ -2807,9 +2840,42 @@ class ResultDB_vmps(ResultDB):
             self['version'] = 1.02
             self.commit(info=1)
         
+    def calc_correlation(self, sh, direct, i0, j_list=None, force=False, info=0):
+        """
+            this is a temporary workaround 
+        """
+        
+        from vmps.measure_and_analysis.measurement_vmps import correlation  as func 
+       
+      
+        if j_list is None:
+            j_list = range(i0+1, sh[0])
+            
+        try: 
+            rec = self['correlation'][sh][-1][direct][i0]
+        except KeyError: 
+            self.add_key_list(['correlation', sh, -1, direct, i0])
+            #rec = self['correlation'][sh][-1][direct][i0]
+            #print_vars(vars(),  ['rec'])
+            #raise
+            rec = []
+        
+        j_list_old = [a[0] for a in rec]
+        if not force: 
+            j_list = set(j_list)-set(j_list_old)
+        ij_list = [(i0, j) for j in j_list]
+        print_vars(vars(),  ['j_list_old', 'ij_list'])
+        if len(j_list)>0: 
+            state = self.load_S(sh)
+            temp=func(state, [direct], ij_list=ij_list)
+            print_vars(vars(),  ['temp'])
+            rec.extend(temp[direct][i0])
+            rec.sort(key=lambda x:x[0])
+            self['correlation'][sh][-1][direct][i0] = rec
+            self.commit(info=info)
+
 
 class ResultDB_idmrg(ResultDB): 
-    
     VERSION = 1.01 
     ALGORITHM = 'idmrg'
     ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
@@ -2831,30 +2897,7 @@ class ResultDB_idmrg(ResultDB):
     
     backup_fn_gen =shape_to_backup_fn 
     
-    def calc_correlation(self, sh, direct,  r_list=None, force=False, info=0):
-        """
-            this is a temporary workaround 
-        """
-        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
-        r_list = [] if r_list is None else r_list 
-        try: 
-            res_old = self['correlation'][sh][-1][direct]
-        except KeyError: 
-            self.add_key_list(['correlation', sh, -1, direct])
-            res_old = self['correlation'][sh][-1][direct]
-        r_old = res_old.keys()
-        if not force: 
-            r_list = set(r_list)-set(r_old)
-        if len(r_list)>0: 
-            state = self.load_S(sh)
-            temp=func(state, [direct], r_list=[r[1] for r in r_list])
-        
-            res_old.update(temp[direct])
-            res_new = OrderedDict(sorted(res_old.items()))
-            self['correlation'][sh][-1][direct] = res_new 
-            
-            self.commit(info=info)
-        
+    
     def calc_correlation_bond(self, sh,  r_list=None, info=0):
         """
             this is a temporary workaround 
@@ -3023,6 +3066,68 @@ class ResultDB_idmrg(ResultDB):
             self['version'] = ver 
             self.commit(info=1)
 
+    def calc_correlation(self, sh, direct,  r_list=None, force=False, info=0):
+        """
+            this is a temporary workaround 
+        """
+        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
+        r_list = [] if r_list is None else r_list 
+        try: 
+            res_old = self['correlation'][sh][-1][direct]
+        except KeyError: 
+            self.add_key_list(['correlation', sh, -1, direct])
+            res_old = self['correlation'][sh][-1][direct]
+        r_old = res_old.keys()
+        if not force: 
+            r_list = set(r_list)-set(r_old)
+            print_vars(vars(),  ['r_list'])
+        if len(r_list)>0: 
+            state = self.load_S(sh)
+            rr = [r[1] for r in r_list]
+            temp=func(state, [direct], r_list=rr, r_max=max(rr))
+        
+            res_old.update(temp[direct])
+            res_new = OrderedDict(sorted(res_old.items()))
+            self['correlation'][sh][-1][direct] = res_new 
+            
+            self.commit(info=1)
+        
+    def calc_correlation_new(self, sh, direct,  r_list=None, force=False, info=0):
+        """
+            this is a temporary workaround 
+        """
+        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
+        if 1:
+            r_list = [] if r_list is None else r_list 
+            try: 
+                res_old = self['correlation'][sh][-1][direct]
+            except KeyError: 
+                self.add_key_list(['correlation', sh, -1, direct])
+                res_old = self['correlation'][sh][-1][direct]
+            r_old = res_old.keys()
+            if not force: 
+                r_list = set(r_list)-set(r_old)
+                #print_vars(vars(),  ['r_list'])
+        print_vars(vars(),  ['r_list', 'r_old'])    
+        if len(r_list)>0: 
+            
+            rdb = self.__class__(self.parpath, use_local_storage=1)
+            state = rdb.load_S(sh, use_local_storage=1)
+            rr = [r[1] for r in r_list]
+            rr = [1, 2, 3]
+            temp=func(state, [direct], r_list=rr, r_max=max(rr))
+        
+            res_old.update(temp[direct])
+            res_new = OrderedDict(sorted(res_old.items()))
+            rdb['correlation'][sh][-1][direct] = res_new 
+            
+            rdb.commit(info=1)
+        
+            #tasks = [(temp, (), {})] 
+            #run_many(tasks, [('localhost', 1984)], try_period=1) 
+            
+        
+
 class ResultDB_ed(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
@@ -3080,13 +3185,31 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         print '*'*80
         #from vmps.run_heisenberg.analysis import an_vmps
-        from merapy.run_heisbg.analysis import an_vmps
-        xx = an_vmps
-        db = xx.an_main_symm[1.0]
-        print db.get_shape_list(only_return_N=1, sh_min=(40, 0))
+        from mera_wigner_crystal.analysis import an_idmrg_psi 
+        xx = an_idmrg_psi.an_main_alt
+        #from merapy.run_heisbg.analysis import an_vmps
+        db = xx[0.5, 2.0, 2.0]
+        rr = np.arange(0, 4, 0.02)
+        rr = (10**rr ).astype(int)
+        sh = (0, 160)
+        kwargs=dict(#sh=sh, direct='zz', 
+                    #r_list=[(0, r) for r in range(200, 1002, 20)  +  range(201, 1002, 20) ]
+                    r_list=[(0, r) for r in rr ]
+                    #r_list=[(0, 1), (0, 3)], 
+                    #r_list=[(0, r) for r in [82, 102, 122, 142, 162, 182, 202, 242]]
+                    )
+        #tasks = [(ResultDB_idmrg.calc_correlation.im_func, (db, ), kwargs)] 
+        #msg=pack_runnable_msg(ResultDB_idmrg.calc_correlation.im_func, (db, ), kwargs)
+        pickle.dumps(db)
+        msg=pack_runnable_msg(ResultDB_idmrg.calc_correlation.im_func, 
+                (db, sh, 'zz'), {})
+        #print msg 
+        
+        send_msg(msg, server=('localhost', 1984))
+        #run_many(tasks, [('localhost', 1984)], try_period=1) 
         
        
-        xx.show_fig()
+        #xx.show_fig()
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
