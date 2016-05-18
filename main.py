@@ -475,7 +475,7 @@ class Main(object):
                     try_period=kwargs.get('try_period', 1))
         else: 
             job_info = {}
-            temp = ['delay_send', 'priority', 'job_group_name']
+            temp = ['delay_send', 'priority', 'job_group_name', 'job_description']
             for t in temp: 
                 if kwargs.has_key(t): 
                     job_info[t] = kwargs[t]

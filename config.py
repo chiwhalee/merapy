@@ -328,6 +328,8 @@ class Config(dict):
             #    cfg['use_local_storage'] = 1
             #because there is issue in brokest, so always use_local_storage 
             cfg['use_local_storage'] = 1
+        if 1:
+            cfg['job_description']  = fn 
            
 
 class TestIt(unittest.TestCase): 
