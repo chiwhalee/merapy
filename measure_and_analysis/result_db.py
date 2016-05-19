@@ -31,8 +31,8 @@ from merapy.utilities import dict_to_object , load , print_vars
 #from merapy.hamiltonian import System
 from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME 
 
-from mypy.brokest.task_center import submit_one 
-from mypy.brokest.brokest import queue, run_many, pack_runnable_msg, send_msg 
+#from mypy.brokest.task_center import submit_one 
+#from mypy.brokest.brokest import queue, run_many, pack_runnable_msg, send_msg 
 
 if 1: 
     import matplotlib as mpl
@@ -3189,25 +3189,8 @@ class TestResultDB(unittest.TestCase):
         xx = an_idmrg_psi.an_main_alt
         #from merapy.run_heisbg.analysis import an_vmps
         db = xx[0.5, 2.0, 2.0]
-        rr = np.arange(0, 4, 0.02)
-        rr = (10**rr ).astype(int)
-        sh = (0, 160)
-        kwargs=dict(#sh=sh, direct='zz', 
-                    #r_list=[(0, r) for r in range(200, 1002, 20)  +  range(201, 1002, 20) ]
-                    r_list=[(0, r) for r in rr ]
-                    #r_list=[(0, 1), (0, 3)], 
-                    #r_list=[(0, r) for r in [82, 102, 122, 142, 162, 182, 202, 242]]
-                    )
-        #tasks = [(ResultDB_idmrg.calc_correlation.im_func, (db, ), kwargs)] 
-        #msg=pack_runnable_msg(ResultDB_idmrg.calc_correlation.im_func, (db, ), kwargs)
-        pickle.dumps(db)
-        msg=pack_runnable_msg(ResultDB_idmrg.calc_correlation.im_func, 
-                (db, sh, 'zz'), {})
-        #print msg 
-        
-        send_msg(msg, server=('localhost', 1984))
-        #run_many(tasks, [('localhost', 1984)], try_period=1) 
-        
+        s= db.load_S((0, 160))
+        print s.keys()
        
         #xx.show_fig()
 
