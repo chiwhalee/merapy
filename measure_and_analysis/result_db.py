@@ -718,7 +718,8 @@ class ResultDB(OrderedDict, AnalysisTools):
             system_class= self.__class__ 
         #fn = system_class.shape_to_backup_fn.im_func(None, sh)
         fn = self.shape_to_backup_fn(sh)
-        path = '/'.join([self.parpath, fn])
+        #path = '/'.join([self.parpath, fn])
+        path = '/'.join([self.state_parpath, fn])
         return os.path.exists(path)
 
     #def has_entry(self, field_name, mera_shape, iter): 
@@ -2575,7 +2576,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     
     def measure(self, sh, state=None, measure_func=None, param=None,  which=None, field_surfix='', 
             exclude_which=None, force=0, fault_tolerant=1, recursive=False,  
-            submit=False, 
+            submit=1, 
             **kwargs): 
         from merapy.measure_and_analysis.measurement import measure_S 
         from mypy.brokest.task_center import submit_one 
@@ -3126,6 +3127,27 @@ class ResultDB_idmrg(ResultDB):
             #tasks = [(temp, (), {})] 
             #run_many(tasks, [('localhost', 1984)], try_period=1) 
             
+    def _get_corr_conn(self, sh, **kwargs):
+        """
+        """
+        corr = self.fetch_easy('correlation', sh, ['zz'])
+        if corr is None:
+            return None 
+        corr = corr.iteritems()
+        #corr = corr.items()
+        if 1:
+            p = kwargs.get('period')
+            mag = {}
+            mag2 = {}
+            for i in range(p):
+                mag[i] = self.fetch_easy('magnetization', sh, ['z', i])
+            for i in range(p):
+                mag2[i] = mag[0]*mag[i]
+            print_vars(vars(),  ['mag2'])
+        res= [((i, j), c-mag2[j%p]) for ((i, j), c) in corr]
+        return OrderedDict(res)
+        
+        
         
 
 class ResultDB_ed(ResultDB): 
@@ -3188,11 +3210,20 @@ class TestResultDB(unittest.TestCase):
         from mera_wigner_crystal.analysis import an_idmrg_psi 
         xx = an_idmrg_psi.an_main_alt
         #from merapy.run_heisbg.analysis import an_vmps
-        db = xx[0.5, 2.0, 2.0]
-        s= db.load_S((0, 160))
-        print s.keys()
-       
-        #xx.show_fig()
+        db = xx[0.33, 2.0, 3.0]
+        print_vars(vars(),  ['db.parpath'])
+        sh = (0, 320)
+        fig, ax = xx.fig_layout()
+        db.plot_field_vs_length('correlation', sh, 
+                xscale='log', yscale='log', 
+                marker='o',
+                rec_getter = db.__class__._get_corr_conn.im_func, rec_getter_args= {'period':3}, 
+                #ms=0 if a[2]!=3.0 else 3,
+                 yfunc=np.abs,
+                key_list=['zz'], r_min=0, period=3,   
+                #r_max=3000,
+                ax=ax)       
+        xx.show_fig()
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]

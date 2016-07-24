@@ -136,15 +136,15 @@ def measure_S(S=None, parpath=None, path=None,
             algorithm = 'mera'
         
         if algorithm == 'mera':  
-            field = list(FIELD_NAME_LIST)
+            #field = list(FIELD_NAME_LIST)
             all_func = all_mera
            
-            if S.symmetry == 'U1': 
-                try: 
-                    field.remove('entanglement_brute_force_9')
-                    field.remove('entanglement_brute_force_9_aver')
-                except: 
-                    pass
+            #if S.symmetry == 'U1': 
+            #    try: 
+            #        field.remove('entanglement_brute_force_9')
+            #        field.remove('entanglement_brute_force_9_aver')
+            #    except: 
+            #        pass
             
             from merapy.hamiltonian import System 
             propt = System.key_property.im_func(S)
@@ -175,7 +175,7 @@ def measure_S(S=None, parpath=None, path=None,
             
         elif algorithm == 'mps': 
             
-            field = all_mps.DEFAULT_FIELD_LISt 
+            #field = all_mps.DEFAULT_FIELD_LISt 
             all_func = all_mps
             #S = S['mps']  #fuck, this is bad, but I like bad!
             #mps= S 
@@ -190,13 +190,13 @@ def measure_S(S=None, parpath=None, path=None,
             dim,  layer = None, None
             shape =  N,  D
             iter = -1
-            #field = ['correlation']
+            
             
             rdb_class= ResultDB_vmps
             
         elif algorithm == 'idmrg': 
-            field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
-                    'entanglement', 'entanglement_spectrum']
+            #field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
+                    #'entanglement', 'entanglement_spectrum']
             if check_convergence: 
                 c1 = S.get('converge_count')
                 c2 = S.get('converge_count_lim')
@@ -221,7 +221,9 @@ def measure_S(S=None, parpath=None, path=None,
             
             rdb_class= ResultDB_idmrg 
             
-    which = which if which is not None else field 
+    #which = which if which is not None else field 
+    which = which if which is not None else []
+    
     if isinstance(which, str): 
         which = [which]
     if exclude_which is not None: 
