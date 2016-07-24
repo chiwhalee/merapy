@@ -2,6 +2,7 @@
 #coding=utf8
 
 import unittest
+import psutil 
 
 from merapy.graphics import TestIt as Test_graphics 
 from merapy.run import TestIt as Test_run 
@@ -43,7 +44,8 @@ else:
     suite = unittest.TestSuite(suite)
     if platform.system() != 'Windows':
         from concurrencytest import ConcurrentTestSuite, fork_for_tests
-        suite = ConcurrentTestSuite(suite, fork_for_tests(8))
+        #suite = ConcurrentTestSuite(suite, fork_for_tests(8))
+        suite = ConcurrentTestSuite(suite, fork_for_tests( psutil.NUM_CPUS))
     unittest.TextTestRunner(verbosity=0).run(suite)
 
 

@@ -125,6 +125,11 @@ class TensorBase(object):
         T3.data = alpha*self.data + beta*T2.data
         return T3
 
+    def __neg__(self):
+        res= self.copy() 
+        res.data = -self.data 
+        return res 
+    
     def __iadd__(self, other):
         self.data += other.data 
         return self

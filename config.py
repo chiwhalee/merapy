@@ -14,7 +14,7 @@ if 1:   #issue: remove these from config !
     import merapy.updaters_binary as upbin
     import merapy.schedule as schedule_module
 
-from merapy.context_util import LOCAL_IP, LOCAL_USERNAME 
+from merapy.context_util import LOCAL_IP, LOCAL_USERNAME, LOCAL_HOSTNAME
 #LOCAL_IP = '222.195.73.70'
 #LOCAL_USERNAME = 'zhli' 
 
@@ -26,7 +26,7 @@ __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_mode
 
 uname=platform.uname()[1]
 HOME = os.path.expanduser('~')
-LOCALHOSTNAME = 'QTG-WS1-ubuntu'
+#LOCAL_HOSTNAME = 'QTG-WS1-ubuntu'
 BACKUP_BASE_DIR =  '/'.join([HOME, 'backup_tensor_dir'])
 BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
 
@@ -74,7 +74,7 @@ CFG_BASE = {
     #for dist comput
         'hostname': socket.gethostname(), 
         'pid': os.getpid(), 
-        'LOCALHOSTNAME': LOCALHOSTNAME ,  
+        'LOCAL_HOSTNAME': LOCAL_HOSTNAME ,  
         'LOCAL_USERNAME': LOCAL_USERNAME, 
         'LOCAL_IP': LOCAL_IP, 
         'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
@@ -324,13 +324,27 @@ class Config(dict):
             cfg['backup_parpath_local'] = locals().get('backup_parpath_local')
             
         if 1:    
-            #if cfg['hostname'] != cfg['LOCALHOSTNAME'] : 
+            #if cfg['hostname'] != cfg['LOCAL_HOSTNAME'] : 
             #    cfg['use_local_storage'] = 1
             #because there is issue in brokest, so always use_local_storage 
             cfg['use_local_storage'] = 1
         if 1:
             cfg['job_description']  = fn 
-           
+     
+    @staticmethod 
+    def filter(cfg, db_class):
+        parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
+        db=db_class(parpath)
+        ss= cfg['schedule']
+        msg = [os.path.basename(parpath), str(ss), 'threads=%d'%cfg['NUM_OF_THREADS']]
+        allow = True 
+        if db.has_shape((0, max(ss))):
+            msg = ['found'] + msg[:1]
+            allow = False
+        else:
+            msg = ['add'] + msg 
+        print('  '.join(msg))
+        return allow 
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 

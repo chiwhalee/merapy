@@ -25,8 +25,12 @@ from merapy.utilities import load, save
 #LOCAL_IP = '222.195.73.70'
 #LOCAL_USERNAME = 'zhli' 
 
-LOCAL_IP = '210.45.117.111'
-LOCAL_USERNAME = 'lizh' 
+#LOCAL_IP = '210.45.117.111'
+#LOCAL_USERNAME = 'lizh' 
+
+LOCAL_IP = '210.45.117.242'
+LOCAL_USERNAME = 'zhli' 
+LOCAL_HOSTNAME = 'qtg7501'
 
 LOCAL_MERA_PATH =  "/home/%s/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"%(LOCAL_USERNAME, )
 
@@ -119,7 +123,7 @@ def ssh_connect(hostname, info=0, timeout=None):
     
     timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
     #if hostname in ['QTG-WS1-ubuntu', 'local']: 
-    if hostname in ['ThinkStation-C30', 'local']: 
+    if hostname in [LOCAL_HOSTNAME, 'local']: 
         args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=timeout)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
@@ -153,10 +157,10 @@ def rpyc_conn_zerodeploy(hostname):
         ssh.close()
 
 @contextmanager
-def rpyc_conn_local_zerodeploy(): 
+def rpyc_conn_local_zerodeploy(info=0): 
     try: 
         get_ip_address()
-        ssh = ssh_connect('local')
+        ssh = ssh_connect('local', info=info)
         server = DeployedServer(ssh)
         conn = server.classic_connect()
         path = [LOCAL_MERA_PATH]
@@ -383,7 +387,7 @@ class TestIt(unittest.TestCase):
             print conn.modules.merapy
     
     def xtest_rpyc_conn_local_zero(self):  #disable this, becuase fails on other machines
-        with rpyc_conn_local_zerodeploy() as conn: 
+        with rpyc_conn_local_zerodeploy(info=1) as conn: 
             print conn.modules['os']
 
         with rpyc_conn_zerodeploy(hostname='local') as conn: 
@@ -405,10 +409,10 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #TestIt('test_temp'), 
+           TestIt('test_temp'), 
            #TestIt('xtest_save_and_load'), 
            #TestIt('xtest_rpyc_conn_local'), 
-           TestIt('xtest_rpyc_conn_local_zero'), 
+           #TestIt('xtest_rpyc_conn_local_zero'), 
         ]
         for a in add_list: 
             suite.addTest(a)

@@ -25,11 +25,12 @@ hostname = socket.gethostname()
 try:            
     if hostname == 'VirtualBox-Lab':
         from merapy.lib.array_permutation_64_ifort_virtual import (
-               array_permutation_fort_parallel , 
+               array_permutation_fort_parallel, 
                #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
                #but it is not thoroughly tested against too mainy cases
+               array_permutation_fort_parallel_complex, 
                permute_player_fort_parallel_dynamic as permute_player_fort  
-                )
+               )
     else:
         if os1 == 'Linux':
             from merapy.lib.array_permutation_64_ifort import (

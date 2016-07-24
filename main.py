@@ -421,7 +421,7 @@ class Main(object):
                 else: 
                     warnings.warn('unfamiliar hostname %s'%(hostname, ))
                     nproc = ncpu_tot/2//nt 
-                assert nproc>0, 'nproc=%d'%(nproc, )
+                #assert nproc>0, 'nproc=%d'%(nproc, )
                 
                 nproc = min(nproc, 12)
                 print 'nproc is auto set to %d'%(nproc, )
@@ -454,7 +454,7 @@ class Main(object):
     
     @classmethod #@staticmethod 
     def run_many_dist(cls, config_group, 
-            submit=True, servers=None, func=None, **kwargs): 
+            submit=True, servers=None, func=None, need_confirm=True,  **kwargs): 
         """
             status: workable now!
                 I dont know why cant run run_many_dist under main.py.
@@ -466,7 +466,14 @@ class Main(object):
         #    #func = cls.run_one
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
-        from brokest.task_center import submit_one, submit_many 
+        from brokest.task_center import submit_one, submit_many, LOCAL_IP
+        if need_confirm:
+            i=raw_input('submit jobs? yes(y)\n')
+            if i.lower()=='y':
+                print 'allow'
+            else:
+                print  'canceled'
+                return 
         
         if not submit: 
             tasks = [(cls.run_one, (c, )) for c in config_group] 
@@ -481,7 +488,12 @@ class Main(object):
                     job_info[t] = kwargs[t]
             for c in config_group: 
                 submit_one(cls.run_one, (c, ),  job_info=job_info)
-    
+            
+            #if 1:
+            #    print 'updationg job order according to their priority... '
+            #    tc = TaskCenter(host=LOCAL_IP)
+            #    print tc.update_job_order()
+            
     @staticmethod 
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 
         from brokest.brokest import server_discover 
