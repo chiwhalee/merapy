@@ -1772,7 +1772,6 @@ class iTensor(TensorBase):
             todo: 
                 I may write a inplace permutation, so needless QSp.copy()
                 ind_labels  also need permuted
-            see Tensor_Permutation in f90
             for permutation of iTensor, first we permute the order of QNs, next we permute each block which is a nTensor
             注意这里是Fortran order
             permutatiion won't change total quantum number
@@ -2117,15 +2116,13 @@ class iTensor(TensorBase):
         
         return V_1n2, Vp1, Vp2, V3 
 
-    def contract(self, T2, V1=None, V2=None, order_final=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
+    def contract(self, T2, V1=None, V2=None, final_ind_labels=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
         """
             see Tensor_Contraction2 in f90
             V1,2,3 are arrays (maps) 张量指标 —> 自然数。用自然数来标记所有张量的指标
             在V1,V2中可能有相同的元素，存在s_1n2中，
             
             T1, T2 contract yielding T3
-            todo:
-                order_final is not implememnted, when contracting the orignal order is changed, finally should be restored
             Args:
                 Vi: of type np.ndarray(,"int")
 
@@ -2202,6 +2199,11 @@ class iTensor(TensorBase):
         if info>0: 
             T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
         T3.ind_labels= V3
+        if final_ind_labels is not None:
+            ll = list(V3)  # head.ind_labels may be np.ndarray, convert it to list
+            order = [ll.index(i) for i in final_ind_labels]
+            T3 = T3.permutation(order)
+            T3.ind_labels = final_ind_labels 
         
         if info>0: 
             #print "T3.data:", T3.data[range(4) + xrange(-4, 0)].round(5)        
@@ -2217,14 +2219,18 @@ class iTensor(TensorBase):
             return T3, V3
     
     @staticmethod 
-    def contract_tensor_list(tlist): 
+    def contract_tensor_list(tlist, final_ind_labels=None): 
         """
             requirs each t.ind_labels is not None 
         """
         head = tlist[0]
         for t in tlist[1: ]: 
-            print_vars(vars(),  ['t.ind_labels'])
             head, _= head.contract(t)
+        if final_ind_labels is not None:
+            ll = list(head.ind_labels)  # head.ind_labels may be np.ndarray, convert it to list
+            order = [ll.index(i) for i in final_ind_labels]
+            head = head.permutation(order)
+            head.ind_labels = final_ind_labels 
         return head 
     
     def dot(self, other): 
