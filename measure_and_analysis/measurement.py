@@ -46,7 +46,9 @@ except ImportError as err:
     print err 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_vmps, ResultDB_mera, 
-        ResultDB_idmrg, FIELD_NAME_LIST, BACKUP_STATE_DIR, RESULTDB_DIR)
+        ResultDB_idmrg, FIELD_NAME_LIST, BACKUP_STATE_DIR, RESULTDB_DIR, 
+        algorithm_name_to_rdb, 
+        )
 from merapy.decorators import timer
 
 
@@ -275,7 +277,7 @@ def measure_S(S=None, parpath=None, path=None,
                 is_found = rdb[k].has_key(w)
             else:
                 key_list = [w] + [shape, iter]
-                is_found = rdb.has_entry(key_list)
+                is_found = rdb.has_key_list(key_list)
             if is_found: 
                 found.append(w)
         print 'found these fields {}, omit them.'.format(found)
@@ -357,8 +359,7 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
         fault_tolerant=1, algorithm=None, recursive=False,  **kwargs): 
     use_local_storage = kwargs.get('use_local_storage', False)
     path_not_found = []
-    if isinstance(which, str): 
-        which = [which]
+        
     if isinstance(dir_list, str): 
         dir_list = [dir_list]
     if recursive: 
@@ -380,12 +381,7 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
             rdb_class= ResultDB_idmrg 
         else: 
             raise
-    if algorithm == 'mera' : 
-        rdb_class= ResultDB_mera
-    elif algorithm == 'mps' : 
-        rdb_class= ResultDB_vmps 
-    elif algorithm == 'idmrg' : 
-        rdb_class= ResultDB_idmrg 
+    rdb_class= algorithm_name_to_rdb(algorithm)
         
    
     path_list = []
@@ -403,12 +399,7 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
                 sh = list(sh);  sh[1] -= 1
                 #fn = System.backup_fn_gen(*sh)
                 fn = backup_fn_gen(*sh)
-            elif algorithm == 'mps': 
-                N, D = sh
-                if D == 'max' : 
-                    D = db.get_dim_max_for_N(N)
-                fn = "N=%d-D=%d.pickle"%(N, D)
-            elif algorithm == 'idmrg': 
+            elif algorithm in ['mps', 'idmrg']: 
                 N, D = sh
                 if D == 'max' : 
                     D = db.get_dim_max_for_N(N)

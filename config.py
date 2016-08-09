@@ -332,18 +332,26 @@ class Config(dict):
             cfg['job_description']  = fn 
      
     @staticmethod 
-    def filter(cfg, db_class):
+    def filter(cfg, db_class=None):
+        if db_class is None:
+            from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
+            alg = cfg['algorithm']
+            db_class= {'idmrg':ResultDB_idmrg, 'vmps':ResultDB_vmps}[alg]
+            
         parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
         db=db_class(parpath)
         ss= cfg['schedule']
-        msg = [os.path.basename(parpath), str(ss), 'threads=%d'%cfg['NUM_OF_THREADS']]
+        N = 0 if alg == 'idmrg' else cfg['N']
+        msg = [os.path.basename(parpath), 'N=%d'%N,  str(ss), 
+                'threads=%d'%cfg['NUM_OF_THREADS']]
         allow = True 
-        if db.has_shape((0, max(ss))):
-            msg = ['found'] + msg[:1]
+        sh = (N, max(ss))
+        if db.has_shape(sh):
+            msg = ['FOUND '] + msg[:1]
             allow = False
         else:
-            msg = ['add'] + msg 
-        print('  '.join(msg))
+            msg = ['ADD '] + msg 
+        print(' '.join(msg))
         return allow 
 
 class TestIt(unittest.TestCase): 

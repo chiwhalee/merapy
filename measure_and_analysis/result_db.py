@@ -28,7 +28,6 @@ import unittest
 
 
 from merapy.utilities import dict_to_object , load , print_vars
-#from merapy.hamiltonian import System
 from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME 
 
 #from mypy.brokest.task_center import submit_one 
@@ -132,14 +131,14 @@ else:
     RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
 
 def html_border(s, fontsize=20): 
-   sss=  """
+    sss=  """
     <div id='page' style='width: 600px'>
       <h1 style='border:1.5px black solid; font-size:%(fontsize)dpx;'>
        %(s)s
       </h1>
     </div>
-   """%vars() 
-   return sss
+    """%vars() 
+    return sss
 
 class AnalysisTools(object): 
     """
@@ -374,7 +373,7 @@ class AnalysisTools(object):
         args.update(kwargs)
         self._plot(x, y, **args)
     
-    def find_lines_extreme(self, ax, which='max', add_text=False, 
+    def find_lines_extreme(self, ax, which='max', add_text=True, 
             find_range=None, 
             zoom_scale=None, font_dict=None, rounding=2): 
         temp=[]        
@@ -400,7 +399,7 @@ class AnalysisTools(object):
             min_location = x[min_ind]
             min_val = y[min_ind]
             if add_text: 
-                ax.text(min_location, min_val, min_location, fontdict=fd,  )
+                ax.text(min_location, min_val, round(min_location, rounding), fontdict=fd,  )
             temp.append((l.get_label(), round(min_location, rounding), min_val))
         if temp: 
             labels, loc, val= zip(*temp)
@@ -422,7 +421,12 @@ class AnalysisTools(object):
             #print y1, y2
             ax.set_ylim(y1, y2)            
         return labels, loc, val 
-
+    
+    def find_points_in_line(self, line, ymin, ymax):
+        x, y = line.get_data()
+        arg = np.bitwise_and(y>=ymin, y<=ymax)
+        return x[arg], y[arg]
+        
 
     def plot_sign(self, ax, line_id=0, center=0.0, magnitude=None, **kwargs):
         l = ax.lines[line_id]
@@ -522,6 +526,14 @@ class AnalysisTools(object):
         if assert_found: 
             assert len(res)>0, '"{}" matches no field'.format(input_str)
         return res 
+
+def algorithm_name_to_rdb(alg_name):
+    mapping = {'mera':ResultDB_mera, 
+            'mps':ResultDB_vmps, 
+            'vmps':ResultDB_vmps, 
+            'idmrg':ResultDB_idmrg, 
+            }
+    return mapping[alg_name]
 
 #class ResultDB_Utills
 
@@ -722,9 +734,11 @@ class ResultDB(OrderedDict, AnalysisTools):
         path = '/'.join([self.state_parpath, fn])
         return os.path.exists(path)
 
-    #def has_entry(self, field_name, mera_shape, iter): 
-    def has_entry(self, key_list): 
-        #key_list = [field_name, mera_shape, iter]
+    def has_entry_del(self, key_list): 
+        """
+            key_list = [field_name, mera_shape, iter]
+        """
+        
         rec = self
         for t in key_list: 
             if not rec.has_key(t): 
@@ -736,17 +750,13 @@ class ResultDB(OrderedDict, AnalysisTools):
     def has_key_list(self, key_list, info=1): 
         temp = self
         for k in key_list: 
-            #print 'kkk', k, key_list
-            if not hasattr(temp, 'has_key'):   # val of rec
-                if info>0: 
-                    msg='not has this key: %s'%(k, )
-                    warnings.warn(msg)
-                return False
+            #if not hasattr(temp, 'has_key'):   # val of rec
+            #    if info>0: 
+            #        print 'not has this key: %s'%(k, )
+            #    return False
             if not temp.has_key(k): 
-                if info>0: 
-                    msg='not has this key: %s'%(k, )
-                    warnings.warn(msg)
-                    
+                #if info>0: 
+                #    print 'not has this key: %s'%(k, )
                 return False
             temp = temp[k]
         
@@ -1767,6 +1777,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                     x = np.asarray(x)
                     x -= r0 
             else: 
+                rec = rec.items()
                 x, y = zip(*rec)
                 
         else: 
@@ -2575,9 +2586,13 @@ class ResultDB(OrderedDict, AnalysisTools):
         plt.show()
     
     def measure(self, sh, state=None, measure_func=None, param=None,  which=None, field_surfix='', 
-            exclude_which=None, force=0, fault_tolerant=1, recursive=False,  
-            submit=1, 
-            **kwargs): 
+            exclude_which=None, force=0, fault_tolerant=1,   
+            submit=1, **kwargs): 
+        """
+            params:
+                which: can be str or a list of str
+                    e.g. which='energy', whic=['energy', 'variance']
+        """
         from merapy.measure_and_analysis.measurement import measure_S 
         from mypy.brokest.task_center import submit_one 
         
