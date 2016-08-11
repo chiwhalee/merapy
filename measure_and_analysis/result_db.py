@@ -4,6 +4,7 @@
 
 import argparse, argcomplete
 import os, sys
+import shutil 
 import warnings 
 import pprint
 from tabulate import tabulate
@@ -550,14 +551,19 @@ class ResultDB(OrderedDict, AnalysisTools):
         a DB to store measurement results 
         
         the structure of the db,  that gives the instruction of the key chains to fetch recs
-        mera version = 1.0
-            STRUCT = {
-                    'entanglement': [shape, iter, layer, num_sites], 
-                    }
-        MPS, version = 1.0
-            STRUCT = {
-                    'entanglement': ['shape', 'iter', num_sites], 
-                    }
+        version log 
+            1.0
+                mera STRUCT = {
+                            'entanglement': [shape, iter, layer, num_sites], 
+                            }
+                MPS STRUCT = {
+                            'entanglement': ['shape', 'iter', num_sites], 
+                            }
+            1.2:  'iter' is removed 
+                MPS STRUCT = {
+                            'entanglement': ['shape', 'num_sites], 
+                            }
+            
         design: 
             fields are of two kinds,  
             first,  like 'version', 'status' is not dependent on sh 
@@ -567,7 +573,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     DBNAME = 'RESULT.pickle.db'   #fix the name of db
     ALGORITHM = 'all'
     AUTO_UPDATE = True 
-    VERSION = 1.0 
+    VERSION = 1.2 
     ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence', 'concurrence_2']
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
             use_local_storage=False, create_empty_db=False,  upgrade=0):
@@ -629,7 +635,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                 if self.get('version') <= 1.0 and dbname != self.dbname + '.new': 
                     self.upgrade_db()
                     
-        elif self.AUTO_UPDATE:
+        elif self.AUTO_UPDATE:   
             if self['version']<self.VERSION: 
                 print 'update_db_structure ... '
                 self.update_db_structure()
@@ -1056,10 +1062,11 @@ class ResultDB(OrderedDict, AnalysisTools):
                     raise
         return rec
 
-    def fetch_easy_new(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
+    def fetch_easy_v1p0(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
              auto_meassure=False, info=0, fault_tolerant=1): 
         """
             fetch_easy for version 1.0
+            for backward compatibility. remove this meth after some time
         """
         
         try: 
@@ -1067,10 +1074,64 @@ class ResultDB(OrderedDict, AnalysisTools):
                 mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
                
             rec = self[field_name][mera_shape]
-            print_vars(vars(),  ['rec.keys()']) 
-           
-            key = next(reversed(rec))  #last iter step
-            rec = rec[key]
+            #key = next(reversed(rec))  #last iter step
+            #rec = rec[key]
+        except KeyError as err: 
+            if fault_tolerant: 
+                if info>0: 
+                    print 'key not found:', err
+                return None
+            else:
+                raise
+        except: 
+            raise
+        
+        if 1: 
+            mapper = {
+                    'EE':  ['central_charge', 'EE'  ], 
+                    'EE1': ['central_charge', 'EE', 1], 
+                    'EE2': ['central_charge', 'EE', 2], 
+                    }
+            if mapper.has_key(field_name): 
+                temp = mapper[field_name]
+                field = temp[0]
+                key_list = temp[1: ]
+            else: 
+                field = field_name
+                key_list = None
+            if sub_key_list is not None: 
+                if key_list is None: 
+                    key_list = sub_key_list
+                else: 
+                    key_list += sub_key_list
+        
+        if key_list is not None and rec is not None: 
+            try: 
+                for key in key_list: 
+                    rec = rec[key]
+            except: 
+                if fault_tolerant: 
+                    if info>0: 
+                        print 'error in fetch_easy'
+                        print 'existent keys are %s; required key_list is %s'%(rec.keys(), key_list)
+                    return None 
+                else: 
+                    raise
+        return rec
+
+    def fetch_easy_new(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
+             auto_meassure=False, info=0, fault_tolerant=1): 
+        """
+            fetch_easy for version >= 1.2
+        """
+        
+        try: 
+            if mera_shape[1] == 'max' : 
+                mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
+               
+            rec = self[field_name][mera_shape]
+            #key = next(reversed(rec))  #last iter step
+            #rec = rec[key]
         except KeyError as err: 
             if fault_tolerant: 
                 if info>0: 
@@ -1184,7 +1245,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         res = self.fetch_easy(field_name, sh, sub_key_list)
         return res 
     
-    def insert(self, field_name, sh, iter, val, sub_key_list=None): 
+    def insert_bac(self, field_name, sh, iter, val, sub_key_list=None): 
         if not self.has_key(field_name): 
             self[field_name] = OrderedDict()
         if not self[field_name].has_key(sh): 
@@ -1201,7 +1262,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                     [iter] + sub_key_list, old_dic=self[field_name][sh],val=val)
             self[field_name][sh] = dic 
 
-    def insert_new(self, field_name, sh, val, sub_key_list=None): 
+    def insert(self, field_name, sh, val, sub_key_list=None): 
         """
             remove param iter
         """
@@ -2617,9 +2678,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         #bac.update(self)
         #bac.commit(info=1)
         
-        cmd = 'cp %s %s'%(self.path, self.path + '.bac')
-        os.system(cmd)
-        print 'db is backuped: %s'%cmd
+        #cmd = 'cp %s %s'%(self.path, self.path + '.bac')
+        shutil.copyfile(self.path, self.path + '.bac')
+        #os.system(cmd)
+        print 'db is backuped to RESULTDB.pickle.bac'
 
     def show_fig(self): 
         plt.show()
@@ -2681,32 +2743,34 @@ class ResultDB(OrderedDict, AnalysisTools):
         path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         return path 
 
-    def update_db_structure(self): 
-        print 'uuuuuuuuuuuuuuuuu'
-        if self['version'] < 1.2:
+    def update_db_structure(self, update_what='all'):
+        """
+            params:
+                update_what:
+                    update is not only controled by version number, 
+                    also by a specific name 'update_what'
+        """
+        if self['version'] < 1.2 and update_what in ['all', 'remove_iter']:
+            print 'update version from %s to %s'%(self['version'], 1.2)
             kk = self.keys()
             kk = [k for k in kk if k not in ['algorithm', 'status', 'version', 'dim_max']]
             ss= self.get_shape_list()
-            print_vars(vars(),  ['ss'])
             for k in kk:
                 for sh in ss:
                     if self.has_key_list([k, sh, -1]):
                         self[k][sh] = self[k][sh][-1]
             self['version']=1.2
-            #db.commit(info=1)    
+            self.commit(info=1)    
             
 
 class ResultDB_mera(ResultDB): 
-    AUTO_UPDATE = False 
+    #AUTO_UPDATE = False 
     ALGORITHM = 'mera'
     ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
     ALL_FIELD_NAMES.extend([ 'entanglement_entropy', 'entanglement_special', 'correlation_extra'])
     def __init__(self, parpath,  **kwargs): 
         kwargs.update(algorithm='mera')
         ResultDB.__init__(self, parpath,  **kwargs)
-    
-    def update_db_structure(self): 
-        pass 
     
     def parse_fn_bac(self, fn):
         return System.backup_fn_parse(fn)
@@ -2850,7 +2914,7 @@ class ResultDB_mera(ResultDB):
             raise
 
 class ResultDB_vmps(ResultDB): 
-    VERSION = 1.02 
+    VERSION = 1.2
     ALGORITHM = 'vmps'
     def __init__(self, parpath,  **kwargs): 
         #kwargs['version'] = 1.0    #version should det
@@ -2876,17 +2940,17 @@ class ResultDB_vmps(ResultDB):
         return eng
     
     def update_db_structure(self): 
-        pass 
         if self['version'] < 1.01:   
             print 'update version from %s to %s'%(self['version'], 1.01)
             def update_correlation(db):
                 if db['version']==1.0:
                     ss= db.get_shape_list()
                     for sh in ss: 
-                        rec=db.fetch_easy('correlation', sh)
+                        rec=db.fetch_easy_v1p0('correlation', sh)
                         if rec is None: 
                             continue 
-                        db.insert('correlation_bac_v1.0', sh, -1, rec)
+                        #db.insert('correlation_bac_v1.0', sh, -1, rec)
+                        #db.insert('correlation_bac_v1.0', sh, rec)
                         rec_new=OrderedDict()
                         for dir in rec.keys():
                             temp=rec[dir]
@@ -2898,7 +2962,8 @@ class ResultDB_vmps(ResultDB):
                             r0=x0[0]
                             rec_new[dir][r0]=zip(x1, y)
 
-                        db.insert('correlation', sh, -1, rec_new)
+                        #db.insert('correlation', sh, -1, rec_new)
+                        db.insert('correlation', sh, rec_new)
                     db['version']=1.01
                     db.commit(info=1)    
             update_correlation(self)
@@ -2911,6 +2976,9 @@ class ResultDB_vmps(ResultDB):
                 self.get_dim_max_for_N(N)  
             self['version'] = 1.02
             self.commit(info=1)
+        
+        if self['version']<1.2:
+            ResultDB.update_db_structure(self, 'remove_iter')
         
     def calc_correlation(self, sh, direct, i0, j_list=None, force=False, info=0):
         """
@@ -2948,7 +3016,7 @@ class ResultDB_vmps(ResultDB):
 
 
 class ResultDB_idmrg(ResultDB): 
-    VERSION = 1.01 
+    VERSION = 1.2
     ALGORITHM = 'idmrg'
     ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
     ALL_FIELD_NAMES.extend(['length', 'entanglement', 'correlation_length'])
@@ -3118,7 +3186,8 @@ class ResultDB_idmrg(ResultDB):
                     raise ValueError(which_log)
                     
                 rec = OrderedDict(rec['EE'])
-                self.insert(field, sh_finite, -1, rec)
+                #self.insert(field, sh_finite, -1, rec)
+                self.insert(field, sh_finite, rec)
                 self.commit(info=info)
             except:
                 if not fault_tol:
@@ -3127,9 +3196,7 @@ class ResultDB_idmrg(ResultDB):
         return rec
 
     def update_db_structure(self): 
-        
-        ver = 1.01
-        if self['version'] <  ver: 
+        if self['version'] <  1.01: 
             print 'update version from %s to %s'%(self['version'], ver)
             sh_list = self.get_shape_list()
             
@@ -3137,6 +3204,8 @@ class ResultDB_idmrg(ResultDB):
             self.get_dim_max_for_N(0, update_db=1)  
             self['version'] = ver 
             self.commit(info=1)
+        if self['version']<1.2:
+            ResultDB.update_db_structure(self, 'remove_iter')
 
     def calc_correlation(self, sh, direct,  r_list=None, force=False, info=0):
         """
@@ -3279,17 +3348,21 @@ class TestResultDB(unittest.TestCase):
         print '*'*80
         #from vmps.run_heisenberg.analysis import an_vmps
         #from mera_wigner_crystal.analysis import an_idmrg_psi 
-        from merapy.run_heisbg.analysis import an_idmrg_psi
-        xx = an_idmrg_psi.an_main_symm 
-        db = xx[0.0]
-        db.fetch_easy('energy', (0,  80))
-        print_vars(vars(),  ['db["energy"]'])
-        ResultDB.update_db_structure.im_func(db)
-        #print_vars(vars(),  ['db["status"]'])
-        #print_vars(vars(),  ['db["version"]'])
-        print db['entanglement']
-        #xx.show_fig()
-        #db.fetch_easy('energy', (0,  80))
+        ResultDB.AUTO_UPDATE = 0
+        from merapy.run_heisbg.analysis import an_vmps
+        xx = an_vmps.an_main_symm 
+        db = xx[1.0]
+        #print_vars(vars(),  ['db.get_shape_list()'])
+        if 1:
+            sh= (200, 40)
+            N = sh[0]
+            s= db.load_S(sh)
+            from vmps.measure_and_analysis.measurement_vmps import correlation_all
+            rec=correlation_all(s, start=100-10, end=100+10)
+            db.insert('correlation_all', sh, rec)
+            db.commit()
+            #xx.show_fig()
+            #db.fetch_easy('energy', (0,  80))
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -3300,8 +3373,10 @@ class TestResultDB(unittest.TestCase):
         self.assertEqual(dic[1][2][3][5], 'hate')
         
         db = ResultDB('/tmp')
-        db.insert( 'xxx', (0, 4), -1, 'love', [1])
-        db.insert( 'xxx', (0, 4), -1, 'hate', [2])
+        #db.insert( 'xxx', (0, 4), -1, 'love', [1])
+        #db.insert( 'xxx', (0, 4), -1, 'hate', [2])
+        db.insert( 'xxx', (0, 4), 'love', [1])
+        db.insert( 'xxx', (0, 4), 'hate', [2])
         print db['xxx'] 
         rec = db.fetch_easy_new('xxx', (0, 4), [1])
         self.assertTrue( rec=='love')

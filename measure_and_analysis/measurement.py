@@ -300,7 +300,8 @@ def measure_S(S=None, parpath=None, path=None,
             if db_version is None: 
                 results.append(dict(field_name=field_name, key=k, res=res, sub_key_list=None))
             else: 
-                results.append(dict(field_name=field_name, sh=shape, iter=iter, val=res))
+                #results.append(dict(field_name=field_name, sh=shape, iter=iter, val=res))
+                results.append(dict(field_name=field_name, sh=shape, val=res))
                 
         except Exception as err:
             failed_list.append((w, shape, iter, err))
