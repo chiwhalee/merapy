@@ -44,7 +44,7 @@ from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE,
 
 import matplotlib as mpl
 mpl.rcParams.update(MATPLOTLIBRC)
-from vmps.measure_and_analysis.measurement_idmrg_mcc import __all__  as ALL_IDMRG_FIELDS 
+#from vmps.measure_and_analysis.measurement_idmrg_mcc import __all__  as ALL_IDMRG_FIELDS 
 
 
 __all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 
@@ -128,7 +128,7 @@ class Analysis(AnalysisTools):
     """
     """
     REMOTE_HOST = 'zhihuali@211.86.151.102:'
-    ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 
+    ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 'magnetization', 
             'correlation', 'concurrence', 'concurrence_2', 'concurrence_neighbour']
     
     #DISTANCE_LIST = [3**i for i in range(1, 9)]
@@ -477,12 +477,13 @@ class Analysis(AnalysisTools):
     def set_rdb_dict(self, alpha_list=None, create_empty_db=1, 
             db_version=None, algorithm=None, reload_db_class=0, info=0):        
         if reload_db_class: 
-            module_name = self.result_db_class.__module__
-            module = importlib.import_module(module_name)
-            reload(module)
-            self.result_db_class= module.__getattribute__(self.result_db_class.__name__)
-            if info>0: 
-                print '%s is reloaded'%(self.result_db_class.__name__, )
+            self.reload_db_class()
+            #module_name = self.result_db_class.__module__
+            #module = importlib.import_module(module_name)
+            #reload(module)
+            #self.result_db_class= module.__getattribute__(self.result_db_class.__name__)
+            #if info>0: 
+            #    print '%s is reloaded'%(self.result_db_class.__name__, )
         
         part_update = 0
         if alpha_list is not None: 
@@ -562,7 +563,6 @@ class Analysis(AnalysisTools):
         if aa is None: 
             aa = self.alpha_list
         else: 
-            #aa = [a for a in aa if not isinstance(a, float) else (a, )]
             aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
@@ -570,14 +570,39 @@ class Analysis(AnalysisTools):
             func = ResultDB.parpath_map 
             dir_list = [func(a).replace('dropbox', '') for a in dir_list]
         dir_list = [d.replace(RESULTDB_DIR, BACKUP_STATE_DIR) for d in dir_list]
-       
         if use_dist_comp: 
             kwargs['use_local_storage'] = 1 
+            
         measure_all_orig(dir_list, mera_shape_list=sh_list, sh_min=sh_min, sh_max=sh_max, which=which, 
                 exclude_which = exclude_which, use_dist_comp=use_dist_comp,  
                 fault_tolerant = fault_tolerant, force=force, **kwargs)
         self.set_rdb_dict(aa)
-        
+
+    def measure_all_new(self, aa, sh_list=None, sh_min=None, sh_max=None,  which=None, num_of_threads=2, 
+             force=0, fault_tolerant=1,
+            **kwargs): 
+        """
+            take use of db.measure 
+        """
+        aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
+        aa = list(aa)
+        if isinstance(sh_list, tuple):
+            sh_list = [sh_list]
+        for a in aa:
+            db = self[a]
+            for sh in sh_list:
+                #if sh[1] == 'max':
+                #    sh = sh[0], db.get_dim_max_for_N(sh[0])
+                #msg = '%s, %s ... '%(a, sh)
+                #if db.has_key_list([which, sh]):
+                #    msg += '  found, skip it'  
+                #    print msg 
+                #else:
+                #    print msg 
+                #    db.measure(sh, which=which, num_of_fields=num_of_fields)
+                print a, sh
+                db.measure(sh, which=which, num_of_threads=num_of_threads)
+
     def measure_two(self, alpha_paier_list): 
         """
             status: 
@@ -2417,6 +2442,15 @@ class Analysis(AnalysisTools):
         if info>0: 
             print('class %s is reloaded'%(name, ))
     
+    def reload_db_class(self, info=1):
+        module_name = self.result_db_class.__module__
+        module = importlib.import_module(module_name)
+        reload(module)
+        self.result_db_class= module.__getattribute__(self.result_db_class.__name__)
+        if info>0: 
+            print '%s is reloaded'%(self.result_db_class.__name__, )
+        
+    
     def plot_fidelity_2d(self, aa, data,  **kwargs): 
         dic = self._plot3d(aa, aa, data, **kwargs)
         fig, ax, cb = dic['fig'], dic['ax'], dic['cb']
@@ -2624,7 +2658,7 @@ class Analysis_vmps(Analysis):
         Analysis.__init__(self, **kwargs)
 
 class Analysis_idmrg(Analysis): 
-    ALL_FIELD_NAMES = ALL_IDMRG_FIELDS  
+    
     def __init__(self, **kwargs): 
         """
         """        
@@ -2647,24 +2681,6 @@ class Analysis_idmrg(Analysis):
         #vmps.print_vars(vars(), ['lam', 's', 'spect', 'spect2', 'EE'])
         return res 
 
-    def measure(self, func, aa, D):
-        #aa=self.alpha_list
-        res=OrderedDict()
-        for a in aa:
-            db=self[a]
-            try:
-                #path='/'.join([db.parpath, 'N=0-D=%d.pickle'%D])
-                #S=iDMRG.load( path)
-                #S= db.load_S(path)
-                S= db.load_S(sh=(0, D))
-                val= func.im_func(None, S)
-                res[a]=val
-
-            except:
-                #print a, path
-                raise
-        return res
-    
     def get_EE(self, aa, D): 
         res=self.measure(self.calc_EE, aa, D=D)
         return res
@@ -2703,15 +2719,16 @@ class TestAnalsysis(unittest.TestCase):
     def test_temp(self): 
         #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
         #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
-        from mera_wigner_crystal.analysis import an_vmps
+        from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
         #from merapy.run_heisbg.analysis import *
-        sys.path.append(r"C:\Users\zhihua\Dropbox\My-documents\My-code\my-python")
-        xx=an_vmps.an_main_alt 
-        aa=xx.filter_alpha(nu=0.5, alpha=2.0, sh=(120, 40))
+        #sys.path.append(r"C:\Users\zhihua\Dropbox\My-documents\My-code\my-python")
+        xx=an_idmrg_psi.an_main_alt_fix_err
+        aa = xx.filter_alpha(nu=0.33, alpha=1.2, sh=(0, 320), surfix=None)
         print_vars(vars(),  ['aa'])
+        xx.measure_all_new(aa, [(0, 'max')], which='magnetization')
 
-        #print_vars(vars(),  ['xx.get_shape_list_all(aa)'])
-        print xx.get_shape_list_all()
+        
+       
         #xx.measure_all(aa, sh_list='all', sh_min=(60, 40),  use_dist_comp=1, fault_tolerant=0)        
         #xx.show_fig()
     
@@ -2735,7 +2752,10 @@ class TestAnalsysis(unittest.TestCase):
     
     def test_plot_magnetization(self): 
         pass 
-        
+
+
+
+
 
 if __name__ == '__main__':
     

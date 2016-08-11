@@ -15,6 +15,7 @@ import itertools
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
+from math import pi as PI
 import socket 
 import platform 
 
@@ -222,6 +223,11 @@ class AnalysisTools(object):
     
     def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
             add_text=False, return_all_params=False, x_extra=None,  fault_tol=True,  **kwargs): 
+        """
+            return:
+                line_lable, param[0]
+                
+        """
         ll = list(ax.lines)
         which_lines = range(len(ll)) if which_lines is None else which_lines 
         #for l in ax.lines[:len(aa)]:
@@ -536,7 +542,9 @@ def algorithm_name_to_rdb(alg_name):
     return mapping[alg_name]
 
 #class ResultDB_Utills
-
+if 1:  #some useful functions
+    expij=  lambda k,N: np.fromfunction(lambda i,j:np.exp(1J*k*(i-j)), (N, N))
+    
 class ResultDB(OrderedDict, AnalysisTools): 
     """
         a DB to store measurement results 
@@ -716,7 +724,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         name = self.__class__.__name__
         self.__class__=getattr(module, name)
         print('class %s is reloaded'%(name, ))
-    
+
     def create_parpath(self): 
         cmd = 'mkdir %s'%self.parpath
         os.system(cmd)
@@ -842,7 +850,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             s= self.load_S(sh)
             ts= s['time_serials']
             ts = pd.DataFrame(ts).T
-            #self.insert('time_serials', sh, iter=-1, val=ts)
             self['time_serials'][sh] = ts 
             self.commit()
         res = ts 
@@ -914,33 +921,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                 self.commit(info=info)
             return D 
     
-    
-    def get_energy_min_del(self, sh=None, **kwargs): 
-        version = self.get('version')
-        
-        if version is None: 
-            if 1: 
-                eng_list = []
-                for k, v in self.iteritems(): 
-                    #print k
-                    eng=v.get('energy')
-                    if eng is not None : 
-                        eng_list.append((k, eng)) 
-                res= min(eng_list, key=lambda x: x[1])
-            else: 
-                pass
-            
-        elif version == 1.0: 
-            #self['energy'][sh]
-            raise NotImplemented 
-        
-        else: 
-            raise
-        
-        if kwargs.get('show_val'): 
-            print 'energy min is: ', res  
-        return res
-    
     def get_energy_min(self, sh=None, **kwargs): 
         version = self.get('version')
         
@@ -984,6 +964,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         diff=self.get_energy( sh=sh, which='diff', iter_max=None)
         count, bin = np.histogram(diff, bins=bins)
         return count, bins
+    
     
     def commit(self, info=0):
         #issue: should change to 'ab+?'
@@ -1086,6 +1067,8 @@ class ResultDB(OrderedDict, AnalysisTools):
                 mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
                
             rec = self[field_name][mera_shape]
+            print_vars(vars(),  ['rec.keys()']) 
+           
             key = next(reversed(rec))  #last iter step
             rec = rec[key]
         except KeyError as err: 
@@ -1488,6 +1471,63 @@ class ResultDB(OrderedDict, AnalysisTools):
         res= 0.5*max(0.0, abs(eng-Jzz*Czz)-Czz-1.0)
         return res 
 
+    def calc_structure_factor(self, sh, x0=0, x1=1.1, clip=0,  num_points=100, 
+            return_Sk = False, 
+            ):
+        db = self
+        N=sh[0]
+        L=N-2*clip
+        corr=db.fetch_easy('correlation_all', sh, ['zz'])
+        mag=db.fetch_easy('magnetization', sh, ['z'])
+        if corr is None or mag is None:
+            return None,None
+        mag=mag.values()
+        if not isinstance(corr, np.ndarray):
+            corr_m=np.asarray(corr.values()).reshape((N, N))
+            print 'change correlation_all store'
+            self['correlation_all'][sh][-1]['zz'] = corr_m
+            self.commit(info=1)
+        else:
+            corr_m=corr
+            if N==0:
+                N=L=corr_m.shape[0]
+                period=len(mag)
+                mag=mag*(L/period)
+        mag=np.asarray(mag)
+        if clip!=0:
+            L=N-2*clip
+            corr_m=corr_m[clip:-clip, clip:-clip]
+            mag=mag[clip:-clip]
+        ni=0.5*(mag+1)
+        ni=ni.reshape(L,1)
+        mag=mag.reshape(L, 1)
+        mag_m=mag*mag.T  # it equals with mag.T*mag
+        ninj=ni*ni.T
+        
+        nij=0.25*(corr_m + (mag+mag.T) +1 )
+        
+        #cij= corr_m - mag_m
+        cij= nij - ninj
+        
+        
+        #dk=2*np.pi/L
+        #x = [dk*i for i in range(N)]
+        #x=np.arange(L+1).tolist()
+        #y = [np.sum(cij * expij(dk*i, L))/L for i in x]    
+        if return_Sk:
+            res= lambda k: np.sum(cij * expij(k, L))/L , L
+            return res 
+        x=np.linspace(x0, x1, num=num_points)
+        y = [np.sum(cij * expij(np.pi*i, L))/L for i in x]    
+        return x, y
+    
+    def _get_Luttinger_param(self, sh, clip=0):
+        func, L = self.calc_structure_factor(sh, clip=clip, return_Sk=1) 
+        if L is None:
+            return None 
+        q = 2*PI/L
+        return PI*func(q)/q
+    
     def delete_rec(self, field_name_list, sh_list): 
         print 'delete fields "%s" for all sh in %s'%(field_name_list,  sh_list)
         if sh_list == 'all' : 
@@ -1502,7 +1542,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                     if isinstance(temp, dict) and temp.has_key(sh): 
                         temp.pop(sh)
         self.commit()
-
 
     def delete_db(self, info=1): 
         os.remove(self.path)
@@ -2586,7 +2625,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         plt.show()
     
     def measure(self, sh, state=None, measure_func=None, param=None,  which=None, field_surfix='', 
-            exclude_which=None, force=0, fault_tolerant=1,   
+            force=0, fault_tolerant=1, num_of_theads=2,    
             submit=1, **kwargs): 
         """
             params:
@@ -2603,6 +2642,10 @@ class ResultDB(OrderedDict, AnalysisTools):
                 return 
             sh = sh[0], D 
         
+        if self.has_key_list([which, sh]):
+            print '   found, skip it'  
+            return 
+ 
         parpath = self.parpath 
         path = self.shape_to_backup_path(sh)
         if 'C:' in parpath:
@@ -2614,10 +2657,11 @@ class ResultDB(OrderedDict, AnalysisTools):
            
         rdb = self 
         temp = ['parpath', 'path', 'rdb', 'which', 'measure_func', 'field_surfix', 'param', 
-                'exclude_which', 'force', 'fault_tolerant']
+                'force', 'fault_tolerant', 'num_of_theads']
         dic = vars()
         temp = {t: dic[t] for t in temp}
         temp.update(kwargs)
+        temp['NUM_OF_THEADS'] = num_of_theads
         if not submit: 
             measure_S(**temp)
         else: 
@@ -2637,6 +2681,20 @@ class ResultDB(OrderedDict, AnalysisTools):
         path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         return path 
 
+    def update_db_structure(self): 
+        print 'uuuuuuuuuuuuuuuuu'
+        if self['version'] < 1.2:
+            kk = self.keys()
+            kk = [k for k in kk if k not in ['algorithm', 'status', 'version', 'dim_max']]
+            ss= self.get_shape_list()
+            print_vars(vars(),  ['ss'])
+            for k in kk:
+                for sh in ss:
+                    if self.has_key_list([k, sh, -1]):
+                        self[k][sh] = self[k][sh][-1]
+            self['version']=1.2
+            #db.commit(info=1)    
+            
 
 class ResultDB_mera(ResultDB): 
     AUTO_UPDATE = False 
@@ -2790,8 +2848,6 @@ class ResultDB_mera(ResultDB):
         else: 
             
             raise
-
-        
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.02 
@@ -3222,23 +3278,18 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         print '*'*80
         #from vmps.run_heisenberg.analysis import an_vmps
-        from mera_wigner_crystal.analysis import an_idmrg_psi 
-        xx = an_idmrg_psi.an_main_alt
-        #from merapy.run_heisbg.analysis import an_vmps
-        db = xx[0.33, 2.0, 3.0]
-        print_vars(vars(),  ['db.parpath'])
-        sh = (0, 320)
-        fig, ax = xx.fig_layout()
-        db.plot_field_vs_length('correlation', sh, 
-                xscale='log', yscale='log', 
-                marker='o',
-                rec_getter = db.__class__._get_corr_conn.im_func, rec_getter_args= {'period':3}, 
-                #ms=0 if a[2]!=3.0 else 3,
-                 yfunc=np.abs,
-                key_list=['zz'], r_min=0, period=3,   
-                #r_max=3000,
-                ax=ax)       
-        xx.show_fig()
+        #from mera_wigner_crystal.analysis import an_idmrg_psi 
+        from merapy.run_heisbg.analysis import an_idmrg_psi
+        xx = an_idmrg_psi.an_main_symm 
+        db = xx[0.0]
+        db.fetch_easy('energy', (0,  80))
+        print_vars(vars(),  ['db["energy"]'])
+        ResultDB.update_db_structure.im_func(db)
+        #print_vars(vars(),  ['db["status"]'])
+        #print_vars(vars(),  ['db["version"]'])
+        print db['entanglement']
+        #xx.show_fig()
+        #db.fetch_easy('energy', (0,  80))
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]

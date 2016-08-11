@@ -28,8 +28,8 @@ uname=platform.uname()[1]
 HOME = os.path.expanduser('~')
 #LOCAL_HOSTNAME = 'QTG-WS1-ubuntu'
 BACKUP_BASE_DIR =  '/'.join([HOME, 'backup_tensor_dir'])
-BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
-
+#BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
+BACKUP_BASE_DIR_LOCAL =  '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir'])
 
 
 updaters_u1 = {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
@@ -332,7 +332,7 @@ class Config(dict):
             cfg['job_description']  = fn 
      
     @staticmethod 
-    def filter(cfg, db_class=None):
+    def filter(cfg, db_class=None, info=0):
         if db_class is None:
             from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
             alg = cfg['algorithm']
@@ -340,6 +340,8 @@ class Config(dict):
             
         parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
         db=db_class(parpath)
+        if info>0:
+            print db
         ss= cfg['schedule']
         N = 0 if alg == 'idmrg' else cfg['N']
         msg = [os.path.basename(parpath), 'N=%d'%N,  str(ss), 
@@ -365,8 +367,8 @@ class TestIt(unittest.TestCase):
         cfg = copy_config(CFG_ISING_BASIC)
         Config.set_backup_parpath(cfg, 'proj', fn='h=1.0', root1='middle', surfix='surf')
         path  = cfg['backup_parpath_local']
-        a = '/'.join([HOME, 'backup_tensor_dir/proj/mera/middle/h=1.0-surf']) 
-        print path 
+        a = '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir/proj/mera/middle/h=1.0-surf']) 
+        print path , a
         self.assertTrue(path==a)
         
 
