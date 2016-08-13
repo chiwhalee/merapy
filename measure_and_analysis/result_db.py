@@ -382,7 +382,7 @@ class AnalysisTools(object):
     
     def find_lines_extreme(self, ax, which='max', add_text=True, 
             find_range=None, 
-            zoom_scale=None, font_dict=None, rounding=2): 
+            zoom_scale=None, font_dict=None, rounding=3): 
         temp=[]        
         fd = {'color': 'r', 'size': 14} 
         if font_dict is not None: 
@@ -410,6 +410,7 @@ class AnalysisTools(object):
             temp.append((l.get_label(), round(min_location, rounding), min_val))
         if temp: 
             labels, loc, val= zip(*temp)
+            labels= map(str, labels)  # by default, labels are unicode, u'...', I remove u signiture
         else: 
             labels, loc, val = None, None, None 
             
@@ -737,7 +738,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         msg = 'parpath not exist, so %s'%cmd
 
     def has_shape(self, sh, system_class=None, from_energy_rec=False): 
-        if from_energy_rec:
+        if from_energy_rec: 
             return self.has_key_list(['energy', sh])
             
         if system_class is None:
@@ -1546,10 +1547,14 @@ class ResultDB(OrderedDict, AnalysisTools):
         if not isinstance(corr, np.ndarray):
             corr_m=np.asarray(corr.values()).reshape((N, N))
             print 'change correlation_all store'
-            self['correlation_all'][sh][-1]['zz'] = corr_m
+            self['correlation_all'][sh]['zz'] = corr_m
             self.commit(info=1)
         else:
             corr_m=corr
+            if corr_m.shape[0]<N:
+                L = corr_m.shape[0]
+                start, end = (N - L)//2, (N + L)//2  
+                mag = mag[start:end]
             if N==0:
                 N=L=corr_m.shape[0]
                 period=len(mag)

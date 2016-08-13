@@ -338,8 +338,13 @@ class Config(dict):
             alg = cfg['algorithm']
             db_class= {'idmrg':ResultDB_idmrg, 'vmps':ResultDB_vmps}[alg]
             
-        parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
+        if platform.system()=='Linux':
+            parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
+        else:
+            parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
         db=db_class(parpath)
+        #print db
+        #print parpath
         if info>0:
             print db
         ss= cfg['schedule']
@@ -348,7 +353,8 @@ class Config(dict):
                 'threads=%d'%cfg['NUM_OF_THREADS']]
         allow = True 
         sh = (N, max(ss))
-        if db.has_shape(sh):
+        #print 'ddddddd', db.get_shape_list(), sh, db.has_shape(sh)
+        if db.has_shape(sh, from_energy_rec=1):
             msg = ['FOUND '] + msg[:1]
             allow = False
         else:
