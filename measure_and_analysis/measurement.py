@@ -94,7 +94,6 @@ def measure_S(S=None, parpath=None, path=None,
     """
     if measure_func is not None: 
         which = measure_func.__name__ 
-        
     if num_of_threads is not None:  
         set_num_of_threads(num_of_threads)
     use_local_storage =  kwargs.get('use_local_storage', False)
@@ -237,22 +236,12 @@ def measure_S(S=None, parpath=None, path=None,
     else: 
         func = {measure_func.__name__: measure_func}
     
-
-    #if param is None:     
-    #    param = {f: {} for f in which}
-    #    corr_param.update(param.get('correlation', {}))
-    #    param.update(correlation=corr_param)
-    #else: 
-    #    for f in which: 
-    #        if not param.has_key(f):  
-    #            param[f] = {}
-    
     if param is None: 
         param = {}
-    elif isinstance(param, dict): 
-        assert len(which)==1, 'when param is provided, only allow measure one field at a time'
-    else: 
-        raise 
+    #elif isinstance(param, dict): 
+    #    assert len(which)==1, 'when param is provided, only allow measure one field at a time'
+    #else: 
+    #    raise 
     
     func_name_map = {
             'calc_scaling_dim_2site': 'scaling_dim', 
@@ -292,7 +281,8 @@ def measure_S(S=None, parpath=None, path=None,
         print '\t%s...   '%field_name,
         
         try:
-            res = ff(S, **param)
+            _param = param.get(w, {})
+            res = ff(S, **_param)
             msg = '%20s'%('done')
             if kwargs.get('show', False): 
                 pprint.pprint(res, indent=1, width=200)
@@ -412,7 +402,6 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
     
     res= []
     for path in path_list:    
-
         temp = dict(path=path, which=which, exclude_which=exclude_which, 
             fault_tolerant=fault_tolerant, field_surfix=field_surfix, 
             force=force, **kwargs)  
@@ -487,37 +476,39 @@ def mera_backup_dir_finder(root):
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 
-        args= {}
-        args['which'] = ['correlation']
-        args['force'] = 0
-        args['show'] = 1
-        if 0: 
-            dir = '/home/zhli/Documents/mera_backup_tensor/run-wigner-crystal/a=2.0-h=1.4142135-V=0.0/'
-            args['dir_list'] = [dir]
-            args['db_version'] = None #1.0
-            args['mera_shape_list'] = [(4, 4)]
-        else: 
+        args= {
+                'which':['correlation'], 
+                'force':0, 
+                'show':1, 
+                'fault_tolerant':0, 
+                }
+        if 1:
             dir = '/home/zhli/mps_backup_folder/run-ising/h=1.0/' 
             args['dir_list'] = [dir]
             args['mera_shape_list'] = [(40, 40)]
-            args['fault_tolerant'] = 0
         self.args= args 
-    
     
     def test_measure_all(self): 
         from vmps.minimize import VMPS 
         dir = tempfile.mkdtemp()
+        v = VMPS.example(h=0.0, N=16, Jzz=1.0, model_name='heisbg', D=None, 
+                symmetry='U1', num_of_sweep_tot=6, backup_parpath = dir, 
+                do_measure=1, measure_only=['energy']) 
         
-        v = VMPS.example(N=10, D=5, model_name='ising', backup_parpath=dir)
         v.minimize()
-       
-        args = self.args.copy()
-        #which = ['variance', 'energy', 'entanglement_entropy', 'magnetization']
-        #which = ['correlation']
-        which = ['energy']
-        args.update(dir_list=[dir], which=which, force=0, show=0, 
-                algorithm='mps', mera_shape_list='all')
-        #measure_all( **args )
+        print '\n'*2
+        args = {
+                'which':['correlation', ],  #['correlation', 'variance', 'energy', 'entanglement_entropy', 'magnetization']
+                'param':{'correlation':{'i0':4}}, 
+                'force':1, 
+                'show':1, 
+                'submit':0, 
+                'dir_list':[dir], 
+                'algorithm':'mps', 
+                #'mera_shape_list':'all',
+                'mera_shape_list':'all',
+                'fault_tolerant':0, 
+                }
         measure_all( **args )
    
     def test_vmps_all(self): 
