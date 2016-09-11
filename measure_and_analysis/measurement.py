@@ -227,7 +227,7 @@ def measure_S(S=None, parpath=None, path=None,
     
     if isinstance(which, str): 
         which = [which]
-    if exclude_which is not None: 
+    if exclude_which:
         print  'exlude this from measure_S: ', exclude_which
         which = [i for i  in which if i not in exclude_which]
     
@@ -330,7 +330,7 @@ def measure_S(S=None, parpath=None, path=None,
                     dmax = shape[1]
                     rdb['dim_max'][shape[0]] = dmax 
                     changed = True
-        
+            
         if changed: 
             rdb.commit(info=1)
         else: 

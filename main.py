@@ -454,7 +454,8 @@ class Main(object):
     
     @classmethod #@staticmethod 
     def run_many_dist(cls, config_group, 
-            submit=True, servers=None, func=None, need_confirm=True,  **kwargs): 
+            submit=True, job_info=None,  
+            servers=None, func=None, need_confirm=True,  **kwargs): 
         """
             status: workable now!
                 I dont know why cant run run_many_dist under main.py.
@@ -479,15 +480,18 @@ class Main(object):
             tasks = [(cls.run_one, (c, )) for c in config_group] 
             run_many(tasks, servers, 
                     info=kwargs.get('info', 10), querry=1, 
-                    try_period=kwargs.get('try_period', 1))
+                    try_period=kwargs.get('try_period', 1)
+                    )
         else: 
-            job_info = {}
-            temp = ['delay_send', 'priority', 'job_group_name', 'job_description']
-            for t in temp: 
-                if kwargs.has_key(t): 
-                    job_info[t] = kwargs[t]
+            #job_info = {}
+            #temp = ['delay_send', 'priority', 'job_group_name', 'job_description']
+            #for t in temp: 
+            #    if kwargs.has_key(t): 
+            #        job_info[t] = kwargs[t]
+            #raise  #modify job_info !!
             for c in config_group: 
-                submit_one(cls.run_one, (c, ),  job_info=job_info)
+                status=submit_one(cls.run_one, (c, ),  job_info=job_info, querry_timeout=kwargs.get('querry_timeout', 10))
+                print status
             
             #if 1:
             #    print 'updationg job order according to their priority... '
@@ -554,51 +558,6 @@ class Main(object):
         res=p.get_cpu_percent(interval=0.01)
         return res
         
-    @staticmethod
-    def email(): 
-        import smtplib
-        import email.mime.text
-        # my test mail
-        #mail_username='chiwhalee@gmail.com'
-        mail_username='zhihuali@mail.ustc.edu.cn'
-        mail_password='****'
-        from_addr = mail_username
-        to_addrs=('chiwhalee@gmail.com')
-
-        # HOST & PORT
-        #HOST = 'smtp.gmail.com'
-        HOST = 'smtp.ustc.edu.cn'
-        PORT = 25
-
-        # Create SMTP Object
-        smtp = smtplib.SMTP()
-        print 'connecting ...'
-
-        # show the debug log
-        smtp.set_debuglevel(1)
-
-        # connet
-        try:
-            print smtp.connect(HOST,PORT)
-        except:
-            print 'CONNECT ERROR ****'
-        # gmail uses ssl
-        #smtp.starttls()
-        # login with username & password
-        try:
-            print 'loginning ...'
-            smtp.login(mail_username,mail_password)
-        except:
-            print 'LOGIN ERROR ****'
-        # fill content with MIMEText's object 
-        msg = email.mime.text.MIMEText('Hi ,I am leehark')
-        msg['From'] = from_addr
-        msg['To'] = ';'.join(to_addrs)
-        msg['Subject']='hello , today is a special day'
-        print msg.as_string()
-        smtp.sendmail(from_addr,to_addrs,msg.as_string())
-        smtp.quit()
-
     def transfer_pickle_file(self, fn=None): 
         """
             when complete, transfer file back to QTG-WS1-ubuntu
@@ -887,22 +846,7 @@ class TestMain(unittest.TestCase):
         
         
     def test_temp(self): 
-
-        config = self.config_heisbg
-        config['SYMMETRY'] = 'Travial'
-        config['schedule']['schedule'] = copy_schedule(schedule_prod_state)
-        dir = tempfile.mkdtemp()
-        config.update(tot_layer=8, backup_parpath=dir )
-        main = Main(**config)
-        #main.run_schedule(schedule=schedule_prod_state, do_measure=0, 
-        #        q_iter_max = 5, mera_shape_min = (4, 3), mera_shape_max=(8, 8), 
-        #        skip_dim_list=[14])
-        main.run()
-        if 0: 
-            S = main.S
-            self.assertEqual(S.iter, 15)
-            self.assertEqual(S.iter1, 5)
-
+        pass
         
         
 class TestRpyc(unittest.TestCase): 
@@ -929,7 +873,7 @@ if __name__=="__main__":
         #'test_run_scale_invar',
         #'test_run_schedule',
         #'test_run_many',
-        'xtest_run_many_dist',
+        #'xtest_run_many_dist',
         #'test_resume',
         
         #'xtest_make_dir',
@@ -939,7 +883,7 @@ if __name__=="__main__":
         #'xtest_transfer_pickle_file',
         #'xtest_set_num_of_threads_1',
         
-        #'test_temp',
+        'test_temp',
                 ]
         for a in add_list: 
             suite.addTest(TestMain(a))

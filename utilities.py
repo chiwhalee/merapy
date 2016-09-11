@@ -300,6 +300,55 @@ def dict_to_object(dic):
     return OBJECT(**dic)
 
 
+def send_email(msg): 
+    import smtplib
+    import email.mime.text
+    # my test mail
+    #mail_username='chiwhalee@gmail.com'
+    mail_username = 'zhihuali@mail.ustc.edu.cn'
+    mail_password = '****'
+    raise
+    from_addr = mail_username
+    to_addrs=('chiwhalee@gmail.com')
+
+    # HOST & PORT
+    #HOST = 'smtp.gmail.com'
+    HOST = 'smtp.ustc.edu.cn'
+    PORT = 25
+
+    # Create SMTP Object
+    smtp = smtplib.SMTP()
+    print 'connecting ...'
+
+    # show the debug log
+    smtp.set_debuglevel(1)
+
+    # connet
+    try:
+        print smtp.connect(HOST,PORT)
+    except:
+        print 'CONNECT ERROR ****'
+    # gmail uses ssl
+    #smtp.starttls()
+    # login with username & password
+    try:
+        print 'loginning ...'
+        smtp.login(mail_username,mail_password)
+    except:
+        print 'LOGIN ERROR ****'
+    
+    # fill content with MIMEText's object 
+    the_email = email.mime.text.MIMEText('Hi ,I am leehark')
+    the_email['From'] = from_addr
+    the_email['To'] = ';'.join(to_addrs)
+    #the_email['Subject']='hello , today is a special day'
+    the_email['Subject'] = msg.get('subject', 'no subject')
+    print the_email.as_string()
+    
+    smtp.sendmail(from_addr,to_addrs,the_email.as_string())
+    smtp.quit()
+
+
 class OrderedSet(collections.MutableSet):
     """
         taken from 
