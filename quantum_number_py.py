@@ -89,10 +89,12 @@ class QnBase():
             res=("(" + "%5d"*self.val.shape[0]+")")  % tuple(self.val)
             #print "in __repr______"
             #res= str(self.val)
-        if isinstance(self.val, int):
+        elif isinstance(self.val, int):
             res= ("(" + "%5d"")")  % self.val
             #res=("(" + "%5d"*self.val.shape[0]+")")  % tuple(self.val)
             #res=("(" + "%5d"*self.NUM_OF_SYMM+")")  % tuple(self.val)
+        else:
+            raise ValueError(self.val)
         return res
     
     def set_val_back(self,val):

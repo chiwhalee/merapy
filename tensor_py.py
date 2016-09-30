@@ -3174,11 +3174,14 @@ class iTensorFactory(object):
         return iTensor(rank, qsp, qn)
     
     @staticmethod
-    def random(qsp): 
+    def random(qsp, totqn=None): 
         """
             create an iTensor whose data is randomized 
         """
-        res= iTensor(QSp=qsp)
+        if isinstance(totqn, int):
+            totqn = qsp[0].QnClass(totqn)
+            print_vars(vars(),  ['totqn'])
+        res = iTensor(QSp=qsp, totQN=totqn)
         #issue:  maybe here need devide total size?
         n = res.data.size
         res.data[: ] = np.random.random(n) - 0.5 

@@ -1,5 +1,5 @@
 
-from merapy.quantum_number_py import QspZ2, QspU1, QspTravial
+from merapy.quantum_number_py import QspZ2, QspU1, QspTravial, symmetry_to_Qn, symmetry_to_Qsp
 from merapy.tensor_py import iTensor, iTensorFactory 
 
 
