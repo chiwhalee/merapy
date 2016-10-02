@@ -182,6 +182,8 @@ class iTensor(TensorBase):
             elif use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
                 buffer = self.buffer_assign(data_size=self.totDim)
             
+            #well, I comment out the line bellow, as it hinders debug sometimes
+            #assert self.totDim>0, ('conceptially a tensor is not empty',  self.totQN, self.shape)
             self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
     
     def __getstate__del(self): 
@@ -3013,6 +3015,8 @@ class iTensor(TensorBase):
         leg.data[0] = 1.0 
         res, _ = self.contract(leg, xrange(self.rank), [i])
         return res 
+        
+        remove_travial_ind = reduce_1d_qsp 
     
     def insert_1d_qsp(self, i, qn): 
         """
@@ -3031,10 +3035,12 @@ class iTensor(TensorBase):
         res, _ = self.contract(leg, range(self.rank), [self.rank])
         res= res.transpose(range(i+1)  + [self.rank]  + range(i+1, self.rank))
         return res 
-            
+        
+        insert_travial_ind = insert_1d_qsp
+        
     def shift_qn(self, qn_delta, qsp_id): 
         """
-            shift qn of a qsp and totqn also, not changing data 
+            shift totqn and  qn of a qsp at the same time, not changing data 
             an inplace operation
             this is efficient enough for production use 
             
@@ -3180,7 +3186,6 @@ class iTensorFactory(object):
         """
         if isinstance(totqn, int):
             totqn = qsp[0].QnClass(totqn)
-            print_vars(vars(),  ['totqn'])
         res = iTensor(QSp=qsp, totQN=totqn)
         #issue:  maybe here need devide total size?
         n = res.data.size
