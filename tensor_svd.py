@@ -400,7 +400,7 @@ class Tensor_svd(object):
         return val_largest, last_list, empty_list  
     
     @staticmethod 
-    def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, 
+    def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, trunc_dim_min=None, 
             full_matrices=False, compute_uv=True, 
             return_trunc_err=False, totqn_on_which='s', 
         normalize_singular_val=False):  
@@ -410,6 +410,10 @@ class Tensor_svd(object):
             this func also support the case when tensor.totqn not identity.
                 tensor.totqn is finally carried by S by default
                 but this can also be changed by param: totqn_on_which 
+            the dim is truncated if trunc_dim or trunc_err_tol is provided.
+                if both are provided, the later will overide the former.
+                if further a 'trunc_dim_min' is provided, it guarantees not trunc too much
+            
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 10000
         num_blocks = tensor.nidx 
@@ -456,7 +460,6 @@ class Tensor_svd(object):
         totdim = np.sum(dim_list)
         prepare_trunc = True 
         if trunc_err_tol is not None: 
-            pass
             temp = np.zeros((3, totdim), dtype=float)
             d0 = 0
             for i, d in enumerate(dim_list): 
@@ -482,6 +485,8 @@ class Tensor_svd(object):
             norm = math.sqrt(s2_cumsum[trunc_dim-1])
             #trunc_err = trunc_err_tol 
             prepare_trunc = False 
+        
+        trunc_dim = trunc_dim if trunc_dim_min is None else max(trunc_dim, trunc_dim_min)
         
         if trunc_dim < totdim:  
             if prepare_trunc: 
