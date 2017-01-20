@@ -30,7 +30,7 @@ import unittest
 
 
 from merapy.utilities import dict_to_object , load , print_vars
-from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME 
+from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOSTNAME 
 
 #from mypy.brokest.task_center import submit_one 
 #from mypy.brokest.brokest import queue, run_many, pack_runnable_msg, send_msg 
@@ -190,7 +190,7 @@ class AnalysisTools(object):
        
         return func, param, cov 
     
-    def fit_line(self, line, func=None, x_min=None, x_max=None, x_extra=None, period=None, x1=None):
+    def fit_line(self, line, func=None, data=None, x_min=None, x_max=None, x_extra=None, period=None, x1=None):
         if isinstance(func, str): 
             if func == 'EE_vs_L' : 
                 func = lambda x, c, a: c/6.*np.log(x) + a
@@ -203,27 +203,38 @@ class AnalysisTools(object):
                 func = lambda x, eta, k: k*x**(-eta)
             else: 
                 raise 
-        
-        x, y = line.get_data()
+        if data is not None:
+            x, y = zip(*data)
+        else:
+            x, y = line.get_data()
+        x = np.copy(x)
+        y = np.copy(y)
         x = x.astype(float); y=y.astype(float)
-
         arg = self.filter_array(x, x_min, x_max, period, x1)
         x = x[arg]
         y = y[arg]
         func_, param, cov = self.__class__.fit_curve(x, y, func)
         if x_extra is not None:  # append one point for expolatating 
+            inc = True if np.all(np.diff(x)>0) else False
             if x_extra>max(x): 
-                x = np.append(x, x_extra)
+                if inc:
+                    x = np.append(x, x_extra)
+                else:
+                    x = np.insert(x, 0, x_extra)
             elif x_extra<min(x): 
-                x = np.insert(x, 0, x_extra)
+                if inc:
+                    x = np.insert(x, 0, x_extra)
+                else:
+                    x = np.append(x, x_extra)
             else: 
                 raise ValueError
+            
         y_fit = func_(x, *param)
         res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
         return res 
     
     def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
-            add_text=False, return_all_params=False, x_extra=None,  fault_tol=True,  **kwargs): 
+            add_text=False, return_all_params=False, x_extra=None, rounding=4, fault_tol=True,  **kwargs): 
         """
             return:
                 line_lable, param[0]
@@ -233,8 +244,9 @@ class AnalysisTools(object):
         which_lines = range(len(ll)) if which_lines is None else which_lines 
         #for l in ax.lines[:len(aa)]:
         temp = []
-        fit_line_args= ['x_min', 'x_max', 'x_extra', 'period', 'x1']
-        fit_line_args= {a: kwargs.get(a) for a in fit_line_args}
+        fit_line_args= {a: kwargs.get(a) for a in 
+                ['x_min', 'x_max', 'x_extra', 'period', 'x1'] }
+        fit_line_args.update(x_extra=x_extra)
         for i, l in enumerate(ll): 
             if not i in which_lines: 
                 continue 
@@ -263,8 +275,8 @@ class AnalysisTools(object):
             if return_all_params: 
                 temp.append((a, res['param']))
             else: 
-                temp.append((a, k))
-            
+                temp.append((a, round(k, 4)))
+          
             if plot_fit: 
                 args= kwargs.copy()
                 color = kwargs['color'] if kwargs.has_key('color') else l.get_color()
@@ -273,6 +285,10 @@ class AnalysisTools(object):
                 #        ax=ax, color=l.get_color(), label='', marker=None)        
                 _ = self._plot.im_func(None, res['x'], res['y'], 
                         ax=ax, **args)
+                #if x_extra is not None:
+                #    tic= ax.get_xticks().tolist()
+                #    print_vars(vars(),  ['tic'])
+                #    pass
                 
         return temp 
     
@@ -535,6 +551,21 @@ class AnalysisTools(object):
             assert len(res)>0, '"{}" matches no field'.format(input_str)
         return res 
 
+    def set_xtics_for_inverse_N(self, ax):
+        tic= ax.get_xticks().tolist()
+        if 1:
+            tic0 = tic[:1]  # it may be 0, 1/0 raises 
+            tic = tic[1:]
+            tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
+            _ = ax.set_xticklabels(tic0 + tic)    
+        else:  # not good 
+            if tic[0] == 0.0:
+                tic[0] = 1e-10
+            tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
+            _ = ax.set_xticklabels(tic)    
+            
+
+    
 def algorithm_name_to_rdb(alg_name):
     mapping = {'mera':ResultDB_mera, 
             'mps':ResultDB_vmps, 
@@ -872,9 +903,9 @@ class ResultDB(OrderedDict, AnalysisTools):
         return N, D 
 
     def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, from_energy_rec=False, 
-            only_return_N=False, only_return_D=False, 
+          only_return_max=False, only_return_N=False, only_return_D=False, 
             ): 
-        if socket.gethostname()=='ThinkStation-C30' and not from_energy_rec: 
+        if socket.gethostname()==LOCAL_HOSTNAME and not from_energy_rec: 
             fn = self.get_fn_list()
             sh = [self.parse_fn(f) for f in fn]
         else:
@@ -896,6 +927,12 @@ class ResultDB(OrderedDict, AnalysisTools):
             sh=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh)
         if sh_min is not None : 
             sh=filter(lambda x: x[0]>= sh_min[0] and x[1]>= sh_min[1] , sh)
+        
+        if only_return_max:
+            NN = [i[0] for i in sh]
+            NN = list(set(NN))
+            sh = [(N, max(filter(lambda x:x[0]==N, sh))[1]) 
+                    for N in NN]
         if only_return_N:
             sh = [i[0] for i in sh]
             sh = list(set(sh))
@@ -1545,20 +1582,36 @@ class ResultDB(OrderedDict, AnalysisTools):
             return None,None
         mag=mag.values()
         if not isinstance(corr, np.ndarray):
-            corr_m=np.asarray(corr.values()).reshape((N, N))
-            print 'change correlation_all store'
-            self['correlation_all'][sh]['zz'] = corr_m
-            self.commit(info=1)
+            if self['algorithm'] == 'mps' :
+                corr_m=np.asarray(corr.values()).reshape((N, N))
+                print 'change correlation_all store'
+                self['correlation_all'][sh]['zz'] = corr_m
+                self.commit(info=1)
+            elif self['algorithm'] == 'idmrg':
+                period, L, corr = corr
+                #temp = filter(lambda x:x[0]==0, corr.keys())
+                #L = max(temp)[1] + 1
+                #period = 2
+                print_vars(vars(),  ['period', 'L'])
+                if 1:
+                    ij = [(i, j) for i in range(L) for j in range(L)]
+                    val=np.ndarray((L, L), dtype=float)
+                    for i, j in ij: 
+                        if i <= j:
+                            val[i, j] = corr[(i%period, j-i)]
+                        else:
+                            val[i, j] = corr[(j%period, abs(j-i))]
+                    corr_m = val
         else:
             corr_m=corr
             if corr_m.shape[0]<N:
                 L = corr_m.shape[0]
                 start, end = (N - L)//2, (N + L)//2  
                 mag = mag[start:end]
-            if N==0:
-                N=L=corr_m.shape[0]
-                period=len(mag)
-                mag=mag*(L/period)
+        if N==0:
+            N=L=corr_m.shape[0]
+            period=len(mag)
+            mag=mag*(L/period)
         mag=np.asarray(mag)
         if clip!=0:
             L=N-2*clip
@@ -1594,8 +1647,34 @@ class ResultDB(OrderedDict, AnalysisTools):
         q = 2*PI/L
         return PI*func(q)/q
     
+    def _get_charge_gap(self, sh):
+        p = self.__class__(self.parpath + '-Np1')
+        h = self.__class__(self.parpath + '-Nm1')
+        temp =  [x.fetch_easy('energy', sh) for x in [p, h, self] ]
+        if all(temp):
+            ep, eh, eg = temp
+            #note eng is energy per bond
+            N = sh[0]
+            gap = (N-1)*(ep + eh - 2*eg)
+        else:
+            gap = None
+        return gap 
+    
+    def _get_charge_gap_2(self, sh, which='ph'):
+        p = self.__class__(self.parpath + '-Np1')
+        temp =  [x.fetch_easy('energy', sh) for x in [p, self] ]
+        if all(temp):
+            ep, eg = temp
+            #note eng is energy per bond
+            N = sh[0]
+            gap = (N-1)*(ep - eg)
+        else:
+            gap = None
+            
+        return gap 
+    
     def delete_rec(self, field_name_list, sh_list): 
-        print 'delete fields "%s" for all sh in %s'%(field_name_list,  sh_list)
+        print 'delete fields "%s" for sh in %s'%(field_name_list,  sh_list)
         if sh_list == 'all' : 
             for i in field_name_list: 
                 self.pop(i)
@@ -1798,7 +1877,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         if kwargs.get('return_fig'): 
             return fig 
     
-    def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, data=None, xfunc=None, yfunc=None, rec_getter=None,  **kwargs): 
+    def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, 
+            data=None, inverse_N=True, xfunc=None, yfunc=None, rec_getter=None, rec_getter_args=None, **kwargs): 
         if 1: 
             sub_key_list = sub_key_list if sub_key_list is not None else []
             info = kwargs.get('info', 0)
@@ -1822,8 +1902,11 @@ class ResultDB(OrderedDict, AnalysisTools):
             try: 
                 x,y=zip(*data)        
                 x = np.asarray(x)
+                y = np.asarray(y)
                 if xfunc is None: 
-                    x = 1./x 
+                    #x = 1./x 
+                    if inverse_N:  #inverse_N takes effects provided xfunc is None
+                        x = 1./x
                 else: 
                     x = xfunc(x)
             except ValueError as err: 
@@ -1831,19 +1914,16 @@ class ResultDB(OrderedDict, AnalysisTools):
                 #x, y = np.nan, np.nan 
                 return 
         
-        #if yfunc is not None : 
-        #    y = yfunc(y)
+        if yfunc is not None : 
+            y = yfunc(y)
         
-        #xx.fit_lines_many(ax, lambda k,c, x : k*x+c, add_text=1, plot_fit=0)
         kwargs.update(xlabel='1/N', ylabel=field_name, return_ax=1)
         fig, ax = self._plot(x, y, **kwargs) 
         
-        tic= ax.get_xticks().tolist()[1:]
-        tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
-        _ = ax.set_xticklabels([0]+tic)    
-        
-        #ax.set_xlim(0, 0.05); 
-        #ax.set_ylim(0)
+        #below may cause problem
+        #tic= ax.get_xticks().tolist()
+        #tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
+        #_ = ax.set_xticklabels(tic)    
         
         if kwargs.get('return_fig'): 
             return fig 
@@ -1882,7 +1962,7 @@ class ResultDB(OrderedDict, AnalysisTools):
                     x = np.asarray(x)
                     x -= r0 
             else: 
-                rec = rec.items()
+                #rec = rec.items()
                 x, y = zip(*rec)
                 
         else: 
@@ -2691,56 +2771,71 @@ class ResultDB(OrderedDict, AnalysisTools):
     def show_fig(self): 
         plt.show()
     
-    def measure(self, sh, state=None, measure_func=None, param=None,  which=None, field_surfix='', 
-            force=0, fault_tolerant=1, num_of_theads=2,    
+    def measure(self, ss, which=None, state=None, measure_func=None, param=None, field_surfix='', 
+            force=0, fault_tolerant=1, num_of_theads=2, job_group_name=None, 
             submit=1, **kwargs): 
         """
             params:
                 which: can be str or a list of str
-                    e.g. which='energy', whic=['energy', 'variance']
+                    e.g. which='energy', which=['energy', 'variance']
         """
         from merapy.measure_and_analysis.measurement import measure_S 
         from mypy.brokest.task_center import submit_one 
         
-        if sh[1] == 'max' : 
-            D = self.get_dim_max_for_N(sh[0])
-            if D == 0: 
-                print('max D for %s is zero, skip it'%(sh, ))
-                return 
-            sh = sh[0], D 
+        if param is not None and isinstance(which, str):
+            param = {which:param}  # to make it compatible with the interface of measure_S
         
-        if self.has_key_list([which, sh]):
-            print '   found, skip it'  
-            return 
- 
-        parpath = self.parpath 
-        path = self.shape_to_backup_path(sh)
-        if 'C:' in parpath:
-            xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
-            for a, b in xxx:
-                parpath=parpath.replace(a, b)
-                path=path.replace(a, b)
-            path=path.replace('dropbox', '')
-           
-        rdb = self 
-        temp = ['parpath', 'path', 'rdb', 'which', 'measure_func', 'field_surfix', 'param', 
-                'force', 'fault_tolerant', 'num_of_theads']
-        dic = vars()
-        temp = {t: dic[t] for t in temp}
-        temp.update(kwargs)
-        temp['NUM_OF_THEADS'] = num_of_theads
-        if not submit: 
-            measure_S(**temp)
-        else: 
-            temp['rdb'] = None # or else it raises 
-            temp['fault_tolerant'] = 0
-            temp.update(use_local_storage=1)
-            submit_one(measure_S, kwargs=temp,
-                    job_info = {'priority': 1, 
-                        'job_group_name': 'measure-'+str(which), 
-                        'delay_send': 20, 
-                        })
+        job_group_name = job_group_name if job_group_name is not None else str(which)
+        job_group_name = '-'.join(['mea-', job_group_name])
+        
+        if isinstance(ss, tuple):
+            ss= [ss]
+        for sh in ss:
+            if sh[1] == 'max' : 
+                if '2site' in self.parpath:  #this is a temporary workaroud. alg info should be also stored in db in future 
+                    D = 0
+                else:
+                    D = self.get_dim_max_for_N(sh[0])
+                    if D == 0: 
+                        print('max D for %s is zero, skip it'%(sh, ))
+                        continue
+                sh = sh[0], D 
             
+            if isinstance(which, str) and self.has_key_list([which, sh]) and not force:
+                print '   found, skip it'  
+                continue
+            
+            ##################### make args  ############################
+            parpath = self.parpath 
+            path = self.shape_to_backup_path(sh)
+            if 'C:' in parpath:
+                xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
+                for a, b in xxx:
+                    parpath=parpath.replace(a, b)
+                    path=path.replace(a, b)
+                path=path.replace('dropbox', '')
+               
+            rdb = self 
+            temp = ['parpath', 'path', 'rdb', 'which', 'measure_func', 'field_surfix', 'param', 
+                    'force', 'fault_tolerant', 'num_of_theads']
+            dic = vars()
+            temp = {t: dic[t] for t in temp}
+            temp.update(kwargs)
+            temp['NUM_OF_THEADS'] = num_of_theads
+            if not submit: 
+                measure_S(**temp)
+            else: 
+                temp['rdb'] = None # or else it raises 
+                temp['fault_tolerant'] = 0
+                temp.update(use_local_storage=1)
+                status = submit_one(measure_S, kwargs=temp,
+                        job_info = {'priority': 1, 
+                            'job_group_name': job_group_name, 
+                            'job_description': (os.path.dirname(path), sh), 
+                            'delay_send': 20, 
+                            })
+                print 'response: ', status
+                
             
     def shape_to_backup_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
@@ -3351,23 +3446,16 @@ class TestResultDB(unittest.TestCase):
     
     def test_temp(self): 
         print '*'*80
-        #from vmps.run_heisenberg.analysis import an_vmps
-        #from mera_wigner_crystal.analysis import an_idmrg_psi 
-        ResultDB.AUTO_UPDATE = 0
-        from merapy.run_heisbg.analysis import an_vmps
-        xx = an_vmps.an_main_symm 
-        db = xx[1.0]
-        #print_vars(vars(),  ['db.get_shape_list()'])
-        if 1:
-            sh= (200, 40)
-            N = sh[0]
-            s= db.load_S(sh)
-            from vmps.measure_and_analysis.measurement_vmps import correlation_all
-            rec=correlation_all(s, start=100-10, end=100+10)
-            db.insert('correlation_all', sh, rec)
-            db.commit()
-            #xx.show_fig()
-            #db.fetch_easy('energy', (0,  80))
+        #from merapy.run_heisbg.analysis import an_vmps
+        from mera_wigner_crystal.analysis import an_idmrg_psi, an_vmps
+        xx=an_vmps.an_main_alt_2site
+        db = xx[0.5, 1.0, 1.0]
+        db.measure((40, 'max'), 'correlation', 
+                submit = 0, 
+                param={'direct_list':["zz", 'pm']})
+        
+        #xx.show_fig()
+            
 
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
