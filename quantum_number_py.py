@@ -1129,6 +1129,13 @@ def symmetry_to_Qsp(symmetry):
 
 symmetry_to_QspClass= symmetry_to_Qsp
 
+def make_qsp(symmetry, qns=None, dims=None):
+    """
+        inefficient, not for production use 
+    """
+    cls= symmetry_to_Qsp(symmetry)
+    return cls.easy_init(qns, dims)
+
 def qn_factory(symmetry, val):
     if symmetry == "Travial":
         return QnTravial()

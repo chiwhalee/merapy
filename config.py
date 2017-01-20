@@ -328,8 +328,6 @@ class Config(dict):
             #    cfg['use_local_storage'] = 1
             #because there is issue in brokest, so always use_local_storage 
             cfg['use_local_storage'] = 1
-        if 1:
-            cfg['job_description']  = fn 
      
     @staticmethod 
     def filter(cfg, db_class=None, info=0):
@@ -337,29 +335,49 @@ class Config(dict):
             from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
             alg = cfg['algorithm']
             db_class= {'idmrg':ResultDB_idmrg, 'vmps':ResultDB_vmps}[alg]
-            
+        if cfg['backup_parpath'] is None:
+             return True
         if platform.system()=='Linux':
             parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
         else:
             parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
         db=db_class(parpath)
-        #print db
-        #print parpath
-        if info>0:
-            print db
-        ss= cfg['schedule']
-        N = 0 if alg == 'idmrg' else cfg['N']
-        msg = [os.path.basename(parpath), 'N=%d'%N,  str(ss), 
-                'threads=%d'%cfg['NUM_OF_THREADS']]
         allow = True 
-        sh = (N, max(ss))
-        #print 'ddddddd', db.get_shape_list(), sh, db.has_shape(sh)
-        if db.has_shape(sh, from_energy_rec=1):
-            msg = ['FOUND '] + msg[:1]
-            allow = False
+        N = 0 if alg == 'idmrg' else cfg['N']
+        
+        msg = [os.path.basename(parpath), 'N=%d'%N,  
+                'threads=%d'%cfg['NUM_OF_THREADS']]
+        if cfg.get('which_minimize', '1site')=='1site':  #old for 1site algrithm and save file for each D 
+            if 0:
+                ss= cfg['schedule']
+                msg = [os.path.basename(parpath), 'N=%d'%N,  str(ss), 
+                        'threads=%d'%cfg['NUM_OF_THREADS']]
+                sh = (N, max(ss))
+                if db.has_shape(sh, from_energy_rec=1):
+                    msg = ['FOUND '] + msg[:1]
+                    allow = False
+                else:
+                    msg = ['ADD '] + msg 
+            else:
+                v = db.fetch_easy('variance', (N, 'max'))
+                v = v if v is not None else 1.0
+                if  v <= cfg['variance_lim']:
+                    msg = ['FOUND '] + msg[:2]
+                    allow = False
+                else:
+                    msg = ['ADD '] + msg 
+            print(' '.join(msg))
         else:
-            msg = ['ADD '] + msg 
-        print(' '.join(msg))
+            tem = db.fetch_easy('run_info', (N, 'max'), sub_key_list=['trunc_err_max'])
+            tem = tem if tem is not None else 1
+            if  tem <= cfg['trunc_err_TOL']:
+                msg = ['FOUND '] + msg[:2]
+                allow = False
+            else:
+                msg = ['ADD '] + msg 
+                
+            print(' '.join(msg))
+           
         return allow 
 
 class TestIt(unittest.TestCase): 

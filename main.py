@@ -469,7 +469,7 @@ class Main(object):
         from brokest.brokest import queue, run_many 
         from brokest.task_center import submit_one, submit_many, LOCAL_IP
         if need_confirm:
-            i=raw_input('submit jobs? yes(y)\n')
+            i=raw_input('submit %s jobs? yes(y)\n'%(len(config_group)))
             if i.lower()=='y':
                 print 'allow'
             else:
@@ -489,7 +489,11 @@ class Main(object):
             #    if kwargs.has_key(t): 
             #        job_info[t] = kwargs[t]
             #raise  #modify job_info !!
-            for c in config_group: 
+            for c in config_group:
+                p = c.get('backup_parpath_local')
+                if p is not None and c.get('job_description') is None: 
+                    fn = os.path.basename(p)
+                    c['job_description'] = (fn, c.get('N'), c.get('schedule'))
                 status=submit_one(cls.run_one, (c, ),  job_info=job_info, querry_timeout=kwargs.get('querry_timeout', 10))
                 print status
             

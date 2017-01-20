@@ -265,7 +265,8 @@ def measure_S(S=None, parpath=None, path=None,
             if db_version is None: 
                 is_found = rdb[k].has_key(w)
             else:
-                key_list = [w] + [shape, iter]
+                #key_list = [w] + [shape, iter]
+                key_list = [w] + [shape]
                 is_found = rdb.has_key_list(key_list)
             if is_found: 
                 found.append(w)

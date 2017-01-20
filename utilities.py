@@ -198,7 +198,11 @@ def load(path, as_str=False, info=0):
         #res= pickle_any.loads(s)
     return res
 
-def save(obj, path, compress=False, compress_level=2, as_str=False, info=0): 
+def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0): 
+    """
+        params:
+            path: can be None if as_str=True
+    """
     if not compress: 
         if not as_str: 
             out = open(path, "wb")
@@ -243,7 +247,7 @@ def save(obj, path, compress=False, compress_level=2, as_str=False, info=0):
             return z 
 
 def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=', 
-        show_header=0, return_str=False):
+        show_header=0, return_str=False, fault_tol=True):
     """
         
     """
@@ -253,7 +257,8 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
         module_name = inspect.getmodule(frm[0]).__name__
         #inspect.getfile(inspect.currentframe())
         caller_name =  frm[3] #inspect.stack()[1][3] 
-        head = '\n---print at %s line %s---\n'%(module_name, lineno)
+        #head = '\n---print at %s line %s---\n'%(module_name, lineno)
+        head = '\n[%5s LINE%d]  '%(module_name, lineno, )
     dic['np'] = np  #inject np to the namespace so that it can be evaled 
     if var_name_list is None: 
         var_name_list = sorted(dic)
@@ -273,13 +278,19 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
                 res= 'not defined'
             #except AttributeError as err: 
             except Exception as err: 
-                res='error: ' +  str(err)
+                if fault_tol:
+                    res='error: ' +  str(err)
+                else:
+                    raise  
                 
         #if isinstance(res, str):   # only print a str 
         #    return  str(res)
         #else: 
         #    return  str(x) + key_val_sep + str(res)
-        return  str(x) + key_val_sep + str(res)
+        res_str = str(res)
+        if isinstance(res, np.ndarray):
+            res_str = '\n\t' + res_str.replace('\n', '\n\t')
+        return  str(x) + key_val_sep + res_str
             
     
     res = head

@@ -596,7 +596,7 @@ class iTensor(TensorBase):
         print self.__repr__(keys=['data'], fewer=0, show_frame=0)
     
     def show_struct(self): 
-        print_vars(vars(), ['self.Addr_idx[:,:self.nidx].T', 'self.Block_idx[:,:self.nidx].T', ], sep_key_val='=\n')
+        print_vars(vars(), ['self.Addr_idx[:,:self.nidx].T', 'self.Block_idx[:,:self.nidx].T', ], key_val_sep='=\n')
         
     @staticmethod
     def unit_tensor(rank, QSp, totQN=None):
@@ -1498,7 +1498,7 @@ class iTensor(TensorBase):
                     
         return  t3         
     
-    def merge_qsp(self, *args): 
+    def merge_qsp(self, *args):
         """
             args should be list tuples of coningueous legs
             note: 
@@ -2118,8 +2118,12 @@ class iTensor(TensorBase):
         
         return V_1n2, Vp1, Vp2, V3 
 
-    def contract(self, T2, V1=None, V2=None, final_ind_labels=None, out_Vc=False, data=None, use_buf=False, preserve_qsp=False, track_name=0,  info=0):
+    def contract(self, T2, V1=None, V2=None, final_ind_labels=None, 
+            out_Vc=False, data=None, use_buf=False, 
+            return_v3 = True, 
+            preserve_qsp=False, track_name=0,  info=0):
         """
+            issue: todo: in future not return_v3 by default 
             see Tensor_Contraction2 in f90
             V1,2,3 are arrays (maps) 张量指标 —> 自然数。用自然数来标记所有张量的指标
             在V1,V2中可能有相同的元素，存在s_1n2中，
@@ -2173,16 +2177,16 @@ class iTensor(TensorBase):
             #"""%(V_1n2, V1[:self.rank], V2[:T2.rank], Vp1[:self.rank], Vp2[:T2.rank])
             #msg += """dims: {0.Dims}\t{1.Dims}""".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank])
             #msg += """\nself.QSp: {0.QSp}\nother.QSp: {1.QSp}""".format(self, T2) 
-            
+            V1 = tuple(V1)
+            V2 = tuple(V2)
             msg = '\n\t'.join([
                 'additional err info:  ', 
-                'V_1n2:%s'%V_1n2, 
-                'V1:%s\t  V2:%s'%(V1[:self.rank], V2[:T2.rank],), 
-                'Vp1:%s\t Vp2:%s'%(Vp1[:self.rank], Vp2[:T2.rank],), 
-                "dims: {0.Dims}\t{1.Dims}".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank]), 
-                "self.QSp: {0.QSp}\n\tother.QSp: {1.QSp}".format(self, T2) ,  
-                "If the exception is like: IndexError: index 4 is out of bounds for axis 1 with size 4, ", 
-                "it is most likely the qsp of legs to be contracted not match,  espcially lack a reverse of qsp", 
+                'names: {0.type_name}\t{1.type_name}'.format(self, T2), 
+                'ind labels: {}, \t{}'.format(V1, V2) , 
+                'ind to contract:%s'%(tuple(V_1n2), ), ] + ['\t'+str((i, self.shape[V1.index(i)], T2.shape[V2.index(i)])) for i in V_1n2] + [
+                #"dims: {0.Dims}\t{1.Dims}".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank]), 
+                #"self.QSp: {0.QSp}\n\tother.QSp: {1.QSp}".format(self, T2) ,  
+                "If the exception is like: IndexError: index 4 is out of bounds for axis 1 with size 4,  it is most likely the qsp of legs to be contracted not match,  espcially lack a reverse of qsp", 
                 ])
             #msg +=  "\n%s\t %s"%(self.__repr__(keys=['QNs', 'Dims'], fewer=True), 
             #        T2.__repr__(keys=['QNs', 'Dims'],fewer=True))
@@ -2218,16 +2222,28 @@ class iTensor(TensorBase):
             Vc= V_1n2
             return  T3, V3, Vc 
         else:
-            return T3, V3
+            if return_v3:
+                return T3, V3
+            else:
+                return T3
     
     @staticmethod 
     def contract_tensor_list(tlist, final_ind_labels=None): 
         """
-            requirs each t.ind_labels is not None 
+            requires each t.ind_labels is not None 
+            params:
+                tlist can be a nested list! like [t1, t2, [t3, t4]]
         """
         head = tlist[0]
-        for t in tlist[1: ]: 
-            head, _= head.contract(t)
+        if isinstance(head, list):
+            head = iTensor.contract_tensor_list(head)
+        try:
+            for t in tlist[1: ]:
+                if isinstance(t, list):
+                    t = iTensor.contract_tensor_list(t)
+                head, _= head.contract(t)
+        except Exception:
+            raise  
         if final_ind_labels is not None:
             ll = list(head.ind_labels)  # head.ind_labels may be np.ndarray, convert it to list
             order = [ll.index(i) for i in final_ind_labels]
@@ -2273,27 +2289,33 @@ class iTensor(TensorBase):
             #X = X+common_util.matrix_trace(d, self.data[self.Block_idx[0,idx]])
             X+= self.data[a:a+d*d].reshape(d,d).trace()
         return X
-
-    def partial_trace_bac(self, i):
+    
+    def trace_ind_pairs(self, *ind_pairs):
         """
-            this is a temporary implementation during calc central charge
-            a full and fast implementation should not use tensor contraction, but direct sum uing index of sparse tensor
+            this is accuratly the general trace function
+            I named it trace_ind_pairs just because trace is occupied by meth above this
+            rename it just to trace in future. 
+            params:
+                ind_pairs: 
+                    pairs like (0, 1), (3, 5), ('a', 'c')
+                    it is actually ind label pairs
         """
-        rank = self.rank
-        assert rank%2 == 0 
-        r_half = rank//2
-
-        qsp = self.QSp[i].copy_many(2, reverse=[1])
-        #I = iTensor(2, qsp.copy_many(2, reverse=[1]), qsp.QnClass.qn_id())
-        I = iTensor.unit_tensor(2, qsp)
-
-        v1 = xrange(rank)
-        v2 = [i, r_half + i]
-        res, leg= self.contract(I, v1, v2)
-        #print 'leg', leg
+        if self.ind_labels is None:
+            self.ind_labels= range(self.rank)
+        self.ind_labels= tuple(self.ind_labels)  #convert to tuple, if it is a ndarray
+        id_list = []
+        for i, j in ind_pairs:
+            #id=iTensor.identity([self.shape[j], self.shape[i]])
+            i1, j1 = self.ind_labels.index(i), self.ind_labels.index(j)
+            id=iTensor.identity([self.shape[j1], self.shape[i1]])
+            id.ind_labels= (i, j)
+            id_list.append(id)
+        id_list.insert(0, self)
+        res=iTensor.contract_tensor_list(id_list)
         
         return res
-
+            
+    
     def partial_trace(self, site_list):
         """
             self is assumed to be a density matrix 
@@ -2323,7 +2345,7 @@ class iTensor(TensorBase):
         #print 'leg', leg
         
         return res
-   
+    
     def conjugate_new(self, d, buffer=None, use_buf=False):
         """
 
@@ -3007,6 +3029,8 @@ class iTensor(TensorBase):
                 use contract is slow, direct operate on Addr_idx is better.
                 only use this func for none production use 
         """
+        if i == -1:
+            i = self.rank-1
         qsp = self.QSp[i].conj()
         assert qsp.totDim == 1 
         qn = qsp.QNs[0].copy()
@@ -3661,11 +3685,14 @@ class iTensorFactory(object):
             #I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
             
             I, Z = sigma_0, sigma_z 
-        
+           
         temp = vars()
         res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
         for i in res: 
             res[i].type_name = i 
+        zero = res['I'].copy()
+        zero.data[:] = 0.0
+        res['zero'] = zero
             
         return res 
     

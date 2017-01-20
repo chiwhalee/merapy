@@ -748,7 +748,7 @@ class Tensor_svd(object):
         pos = np.empty(div+1, int)
  
         for gidx  in range(cls.QSp_Group1.nQN):
-            #print "ggg", gidx, 
+            #print_vars(vars(),  ['cls.QSp_Group1.QNs[gidx]', 'totQN', 'gidx'])
             if  cls.QSp_Group1.QNs[gidx] !=  totQN:  
                 continue
             V_buf = cls.get_block1(itensor, gidx)
