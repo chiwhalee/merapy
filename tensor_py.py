@@ -35,6 +35,7 @@ import pprint
 import numpy as np
 import itertools 
 import math 
+from collections import OrderedDict
 
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy.utilities import print_vars 
@@ -45,7 +46,7 @@ from merapy import array_permutation
 from merapy.set1 import *
 from merapy import crandom
 from merapy.utilities import get_local
-from merapy import decorators
+from merapy import decorators, make_qsp
 from merapy.decorators import *
 
 #import scipy.weave as weave
@@ -2926,10 +2927,17 @@ class iTensor(TensorBase):
         else: 
             res= np.allclose(self.data, other.data, atol=tol)
         return res 
-            
-        
-            
-            
+    
+    def commutator(self, other):
+        assert self.rank == 2 
+        return self.dot(other)-other.dot(self)
+    
+    def commutator_plus(self, other):
+        """
+            anti-commutator for fermions
+        """
+        assert self.rank == 2 
+        return self.dot(other)+other.dot(self)
     
     if 0:
     #not completely correct
@@ -3868,7 +3876,104 @@ class iTensorFactory(object):
             h3a = (-1.0)*y.direct_product(i).direct_product(y) + x.direct_product(i).direct_product(x)
             h3b = 2.0*(p.direct_product(i).direct_product(m) + m.direct_product(i).direct_product(p))
             print np.all(h3a.data==h3b.data)
-    
+
+    @staticmethod
+    def fermion_op(symmetry, shift_qn=True):
+        """
+            ref http://hedrock.ps.uci.edu/docs.cgi?page=tutorials/fermions
+            the basis
+                {|0>, |u>, |d>, |ud>}
+                note a convention here
+                    |ud> = cdag_up cdag_dn|0>
+                    
+            params:
+                shift_qn: if true, this assumes add a postive electron at each site
+                    this has benifits that at half filling MPS has total qn of 0
+                    
+        """
+        vec = OrderedDict()
+        names = ['0', 'u', 'd', 'ud']
+        if symmetry ==  "Travial":
+            q = QspTravial.easy_init([1], [4])
+            e = QspTravial.easy_init([1], [1])
+            for i, n in enumerate(names) :
+                vec[n] = iTensor(QSp=[q.copy(), e.copy()])
+                vec[n].data[:] = 0.0
+                vec[n].data[i] = 1.0
+                
+        elif symmetry == 'U1':  #charge symmetry
+            if not shift_qn:
+                q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
+                dic = {'0':0, 'u':1, 'd':1, 'ud':2}
+            else:
+                q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
+                dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
+                
+            for i, n in enumerate(names) :
+                totqn = QnU1(dic[n])
+                e = make_qsp(symmetry, [0], [1])
+                vec[n] = iTensor(QSp=[q.copy(), e.copy()], totQN=totqn)
+                vec[n].data[:] = 0.0
+            
+            
+            vec['0'].data[:] = [1.0]
+            vec['u'].data[:] = [1.0, 0.0]
+            vec['d'].data[:] = [0.0, 1.0]
+            vec['ud'].data[:] = [1.0]
+            
+        def make_op(xx):
+            op = 0.0
+            for a, b, c in xx:
+                #print_vars(vars(),  ['a', 'b'])
+                a = vec[a]  #|a>
+                b = vec[b]  #|b>
+                a_tc = a.T.conj()
+                #a_tc.totQN.reverse()
+                cba = c*b.dot(a_tc)  #  + c|b><a|
+                #print_vars(vars(),  ['a.shape', 'a_tc.shape', 'b.shape'])
+                #print_vars(vars(),  ['a.totQN',  'a_tc.totQN', 'b.totQN', 'cba.totQN' ])
+                op += cba
+            return op
+        
+        cdag_up = [('0', 'u', 1.0), ('d', 'ud', 1.0)]  # maps |0> to |u>,  |d> to |ud>
+        cdag_up = make_op(cdag_up)
+        c_up = cdag_up.T.conj()  #[('u', '0', 1.0), ('ud', 'd', 1.0)]
+        
+        cdag_dn = [('0', 'd', 1.0), ('u', 'ud', -1.0)]
+        cdag_dn = make_op(cdag_dn)
+        c_dn = cdag_dn.T.conj()  #[('d', '0', 1.0), ('ud', 'u', -1.0)]
+        
+        if 1:
+            #F = (-1)^n_i  used in the jordan-wigner str 
+            F = [('0', '0', 1.0), ('u', 'u', -1.0), ('d', 'd', -1.0), ('ud', 'ud', 1.0)]
+            F = make_op(F)
+            
+            adag_up = [('0', 'u', 1.0), ('d', 'ud', 1.0)]  
+            adag_up = make_op(adag_up)
+            a_up = adag_up.T.conj()  
+            
+            adag_dn = [('0', 'd', 1.0), ('u', 'ud', 1.0)]
+            adag_dn = make_op(adag_dn)
+            a_dn = adag_dn.T.conj()  
+        
+        if 1:
+            n_up = cdag_up.dot(c_up)
+            n_dn = cdag_dn.dot(c_dn)
+            n_up_prod_n_dn = n_up.dot(n_dn)
+            
+            I = iTensor.identity(n_up.QSp[0].copy_many(2, reverse=[1]) )
+        
+        temp = ['I', 
+                'cdag_up', 'cdag_dn', 'c_up', 'c_dn', 
+                'adag_up', 'adag_dn', 'a_up', 'a_dn', 
+                'F', 
+                'n_up', 'n_dn', 'n_up_prod_n_dn'] 
+        
+        dic = locals()
+        res= {a:dic[a] for a in temp}
+        return res 
+            
+
     @staticmethod
     def symbol_tensor_prod(symbol, mapper):
         o = mapper[symbol[0]]
@@ -3897,7 +4002,9 @@ class iTensorFactory(object):
         res= iTensor(QSp=qsp)
         res.data[0] = 1.0
         return res 
-        
+    
+    
+    
         
 class test_iTensor(object):
     def __init__(self, symmetry, dim=None):
@@ -4850,8 +4957,35 @@ class Test_iTensorFactory(unittest.TestCase):
         #t = iTensorFactory.pauli_mat_1site('U1')
         sp = t['sp']
         print_vars(vars(),  ['t.keys()', 'sp.to_ndarray()'])
-       
-      
+
+    def test_fermion_op(self):
+        for symmetry in ['U1', 'Travial']:
+            res=iTensorFactory.fermion_op(symmetry)
+            cdag_up, cdag_dn, c_up, c_dn = res['cdag_up'], res['cdag_dn'], res['c_up'], res['c_dn']
+            n_up_prod_n_dn = res['n_up_prod_n_dn']
+            n_up, n_dn = res['n_up'], res['n_dn']
+            #test {c, c^+} = 1
+            temp=[c_up.commutator_plus(cdag_up).is_close_to(1), 
+            c_dn.commutator_plus(cdag_dn).is_close_to(1)
+                ]
+            self.assertTrue(all(temp))
+
+    def test_temp_itf(self):
+        symmetry = 'U1'
+        #symmetry = 'Travial'
+        res=iTensorFactory.fermion_op(symmetry)
+        cdag_up, cdag_dn, c_up, c_dn = res['cdag_up'], res['cdag_dn'], res['c_up'], res['c_dn']
+        n_up_prod_n_dn = res['n_up_prod_n_dn']
+        n_up, n_dn = res['n_up'], res['n_dn']
+        #print_vars(vars(),  ['n_up_prod_n_dn.matrix_view()'])
+        #print_vars(vars(),  ['n_up.matrix_view()', 'n_dn.matrix_view()'])
+        #print_vars(vars(),  ['cdag_up.matrix_view()', 'c_up.matrix_view()'])
+        
+        print c_up.commutator_plus(cdag_up).matrix_view()
+        print c_dn.commutator_plus(cdag_dn).matrix_view()
+        
+        print c_up.commutator_plus(cdag_up).is_close_to(1)
+        print c_dn.commutator_plus(cdag_dn).is_close_to(1)
             
 
 class performance_iTensor(object):
@@ -5091,13 +5225,16 @@ if __name__ == "__main__":
            #'test_reshape_u1', 
            #
            #'test_conj_new', 
-           'test_reduce_and_insert_1d_qsp', 
+           #'test_reduce_and_insert_1d_qsp', 
            #'test_temp', 
         ]
         
         add_list_iTF = [
             #'test_diagonal_tensor_rank2', 
             #'test_spin_one_mat', 
+            'test_fermion_op', 
+            #'test_temp_itf', 
+            
                 ]
         
         for a in add_list_iTensor: 

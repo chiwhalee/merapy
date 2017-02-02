@@ -246,7 +246,7 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
         else: 
             return z 
 
-def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=', 
+def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=', 
         show_header=0, return_str=False, fault_tol=True):
     """
         
@@ -288,7 +288,7 @@ def print_vars(dic, var_name_list=None, head=None, sep='\n', key_val_sep='=',
         #else: 
         #    return  str(x) + key_val_sep + str(res)
         res_str = str(res)
-        if isinstance(res, np.ndarray):
+        if isinstance(res, np.ndarray) and res.ndim>1:
             res_str = '\n\t' + res_str.replace('\n', '\n\t')
         return  str(x) + key_val_sep + res_str
             

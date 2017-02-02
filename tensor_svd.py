@@ -450,7 +450,7 @@ class Tensor_svd(object):
             dim_list[i] = s.size 
             qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
             qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
-        
+        #print_vars(vars(),  ['ss'])
         if not compute_uv: 
             spect = {}
             for i in xrange(num_blocks): 
@@ -470,6 +470,7 @@ class Tensor_svd(object):
             ind_sorted = temp[0].argsort() 
             ind_sorted = ind_sorted[: : -1]
             s_sorted = temp[0][ind_sorted]
+            #print_vars(vars(),  ['s_sorted'])
             s2_cumsum = np.cumsum(s_sorted**2)
             #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
             arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
