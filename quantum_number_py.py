@@ -1016,7 +1016,8 @@ class QspU1(QuantSpaceBase):
     #MaxQNNum shouldn't to small, because two qn can fuse into a new qn so that nQN can increase MaxQNNum is related to max rank of tensors in the tensor net
     #issue: 数目太多慢，太少不够，需要改进
     #MaxQNNum = 30 
-    MaxQNNum = 15
+    #MaxQNNum = 15
+    MaxQNNum = 20 #for fermion hubbard model, if nu=0.1, it requeres this number larger
     QnClass = QnU1
     def __init__(self, n, qns, dims, RefQN=None):
         """
@@ -1029,7 +1030,10 @@ class QspU1(QuantSpaceBase):
         n = len(dims)
         assert dims is not None 
         if qns is None: 
-            qns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7][: len(dims)]
+            qns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 
+                    6, -6, 7, -7, -8, 8, -9, 9, -10, 10]
+            assert len(qns)>= len(dims)
+            qns = qns[: len(dims)]
         qns1 = [cls.QnClass(i) for i in qns]
         return cls(n=n, qns=qns1, dims=dims)
 
