@@ -3029,7 +3029,7 @@ class iTensor(TensorBase):
     def set_data_to_zero(self): 
         self.data[: ] = 0.0
         
-    def reduce_1d_qsp(self, i): 
+    def reduce_1d_qsp(self, i):   # def reduce_dummy_index
         """
             suppose t has a qsp[i] whose totDim is 1. reduce it, such that 
             totqn of t is qsp[i].qn
@@ -3050,7 +3050,7 @@ class iTensor(TensorBase):
         
         remove_travial_ind = reduce_1d_qsp 
     
-    def insert_1d_qsp(self, i, qn): 
+    def insert_1d_qsp(self, i, qn):  # def insert_dummy_index
         """
             performance issue: 
                 see that under reduce_1d_qsp 
@@ -3069,7 +3069,8 @@ class iTensor(TensorBase):
         return res 
         
         insert_travial_ind = insert_1d_qsp
-        
+     
+     
     def shift_qn(self, qn_delta, qsp_id): 
         """
             shift totqn and  qn of a qsp at the same time, not changing data 
@@ -3905,7 +3906,7 @@ class iTensorFactory(object):
             if not shift_qn:
                 q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
                 dic = {'0':0, 'u':1, 'd':1, 'ud':2}
-            else:
+            else:  #I have tested with hubbard model, the following if correct in all cases
                 q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
                 dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
                 
@@ -3920,7 +3921,8 @@ class iTensorFactory(object):
             vec['u'].data[:] = [1.0, 0.0]
             vec['d'].data[:] = [0.0, 1.0]
             vec['ud'].data[:] = [1.0]
-            
+        else:
+            raise ValueError
         def make_op(xx):
             op = 0.0
             for a, b, c in xx:
@@ -3959,6 +3961,7 @@ class iTensorFactory(object):
         if 1:
             n_up = cdag_up.dot(c_up)
             n_dn = cdag_dn.dot(c_dn)
+            n_i = n_up + n_dn
             n_up_prod_n_dn = n_up.dot(n_dn)
             
             I = iTensor.identity(n_up.QSp[0].copy_many(2, reverse=[1]) )
@@ -3967,7 +3970,7 @@ class iTensorFactory(object):
                 'cdag_up', 'cdag_dn', 'c_up', 'c_dn', 
                 'adag_up', 'adag_dn', 'a_up', 'a_dn', 
                 'F', 
-                'n_up', 'n_dn', 'n_up_prod_n_dn'] 
+                'n_i', 'n_up', 'n_dn', 'n_up_prod_n_dn'] 
         
         dic = locals()
         res= {a:dic[a] for a in temp}
@@ -4960,7 +4963,7 @@ class Test_iTensorFactory(unittest.TestCase):
 
     def test_fermion_op(self):
         for symmetry in ['U1', 'Travial']:
-            res=iTensorFactory.fermion_op(symmetry)
+            res = iTensorFactory.fermion_op(symmetry)
             cdag_up, cdag_dn, c_up, c_dn = res['cdag_up'], res['cdag_dn'], res['c_up'], res['c_dn']
             n_up_prod_n_dn = res['n_up_prod_n_dn']
             n_up, n_dn = res['n_up'], res['n_dn']
@@ -4969,6 +4972,10 @@ class Test_iTensorFactory(unittest.TestCase):
             c_dn.commutator_plus(cdag_dn).is_close_to(1)
                 ]
             self.assertTrue(all(temp))
+        
+            ni = res['n_i']
+            self.assertTrue(np.all(ni.matrix_view().diagonal()==[0, 1, 1, 2]))
+        
 
     def test_temp_itf(self):
         symmetry = 'U1'

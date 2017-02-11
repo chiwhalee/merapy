@@ -26,6 +26,11 @@ __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_mode
 
 uname=platform.uname()[1]
 HOME = os.path.expanduser('~')
+HOME=HOME.replace('\\', '/') 
+if 'cygwin' in HOME:  #properly deal with cygwin path
+    assert 'cygwin64/home' in HOME
+    HOME = HOME.replace('cygwin64/home', 'Users')
+
 #LOCAL_HOSTNAME = 'QTG-WS1-ubuntu'
 BACKUP_BASE_DIR =  '/'.join([HOME, 'backup_tensor_dir'])
 #BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
@@ -370,7 +375,9 @@ class Config(dict):
         else:
             tem = db.fetch_easy('run_info', (N, 'max'), sub_key_list=['trunc_err_max'])
             tem = tem if tem is not None else 1
-            if  tem <= cfg['trunc_err_TOL']:
+            v = db.fetch_easy('variance', (N, 'max'))
+            v = v if v is not None else 10
+            if  tem <= cfg['trunc_err_TOL'] or v <= cfg['variance_lim']:
                 msg = ['FOUND '] + msg[:2]
                 allow = False
             else:
