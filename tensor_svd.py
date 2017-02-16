@@ -413,6 +413,8 @@ class Tensor_svd(object):
             the dim is truncated if trunc_dim or trunc_err_tol is provided.
                 if both are provided, the later will overide the former.
                 if further a 'trunc_dim_min' is provided, it guarantees not trunc too much
+            params:
+                normalize_singular_val: it in fact always true
             
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 10000
@@ -462,6 +464,7 @@ class Tensor_svd(object):
         if trunc_err_tol is not None: 
             temp = np.zeros((3, totdim), dtype=float)
             d0 = 0
+            #put together singular value for each quantum numbers, prepare for truncation
             for i, d in enumerate(dim_list): 
                 temp[0, d0: d0 + d] = ss[i]
                 temp[1, d0: d0 + d] = i
@@ -470,7 +473,6 @@ class Tensor_svd(object):
             ind_sorted = temp[0].argsort() 
             ind_sorted = ind_sorted[: : -1]
             s_sorted = temp[0][ind_sorted]
-            #print_vars(vars(),  ['s_sorted'])
             s2_cumsum = np.cumsum(s_sorted**2)
             #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
             arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
@@ -484,7 +486,6 @@ class Tensor_svd(object):
                 
             #print_vars(vars(),  ['trunc_dim', 's2_cumsum', '1-trunc_err_tol'])
             norm = math.sqrt(s2_cumsum[trunc_dim-1])
-            #trunc_err = trunc_err_tol 
             prepare_trunc = False 
         
         trunc_dim = trunc_dim if trunc_dim_min is None else max(trunc_dim, trunc_dim_min)
@@ -502,13 +503,10 @@ class Tensor_svd(object):
                 ind_sorted = temp[0].argsort()
                 ind_sorted = ind_sorted[: : -1]
                 
-            #ind_largest = ind_sorted[-1:-trunc_dim-1:-1]
             ind_largest = ind_sorted[:trunc_dim]
-            
             temp = temp[:, ind_largest]
             
             if prepare_trunc: 
-                #print_vars(vars(),  ['temp[0]**2', 'np.cumsum(temp[0]**2)'])
                 norm = np.linalg.norm(temp[0])
             trunc_err = 1-norm**2  
             
@@ -520,7 +518,7 @@ class Tensor_svd(object):
                     last = int(temp[2][ind]) + 1 
                     #truncate vecs, and normalize singular values 
                     ss[i] = ss[i][: last]
-                    ss[i] *= 1./norm 
+                    ss[i] *= 1./norm   # always normalize_singular_val
                     dim_list[i] = last 
                     uu[i] = uu[i][:, :last]
                     vv[i] = vv[i][:last, :]

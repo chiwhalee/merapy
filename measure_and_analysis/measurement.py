@@ -270,7 +270,8 @@ def measure_S(S=None, parpath=None, path=None,
                 is_found = rdb.has_key_list(key_list)
             if is_found: 
                 found.append(w)
-        print 'found these fields {}, omit them.'.format(found)
+        if found:
+            print 'found these fields {}, omit them.'.format(found)
         which = [w for w in which if w not in found]
      
     failed_list = []
