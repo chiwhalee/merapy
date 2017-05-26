@@ -467,7 +467,7 @@ class Main(object):
         #    #func = cls.run_one
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
-        from brokest.task_center import submit_one, submit_many, LOCAL_IP
+        from brokest.task_center import TaskCenter, submit_one, submit_many, LOCAL_IP
         if need_confirm:
             i=raw_input('submit %s jobs? yes(y)\n'%(len(config_group)))
             if i.lower()=='y':
@@ -501,6 +501,16 @@ class Main(object):
             #    print 'updationg job order according to their priority... '
             #    tc = TaskCenter(host=LOCAL_IP)
             #    print tc.update_job_order()
+        
+        if job_info.has_key('job_group_name'):
+            job_group_name = job_info['job_group_name']
+            i=raw_input('add_notify for %s ? yes(y)\n'%(job_group_name))
+            if i.lower()=='y':
+                tc = TaskCenter(host=LOCAL_IP)
+                print tc.add_notify(job_group_name)
+            else:
+                print  'canceled'
+                
             
     @staticmethod 
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 

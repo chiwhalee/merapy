@@ -28,7 +28,7 @@ from merapy.utilities import load, save
 #LOCAL_IP = '210.45.117.111'
 #LOCAL_USERNAME = 'lizh' 
 
-LOCAL_IP = '210.45.117.242'
+LOCAL_IP = '210.45.74.76'
 LOCAL_USERNAME = 'zhli' 
 LOCAL_HOSTNAME = 'qtg7501'
 

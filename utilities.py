@@ -287,7 +287,7 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
         #    return  str(res)
         #else: 
         #    return  str(x) + key_val_sep + str(res)
-        if isinstance(res, np.ndarray) and res.dtype==int:
+        if isinstance(res, np.ndarray) and res.dtype==float:
             res= res.round(round)
         res_str = str(res)
         if isinstance(res, np.ndarray) and res.ndim>1:
@@ -314,13 +314,21 @@ def dict_to_object(dic):
 
 
 def send_email(msg): 
+    """
+    issue: not secure to save password in a file
+        find solution refer to 
+        https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=python%20email%20encrypt%20password
+        http://stackoverflow.com/questions/157938/hiding-a-password-in-a-python-script
+    """
     import smtplib
     import email.mime.text
     # my test mail
-    #mail_username='chiwhalee@gmail.com'
     mail_username = 'zhihuali@mail.ustc.edu.cn'
-    mail_password = '****'
-    raise
+    s= ''
+    #issue: this is risky to put it in a file, fix this!
+    with open('./p.txt', 'r') as f:
+        s=f.readline()[:-1]
+    mail_password = s
     from_addr = mail_username
     to_addrs=('chiwhalee@gmail.com')
 
@@ -351,7 +359,7 @@ def send_email(msg):
         print 'LOGIN ERROR ****'
     
     # fill content with MIMEText's object 
-    the_email = email.mime.text.MIMEText('Hi ,I am leehark')
+    the_email = email.mime.text.MIMEText('send from merapy')
     the_email['From'] = from_addr
     the_email['To'] = ';'.join(to_addrs)
     #the_email['Subject']='hello , today is a special day'
@@ -424,15 +432,6 @@ class OrderedSet(collections.MutableSet):
             return len(self) == len(other) and list(self) == list(other)
         return set(self) == set(other)
 
-            
-if __name__ == '__main__':
-    s = OrderedSet('abracadaba')
-    t = OrderedSet('simsalabim')
-    print(s | t)
-    print(s & t)
-    print(s - t)
-
-
 class TestIt(unittest.TestCase): 
     def test_temp(self): 
         s = OrderedSet('sssssdfsdfdsf')
@@ -449,11 +448,14 @@ class TestIt(unittest.TestCase):
             print 'bbb', b 
             self.assertEqual(z, b)
             os.remove(path)
-        
+    
+    def xtest_send_email(self):
+        msg = {'a':1}
+        send_email(msg)
+           
 
-#replace_graph(x)
 if __name__ == "__main__": 
-    replace_num(x)
+    
 
     if 0: 
         unittest.main()
@@ -461,7 +463,8 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         
         add_list = [
-        'test_temp', 
+        #'test_temp', 
+        'xtest_send_email', 
         #'test_save_load', 
           
         ]

@@ -3906,7 +3906,7 @@ class iTensorFactory(object):
             if not shift_qn:
                 q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
                 dic = {'0':0, 'u':1, 'd':1, 'ud':2}
-            else:  #I have tested with hubbard model, the following if correct in all cases
+            else:  #I have tested with hubbard model, the following is correct in all cases
                 q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
                 dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
                 
@@ -3974,6 +3974,8 @@ class iTensorFactory(object):
         
         dic = locals()
         res= {a:dic[a] for a in temp}
+        for i in res:
+            res[i].type_name = i
         return res 
             
 
