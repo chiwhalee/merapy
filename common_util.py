@@ -551,11 +551,18 @@ class TestCommon(unittest.TestCase):
     
     def test_matrix_svd(self): 
         print matrix_svd.__doc__ 
-        a = np.random.random((10, 8))
-        u, s, v=matrix_svd(8, a)
+        #n, m = 200, 80
+        n, m = 100, 80
+        a = np.random.random((n, m))
+        u, s, v=matrix_svd(m, a)
         print  s 
+        print u.shape, s.shape, v.shape
+        print (u*s).dot(v) - a
+        
         U, S, V=np.linalg.svd(a, full_matrices=0)
         print  S 
+        val, vec = np.linalg.eigh(a.T.dot(a)) 
+        #print S**2-val[::-1]
         self.assertTrue(np.allclose(s, S, atol=1e-15))
 
     def test_matrix_eigen_vector(self):
@@ -748,10 +755,10 @@ if __name__=="__main__":
         add_list = [
             #'test_temp', 
             #'test_matrix_multiply', 
-            'test_matrix_multiply_inplace', 
+            #'test_matrix_multiply_inplace', 
             #'test_get_num_of_threads', 
             #'test_matrix_svd_1by1', 
-            #'test_matrix_svd', 
+            'test_matrix_svd', 
             #'test_matrix_eigen_vector', 
         ]
         for a in add_list: 

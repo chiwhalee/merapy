@@ -18,7 +18,7 @@ from merapy.decorators import *
 from merapy.quantum_number import * #import QuantSpace
 from merapy.utilities import print_vars 
 import merapy.common_util as common_util 
-from merapy.utilities import print_vars 
+from merapy.utilities import print_vars, save
 
 """ 
     issue225: 
@@ -415,6 +415,14 @@ class Tensor_svd(object):
                 if further a 'trunc_dim_min' is provided, it guarantees not trunc too much
             params:
                 normalize_singular_val: it in fact always true
+                
+            note1:
+                it happens that it through an error saying  SVD not converge. 
+                Actually,  it appears to me that SVD should ALWAYS converge! (this point still need confirm) 
+                This happens mostly because bug in a early version of BLAS, 
+                refs: https://github.com/scipy/scipy/issues/3868
+                so I just use the fortran version common_util.matrix_svd instead 
+                    
             
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 10000
@@ -441,13 +449,20 @@ class Tensor_svd(object):
                 #issue225 #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
                 #暂时先不用它，而改用numpy
                 u, s, v = common_util.matrix_svd(min(dl, dr), mat)
+                uu[i], ss[i], vv[i] = u, s, v
             else:
-                if compute_uv: 
-                    u, s, v=scipy.linalg.svd(mat, full_matrices=False)
+                try:  # sometimes there is SVD not converge error
+                    if compute_uv: 
+                        u, s, v=scipy.linalg.svd(mat, full_matrices=False)
+                        uu[i], ss[i], vv[i] = u, s, v
+                    else: 
+                        s = scipy.linalg.svd(mat, full_matrices=False, compute_uv=False)
+                        ss[i] = s
+                except scipy.linalg.LinAlgError as err:  # see note1
+                    warnings.warn(" scipy.linalg.svd not converge  use another version of SVD instead")
+                    u, s, v = common_util.matrix_svd(min(dl, dr), mat)
                     uu[i], ss[i], vv[i] = u, s, v
-                else: 
-                    s = scipy.linalg.svd(mat, full_matrices=False, compute_uv=False)
-                    ss[i] = s
+                    
                     
             dim_list[i] = s.size 
             qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
@@ -1201,47 +1216,14 @@ class TestIt(unittest.TestCase):
                 self.assertTrue(c.is_close_to(1))
 
     def test_temp(self): 
-        from merapy import QspU1 
+        from merapy import QspU1, load 
         np.random.seed(1234)
-        if 1: 
-            #np.set_printoptions(5)
-            np.random.seed(1234)
-            q1 = QspU1.easy_init([ 1], [4])
-            q2 = QspU1.easy_init([ 0], [4])
-            
-            totqn = QspU1.QnClass(1)
-            t = iTensor.example(qsp=[q1, q2], totqn=totqn, symmetry='U1')
-
-            print_vars(vars(),  ['t'])
-            
-            res=Tensor_svd.eig_rank2(t, 
-                    #trunc_dim = 2, 
-                    trunc_which='left', 
-                    #trunc_which='right'
-                    )
-            vec = res['vec_mat']
-            print_vars(vars(),  ['vec'])
-            print_vars(vars(),  ['repr(vec.data)'])
-            val = res['val_mat']
-            print_vars(vars(),  ['val'])
         
-        if 0: 
-            #np.set_printoptions(5)
-            np.random.seed(1234)
-            q1 = QspU1.easy_init([ 1, -1, -2], [4, 3, 2])
-            q2 = QspU1.easy_init([ 0, 2, 3], [4, 3, 2])
-            
-            totqn = QspU1.QnClass(1)
-            t = iTensor.example(qsp=[q1, q2], totqn=totqn, symmetry='U1')
-
-            print_vars(vars(),  ['t'])
-            
-            res=Tensor_svd.eig_rank2(t, 
-                    #trunc_dim = 2, 
-                    trunc_which='left')
-            t1 = res['vec_mat']
-            print_vars(vars(),  ['t1'])
-            print_vars(vars(),  ['repr(t1.data)'])
+        t = iTensor.example(rank=2, symmetry='U1')
+        t.data[: ] = np.random.random(t.totDim)
+        t.data[0] = np.nan
+        U, S, V=Tensor_svd.svd_rank2(t)
+        print S.data 
             
             
 
