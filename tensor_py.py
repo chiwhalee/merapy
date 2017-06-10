@@ -87,6 +87,7 @@ class tBuffer(object):
 #meth_names= ["__init__", "set_data_entrance", "contract_core", "permutation"]
 #meth_names.pop(0)
 
+#print 'disabled decorator '*10
 @decorate_methods(decorator=tensor_player, meth_names=None)
 class iTensor(TensorBase):
     """
@@ -152,7 +153,7 @@ class iTensor(TensorBase):
         rank = len(QSp)
         self.rank = rank 
         self.ind_labels = None 
-        self.dtype = dtype 
+        #self.dtype = dtype 
         
         #assert rank == len(QSp), ('aaaaaaaaaaaaaaaaaa\n', rank, len(QSp), QSp) 
         
@@ -220,7 +221,7 @@ class iTensor(TensorBase):
                 self.buf_ref[1]=i                
                 iTensor.T_BUFFER[n].in_use[i] = True 
                 if iTensor.T_BUFFER[n].T[i].size<data_size:
-                    iTensor.T_BUFFER[n].T[i] = np.empty(data_size, dtype=iTensor.dtype)
+                    iTensor.T_BUFFER[n].T[i] = np.empty(data_size, dtype=float)
                 
                 return iTensor.T_BUFFER[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.T_BUFFER[0].in_use[:100], )))
@@ -445,6 +446,10 @@ class iTensor(TensorBase):
     @property
     def symmetry(self): 
         return self.qsp_class.QnClass.SYMMETRY 
+    
+    @property
+    def dtype(self):
+        return self.data.dtype
         
     if 1: #for compatable with numpy
         @property  
@@ -474,14 +479,15 @@ class iTensor(TensorBase):
         for i in xrange(3):
             print cls.T_BUFFER[i].in_use[:64]
 
-    def copy_struct(self, other=None, use_buf=False):
+    def copy_struct(self, other=None, has_data=True, use_buf=False):
         """
             see iTensor_CopyStruct in f90
         """
         QSp= [q.copy() for q in self.QSp]
         totQN = self.totQN.copy()
-        other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, dtype=self.dtype, use_buf=use_buf)
-        #other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, use_buf=use_buf)
+        other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, 
+                dtype=self.dtype, has_data=has_data, use_buf=use_buf)
+        other.type_name = self.type_name 
         return other
 
     def copy_struct_new(self, other=None, use_buf=False):
@@ -499,11 +505,11 @@ class iTensor(TensorBase):
 
     def copy(self, use_buf=False):
         """
-            deepcopy
+            deepcopy:
+                copy also data
         """
         
         other = self.copy_struct(use_buf=use_buf)
-        other.type_name = self.type_name 
         totDim=self.totDim
         #for large array(size>10^4) slicing is faster than copy
         other.data[:totDim]=self.data[:totDim]
@@ -712,6 +718,8 @@ class iTensor(TensorBase):
         if pi>= block_len:
             raise ValueError("error, sub_ind values not permited, sub_ind=%s"%sub_ind)
         #print "ppppqqqq  ", pq, pi,'idx', temp, 'pidx', pidx, pidx + pi 
+        #if isinstance(element, complex):
+        #    raise  
         self.data[pidx+pi] = element 
 
     def get_element(self, qn_id_tuple, sub_ind):
@@ -2381,6 +2389,8 @@ class iTensor(TensorBase):
         temp=self.permutation(ord, buffer=buffer, use_buf=use_buf)
         
         temp.reverse_qsp(inplace=False)
+        if self.dtype == complex:  # this line maybe not needed, numpy may check this before do the conj 
+            np.conj(self.data, self.data)
         return temp
     
     def conj(self): 
@@ -2431,7 +2441,6 @@ class iTensor(TensorBase):
             A = self.copy(use_buf=use_buf)
         else: 
             raise  ValueError('symmetry is %s'% self.symmetry)
-            
         np.conj(A.data, out=A.data)
         return A 
 
@@ -3213,16 +3222,22 @@ class iTensorFactory(object):
         return iTensor(rank, qsp, qn)
     
     @staticmethod
-    def random(qsp, totqn=None): 
+    def random(qsp, totqn=None, dtype=float): 
         """
             create an iTensor whose data is randomized 
         """
         if isinstance(totqn, int):
             totqn = qsp[0].QnClass(totqn)
-        res = iTensor(QSp=qsp, totQN=totqn)
+        res = iTensor(QSp=qsp, totQN=totqn, dtype=dtype)
         #issue:  maybe here need devide total size?
         n = res.data.size
-        res.data[: ] = np.random.random(n) - 0.5 
+        if dtype == float: 
+            res.data[: ] = np.random.random(n) - 0.5 
+        elif dtype == complex:
+            res.data[: ] = (np.random.random(n) - 0.5  + 
+                    1j*(np.random.random(n) - 0.5))
+        else:
+            raise  
         return res 
     
     @staticmethod
@@ -3998,14 +4013,17 @@ class iTensorFactory(object):
         raise NotImplemented
 
     @staticmethod
-    def travial_tensor(rank, symmetry): 
+    def travial_tensor(rank, symmetry, dtype=float): 
         """
             scalar 1 with dummy indices 
         """
         qsp_class= symmetry_to_QspClass(symmetry)
         qsp = [qsp_class.null() for i in xrange(rank)]
-        res= iTensor(QSp=qsp)
-        res.data[0] = 1.0
+        res= iTensor(QSp=qsp, dtype=dtype)
+        if dtype == float:  
+            res.data[0] = 1.0
+        else:  #complex type,  if not doing this, numpy would warn
+            res.data[0] = 1.0 + 0j 
         return res 
     
     

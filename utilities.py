@@ -323,7 +323,7 @@ def send_email(msg):
     import smtplib
     import email.mime.text
     # my test mail
-    mail_username = 'zhihuali@mail.ustc.edu.cn'
+    mail_username = 'zhihuali@ustc.edu.cn'
     s= ''
     #issue: this is risky to put it in a file, fix this!
     with open('./p.txt', 'r') as f:

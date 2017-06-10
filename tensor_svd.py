@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 import numpy.linalg as linalg
 import scipy 
+import scipy.linalg 
 from scipy.sparse.linalg import eigs, eigsh 
 from collections import OrderedDict 
 import warnings 
@@ -418,10 +419,12 @@ class Tensor_svd(object):
                 
             note1:
                 it happens that it through an error saying  SVD not converge. 
-                Actually,  it appears to me that SVD should ALWAYS converge! (this point still need confirm) 
-                This happens mostly because bug in a early version of BLAS, 
-                refs: https://github.com/scipy/scipy/issues/3868
-                so I just use the fortran version common_util.matrix_svd instead 
+                Actually, SVD may fail for some matrices,  but very few this would happen. 
+                If it happens frequently mostly because numpy use an early version of BLAS which has a bug. 
+                so I just try the fortran version common_util.matrix_svd instead when it fails. 
+                see also
+                    https://github.com/scipy/scipy/issues/3868
+                    https://github.com/numpy/numpy/issues/1588
                     
             
         """
@@ -459,7 +462,9 @@ class Tensor_svd(object):
                         s = scipy.linalg.svd(mat, full_matrices=False, compute_uv=False)
                         ss[i] = s
                 except scipy.linalg.LinAlgError as err:  # see note1
-                    warnings.warn(" scipy.linalg.svd not converge  use another version of SVD instead")
+                    msg = " scipy.linalg.svd not converge  use another version of SVD instead"
+                    warnings.warn(msg)
+                    print msg
                     u, s, v = common_util.matrix_svd(min(dl, dr), mat)
                     uu[i], ss[i], vv[i] = u, s, v
                     
@@ -566,9 +571,10 @@ class Tensor_svd(object):
         qsp_r = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
         qsp_l_rev = qsp_l.copy(); qsp_l_rev.reverse()
         qsp_r_rev = qsp_r.copy(); qsp_r_rev.reverse()
-        U = iTensor(QSp=[tt.QSp[0], qsp_l_rev])
-        V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]])
-        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy())
+        
+        U = iTensor(QSp=[tt.QSp[0], qsp_l_rev], dtype=tt.dtype)
+        V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]], dtype=tt.dtype)
+        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=float)
         if totqn != totqn.__class__.qn_id():  # when itensor carry non-travial totqn  
             if totqn_on_which == 's' : 
                 pass
@@ -627,7 +633,7 @@ class Tensor_svd(object):
         dim_list_trunc = np.ndarray(num_blocks, dtype=np.int)   #truncated dim_list 
         qn_list_l = np.ndarray(num_blocks, dtype=np.object)
         qn_list_r = np.ndarray(num_blocks, dtype=np.object)
-        
+        dtype = tt.dtype 
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
             qn0, qn1 = qn_id_tuple
@@ -635,9 +641,18 @@ class Tensor_svd(object):
             assert dl == dr  
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
-            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            val = np.empty(dl, order='F')
-            common_util.matrix_eigen_vector(mat, val) 
+            if dtype == float: 
+                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+                val = np.empty(dl, order='F')
+                common_util.matrix_eigen_vector(mat, val) 
+            else:
+                raise  NotImplemented
+                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='C')
+                #issue: maybe scipy.linalg.eigh is better
+                #np.linalg.eigh(mat)
+                #val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
+                #val, mat = scipy.linalg.eigh(mat, overwrite_a=False)
+                val, mat = np.linalg.eigh(mat)
             VAL[i] = val[: dl] 
             VEC[i] = mat
             dim_list[i] = dl 
@@ -832,16 +847,19 @@ class Tensor_svd(object):
                     if k>d:
                         k = d-2
                     if is_hermite: 
+                        print_vars(vars(),  ['V_buf.shape'])
                         vals, vecs= eigsh(A=V_buf, which=which, k=k, tol=tol )
                     else: 
                         vals, vecs= eigs(A=V_buf, which=which, k=k, tol=tol )
                 else: 
                     raise 
                 
-                res[qn._val] = vals
+                #res[qn._val] = vals
+                res[qn._val] = vals, vecs
 
             else:
-                print ("qn %s not found in qn_list %s, QSp_Group1.QNs are %s"%(qn,  qn_list, cls.QSp_Group1.QNs))
+                pass
+                #warnings.warn("qn %s not found in qn_list %s, QSp_Group1.QNs are %s"%(qn,  qn_list, cls.QSp_Group1.QNs))
 
         return res
     

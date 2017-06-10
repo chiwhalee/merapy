@@ -19,7 +19,7 @@ class TensorBase(object):
     this class is newly added 
     """
     MaxRank= 32  # maximal rank of tensors supported
-    dtype="float"
+    #dtype = float 
 
     def __init__(self,rank=None, ind_labels=None,use_buf=False):
         """
@@ -154,10 +154,16 @@ class TensorBase(object):
         return res
 
     def __rmul__(self, scalar):
-        #self.data *= scalar  # this is wrong! 
+        """
+            calculate scalar*self 
+        """
+        #self.data *= scalar  # this is wrong!,  because this is not intend to be inplace operation
         #return self
-        res= self.copy()
-        res.data *= scalar
+        res = self.copy_struct(has_data=False)
+        res.data = scalar*self.data
+        # I dont use the following,  because if scalar is of type complex, numpy raise if self.data is not of type complex 
+        #res = self.copy()
+        #res.data *= scalar  
         return res 
     
     
