@@ -612,12 +612,13 @@ class Tensor_svd(object):
             return U, S, V 
         else:
             return U, S, V , trunc_err 
-
+    
     @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, trunc_which=None, 
+    def eig_rank2(tensor, trunc_dim=None, 
             return_trunc_err=False, return_val=False,  use_buff=False):
-        """
-            为了在mps中 对角化密度矩阵 而写此函数
+        """ 
+            
+            仅仅为了在mps中 对角化密度矩阵 而写此函数，不做一般用途
             exact diagonalizetion of a rank-2 symmetric tensor 
             given A such that A = A^+, find V such that 
                 AV = lam V
@@ -641,18 +642,15 @@ class Tensor_svd(object):
             assert dl == dr  
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
-            if dtype == float: 
+            if dtype==float: 
                 mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
                 val = np.empty(dl, order='F')
                 common_util.matrix_eigen_vector(mat, val) 
             else:
-                raise  NotImplemented
-                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='C')
-                #issue: maybe scipy.linalg.eigh is better
-                #np.linalg.eigh(mat)
-                #val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
-                #val, mat = scipy.linalg.eigh(mat, overwrite_a=False)
-                val, mat = np.linalg.eigh(mat)
+                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+                val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
+                #val, mat = np.linalg.eigh(mat)
+            
             VAL[i] = val[: dl] 
             VEC[i] = mat
             dim_list[i] = dl 
@@ -661,8 +659,7 @@ class Tensor_svd(object):
         totdim = np.sum(dim_list)
         index = range(num_blocks)
         if trunc_dim < totdim:  
-            #temp = np.zeros((3, totdim), dtype=float)
-            #temp = np.ndarray(3, dtype=np.object)
+            #print_vars(vars(),  ['totdim'])
             temp = {}
             temp[0] = np.ndarray(totdim, dtype=float)
             temp[1] = np.ndarray(totdim, dtype=int)
@@ -709,21 +706,12 @@ class Tensor_svd(object):
         else: 
             dim_list_trunc = dim_list 
             trunc_err = np.nan 
-        if trunc_which == 'left': 
-            qn_list_l = qn_list_l[index]
-            q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_trunc)
-            q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
-            for i in xrange(VEC.size): 
-                VEC[i] = VEC[i].T 
-        elif trunc_which == 'right' : 
-            qn_list_r = qn_list_r[index]
-            q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
-            q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trunc)
-        else: 
-            raise 
+                
+        qn_list_r = qn_list_r[index]
+        q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
+        q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trunc)
         
-        res = iTensor(QSp=[q1, q2], use_buf=use_buff)
-        #print_vars(vars(),  ['res.shape', 'empty_list', 'dim_list'], '')
+        res = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
         
         for i in xrange(res.nidx): 
             p  = res.Block_idx[0, i]
@@ -731,10 +719,10 @@ class Tensor_svd(object):
             res.data[p: p + size] = VEC[i].ravel(order='F')
             
         if return_val: 
-            if trunc_which == 'right' : 
-                val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff)
-            else:
-                val_mat = iTensor(QSp=[q1.copy(), q1.copy(reverse=1)], use_buf=use_buff)
+            
+            val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff)
+            
+                
             for i in xrange(val_mat.nidx): 
                 p  = val_mat.Block_idx[0, i]
                 size  = val_mat.Block_idx[1, i]
@@ -847,7 +835,6 @@ class Tensor_svd(object):
                     if k>d:
                         k = d-2
                     if is_hermite: 
-                        print_vars(vars(),  ['V_buf.shape'])
                         vals, vecs= eigsh(A=V_buf, which=which, k=k, tol=tol )
                     else: 
                         vals, vecs= eigs(A=V_buf, which=which, k=k, tol=tol )
@@ -1051,6 +1038,12 @@ class TestIt(unittest.TestCase):
             V_old = np.array([-0.4847991142639 ,  0.23290875129277, -0.044051212802  , -0.48705950022753, -0.8724290630502 , -0.00866150155038, -0.59494397532567,  0.34460444158915,  0.60174128416965, -0.41687471531714,  0.25664922044225, -0.79742830145878, -0.62198761202164,  0.78302708158251, -0.78302708158251, -0.62198761202164, -0.68010581731849, -0.7331139592516 ,  1.              ])
             self.assertTrue(np.allclose(V.data, V_old, atol=1e-12))
             print 'test svd_rank2 for cases qn of dim=0 is removed  -- pass'
+        
+        if 1: #test complex dtype   
+            t = iTensor.example(rank=2, symmetry='U1', dtype=complex)
+            t.data[: ] = np.random.random(t.totDim)  +  1j*np.random.random(t.totDim)  
+            U, S, V=Tensor_svd.svd_rank2(t)
+            print U.dot(S).dot(V) == t
 
     def test_svd_rank2_2(self): 
         if 1: 
@@ -1205,7 +1198,7 @@ class TestIt(unittest.TestCase):
             t.data[: ] = data
         if 1: 
             temp = Tensor_svd.eig_rank2(t, 
-                    trunc_dim=10, trunc_which='right', return_val=1) 
+                    trunc_dim=10,  return_val=1) 
             print_vars(vars(),  ['temp["trunc_err"]'])
             self.assertAlmostEqual(temp['trunc_err'], -0.146845010382, 12)
             
@@ -1214,37 +1207,65 @@ class TestIt(unittest.TestCase):
             if 1: 
                 print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
                 temp = Tensor_svd.eig_rank2(t, 
-                        trunc_dim=trunc_dim, trunc_which='right', return_val=1) 
+                        trunc_dim=trunc_dim,  return_val=1) 
                 tt = temp['vec_mat']
-                tt.show_data()
+                #tt.show_data()
                 print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
                 print_vars(vars(),  ['tt.shape'])
                 c, _ = tt.contract(tt.conj(), [0, 1], [0, 2])
                 self.assertTrue(c.is_close_to(1))
                 
-            if 1: 
-                print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
-                temp = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim, trunc_which='left') 
-                tt = temp['vec_mat']
+
+    def test_temp(self): 
+        pass
+        np.set_printoptions(precision=3)
+        if 0: 
+            np.random.seed(1234)
+            #qsp = QspU1.easy_init([0, 1, -1, 2, -2] , [4, 2, 3, 2, 2])
+            qsp = QspU1.easy_init([0, 1, -1, ] , [2, 2, 1])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1', 
+                    dtype=float)
+            data = np.random.random(t.totDim)
+            t.data[: ] = data[:]
+        
+            temp = Tensor_svd.eig_rank2(t, 
+                    trunc_dim=6,  return_val=1) 
+            vec, val = temp['vec_mat'], temp['val_mat']
+            if 1:
+                tt = vec 
+                #tt = temp['vec_mat']
                 tt.show_data()
                 print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
                 print_vars(vars(),  ['tt.shape'])
                 c, _ = tt.contract(tt.conj(), [0, 1], [-1, 1])
-                c.show_data()
+                #c.show_data()
                 self.assertTrue(c.is_close_to(1))
-
-    def test_temp(self): 
-        from merapy import QspU1, load 
-        np.random.seed(1234)
         
-        t = iTensor.example(rank=2, symmetry='U1')
-        t.data[: ] = np.random.random(t.totDim)
-        t.data[0] = np.nan
-        U, S, V=Tensor_svd.svd_rank2(t)
-        print S.data 
+        if 1: 
+            np.random.seed(1234)
+            #qsp = QspU1.easy_init([0, 1, -1, 2, -2] , [4, 2, 3, 2, 2])
+            qsp = QspU1.easy_init([0, 1, -1, ] , [2, 2, 1])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1', 
+                    dtype=complex)
+            t.data[: ] =  np.random.random(t.totDim)  + 1j*np.random.random(t.totDim)
+        
+            temp = Tensor_svd.eig_rank2(t, 
+                    trunc_dim=2,  
+                    return_val=1) 
+            vec, val = temp['vec_mat'], temp['val_mat']
+            if 1:
+                tt = vec 
+                #tt = temp['vec_mat']
+                tt.show_data()
+                print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
+                print_vars(vars(),  ['tt.shape'])
+                c, _ = tt.contract(tt.conj(), [0, 1], [-1, 1])
+                #c.show_data()
+                self.assertTrue(c.is_close_to(1))
             
-            
-
+    
 if __name__ == "__main__":
     if 0: 
         tt = test_Tensor_svd(symmetry="Travial")
@@ -1267,10 +1288,10 @@ if __name__ == "__main__":
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
-           #'test_eig_rank2', 
+           'test_eig_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
-           'test_temp', 
+           #'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

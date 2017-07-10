@@ -196,7 +196,19 @@ class iTensor(TensorBase):
     def __setstate__(self, d): 
         self.__dict__.update(d)
         self.buf_ref = np.array([-1, -1], np.int)   # this is important 
-        
+    
+    def __eq__(self, other):
+        """
+            still need wanshan 
+        """
+        if not isinstance(other, iTensor):
+            return False
+        if not self.QSp == other.QSp:
+            return False
+        if not np.allclose(self.data, other.data, atol=1e-14):
+            return False
+        return True
+     
     def buffer_assign(self, data_size, n=None):
         """
             see use_tBuffer in f90
@@ -385,9 +397,8 @@ class iTensor(TensorBase):
     def set_block(self, i, data): 
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
-        self.data[p: p + size] = data
-        #print_vars(vars(),  ['"remove assertion"'], ' ')
-        #assert self.data.dtype == data.dtype  
+        #self.data[p: p + size] = data
+        self.data[p: p + size] = data[:]  # this checks dtype, the above dont
     
     @staticmethod 
     def example(qsp=None, rank=4, totqn=None, symmetry='Z2', dtype=float, rand_seed=None): 
@@ -470,7 +481,7 @@ class iTensor(TensorBase):
         
         @property
         def T(self): 
-            assert self.rank == 2 
+            #assert self.rank == 2 
             return self.transpose([1, 0])
         
         
@@ -969,23 +980,6 @@ class iTensor(TensorBase):
         
         print  match_table     
         return res    
-    
-    def reshape_wrong(self, *qsp_new): 
-        if not hasattr(qsp_new[0], 'QNs'): 
-            qsp_new = qsp_new[0]
-        
-        #check matchable 
-        qsp = self.QSp
-        q = qsp[0]
-        for i in qsp[1: ]:  
-            q = q.add(i)
-        p = qsp_new[0]
-        for i in qsp_new[1: ]:  
-            p = p.add(i)
-        assert q == p  , (q, p)
-        
-        qn_cls = qsp[0].QnClass
-        return iTensor(QSp=qsp_new, totQN=self.totQN, buffer=self.data)
     
     def reshape_bac(self, *qsp_new): 
         """
@@ -1669,7 +1663,7 @@ class iTensor(TensorBase):
             guide = (1, (1, 2))
         assert self.qsp_class.prod_many(qsp_list)==self.QSp[which]
         t2 = self 
-        t3 = iTensor(QSp=qsp, totQN=self.totQN.copy())
+        t3 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
         #print_vars(vars(), ['t2.Addr_idx[:,:t2.nidx].T', 't2.Block_idx[:,:t2.nidx].T', ], sep_key_val='=\n')
         #print_vars(vars(), ['t3.Addr_idx[:,:t3.nidx].T', 't3.Block_idx[:,:t3.nidx].T', ], sep_key_val='=\n')
         for i in range(t2.nidx): 
@@ -1738,7 +1732,7 @@ class iTensor(TensorBase):
          
         #print_vars(vars(), ['leg_map', 'len(qsp)', 'qsp']); raise 
         
-        res = iTensor(QSp=qsp, totQN=self.totQN.copy())
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
         t2 = res 
         t3 = self
         for i in range(t2.nidx): 
@@ -2422,6 +2416,8 @@ class iTensor(TensorBase):
                 this also depends on whether change totqn after conj_new
                 
                 so this func is not very complete
+            issue:
+                这里的几个函数需要整理，名字太乱，功能重复
         """
         #assert self.rank == 3  
 
@@ -2441,7 +2437,7 @@ class iTensor(TensorBase):
             A = self.copy(use_buf=use_buf)
         else: 
             raise  ValueError('symmetry is %s'% self.symmetry)
-        np.conj(A.data, out=A.data)
+        #np.conj(A.data, out=A.data)   # note should no complex conjugate here !
         return A 
 
     def reverse_qsp(self, inplace=True):
