@@ -1870,7 +1870,6 @@ class iTensor(TensorBase):
             QSp.extend(T2.QSp[div:rank2])
 
         if rank3==0:
-            #print  'qqqqq', QSp
             #QSp = [self.QSp[0].null()]
             QSp = []
         
@@ -1891,11 +1890,11 @@ class iTensor(TensorBase):
             iQN2[0:rank2]=T2.Addr_idx[0:rank2,idx2]
             p2 = T2.Block_idx[0,idx2]
             
-            Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div, rank2)])
+            Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div, rank2)], dtype=np.int)
             if div == rank2: 
                 Dim2 = 1 
-            Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div)])
-            
+            Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div)], dtype=np.int)  # np.prod([])=1.0, so use dtype=np.int 
+                
             for idx1 in xrange(self.nidx):
                 iQN1[0] = 1 #!for rank=0
                 iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
@@ -2231,7 +2230,7 @@ class iTensor(TensorBase):
                 return T3
     
     @staticmethod 
-    def contract_tensor_list(tlist, final_ind_labels=None): 
+    def contract_tensor_list(tlist, final_ind_labels=None):   #def ctl
         """
             requires each t.ind_labels is not None 
             params:
@@ -2253,6 +2252,7 @@ class iTensor(TensorBase):
             head = head.permutation(order)
             head.ind_labels = final_ind_labels 
         return head 
+    ctl = CTL= contract_tensor_list 
     
     def dot(self, other): 
         """
@@ -3055,12 +3055,15 @@ class iTensor(TensorBase):
         
         remove_travial_ind = reduce_1d_qsp 
     
-    def insert_1d_qsp(self, i, qn):  # def insert_dummy_index
+    def insert_1d_qsp(self, i, qn=None):  # def insert_dummy_index
         """
             performance issue: 
                 see that under reduce_1d_qsp 
-        
+            params:
+                i: 
+                    insert the qsp before index i 
         """
+        qn = qn if qn is not None else self.qsp_class.QnClass.qn_id()
         if isinstance(qn, int): 
             qn = self.qsp_class.QnClass(qn)
             
@@ -3070,11 +3073,12 @@ class iTensor(TensorBase):
         leg = iTensor(QSp=[qsp], totQN=qnr)
         leg.data[0] = 1.0
         res, _ = self.contract(leg, range(self.rank), [self.rank])
-        res= res.transpose(range(i+1)  + [self.rank]  + range(i+1, self.rank))
+        order = range(self.rank)
+        order.insert(i, self.rank)
+        res= res.transpose(order)
         return res 
         
         insert_travial_ind = insert_1d_qsp
-     
      
     def shift_qn(self, qn_delta, qsp_id): 
         """
@@ -3903,48 +3907,17 @@ class iTensorFactory(object):
                     this has benifits that at half filling MPS has total qn of 0
                     
         """
-        vec = OrderedDict()
-        names = ['0', 'u', 'd', 'ud']
-        if symmetry ==  "Travial":
-            q = QspTravial.easy_init([1], [4])
-            e = QspTravial.easy_init([1], [1])
-            for i, n in enumerate(names) :
-                vec[n] = iTensor(QSp=[q.copy(), e.copy()])
-                vec[n].data[:] = 0.0
-                vec[n].data[i] = 1.0
-                
-        elif symmetry == 'U1':  #charge symmetry
-            if not shift_qn:
-                q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
-                dic = {'0':0, 'u':1, 'd':1, 'ud':2}
-            else:  #I have tested with hubbard model, the following is correct in all cases
-                q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
-                dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
-                
-            for i, n in enumerate(names) :
-                totqn = QnU1(dic[n])
-                e = make_qsp(symmetry, [0], [1])
-                vec[n] = iTensor(QSp=[q.copy(), e.copy()], totQN=totqn)
-                vec[n].data[:] = 0.0
-            
-            
-            vec['0'].data[:] = [1.0]
-            vec['u'].data[:] = [1.0, 0.0]
-            vec['d'].data[:] = [0.0, 1.0]
-            vec['ud'].data[:] = [1.0]
-        else:
-            raise ValueError
+        vec = iTensorFactory.base_state(which='fermion', symmetry=symmetry, 
+                shift_qn=shift_qn)
         def make_op(xx):
             op = 0.0
             for a, b, c in xx:
                 #print_vars(vars(),  ['a', 'b'])
-                a = vec[a]  #|a>
-                b = vec[b]  #|b>
+                a = vec[a].insert_1d_qsp(1)  #|a>
+                b = vec[b].insert_1d_qsp(1) #|b>
                 a_tc = a.T.conj()
                 #a_tc.totQN.reverse()
                 cba = c*b.dot(a_tc)  #  + c|b><a|
-                #print_vars(vars(),  ['a.shape', 'a_tc.shape', 'b.shape'])
-                #print_vars(vars(),  ['a.totQN',  'a_tc.totQN', 'b.totQN', 'cba.totQN' ])
                 op += cba
             return op
         
@@ -3988,8 +3961,52 @@ class iTensorFactory(object):
         for i in res:
             res[i].type_name = i
         return res 
+    
+    @staticmethod
+    def base_state(which, symmetry, shift_qn=True, **kwargs):
+        """
+            params:
+                shift_qn: only for fermions
             
-
+        """
+        if which == 'fermion':
+            vec = OrderedDict()
+            names = ['0', 'u', 'd', 'ud']
+            if symmetry ==  "Travial":
+                q = QspTravial.easy_init([1], [4])
+                e = QspTravial.easy_init([1], [1])
+                for i, n in enumerate(names) :
+                    #vec[n] = iTensor(QSp=[q.copy(), e.copy()])
+                    vec[n] = iTensor(QSp=[q.copy()])
+                    vec[n].data[:] = 0.0
+                    vec[n].data[i] = 1.0
+                    
+            elif symmetry == 'U1':  #charge symmetry
+                if not shift_qn:
+                    q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
+                    dic = {'0':0, 'u':1, 'd':1, 'ud':2}
+                else:  #I have tested with hubbard model, the following is correct in all cases
+                    q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
+                    dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
+                    
+                for i, n in enumerate(names) :
+                    totqn = QnU1(dic[n])
+                    e = make_qsp(symmetry, [0], [1])
+                    #vec[n] = iTensor(QSp=[q.copy(), e.copy()], totQN=totqn)
+                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
+                    vec[n].data[:] = 0.0
+                
+                
+                vec['0'].data[:] = [1.0]
+                vec['u'].data[:] = [1.0, 0.0]
+                vec['d'].data[:] = [0.0, 1.0]
+                vec['ud'].data[:] = [1.0]
+            else:
+                raise ValueError
+        else:
+            raise 
+        return vec
+    
     @staticmethod
     def symbol_tensor_prod(symbol, mapper):
         o = mapper[symbol[0]]
@@ -4937,7 +4954,7 @@ class Test_iTensor(unittest.TestCase):
             t1=t.reduce_1d_qsp(2)
             self.assertTrue(t1.totQN._val==-2)
         if 1: 
-            t2 = t1.insert_1d_qsp(1, q3.QNs[0]._val)
+            t2 = t1.insert_1d_qsp(2, q3.QNs[0]._val)
             print_vars(vars(),  ['t.data', 't2.data'])
             self.assertTrue(np.allclose(t.data, t2.data))
             print_vars(vars(),  ['t.shape', 't2.shape'])

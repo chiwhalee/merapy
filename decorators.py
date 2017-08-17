@@ -374,8 +374,8 @@ def tensor_player(which):
                     iQN2[0:rank2]=T2.Addr_idx[0:rank2,idx2]
                     p2 = T2.Block_idx[0,idx2]
                     
-                    Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div, rank2)])
-                    Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div)])
+                    Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div, rank2)], dtype=np.int)
+                    Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div)], dtype=np.int)
                     
                     for idx1 in xrange(self.nidx):
                         iQN1[0] = 1 #!for rank=0
@@ -385,7 +385,7 @@ def tensor_player(which):
                         if not iseq:
                             #如果量子数组合相等则收缩
                             continue
-                        Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in xrange(shift)])
+                        Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in xrange(shift)], dtype=np.int)
                         
                         iQN3[0] = 1 #!for rank=1
                         iQN3[0:shift] = iQN1[0:shift]
@@ -1017,7 +1017,7 @@ if 1:  #profilers
 
         def decorator(func):
             def newfunc(*args, **kwargs):
-                pr = profile.Profile()
+                pr = cProfile.Profile()
                 ret = pr.runcall(func, *args, **kwargs)
                 if multi:
                     fn = "%s.%d%s" % (p, i[0], q)
@@ -1042,26 +1042,28 @@ if 1:  #profilers
             return retval
         return wrapper
 
-    def profileit(fn, filename, stats=True):
+    def profileit(path, fn=None, stats=True):
         """
             example usage:  @profileit("profile_for_func1_001") 
         """
+        fn = fn if fn is not None else '/tmp/profile'
         def inner(func):
             def wrapper(*args, **kwargs):
                 prof = cProfile.Profile()
                 retval = prof.runcall(func, *args, **kwargs)
                 # Note use of name from outer scope
                 if stats:
-                    inn=open(filename, 'a')
-                    stdout = sys.stdout
+                    inn=open(path, 'a')
+                    bac = sys.stdout
                     sys.stdout = inn
                     prof.dump_stats(fn)
                     
                     p = pstats.Stats(fn) 
                     p.sort_stats("cumulative").print_stats(60) 
-                    
-                    sys.stdout = stdout
-
+                    inn.close()
+                    sys.stdout = bac
+                
+                print '\n\nprofiling result is saved in %s'%(path, )
                 return retval
             return wrapper
         return inner

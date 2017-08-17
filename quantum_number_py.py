@@ -1,7 +1,10 @@
 #! /usr/bin/env python
 #coding=UTF8
 
-""" 
+"""
+    issue:
+        performance issue: may need to change qn val to np.int16 or np.int8, this may be faster? 
+        
     some math
         In representation theory, QnZ2, QnU1 etc defined below are in fact the
         so called "WEIGHT SPACE" \Lambda={\lambda_1, \lambda_2, ...}.
