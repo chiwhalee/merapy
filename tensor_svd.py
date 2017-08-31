@@ -740,6 +740,8 @@ class Tensor_svd(object):
     @classmethod
     def eig(cls, itensor, totQN=None):
         """
+            the name of the func should be eigh, as it calc eigen value for symmetric tensors
+            
             full diagonalization of itensor 
             thif func is only used in calc central_charge
             params:
@@ -770,18 +772,20 @@ class Tensor_svd(object):
                 continue
             V_buf = cls.get_block1(itensor, gidx)
             esize = int(sqrt(V_buf.size))
-            E = np.empty(esize, order='F')
-            common_util.matrix_eigen_vector(V_buf, E[: esize])
-            #E, V_buf = np.linalg.eig(V_buf)
-            #need sort !!!
-            #print E[:3]/2.0
-            
+            if 0:
+                #E = np.empty(esize, order='F')
+                E = np.empty(esize)
+                common_util.matrix_eigen_vector(V_buf, E[: esize])
+            else:
+                V_buf = V_buf.T  #this may be not needed as V_buf should be hermit, but, I do some tests in which it is not hernmit
+                E, V_buf = np.linalg.eigh(V_buf)
+                
             V_buf = V_buf.ravel(order="F")
 
             Eg = E[0]
             QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
             QSp[div].reverse()
-            Vg = iTensor(div+1, QSp, tQN)
+            Vg = iTensor(div+1, QSp, tQN, dtype=itensor.dtype)
             Vg.data[:] = 0.0
             
             for idx in range(itensor.nidx):
@@ -795,7 +799,6 @@ class Tensor_svd(object):
 
                 pV = Vg.get_position(pos)
                 p = Vg.Block_idx[0, Vg.idx[pV]]
-                #Vg.data[p:p+nT-1] = V_buf[x+1:x+nT]
                 Vg.data[p:p+nT] = V_buf[x:x+nT]
         return Vg, E
 
@@ -982,16 +985,30 @@ class TestIt(unittest.TestCase):
         Tensor_svd.show_group(u)
         
     def test_eig(self):
-        rank = 4
-        u = iTensor(rank, self.qsp_base.copy_many(rank), self.qn_identity)
-        u.data[:] = 1.0
-        print "tensor to be eiged", u
-        totqn = self.qn_identity.copy()
-        print "tttt", type(totqn)
-        a, b=Tensor_svd.eig(u, totqn)
-        print "a", a, "b", b
-        pass
-   
+        if 1: 
+            rank = 4
+            u = iTensor.example(rank=4, dtype=complex)
+            totqn = self.qn_identity.copy()
+            v, e=Tensor_svd.eig(u, totqn)
+            print_vars(vars(),  ['e'])
+            print_vars(vars(),  ['v'])
+            
+        
+        if 1:
+            np.random.seed(333)
+            rank = 4
+            u = iTensor.example(rank=4)
+            totqn = self.qn_identity.copy()
+            print "tttt", type(totqn)
+            v, E=Tensor_svd.eig(u, totqn)
+            E_old = np.asarray([-1.64530983, -1.3290226 , -0.58372545, -0.16195959,  0.35432525, 0.48924165,  0.60459623,  0.81444748])
+            self.assertTrue(np.allclose(E, E_old, 1e-8))
+            
+            v_old = np.abs(np.asarray([-0.29005013,  0.42709089, -0.52537203, -0.08798355, -0.09995058, 0.49136065, -0.42246346, -0.14073605]))
+            print_vars(vars(),  ['v.data'])
+            print_vars(vars(),  ['v_old'])
+            self.assertTrue(np.allclose(np.abs(v.data), v_old, 1e-8))
+
     def test_svd(self):
         """  
             --- not sure
@@ -1218,52 +1235,30 @@ class TestIt(unittest.TestCase):
 
     def test_temp(self): 
         pass
-        np.set_printoptions(precision=3)
-        if 0: 
-            np.random.seed(1234)
-            #qsp = QspU1.easy_init([0, 1, -1, 2, -2] , [4, 2, 3, 2, 2])
-            qsp = QspU1.easy_init([0, 1, -1, ] , [2, 2, 1])
-            qsp = qsp.copy_many(2, reverse=[1])
-            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1', 
-                    dtype=float)
-            data = np.random.random(t.totDim)
-            t.data[: ] = data[:]
-        
-            temp = Tensor_svd.eig_rank2(t, 
-                    trunc_dim=6,  return_val=1) 
-            vec, val = temp['vec_mat'], temp['val_mat']
-            if 1:
-                tt = vec 
-                #tt = temp['vec_mat']
-                tt.show_data()
-                print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
-                print_vars(vars(),  ['tt.shape'])
-                c, _ = tt.contract(tt.conj(), [0, 1], [-1, 1])
-                #c.show_data()
-                self.assertTrue(c.is_close_to(1))
-        
+        #np.set_printoptions(precision=3)
         if 1: 
-            np.random.seed(1234)
-            #qsp = QspU1.easy_init([0, 1, -1, 2, -2] , [4, 2, 3, 2, 2])
-            qsp = QspU1.easy_init([0, 1, -1, ] , [2, 2, 1])
-            qsp = qsp.copy_many(2, reverse=[1])
-            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1', 
-                    dtype=complex)
-            t.data[: ] =  np.random.random(t.totDim)  + 1j*np.random.random(t.totDim)
-        
-            temp = Tensor_svd.eig_rank2(t, 
-                    trunc_dim=2,  
-                    return_val=1) 
-            vec, val = temp['vec_mat'], temp['val_mat']
-            if 1:
-                tt = vec 
-                #tt = temp['vec_mat']
-                tt.show_data()
-                print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
-                print_vars(vars(),  ['tt.shape'])
-                c, _ = tt.contract(tt.conj(), [0, 1], [-1, 1])
-                #c.show_data()
-                self.assertTrue(c.is_close_to(1))
+            rank = 4
+            u = iTensor.example(rank=4, dtype=complex)
+            totqn = self.qn_identity.copy()
+            v, e=Tensor_svd.eig(u, totqn)
+            print_vars(vars(),  ['e'])
+            print_vars(vars(),  ['v'])
+            
+        if 1:
+            np.random.seed(333)
+            rank = 4
+            u = iTensor.example(rank=4)
+            totqn = self.qn_identity.copy()
+            print "tttt", type(totqn)
+            v, E=Tensor_svd.eig(u, totqn)
+            E_old = np.asarray([-1.64530983, -1.3290226 , -0.58372545, -0.16195959,  0.35432525, 0.48924165,  0.60459623,  0.81444748])
+            self.assertTrue(np.allclose(E, E_old, 1e-8))
+            
+            v_old = np.abs(np.asarray([-0.29005013,  0.42709089, -0.52537203, -0.08798355, -0.09995058, 0.49136065, -0.42246346, -0.14073605]))
+            print_vars(vars(),  ['v.data'])
+            print_vars(vars(),  ['v_old'])
+            self.assertTrue(np.allclose(np.abs(v.data), v_old, 1e-8))
+            
             
     
 if __name__ == "__main__":
@@ -1283,12 +1278,12 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_eig', 
+           'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
-           'test_eig_rank2', 
+           #'test_eig_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
            #'test_temp', 
