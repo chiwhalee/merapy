@@ -19,6 +19,7 @@ import math
 from math import pi as PI
 import socket 
 import platform 
+import types
 
 import importlib
 from matplotlib.lines import Line2D
@@ -40,18 +41,37 @@ if 1:
     mpl.rcParams['figure.figsize'] = (4, 3)
     mpl.rcParams['axes.labelsize'] = 16
     #mpl.rcParams['legend.frameon'] = False  # whether or not to draw a frame around legend   
+    v = mpl.__version__
     MATPLOTLIBRC = {
             'legend.alpha': 0,    # this will make the box totally transparent 
             'legend.edege_color': 'white',   # this will make the edges of the border white to match the background instead 
             'legend.frameon': 0,# whether or not to draw a frame around legend    
             'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
             }
-    if platform.system()=='Windows':
-        MATPLOTLIBRC.pop('legend.edege_color')
-        MATPLOTLIBRC.pop('legend.alpha')
-        MATPLOTLIBRC.update({'legend.framealpha':0})
+    #if platform.system()=='Windows':
+    if v<'2.0.0':
+        MATPLOTLIBRC = {
+            #'legend.alpha': 0,    # this will make the box totally transparent 
+            #'legend.edge_color': 'white',   # this will make the edges of the border white to match the background instead 
+            'legend.frameon': 0,# whether or not to draw a frame around legend    
+            'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
+            'figure.facecolor': 'white', 
+            }
+    else:
+        MATPLOTLIBRC = {
+            u'legend.fontsize':'large', 
+            u'grid.linestyle':'dotted', 
+            #'Legend.alpha': 0,    # this will make the box totally transparent 
+            u'legend.edgecolor': 'white',   # this will make the edges of the border white to match the background instead 
+            u'legend.frameon': False,# whether or not to draw a frame around legend    
+            u'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
+            u'figure.facecolor': 'white', 
+            }
+        #MATPLOTLIBRC.pop('legend.alpha')
+        #MATPLOTLIBRC.pop('legend.edege_color')
+        #MATPLOTLIBRC.update({'legend.framealpha':0})
     mpl.rcParams.update(MATPLOTLIBRC)
-
+    
     from matplotlib.lines import Line2D
     #print Line2D.marker
     marker_cycle = itertools.cycle(Line2D.markers)
@@ -124,6 +144,9 @@ FIELD_NAME_LIST = [
 
 HOME = os.path.expanduser('~')
 HOME=HOME.replace('\\', '/') 
+if 'cygwin' in HOME:  #properly deal with cygwin path
+    assert 'cygwin64/home' in HOME
+    HOME = HOME.replace('cygwin64/home', 'Users')
 
 BACKUP_STATE_DIR = 'backup_tensor_dir'
 RESULTDB_DIR = 'resultdb_dir'
@@ -131,6 +154,8 @@ if platform.system()=='Linux':
     RESULTDB_ROOT = '/'.join([HOME, RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
 else:
     RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
+
+
 
 def html_border(s, fontsize=20): 
     sss=  """
@@ -275,7 +300,7 @@ class AnalysisTools(object):
             if return_all_params: 
                 temp.append((a, res['param']))
             else: 
-                temp.append((a, round(k, 4)))
+                temp.append((a, round(k, rounding)))
           
             if plot_fit: 
                 args= kwargs.copy()
@@ -563,8 +588,6 @@ class AnalysisTools(object):
                 tic[0] = 1e-10
             tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
             _ = ax.set_xticklabels(tic)    
-            
-
     
 def algorithm_name_to_rdb(alg_name):
     mapping = {'mera':ResultDB_mera, 
@@ -868,7 +891,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         dir = dir if dir is not None else self.parpath
         #issue: this could be slow if do this each time , find better way later 
         dir = dir.replace('resultdb_dir', 'backup_tensor_dir')
-        
+        if not os.path.exists(dir):
+            return []
         nlist = os.listdir(dir) 
         pickle_files = [i for i in nlist if "pickle" == i.split('.')[-1]]
         #if not self.get('algorithm')=='mps': 
@@ -931,8 +955,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         if only_return_max:
             NN = [i[0] for i in sh]
             NN = list(set(NN))
-            sh = [(N, max(filter(lambda x:x[0]==N, sh))[1]) 
-                    for N in NN]
+            #sh = [(N, max(filter(lambda x:x[0]==N, sh))[1]) for N in NN]
+            sh = [(N, self.get_dim_max_for_N(N)) for N in NN]
         if only_return_N:
             sh = [i[0] for i in sh]
             sh = list(set(sh))
@@ -944,7 +968,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     
     get_mera_shape_list = get_shape_list 
     
-    def get_dim_max_for_N(self, N, update_db=False, force=False,  info=0): 
+    def get_dim_max_for_N(self, N, update_db=False, force=False, info=0): 
         #if self.has_key('dim_max'): 
         #if self.has_key_list(['dim_max', 'N'])
         #    return self['dim_max']['N']
@@ -1010,7 +1034,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         return count, bins
     
     
-    def commit(self, info=0):
+    def commit(self, use_local_storage=None, info=0):
         #issue: should change to 'ab+?'
         if 0: 
             out = open(self.path, 'wb')
@@ -1018,7 +1042,8 @@ class ResultDB(OrderedDict, AnalysisTools):
             #pickle.dump(self, out)  #this is rather critical, or else got error
             pickle.dump(OrderedDict(self), out)
             out.close()
-        rpyc_save(self.path, OrderedDict(self), use_local_storage=self.use_local_storage)
+        use_local_storage = use_local_storage if use_local_storage is not None else self.use_local_storage
+        rpyc_save(self.path, OrderedDict(self), use_local_storage=use_local_storage)
         if info>0: 
             temp = str(self.path)
             print '\tmodification in ...%s has been commited'%(temp[-90: ])
@@ -1166,7 +1191,12 @@ class ResultDB(OrderedDict, AnalysisTools):
         try: 
             if mera_shape[1] == 'max' : 
                 mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
-               
+            elif mera_shape[1] == 'max_field':  #the max dim for each field may differ, then may use this
+                N = mera_shape[0]
+                ss = self.get(field_name, {}).keys()
+                dd = [s[1] for s in ss if s[0]==N ]
+                D = max(dd) if dd else 0     
+                mera_shape = N, D
             rec = self[field_name][mera_shape]
             #key = next(reversed(rec))  #last iter step
             #rec = rec[key]
@@ -1334,22 +1364,39 @@ class ResultDB(OrderedDict, AnalysisTools):
             opeation on the parpath !! 
         """
         warnings.warn('still bug in some cases, so better dry_run first')
-        #raise NotImplemented  # bug in it 
-        root = os.path.dirname(self.parpath)
-        old_name = os.path.basename(self.parpath)
         
+        db_root = os.path.dirname(self.parpath)
+        state_root = os.path.dirname(self.state_parpath)
+        
+        old_name = os.path.basename(self.parpath)
         temp = old_name.split('-')[-1]
+        
         if '=' in temp: 
             old_sur = ''
             new_name = '-'.join([old_name, new_surfix])
         else: 
             old_sur = temp
             new_name = old_name.replace(old_sur, new_surfix)
-        new_parpath = '/'.join([root, new_name])
-        print 'rename ...%s -> ...%s'%(self.parpath[-20:], new_parpath[-20: ])
+        
+        db_parpath_new = '/'.join([db_root, new_name])
+        state_parpath_new = '/'.join([state_root, new_name])
+        
+        print 'rename ...%s -> ...%s'%(
+                self.parpath[-100:], db_parpath_new[-100: ])
         if not dry_run: 
-            os.rename(self.parpath, new_parpath)
-        #print_vars(vars(),  ['root', 'old_name', 'temp', 'old_sur', 'new_name'])
+            try:
+                os.rename(self.parpath, db_parpath_new)
+            except Exception as err:
+                print err
+        
+        print 'rename ...%s -> ...%s'%(
+                self.state_parpath[-100:], state_parpath_new[-100: ])
+        if not dry_run: 
+            try:
+                os.rename(self.state_parpath, state_parpath_new)
+            except Exception as err:
+                print err
+        
     
     def move_folder(self, local_root): 
         dir = self.parpath 
@@ -1474,7 +1521,7 @@ class ResultDB(OrderedDict, AnalysisTools):
             raise 
         
         return res 
-
+    
     def _get_Css(self, sh, **kwargs):
         db = self
         field = kwargs.get('field', 'correlation')
@@ -1571,14 +1618,18 @@ class ResultDB(OrderedDict, AnalysisTools):
         return res 
 
     def calc_structure_factor(self, sh, x0=0, x1=1.1, clip=0,  num_points=100, 
-            return_Sk = False, 
-            ):
+            return_Sk = False, fault_tol=1):
+        """
+            for spin models
+        """
         db = self
         N=sh[0]
         L=N-2*clip
         corr=db.fetch_easy('correlation_all', sh, ['zz'])
         mag=db.fetch_easy('magnetization', sh, ['z'])
         if corr is None or mag is None:
+            if not fault_tol:
+                raise  
             return None,None
         mag=mag.values()
         if not isinstance(corr, np.ndarray):
@@ -1640,12 +1691,88 @@ class ResultDB(OrderedDict, AnalysisTools):
         y = [np.sum(cij * expij(np.pi*i, L))/L for i in x]    
         return x, y
     
-    def _get_Luttinger_param(self, sh, clip=0):
-        func, L = self.calc_structure_factor(sh, clip=clip, return_Sk=1) 
+    def calc_structure_factor_fermion(self, sh, x0=0, x1=1.1, clip=0,  num_points=100, 
+            return_Sk = False, fault_tol=1, ):
+        """
+            for e.g. fermion hubbard model
+        """
+        db = self
+        N=sh[0]
+        L=N-2*clip
+        corr=db.fetch_easy('correlation_all', sh, ['nn'])
+        ni=db.fetch_easy('fermion_number', sh)
+        if corr is None or ni is None:
+            if not fault_tol:
+                raise  
+            return None,None
+        ni=ni.values()
+       
+        if corr.shape[0]<N:
+            L = corr.shape[0]
+            start, end = (N - L)//2, (N + L)//2  
+            ni = ni[start:end]
+        if N==0:
+            N=L=corr.shape[0]
+            period=len(ni)
+            ni=ni*(L/period)
+        ni=np.asarray(ni)
+        if clip!=0:
+            L=N-2*clip
+            corr=corr[clip:-clip, clip:-clip]
+            ni=ni[clip:-clip]
+        ni=ni.reshape(L,1)
+        ninj=ni*ni.T # it equals with ni.T*ni
+        cij= corr - ninj
+        if return_Sk:
+            res= lambda k: np.sum(cij * expij(k, L))/L , L
+            return res 
+        x=np.linspace(x0, x1, num=num_points)
+        y = [np.sum(cij * expij(np.pi*i, L))/L for i in x]    
+        return x, y
+    
+    def _get_SF_k(self, sh, k=np.pi, per_site=True, fault_tol=1):
+        """
+            
+            calc magnetization by S(pi)
+            attention:
+                One question is do one need to calc correlation_all for full
+                length?  
+                The answer is: For a state that has good translation
+                invariance, one dont need to, e.g. when Jzz=0 for the XXZ
+                model; otherwise it is needed. 
+                
+        """
+        func, L = self.calc_structure_factor(sh, clip=0, 
+                return_Sk=1, fault_tol=fault_tol) 
         if L is None:
+            if not fault_tol:
+                raise  
+            return None 
+        res = func(k)
+        if per_site:
+            res= res/sh[0]
+        return res
+        
+    def _get_Luttinger_param(self, sh, clip=0, fault_tol=1):
+        func, L = self.calc_structure_factor(sh, clip=clip, return_Sk=1, fault_tol=fault_tol) 
+        if L is None:
+            if not fault_tol:
+                raise  
             return None 
         q = 2*PI/L
+        #q = PI/L
         return PI*func(q)/q
+
+    def _get_Luttinger_param_fermion(self, sh, clip=0, fault_tol=1):
+        func, L = self.calc_structure_factor_fermion(sh, clip=clip, return_Sk=1, fault_tol=fault_tol) 
+        if L is None:
+            if not fault_tol:
+                raise  
+            return None 
+        q = 2*PI/L
+        #q = PI/L
+        return PI*func(q)/q
+    
     
     def _get_charge_gap(self, sh):
         p = self.__class__(self.parpath + '-Np1')
@@ -1660,21 +1787,48 @@ class ResultDB(OrderedDict, AnalysisTools):
             gap = None
         return gap 
     
-    def _get_charge_gap_2(self, sh, which='ph'):
-        p = self.__class__(self.parpath + '-Np1')
-        temp =  [x.fetch_easy('energy', sh) for x in [p, self] ]
+    def _get_charge_gap_2(self, sh, surfix='Np1'):
+        p = self.__class__(self.parpath + '-' + surfix)
+        temp = [x.fetch_easy('energy', sh) for x in [p, self] ]
         if all(temp):
             ep, eg = temp
-            #note eng is energy per bond
             N = sh[0]
-            gap = (N-1)*(ep - eg)
+            #issue: 下面正好反了，
+            if surfix in ['Np1', 'Np2']:  #vmps算法Np1其实是Nm1，这里将错就错
+                gap = (ep - eg)
+            else:
+                gap = (eg - ep)
+            gap = 2*(N-1)*gap #note eng is energy per bond
         else:
             gap = None
             
         return gap 
     
-    def delete_rec(self, field_name_list, sh_list): 
+    def _get_chemical_potential(self, sh, surfix='Np1'):
+        p = self.__class__(self.parpath + '-' + surfix)
+        temp = [x.fetch_easy('energy', sh) for x in [p, self] ]
+        if all(temp):
+            ep, eg = temp
+            #note eng is energy per bond
+            N = sh[0]
+            if surfix == 'Np1':  
+                gap = ep - eg
+            else:
+                gap = eg - ep
+            gap=(N-1)*gap
+        else:
+            gap = None
+            
+        return gap 
+     
+    def delete_rec(self, field_name_list, sh_list, need_comfirm=0): 
+        """
+            field_name_list: it can take parameter 'all'
+            sh_list: e.g. 'all', [(20, 'max')]
+        """
         print 'delete fields "%s" for sh in %s'%(field_name_list,  sh_list)
+        if need_comfirm:
+            pass
         if sh_list == 'all' : 
             for i in field_name_list: 
                 self.pop(i)
@@ -1682,6 +1836,8 @@ class ResultDB(OrderedDict, AnalysisTools):
             if field_name_list == 'all' : 
                 field_name_list = self.keys()
             for sh in sh_list: 
+                if sh[1] == 'max' :
+                    sh = sh[0], self.get_dim_max_for_N(sh[0]) 
                 for f in field_name_list: 
                     temp = self[f]
                     if isinstance(temp, dict) and temp.has_key(sh): 
@@ -1751,7 +1907,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             #os.system('ls %s'%self.parpath)
             print 'merge succeed'
     
-    
     def _plot(self, x, y, **kwargs): 
         figsize = kwargs.get('figsize')
         figsize = (4, 3) if figsize is None else figsize
@@ -1777,8 +1932,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         if 1:  
             line_style = {
                     'marker':MARKER_CYCLE.next(), 
-                    'markersize': 5, 
-                    'ms': 5,  
+                    'ms': 5,    #'markersize': 7, 
                     'mfc': 'None',  #'w',
                     #'mec': 'r', 
                     'mew': 1,  
@@ -1848,6 +2002,9 @@ class ResultDB(OrderedDict, AnalysisTools):
                 rec=self.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
             else: 
                 rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
+                if type(rec_getter)==types.MethodType:
+                    rec_getter = rec_getter.im_func
+                
                 rec = rec_getter(self, sh, **rec_getter_args)
             dim = sh[1]
             if rec is not None:
@@ -1878,7 +2035,8 @@ class ResultDB(OrderedDict, AnalysisTools):
             return fig 
     
     def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, 
-            data=None, inverse_N=True, xfunc=None, yfunc=None, rec_getter=None, rec_getter_args=None, **kwargs): 
+            data=None, inverse_N=True, xfunc=None, yfunc=None, 
+            rec_getter=None, rec_getter_args=None, **kwargs): 
         if 1: 
             sub_key_list = sub_key_list if sub_key_list is not None else []
             info = kwargs.get('info', 0)
@@ -1892,6 +2050,8 @@ class ResultDB(OrderedDict, AnalysisTools):
                         rec=self.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
                     else: 
                         rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
+                        if type(rec_getter)==types.MethodType:
+                            rec_getter = rec_getter.im_func
                         rec = rec_getter(self, sh, **rec_getter_args)
                     size = sh[0]
                     if rec is not None:
@@ -1916,8 +2076,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         if yfunc is not None : 
             y = yfunc(y)
-        
-        kwargs.update(xlabel='1/N', ylabel=field_name, return_ax=1)
+        xlabel = '1/N' if inverse_N else 'N'
+        ylabel = field_name if rec_getter is None else (
+                rec_getter.__name__.replace('_get', ''))
+        kwargs.update(xlabel=xlabel, ylabel=field_name, return_ax=1)
         fig, ax = self._plot(x, y, **kwargs) 
         
         #below may cause problem
@@ -1938,8 +2100,11 @@ class ResultDB(OrderedDict, AnalysisTools):
                 rec = self.fetch_easy(field_name, mera_shape=sh, sub_key_list=key_list, 
                         fault_tolerant=fault_tolerant, info=info-1) 
             else: 
+                if type(rec_getter)==types.MethodType:
+                    rec_getter = rec_getter.im_func
                 rec = rec_getter(self, sh, **rec_getter_args)
-            
+                field_name=rec_getter.__name__.replace('_get_', '').replace('_', ' ')  #for ylabel
+                
         if rec is None: 
             return None
         algorithm = self['algorithm']
@@ -1953,20 +2118,19 @@ class ResultDB(OrderedDict, AnalysisTools):
             
         elif 'mps' in algorithm:   #elif self['algorithm'] == 'vmps':
             if field_name in ['correlation', 'correlation_bond'] : 
-                if 0:   #version 1.0 
-                    r0, r1, y = zip(*rec)
-                    x = np.array(r1) - np.array(r0)
-                else:
-                    x, y = zip(*rec)
-                    r0 = key_list[-1]
-                    x = np.asarray(x)
-                    x -= r0 
+                x, y = zip(*rec)
+                r0 = key_list[-1]
+                x = np.asarray(x)
+                x -= r0 
             else: 
-                #rec = rec.items()
+                if isinstance(rec, OrderedDict):
+                    rec = rec.items()
                 x, y = zip(*rec)
                 
-        else: 
-            raise 
+        elif algorithm == 'proj_qmc': 
+            x, y = zip(*rec)
+        else:
+            x, y = zip(*rec)
         
         if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
             x = [a[1] for a in x]
@@ -1997,6 +2161,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         x = x[arg]
         y = y[arg]
         kwargs['return_ax'] = 1
+        if not kwargs.has_key('xlabel'):
+            kwargs['xlabel'] = '$i$'
+        if not kwargs.has_key('ylabel'):
+            kwargs['ylabel'] = field_name
         fig, ax=self._plot(x, y, **kwargs)
         if fit: 
             fit_succeed = 1
@@ -2771,37 +2939,56 @@ class ResultDB(OrderedDict, AnalysisTools):
     def show_fig(self): 
         plt.show()
     
-    def measure(self, ss, which=None, state=None, measure_func=None, param=None, field_surfix='', 
+    def measure(self, sh_list, which=None, state=None, measure_func=None, 
+            param=None, field_surfix='', 
             force=0, fault_tolerant=1, num_of_theads=2, job_group_name=None, 
-            submit=1, **kwargs): 
+            submit=1, info=1,  **kwargs): 
         """
             params:
+                sh_list:
+                    it can be 'all',  a tuple or a list of sh tuples
                 which: can be str or a list of str
                     e.g. which='energy', which=['energy', 'variance']
         """
         from merapy.measure_and_analysis.measurement import measure_S 
         from mypy.brokest.task_center import submit_one 
-        
+        if isinstance(which, list) and len(which)==1:
+            which = which[0]
         if param is not None and isinstance(which, str):
             param = {which:param}  # to make it compatible with the interface of measure_S
         
         job_group_name = job_group_name if job_group_name is not None else str(which)
         job_group_name = '-'.join(['mea-', job_group_name])
         
-        if isinstance(ss, tuple):
-            ss= [ss]
-        for sh in ss:
-            if sh[1] == 'max' : 
-                if '2site' in self.parpath:  #this is a temporary workaroud. alg info should be also stored in db in future 
-                    D = 0
-                else:
-                    D = self.get_dim_max_for_N(sh[0])
-                    if D == 0: 
-                        print('max D for %s is zero, skip it'%(sh, ))
-                        continue
-                sh = sh[0], D 
-            
-            if isinstance(which, str) and self.has_key_list([which, sh]) and not force:
+        if sh_list == 'all' :
+            sh_list = self.get_shape_list()
+        if isinstance(sh_list, tuple):
+            sh_list= [sh_list]
+        for sh in sh_list:
+            #if sh[1] == 'max' : 
+            #    if '2site' in self.parpath:  #this is a temporary workaroud. alg info should be also stored in db in future 
+            #        D = 0
+            #    else:
+            #        D = self.get_dim_max_for_N(sh[0])
+            #        if D == 0: 
+            #            print('max D for %s is zero, skip it'%(sh, ))
+            #            continue
+            #    sh = sh[0], D 
+            if sh[1] == 'max':
+                Dmax = self.get_dim_max_for_N(sh[0])
+                sh = _sh = sh[0], Dmax
+                if Dmax == 0:                
+                    print('\tmax D for %s is zero, skip it'%(sh, ))
+                    continue
+            elif sh[1] == 0:
+                Dmax = self.get_dim_max_for_N(sh[0], force=force)
+                if Dmax == 0:                
+                    print('\tmax D for %s is zero, skip it'%(sh, ))
+                    continue
+                _sh = sh[0], self.get_dim_max_for_N(sh[0])
+            else:
+                _sh = sh
+            if isinstance(which, str) and self.has_key_list([which, _sh]) and not force:
                 print '   found, skip it'  
                 continue
             
@@ -2834,8 +3021,8 @@ class ResultDB(OrderedDict, AnalysisTools):
                             'job_description': (os.path.dirname(path), sh), 
                             'delay_send': 20, 
                             })
-                print 'response: ', status
                 
+                print '\tresponse: ', status
             
     def shape_to_backup_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
@@ -2851,10 +3038,11 @@ class ResultDB(OrderedDict, AnalysisTools):
                     also by a specific name 'update_what'
         """
         if self['version'] < 1.2 and update_what in ['all', 'remove_iter']:
+            #this is big change, removed  -1 from the key list
             print 'update version from %s to %s'%(self['version'], 1.2)
             kk = self.keys()
             kk = [k for k in kk if k not in ['algorithm', 'status', 'version', 'dim_max']]
-            ss= self.get_shape_list()
+            ss = self.get_shape_list(from_energy_rec=1)  #here I use from_energy_rec because state file may be lost, while only db file retained
             for k in kk:
                 for sh in ss:
                     if self.has_key_list([k, sh, -1]):
@@ -2862,7 +3050,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             self['version']=1.2
             self.commit(info=1)    
             
-
 class ResultDB_mera(ResultDB): 
     #AUTO_UPDATE = False 
     ALGORITHM = 'mera'
@@ -3113,8 +3300,47 @@ class ResultDB_vmps(ResultDB):
             rec.sort(key=lambda x:x[0])
             self['correlation'][sh][-1][direct][i0] = rec
             self.commit(info=info)
-
-
+    
+    def _get_energy_better(self, sh, N_diff=2):
+        """
+            better energy per bond. this solves the problem caused by OBC of VMPS
+        """
+        N = sh[0]
+        e  = self.fetch_easy('energy', sh)
+        e2 = self.fetch_easy('energy', (sh[0]+N_diff, sh[1]))
+        #print_vars(vars(),  ['e, e2'])
+        if e is not None  and e2 is not None:
+            res=(e2*(N-1+N_diff)-e*(N-1))/N_diff
+        else:
+            res= None
+        return res
+     
+    def _get_energy_total(self, sh):
+        e = self.fetch_easy('energy', sh)
+        if e is None:
+            return None
+        N = sh[0]
+        res = e*(N-1)
+        return res
+    
+    def _get_corr_len(self, sh, k0=np.pi, per_site=1):
+        """
+            extract correlation length from structure factor
+            it can be used to locate QCP by scaling of \\xi 
+            ref: Sandvik 2010 p.38 eq.70
+        """
+        pi = np.pi
+        N = sh[0]
+        s0 = self._get_SF_k(sh, k=k0, per_site=0) 
+        if s0 is None:
+            return None
+        q1 = k0 + 2*pi/N
+        s1 = self._get_SF_k(sh, k=q1, per_site=0) 
+        res = 1/q1 * np.sqrt(s0/s1 - 1)  #note this res is already per site
+        if not per_site:
+            res *= N
+        return res
+    
 class ResultDB_idmrg(ResultDB): 
     VERSION = 1.2
     ALGORITHM = 'idmrg'
@@ -3296,7 +3522,9 @@ class ResultDB_idmrg(ResultDB):
         return rec
 
     def update_db_structure(self): 
+        #if not self.has_key('version')
         if self['version'] <  1.01: 
+            ver = 1.01
             print 'update version from %s to %s'%(self['version'], ver)
             sh_list = self.get_shape_list()
             
@@ -3307,65 +3535,32 @@ class ResultDB_idmrg(ResultDB):
         if self['version']<1.2:
             ResultDB.update_db_structure(self, 'remove_iter')
 
-    def calc_correlation(self, sh, direct,  r_list=None, force=False, info=0):
+    def calc_correlation(self, sh, direct,  r_list=None, force=False, 
+            use_local_storage=False, info=0):
         """
             this is a temporary workaround 
         """
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
         r_list = [] if r_list is None else r_list 
         try: 
-            res_old = self['correlation'][sh][-1][direct]
+            res_old = self['correlation'][sh][direct]
         except KeyError: 
-            self.add_key_list(['correlation', sh, -1, direct])
-            res_old = self['correlation'][sh][-1][direct]
+            self.add_key_list(['correlation', sh, direct])
+            res_old = self['correlation'][sh][direct]
         r_old = res_old.keys()
         if not force: 
             r_list = set(r_list)-set(r_old)
-            print_vars(vars(),  ['r_list'])
         if len(r_list)>0: 
-            state = self.load_S(sh)
+            #state = self.load_S(sh, use_local_storage=self.use_local_storage)
+            state = self.load_S(sh, use_local_storage=use_local_storage)
             rr = [r[1] for r in r_list]
             temp=func(state, [direct], r_list=rr, r_max=max(rr))
         
             res_old.update(temp[direct])
             res_new = OrderedDict(sorted(res_old.items()))
-            self['correlation'][sh][-1][direct] = res_new 
+            self['correlation'][sh][direct] = res_new 
             
-            self.commit(info=1)
-        
-    def calc_correlation_new(self, sh, direct,  r_list=None, force=False, info=0):
-        """
-            this is a temporary workaround 
-        """
-        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
-        if 1:
-            r_list = [] if r_list is None else r_list 
-            try: 
-                res_old = self['correlation'][sh][-1][direct]
-            except KeyError: 
-                self.add_key_list(['correlation', sh, -1, direct])
-                res_old = self['correlation'][sh][-1][direct]
-            r_old = res_old.keys()
-            if not force: 
-                r_list = set(r_list)-set(r_old)
-                #print_vars(vars(),  ['r_list'])
-        print_vars(vars(),  ['r_list', 'r_old'])    
-        if len(r_list)>0: 
-            
-            rdb = self.__class__(self.parpath, use_local_storage=1)
-            state = rdb.load_S(sh, use_local_storage=1)
-            rr = [r[1] for r in r_list]
-            rr = [1, 2, 3]
-            temp=func(state, [direct], r_list=rr, r_max=max(rr))
-        
-            res_old.update(temp[direct])
-            res_new = OrderedDict(sorted(res_old.items()))
-            rdb['correlation'][sh][-1][direct] = res_new 
-            
-            rdb.commit(info=1)
-        
-            #tasks = [(temp, (), {})] 
-            #run_many(tasks, [('localhost', 1984)], try_period=1) 
+            self.commit(info=1, use_local_storage=use_local_storage)
             
     def _get_corr_conn(self, sh, **kwargs):
         """
@@ -3383,11 +3578,9 @@ class ResultDB_idmrg(ResultDB):
                 mag[i] = self.fetch_easy('magnetization', sh, ['z', i])
             for i in range(p):
                 mag2[i] = mag[0]*mag[i]
-            print_vars(vars(),  ['mag2'])
+            #print_vars(vars(),  ['mag2'])
         res= [((i, j), c-mag2[j%p]) for ((i, j), c) in corr]
         return OrderedDict(res)
-        
-        
         
 
 class ResultDB_ed(ResultDB): 
@@ -3423,6 +3616,19 @@ class ResultDB_proj_qmc(ResultDB):
         return res
     backup_fn_gen = shape_to_backup_fn 
 
+    def get_Svb(self, sh):
+        N = sh[0]
+        data = self.fetch_easy('svb_sample', sh)
+        #data=(db['svb_sample'][(N, N*20)])
+        if data is not None: 
+            nn,yy=zip(*data)
+            n=np.sum(nn)
+            x=np.arange(N//2)
+            y=reduce(lambda x,y:x+y,yy, np.zeros(N//2, dtype=int))*np.log(2.)/n 
+            res = zip(x, y)
+        else:
+            res= None
+        return res 
 
         
 class TestResultDB(unittest.TestCase): 
@@ -3445,18 +3651,33 @@ class TestResultDB(unittest.TestCase):
         
     
     def test_temp(self): 
-        print '*'*80
-        #from merapy.run_heisbg.analysis import an_vmps
-        from mera_wigner_crystal.analysis import an_idmrg_psi, an_vmps
-        xx=an_vmps.an_main_alt_2site
-        db = xx[0.5, 1.0, 1.0]
-        db.measure((40, 'max'), 'correlation', 
-                submit = 0, 
-                param={'direct_list':["zz", 'pm']})
+        a = dict()
         
-        #xx.show_fig()
-            
-
+        print '*'*80
+        #from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        #from merapy.run_heisbg.analysis import an_vmps
+        #from vmps.run_hubbard.analysis import an_vmps
+        from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
+        #xx = an_idmrg_psi.an_main_alt
+        
+        xx=an_vmps.an_test.an_test
+        db = xx[(1.2, 0.8, 0.0, 0.5, '1site_D0200_random_init')]
+        #ss= db.get_shape_list()
+        #db.plot_field_vs_size('correlation', ss,  fault_tol=1, 
+        #        sub_key_list=['zz', 10, 1, 1],
+        #                   legend_title='Jzz',
+        #              ms=5, lw=0.2,  )        
+        #
+        print db['entanglement_entropy']
+        print_vars(vars(),  ['db["dim_max"]'])
+        #db.measure((40, 0), which='entanglement_entropy', submit=0, force=1)
+        
+        raise  
+        
+        print  db.fetch_easy_new('energy', (40, 'max'))
+        #print db._get_corr_len((40, 'max'))
+        xx.show_fig()
+        
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
         dic=ResultDB.make_nested_dict(a, val='love')

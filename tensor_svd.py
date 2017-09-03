@@ -771,8 +771,8 @@ class Tensor_svd(object):
             if  cls.QSp_Group1.QNs[gidx] !=  totQN:  
                 continue
             V_buf = cls.get_block1(itensor, gidx)
-            esize = int(sqrt(V_buf.size))
             if 0:
+                esize = int(sqrt(V_buf.size))
                 #E = np.empty(esize, order='F')
                 E = np.empty(esize)
                 common_util.matrix_eigen_vector(V_buf, E[: esize])
@@ -803,7 +803,8 @@ class Tensor_svd(object):
         return Vg, E
 
     @classmethod
-    def eig_sparse(cls, itensor, qn_list, which_eig='sparse', which='LM', is_hermite=False, k=10, tol=None):
+    def eig_sparse(cls, itensor, qn_list, which_eig='sparse', which='LM', 
+            is_hermite=False, k=10, tol=None):
         """
             eigenvalue decomposition of sparse tensor
             using eigs, eigsh 
@@ -852,10 +853,6 @@ class Tensor_svd(object):
                 #warnings.warn("qn %s not found in qn_list %s, QSp_Group1.QNs are %s"%(qn,  qn_list, cls.QSp_Group1.QNs))
 
         return res
-    
-    @classmethod
-    def eigs(cls, itensor): 
-        pass 
     
     @classmethod
     def get_block(cls, div, target_QN, gidx= -1, need_group=True):
