@@ -173,6 +173,10 @@ class AnalysisTools(object):
     """
     
     def filter_array(self, x, x_min=None, x_max=None, period=None, x1=None) :  
+        """
+            returns:
+                arg
+        """
         r = x1 
         if r is None: 
             if x_min is None: 
@@ -926,14 +930,14 @@ class ResultDB(OrderedDict, AnalysisTools):
         D = D.split('=')[1]; D=eval(D)
         return N, D 
 
-    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, from_energy_rec=False, 
-          only_return_max=False, only_return_N=False, only_return_D=False, 
+    def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, 
+            from_energy_rec=True, only_return_max=False, only_return_N=False, only_return_D=False, 
             ): 
         if socket.gethostname()==LOCAL_HOSTNAME and not from_energy_rec: 
             fn = self.get_fn_list()
             sh = [self.parse_fn(f) for f in fn]
         else:
-            warnings.warn('get_shape_list using energy rec')
+            #warnings.warn('get_shape_list using energy rec')
             sh = self.get('energy', {}).keys()
        
         #if N is not None:
@@ -1191,22 +1195,20 @@ class ResultDB(OrderedDict, AnalysisTools):
         try: 
             if mera_shape[1] == 'max' : 
                 mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
-            elif mera_shape[1] == 'max_field':  #the max dim for each field may differ, then may use this
+            elif mera_shape[1] == 'field_max':  #the max dim for each field may differ, then may use this
                 N = mera_shape[0]
                 ss = self.get(field_name, {}).keys()
                 dd = [s[1] for s in ss if s[0]==N ]
                 D = max(dd) if dd else 0     
                 mera_shape = N, D
             rec = self[field_name][mera_shape]
-            #key = next(reversed(rec))  #last iter step
-            #rec = rec[key]
         except KeyError as err: 
             if fault_tolerant: 
                 if info>0: 
                     print 'key not found:', err
                 return None
             else:
-                raise
+                raise err
         except: 
             raise
         
@@ -1429,59 +1431,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                 new_sur = '_'.join([sur, 'bad'])
             print_vars(vars(),  ['new_sur'])
             db.rename_folder(new_surfix=new_sur)
-            
-    def fit_correlation(self, sh, func_type='power', which='correlation_extra', 
-            direct='pm', r_min=None, r_max=None, period=None,  plot=0, plot_orig=1, show_label=1, **kwargs): 
-        if 1: 
-            power_func= lambda x, C, eta: -C*x**eta*(-1)**x
-            #power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(pi*m*x)[0]*(-1)**x
-            power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(m*x)[0]*(-1)**x
-            power_cos_func= lambda x,  C,eta, m, b, k: -C*x**eta*(-1)**x * (b+ np.sin(1.*x/k))   #not usefull, only test
-            def exp_func_1(t, a, b, c):                                                         
-                return a * np.exp(b * t) + c   
-
-            def exp_func_2(t, A, B):                                                         
-                #return A * np.exp(-B * t) 
-                return A * np.exp(- t/B) 
-
-            if func_type == 'power': 
-                func = power_func; 
-            elif func_type == 'exp' : 
-                func = exp_func_2
-        if 1: 
-            xy = self.get_correlation(sh, which, direct=direct, 
-                    r_min=r_min, r_max=r_max,  period=period)
-            if xy is None: 
-                return None
-            else: 
-                x, y = xy
-        
-        if kwargs.get('info'): 
-            print 'xxx', x[0], x[-1], len(x)
-        x=np.array(x); y=np.array(y);  
-        y=np.abs(y)
-        fit_succeed = 1
-        try:
-            param,cov = curve_fit(func, x, y)
-            if isinstance(cov, float): 
-                cov = np.array([[cov]])
-            
-        except Exception as err: 
-            print 'fitting faild', err 
-            fit_succeed = 0
-      
-        if fit_succeed: 
-            if plot: 
-                label = '' if not show_label else param[1]
-                fig=self._plot(x, func(x, *param), xscale='log',yscale='log', 
-                        label=label, return_fig=1, marker=None,  **kwargs)
-                if plot_orig: 
-                    if not kwargs.has_key('fig'): kwargs['fig'] = fig
-                    fig=self._plot(x, y, xscale='log', yscale='log',   **kwargs)
-            return param
-       
-        else: 
-            return None
             
 
     def get_correaltion_exact(self, r, model_name=None, which='shastry'): 
@@ -1953,7 +1902,9 @@ class ResultDB(OrderedDict, AnalysisTools):
         dic.update(dic_temp)
         
         if kwargs.get('yfunc'): 
-            y = kwargs['yfunc'](y)
+            #y = kwargs['yfunc'](y)
+            yfunc = kwargs['yfunc']
+            y = map(yfunc, y)
         if kwargs.get('xfunc'): 
             x = kwargs['xfunc'](x)
         if fig_type is None: 
@@ -2091,7 +2042,7 @@ class ResultDB(OrderedDict, AnalysisTools):
             return fig 
     
     def plot_field_vs_position(self, field_name, sh, key_list=None,
-            r=None, r_min=None,  r_max=None,  period=1, rec=None,  fit=None, plot_fit=False, 
+            r=None, r_min=None,  r_max=None,  period=None, rec=None,  fit=None, plot_fit=False, 
             fault_tolerant=1, rec_getter=None, rec_getter_args=None, 
             info=0, algorithm=None,  **kwargs): 
         rec_getter_args = rec_getter_args if rec_getter_args is not None else {}
@@ -2135,29 +2086,33 @@ class ResultDB(OrderedDict, AnalysisTools):
         if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
             x = [a[1] for a in x]
         x = np.array(x); y=np.array(y)
-        #if kwargs.get('yfunc'): 
-        #    y = kwargs['yfunc'](y)
-        if r is None: 
-            if r_min is None: 
-                r_min = x[0]
-            if r_max is None: 
-                r_max = x[-1]
-            temp = np.logical_and(x>=r_min, x<=r_max)
-            if period != 1:  
-                temp = np.logical_and(temp, (x-r_min)%period==0)
-            arg = np.argwhere(temp).ravel()
+        
+       
+        
+        if 0:
+            if r is None: 
+                if r_min is None: 
+                    r_min = x[0]
+                if r_max is None: 
+                    r_max = x[-1]
+                temp = np.logical_and(x>=r_min, x<=r_max)
+                if period != 1:  
+                    temp = np.logical_and(temp, (x-r_min)%period==0)
+                arg = np.argwhere(temp).ravel()
+            else:
+                arg = []
+                a = 0
+                for _r in r: 
+                    ii = 0
+                    for _x in x[a:]: 
+                        if _r == _x:
+                            arg.append(a + ii)
+                            #print _r, a + ii   
+                            a = ii 
+                            break 
+                        ii += 1  
         else:
-            arg = []
-            a = 0
-            for _r in r: 
-                ii = 0
-                for _x in x[a:]: 
-                    if _r == _x:
-                        arg.append(a + ii)
-                        #print _r, a + ii   
-                        a = ii 
-                        break 
-                    ii += 1  
+            arg=self.filter_array(x, r_min, r_max, period)
         x = x[arg]
         y = y[arg]
         kwargs['return_ax'] = 1
@@ -2273,9 +2228,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             kwargs['ax'] = ax 
             count += y.size  
     
-    @staticmethod 
-    def fit_lines(ax, func): 
-        pass 
         
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
         if layer=='top':
@@ -2623,91 +2575,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         #y = (y + 1.0)/2.0
         return y.mean()  
     
-    def plot_correlation(self, sh,  direct='pm', r_min=None, r_max=None, period=None, which='correlation_mixed', 
-            log_scale=1, fit=None, plot_fit=False,   return_fig=0, draw=0, **kwargs): 
-        
-        if 1: 
-            assert which in ['correlation_extra', 'correlation', 'correlation_mixed']
-            sh_list = sh
-            fig = kwargs.get('fig')
-            ax = kwargs.get('ax')
-            if ax is None: 
-                if fig is None :
-                    fig=plt.figure(figsize=(6, 4))
-                if len(fig.axes)==0: 
-                    ax=fig.add_subplot(111)
-                else: 
-                    ax = fig.axes[-1]
-        not_found=[]
-        is_many_sh = 0
-        if len(sh_list)==2 : # and isinstance(sh_list[0], int): 
-            sh_list = [sh_list]
-            #is_many_sh = 1
-        #direct_orig = direct
-        #if direct == 'pm': direct = 'xx' 
-        sub_key_list = [direct] if which == 'correlation_extra' else [direct, 'val'] 
-        if period is None: 
-            period = 2 if log_scale else 1
-        for sh in sh_list: 
-                
-            rec = self.get_correlation(sh, which, direct, r_min=r_min, r_max=r_max, period=period )
-            if rec is not None: 
-                x, y = rec
-            else: 
-                continue
-            
-            if direct == 'pm':   
-                y=np.array(y);  y=y*2;  
-
-            label = kwargs.get('label')
-            
-            label = label if label is not None else ''
-            #label = ''  #if len(sh_list)<2: label += ' %s  '%(a, )   #if len(alpha_list)<2: label += ' %s  '%(sh, )
-            if is_many_sh: label += ' %s  '%(sh, )
-            marker = kwargs.get('marker')
-            marker = marker if marker is not None else '--'
-            if fit is None and len(marker)==1: marker  += '-'
-            
-            if log_scale: 
-                y=np.abs(y)
-                #ax.loglog(x, y, marker, label=label)
-                ax.loglog(x, y, marker)
-            else: 
-                ax.plot(x, y, marker)
-            
-            line = ax.lines[-1]
-            color = line.get_color()
-            line.set_markersize(5)
-            line.set_mfc('w')
-            line.set_markeredgewidth(1)
-            line.set_mec(color)
-            if fit is not None : 
-                    #line.set_mfc('w')
-                    #line.set_markersize(5)
-                res=self.fit_correlation(sh, func_type=fit,  which=which, direct=direct, 
-                        r_min=r_min, r_max=r_max, period=period,  plot=plot_fit, plot_orig=0, 
-                        show_label=0, ax=ax, fig=fig,  color=color)
-                if res is not None : 
-                    #if fit == 'power': 
-                    A, eta  = res
-                    if fit == 'power':  
-                        name = '\\eta' 
-                    else: 
-                        name = '\\xi'
-                    label += ' $%s=%1.2f$'%(name, eta)
-                       
-            line.set_label(label)
-            if fit: ax.set_xlim(x[0], x[-1]*10)
-        l=ax.legend()   #l=ax.legend(title='$\\alpha$')
-        if l is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transparent
-            l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
-           
-        ax.grid(1)
-        if kwargs.get('show_fig'): plt.show()
-        if draw: plt.show()
-        if len(not_found)>0: print 'not_found is ', not_found
-        if return_fig: return fig
 
     def plot_structure_factor(self, sh, direct=None, dist_max=100, show_fig=0,  **kwargs): 
         fft = np.fft.fft
@@ -2977,12 +2844,12 @@ class ResultDB(OrderedDict, AnalysisTools):
             if sh[1] == 'max':
                 Dmax = self.get_dim_max_for_N(sh[0])
                 sh = _sh = sh[0], Dmax
-                if Dmax == 0:                
+                if Dmax == 0 and not force:                
                     print('\tmax D for %s is zero, skip it'%(sh, ))
                     continue
             elif sh[1] == 0:
                 Dmax = self.get_dim_max_for_N(sh[0], force=force)
-                if Dmax == 0:                
+                if Dmax == 0 and not force:                
                     print('\tmax D for %s is zero, skip it'%(sh, ))
                     continue
                 _sh = sh[0], self.get_dim_max_for_N(sh[0])
@@ -3199,6 +3066,145 @@ class ResultDB_mera(ResultDB):
         else: 
             
             raise
+    
+    def fit_correlation(self, sh, func_type='power', which='correlation_extra', 
+            direct='pm', r_min=None, r_max=None, period=None,  plot=0, plot_orig=1, show_label=1, **kwargs): 
+        if 1: 
+            power_func= lambda x, C, eta: -C*x**eta*(-1)**x
+            #power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(pi*m*x)[0]*(-1)**x
+            power_si_func= lambda x,  C,eta, m: -C*x**eta*sici(m*x)[0]*(-1)**x
+            power_cos_func= lambda x,  C,eta, m, b, k: -C*x**eta*(-1)**x * (b+ np.sin(1.*x/k))   #not usefull, only test
+            def exp_func_1(t, a, b, c):                                                         
+                return a * np.exp(b * t) + c   
+
+            def exp_func_2(t, A, B):                                                         
+                #return A * np.exp(-B * t) 
+                return A * np.exp(- t/B) 
+
+            if func_type == 'power': 
+                func = power_func; 
+            elif func_type == 'exp' : 
+                func = exp_func_2
+        if 1: 
+            xy = self.get_correlation(sh, which, direct=direct, 
+                    r_min=r_min, r_max=r_max,  period=period)
+            if xy is None: 
+                return None
+            else: 
+                x, y = xy
+        
+        if kwargs.get('info'): 
+            print 'xxx', x[0], x[-1], len(x)
+        x=np.array(x); y=np.array(y);  
+        y=np.abs(y)
+        fit_succeed = 1
+        try:
+            param,cov = curve_fit(func, x, y)
+            if isinstance(cov, float): 
+                cov = np.array([[cov]])
+            
+        except Exception as err: 
+            print 'fitting faild', err 
+            fit_succeed = 0
+      
+        if fit_succeed: 
+            if plot: 
+                label = '' if not show_label else param[1]
+                fig=self._plot(x, func(x, *param), xscale='log',yscale='log', 
+                        label=label, return_fig=1, marker=None,  **kwargs)
+                if plot_orig: 
+                    if not kwargs.has_key('fig'): kwargs['fig'] = fig
+                    fig=self._plot(x, y, xscale='log', yscale='log',   **kwargs)
+            return param
+       
+        else: 
+            return None
+            
+    def plot_correlation(self, sh,  direct='pm', r_min=None, r_max=None, period=None, which='correlation_mixed', 
+            log_scale=1, fit=None, plot_fit=False,   return_fig=0, draw=0, **kwargs): 
+        
+        if 1: 
+            assert which in ['correlation_extra', 'correlation', 'correlation_mixed']
+            sh_list = sh
+            fig = kwargs.get('fig')
+            ax = kwargs.get('ax')
+            if ax is None: 
+                if fig is None :
+                    fig=plt.figure(figsize=(6, 4))
+                if len(fig.axes)==0: 
+                    ax=fig.add_subplot(111)
+                else: 
+                    ax = fig.axes[-1]
+        not_found=[]
+        is_many_sh = 0
+        if len(sh_list)==2 : # and isinstance(sh_list[0], int): 
+            sh_list = [sh_list]
+            #is_many_sh = 1
+        #direct_orig = direct
+        #if direct == 'pm': direct = 'xx' 
+        sub_key_list = [direct] if which == 'correlation_extra' else [direct, 'val'] 
+        if period is None: 
+            period = 2 if log_scale else 1
+        for sh in sh_list: 
+                
+            rec = self.get_correlation(sh, which, direct, r_min=r_min, r_max=r_max, period=period )
+            if rec is not None: 
+                x, y = rec
+            else: 
+                continue
+            
+            if direct == 'pm':   
+                y=np.array(y);  y=y*2;  
+
+            label = kwargs.get('label')
+            
+            label = label if label is not None else ''
+            #label = ''  #if len(sh_list)<2: label += ' %s  '%(a, )   #if len(alpha_list)<2: label += ' %s  '%(sh, )
+            if is_many_sh: label += ' %s  '%(sh, )
+            marker = kwargs.get('marker')
+            marker = marker if marker is not None else '--'
+            if fit is None and len(marker)==1: marker  += '-'
+            
+            if log_scale: 
+                y=np.abs(y)
+                #ax.loglog(x, y, marker, label=label)
+                ax.loglog(x, y, marker)
+            else: 
+                ax.plot(x, y, marker)
+            
+            line = ax.lines[-1]
+            color = line.get_color()
+            line.set_markersize(5)
+            line.set_mfc('w')
+            line.set_markeredgewidth(1)
+            line.set_mec(color)
+            if fit is not None : 
+                    #line.set_mfc('w')
+                    #line.set_markersize(5)
+                res=self.fit_correlation(sh, func_type=fit,  which=which, direct=direct, 
+                        r_min=r_min, r_max=r_max, period=period,  plot=plot_fit, plot_orig=0, 
+                        show_label=0, ax=ax, fig=fig,  color=color)
+                if res is not None : 
+                    #if fit == 'power': 
+                    A, eta  = res
+                    if fit == 'power':  
+                        name = '\\eta' 
+                    else: 
+                        name = '\\xi'
+                    label += ' $%s=%1.2f$'%(name, eta)
+                       
+            line.set_label(label)
+            if fit: ax.set_xlim(x[0], x[-1]*10)
+        l=ax.legend()   #l=ax.legend(title='$\\alpha$')
+        if l is not None : 
+            l.get_frame().set_alpha(0) # this will make the box totally transparent
+            l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
+           
+        ax.grid(1)
+        if kwargs.get('show_fig'): plt.show()
+        if draw: plt.show()
+        if len(not_found)>0: print 'not_found is ', not_found
+        if return_fig: return fig
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.2
@@ -3542,6 +3548,8 @@ class ResultDB_idmrg(ResultDB):
         """
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
         r_list = [] if r_list is None else r_list 
+        if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
+            self = self.__class__(self.parpath, use_local_storage=1)
         try: 
             res_old = self['correlation'][sh][direct]
         except KeyError: 
@@ -3654,28 +3662,33 @@ class TestResultDB(unittest.TestCase):
         a = dict()
         
         print '*'*80
-        #from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        #from merapy.run_heisbg.analysis import an_vmps
+        from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
         #from vmps.run_hubbard.analysis import an_vmps
-        from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
+        #from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
         #xx = an_idmrg_psi.an_main_alt
-        
-        xx=an_vmps.an_test.an_test
-        db = xx[(1.2, 0.8, 0.0, 0.5, '1site_D0200_random_init')]
-        #ss= db.get_shape_list()
-        #db.plot_field_vs_size('correlation', ss,  fault_tol=1, 
-        #        sub_key_list=['zz', 10, 1, 1],
-        #                   legend_title='Jzz',
-        #              ms=5, lw=0.2,  )        
         #
-        print db['entanglement_entropy']
-        print_vars(vars(),  ['db["dim_max"]'])
-        #db.measure((40, 0), which='entanglement_entropy', submit=0, force=1)
+        xx=an_idmrg_psi.an_main_alt
+
+        xx=an_idmrg_psi.an_main_alt
+        sh=(0, 'field_max')
+        #sh=(0, 640)
+        xx.set_parpath_dict()
+        aa=xx.filter_alpha(nu=0.5, alpha=2.0, )
+
+        xx.set_rdb_dict(aa)
+
+        fig, ax=xx.fig_layout(size=(5, 4))
+        for a in aa:
+            db=xx[a]
+            db.plot_field_vs_length('correlation', sh, key_list=['zz'],  label=a[2],
+                xscale='log', yscale='log',  fault_tol = 0, 
+                lw=0,
+                r_min=0, r_max=1000, 
+                period=1, ax=ax)
+            
         
-        raise  
-        
-        print  db.fetch_easy_new('energy', (40, 'max'))
-        #print db._get_corr_len((40, 'max'))
+            
         xx.show_fig()
         
     def test_insert_and_fetch(self): 

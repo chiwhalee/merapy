@@ -468,13 +468,6 @@ class Main(object):
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
         from brokest.task_center import TaskCenter, submit_one, submit_many, LOCAL_IP
-        if need_confirm:
-            i=raw_input('submit %s jobs? yes(y)\n'%(len(config_group)))
-            if i.lower()=='y':
-                print 'allow'
-            else:
-                print  'canceled'
-                return 
         
         if not submit: 
             tasks = [(cls.run_one, (c, )) for c in config_group] 
@@ -483,6 +476,14 @@ class Main(object):
                     try_period=kwargs.get('try_period', 1)
                     )
         else: 
+            if need_confirm:
+                i=raw_input('submit %s jobs? yes(y)\n'%(len(config_group)))
+                if i.lower()=='y':
+                    print 'allow'
+                else:
+                    print  'canceled'
+                    return 
+            
             #job_info = {}
             #temp = ['delay_send', 'priority', 'job_group_name', 'job_description']
             #for t in temp: 
@@ -502,14 +503,14 @@ class Main(object):
             #    tc = TaskCenter(host=LOCAL_IP)
             #    print tc.update_job_order()
         
-        if job_info.has_key('job_group_name'):
-            job_group_name = job_info['job_group_name']
-            i=raw_input('add_notify for %s ? yes(y)\n'%(job_group_name))
-            if i.lower()=='y':
-                tc = TaskCenter(host=LOCAL_IP)
-                print tc.add_notify(job_group_name)
-            else:
-                print  'canceled'
+            if job_info.has_key('job_group_name'):
+                job_group_name = job_info['job_group_name']
+                i=raw_input('add_notify for %s ? yes(y)\n'%(job_group_name))
+                if i.lower()=='y':
+                    tc = TaskCenter(host=LOCAL_IP)
+                    print tc.add_notify(job_group_name)
+                else:
+                    print  'canceled'
                 
             
     @staticmethod 

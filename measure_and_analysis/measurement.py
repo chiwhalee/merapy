@@ -160,12 +160,6 @@ def measure_S(S=None, parpath=None, path=None,
                
             path = parpath + '/' + fn
             
-            #if db_version is None: 
-            #    k = (dim, layer, iter)
-            #    if not rdb.has_key(k): 
-            #        raise NotImplemented   #后来修改了，不支持，需要再修改
-            #        rdb[k] = OrderedDict()
-            
             if nqn <= 3: 
                 shape = (dim, layer)
             else: 
@@ -255,19 +249,21 @@ def measure_S(S=None, parpath=None, path=None,
         return 
 
     if rdb is None: 
-        rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+        _rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+    else:
+        _rdb = rdb
     
     #if algorithm == 'mera' :  # backward compatibiliy for ResultDB version = None
-    db_version = rdb.get('version')
+    db_version = _rdb.get('version')
     if not force: 
         found = []
         for w in which: 
             if db_version is None: 
-                is_found = rdb[k].has_key(w)
+                is_found = _rdb[k].has_key(w)
             else:
                 #key_list = [w] + [shape, iter]
                 key_list = [w] + [shape]
-                is_found = rdb.has_key_list(key_list)
+                is_found = _rdb.has_key_list(key_list)
             if is_found: 
                 found.append(w)
         if found:
@@ -303,38 +299,42 @@ def measure_S(S=None, parpath=None, path=None,
         print msg
     
     if 1: 
-        #load rdb again! so that avoid chance of confliction 
-        rdb = rdb_class(parpath, use_local_storage=use_local_storage) 
+        #load _rdb again! so that avoid chance of confliction due to measure time delay
+        if rdb is None: 
+            _rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+        else:
+            _rdb = rdb
+            
         changed = False
         if len(results)>0:
             for r in results: 
                 if db_version is None: 
-                    rdb.put(**r)
+                    _rdb.put(**r)
                 else: 
-                    rdb.insert(**r)
+                    _rdb.insert(**r)
                 
             changed = True
         
         if 1: 
-            if not rdb.has_key('algorithm'): 
-                rdb['algorithm'] = algorithm
+            if not _rdb.has_key('algorithm'): 
+                _rdb['algorithm'] = algorithm
                 changed = True
                 
             if algorithm in ['mps', 'idmrg']: 
-                if not rdb.has_key('dim_max'): 
-                    rdb['dim_max'] = {}
-                if rdb.has_key_list(['dim_max', shape[0]], info=0): 
-                    dmax = rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
+                if not _rdb.has_key('dim_max'): 
+                    _rdb['dim_max'] = {}
+                if _rdb.has_key_list(['dim_max', shape[0]], info=0): 
+                    dmax = _rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
                     if dmax<shape[1]: 
-                        rdb['dim_max'][shape[0]] = shape[1]
+                        _rdb['dim_max'][shape[0]] = shape[1]
                         changed = True
                 else: 
                     dmax = shape[1]
-                    rdb['dim_max'][shape[0]] = dmax 
+                    _rdb['dim_max'][shape[0]] = dmax 
                     changed = True
             
         if changed: 
-            rdb.commit(info=1)
+            _rdb.commit(info=1)
         else: 
             print 'No change to commit.'
     if len(failed_list)>0: 
