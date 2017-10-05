@@ -352,45 +352,40 @@ class Config(dict):
         
         msg = [os.path.basename(parpath), 'N=%d'%N,  
                 'threads=%d'%cfg['NUM_OF_THREADS']]
-        if cfg.get('which_minimize', '1site')=='1site':  #old for 1site algrithm and save file for each D 
-            if 0:
-                ss= cfg['schedule']
-                msg = [os.path.basename(parpath), 'N=%d'%N,  str(ss), 
-                        'threads=%d'%cfg['NUM_OF_THREADS']]
-                sh = (N, max(ss))
-                if db.has_shape(sh, from_energy_rec=1):
-                    msg = ['FOUND '] + msg[:1]
-                    allow = False
-                else:
-                    msg = ['ADD '] + msg 
-            else:
+        if alg == 'vmps' :
+            schedule = cfg['schedule']
+            if cfg.get('which_minimize', '1site')=='1site':  #old for 1site algrithm and save file for each D 
+                #sh = (N, max(schedule))
+                #if db.has_shape(sh, from_energy_rec=1):
                 v = db.fetch_easy('variance', (N, 'max'))
                 v = v if v is not None else 1.0
                 if  v <= cfg['variance_lim']:
-                    msg = ['FOUND '] + msg[:2]
                     allow = False
-                else:
-                    msg = ['ADD '] + msg 
-            print(' '.join(msg))
-        else:
-            if 1:
-                schedule = cfg['schedule']
+            else:
                 Dmax_schedule = max([s['D'] for s in schedule])
                 Dmax = db.get_dim_max_for_N(N)
-            
-            tem = db.fetch_easy('run_info', (N, 'max'), sub_key_list=['trunc_err_max'])
-            tem = tem if tem is not None else 1
-            v = db.fetch_easy('variance', (N, 'max'))
-            v = v if v is not None else 10
-            if (tem <= cfg['trunc_err_TOL'] or 
-                    v <= cfg['variance_lim'] or 
-                    Dmax_schedule <= Dmax ):
-                msg = ['FOUND '] + msg[:2]
-                allow = False
-            else:
-                msg = ['ADD '] + msg 
                 
-            print(' '.join(msg))
+                tem = db.fetch_easy('run_info', (N, 'max'), sub_key_list=['trunc_err_max'])
+                tem = tem if tem is not None else 1
+                v = db.fetch_easy('variance', (N, 'max'))
+                v = v if v is not None else 10
+                if (tem <= cfg['trunc_err_TOL'] or 
+                        v <= cfg['variance_lim'] or 
+                        Dmax_schedule <= Dmax ):
+                    allow = False
+        elif alg == 'idmrg' :
+            schedule = cfg['schedule']
+            Dmax = max(schedule)
+            sh = (0, Dmax)
+            if db.has_shape(sh, from_energy_rec=1):
+                allow = False
+            
+        if not allow:
+            msg = ['FOUND '] + msg[:2]
+        else:
+            msg = ['ADD '] + msg 
+            
+        print(' '.join(msg))
            
         return allow 
 

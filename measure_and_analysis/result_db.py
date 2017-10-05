@@ -151,7 +151,8 @@ if 'cygwin' in HOME:  #properly deal with cygwin path
 BACKUP_STATE_DIR = 'backup_tensor_dir'
 RESULTDB_DIR = 'resultdb_dir'
 if platform.system()=='Linux':
-    RESULTDB_ROOT = '/'.join([HOME, RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
+    #RESULTDB_ROOT = '/'.join([HOME, RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
+    RESULTDB_ROOT = '/'.join([HOME,'dropbox', RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
 else:
     RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
 
@@ -703,6 +704,25 @@ class ResultDB(OrderedDict, AnalysisTools):
     def state_parpath(self): 
         dir = self.parpath.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         return dir 
+    
+    def parpath_map(self, dir):
+        if 'C:' in dir:
+            #xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), 
+            #        ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
+            xxx = [ ('C:', ''), 
+                    ('Users', 'home'), 
+                    ('zhihua', LOCAL_USERNAME),  
+                    ('Dropbox', 'dropbox')]
+            for a, b in xxx:
+                dir=dir.replace(a, b)
+            dir = os.path.normpath(dir)
+            dir = dir.replace('\\', '/')
+        return dir 
+    
+    @property
+    def parpath_center(self):
+        dir = self.parpath_map(self.parpath)
+        return dir
 
     def __repr__(self): 
         return self.keys()
@@ -734,13 +754,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         """
         return (self.__class__, (self.parpath, ))
     
-    @staticmethod 
-    def parpath_map(dir):
-        if 'C:' in dir:
-            xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
-            for a, b in xxx:
-                dir=dir.replace(a, b)
-        return dir 
         
     if 0: 
         def __getitem__(self, k): 
@@ -767,10 +780,6 @@ class ResultDB(OrderedDict, AnalysisTools):
             todo: load 时，应该支持 update state 
         """
         
-        
-        #fn = self.__class__.shape_to_backup_fn(sh)
-        #path = '/'.join([self.parpath, fn])
-        #path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         path = self.shape_to_backup_path(sh)
         
         #with open(path, 'rb') as inn: 
@@ -1046,10 +1055,14 @@ class ResultDB(OrderedDict, AnalysisTools):
             #pickle.dump(self, out)  #this is rather critical, or else got error
             pickle.dump(OrderedDict(self), out)
             out.close()
+        
         use_local_storage = use_local_storage if use_local_storage is not None else self.use_local_storage
-        rpyc_save(self.path, OrderedDict(self), use_local_storage=use_local_storage)
+        path = self.path
+        if use_local_storage:
+            path = self.parpath_map(path)
+        rpyc_save(path, OrderedDict(self), use_local_storage=use_local_storage)
         if info>0: 
-            temp = str(self.path)
+            temp = str(path)
             print '\tmodification in ...%s has been commited'%(temp[-90: ])
     
     def _fetch(self, dim, num_of_layer=None): 
@@ -2893,9 +2906,9 @@ class ResultDB(OrderedDict, AnalysisTools):
             
     def shape_to_backup_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
-        path = '/'.join([self.parpath, fn])
-        path = path.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
-        return path 
+        dir = self.parpath.replace('Dropbox', '').replace('dropbox', '')
+        dir = dir.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+        return '/'.join([dir, fn])
 
     def update_db_structure(self, update_what='all'):
         """
@@ -3347,6 +3360,7 @@ class ResultDB_vmps(ResultDB):
             res *= N
         return res
     
+    
 class ResultDB_idmrg(ResultDB): 
     VERSION = 1.2
     ALGORITHM = 'idmrg'
@@ -3549,7 +3563,7 @@ class ResultDB_idmrg(ResultDB):
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
         r_list = [] if r_list is None else r_list 
         if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
-            self = self.__class__(self.parpath, use_local_storage=1)
+            self = self.__class__(self.parpath_center, use_local_storage=1)
         try: 
             res_old = self['correlation'][sh][direct]
         except KeyError: 
@@ -3569,7 +3583,31 @@ class ResultDB_idmrg(ResultDB):
             self['correlation'][sh][direct] = res_new 
             
             self.commit(info=1, use_local_storage=use_local_storage)
-            
+     
+    def calc_correlation_submit(self, sh, direct, r_list):
+        """
+            this is a convenient function
+        """
+        
+        from mypy.brokest.task_center import submit_one 
+        from mypy.brokest.brokest import run_many 
+        db = self
+        #parpath = db.parpath
+        #db=db.__class__(parpath, use_local_storage=1)
+        
+        func = db.__class__.calc_correlation.im_func
+        #kwargs= dict(r_list=[(0, r) for r in rr ], use_local_storage=1)
+        kwargs = dict(r_list=r_list, use_local_storage=1)
+        if 1:
+            status=submit_one(func, 
+                    args= (db, sh, direct), kwargs=kwargs, 
+                    job_info = {'priority': 1, 'job_group_name': 'calcl-correlation', 'delay_send': 20, })
+            print '\tresponse: ', status
+        else:
+            tasks= [(func, (db, sh, 'zz'), kwargs)]
+            run_many(tasks, servers=('localhost', None))
+
+     
     def _get_corr_conn(self, sh, **kwargs):
         """
         """
@@ -3678,18 +3716,29 @@ class TestResultDB(unittest.TestCase):
 
         xx.set_rdb_dict(aa)
 
-        fig, ax=xx.fig_layout(size=(5, 4))
+        #fig, ax=xx.fig_layout(size=(5, 4))
         for a in aa:
             db=xx[a]
-            db.plot_field_vs_length('correlation', sh, key_list=['zz'],  label=a[2],
-                xscale='log', yscale='log',  fault_tol = 0, 
-                lw=0,
-                r_min=0, r_max=1000, 
-                period=1, ax=ax)
-            
         
+        rr = range(100)
+        rr=[(0, r) for r in rr]
+        if 0:
+            print_vars(vars(),  ['db.parpath'])
+            p = db.parpath
+            pp = db.parpath_map(db.parpath)
+            print_vars(vars(),  ['db.parpath_center'])
+            print 
+            print 
+            state_path = db.shape_to_backup_path((0, 160))
+            print_vars(vars(),  ['state_path'])
+            state_path = db.parpath_map(state_path)
+            print_vars(vars(),  ['state_path'])
+        p = db.path
+        p= db.parpath_map(p)
+        print_vars(vars(),  ['p'])
+        #db.calc_correlation((0, 320), 'pm', r_list=rr)             
             
-        xx.show_fig()
+        #xx.show_fig()
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
