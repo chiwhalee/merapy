@@ -325,7 +325,8 @@ class AnalysisTools(object):
     def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
         if size is None and ncol == 1 and nrow == 1: 
             size = (4, 3)
-        size= size if size is not None else (3.5, 2.5)
+        #size= size if size is not None else (3.5, 2.5)
+        size= size if size is not None else (5, 4)
         size = ncol*size[0], nrow*size[1]
         fig = plt.figure(figsize=size)
         iii=0
@@ -703,6 +704,7 @@ class ResultDB(OrderedDict, AnalysisTools):
     @property
     def state_parpath(self): 
         dir = self.parpath.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+        dir = dir.replace('dropbox', '')
         return dir 
     
     def parpath_map(self, dir):
@@ -843,6 +845,25 @@ class ResultDB(OrderedDict, AnalysisTools):
             temp = temp[k]
         
         return True
+    
+    def fetch_from_key_list(self, key_list, default=None, rec=None, fault_tol=True):
+        if rec is None:
+            rec = self
+        try: 
+            for key in key_list: 
+                rec = rec[key]
+        except KeyError as err: 
+            if fault_tol: 
+                #print 'error in get_from_key_list'
+                #print err
+                warnings.warn(str(err))
+                #print 'keys are', rec.keys()
+                return default
+            else: 
+                raise
+        #finally:
+        #    return default
+        return rec
     
     @staticmethod 
     def make_nested_dict(key_list, old_dic=None,  val=None, info=0): 
@@ -1129,17 +1150,19 @@ class ResultDB(OrderedDict, AnalysisTools):
         
         
         rec = self.fetch(field, dim, num_of_layer=layer, info=info)
-    
-        if key_list is not None and rec is not None: 
-            try: 
-                for key in key_list: 
-                    rec = rec[key]
-            except: 
-                if fault_tolerant: 
-                    print 'error in fetch_easy'
-                    print 'keys are', rec.keys()
-                else: 
-                    raise
+        if 0: 
+            if key_list is not None and rec is not None: 
+                try: 
+                    for key in key_list: 
+                        rec = rec[key]
+                except: 
+                    if fault_tolerant: 
+                        print 'error in fetch_easy'
+                        print 'keys are', rec.keys()
+                    else: 
+                        raise
+        else:
+            rec=self.fetch_from_key_list(key_list, rec=rec, fault_tol=fault_tolerant)
         return rec
 
     def fetch_easy_v1p0(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
@@ -1243,19 +1266,22 @@ class ResultDB(OrderedDict, AnalysisTools):
                     key_list = sub_key_list
                 else: 
                     key_list += sub_key_list
-        
         if key_list is not None and rec is not None: 
-            try: 
-                for key in key_list: 
-                    rec = rec[key]
-            except: 
-                if fault_tolerant: 
-                    if info>0: 
-                        print 'error in fetch_easy'
-                        print 'existent keys are %s; required key_list is %s'%(rec.keys(), key_list)
-                    return None 
-                else: 
-                    raise
+            if 0:
+                try: 
+                    for key in key_list: 
+                        rec = rec[key]
+                except: 
+                    if fault_tolerant: 
+                        if info>0: 
+                            print 'error in fetch_easy'
+                            print 'existent keys are %s; required key_list is %s'%(rec.keys(), key_list)
+                        return None 
+                    else: 
+                        raise
+            else: 
+                rec=self.fetch_from_key_list(key_list, rec=rec, fault_tol=fault_tolerant)
+            
         return rec
     
     def search_field_name_del(self, search_str, all_field_names=None, only_first=False, only_one=False, assert_found=False): 
@@ -1328,23 +1354,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         res = self.fetch_easy(field_name, sh, sub_key_list)
         return res 
     
-    def insert_bac(self, field_name, sh, iter, val, sub_key_list=None): 
-        if not self.has_key(field_name): 
-            self[field_name] = OrderedDict()
-        if not self[field_name].has_key(sh): 
-            self[field_name][sh] = OrderedDict()
-            
-        if sub_key_list is None: 
-            self[field_name][sh][iter] = val
-        else:
-            #self[field_name][sh][iter]  = OrderedDict()
-            #dic=self.__class__.make_nested_dict(
-            #        sub_key_list, old_dic=self[field_name][sh][iter],val=val)
-            #self[field_name][sh][iter] = dic 
-            dic=self.__class__.make_nested_dict(
-                    [iter] + sub_key_list, old_dic=self[field_name][sh],val=val)
-            self[field_name][sh] = dic 
-
     def insert(self, field_name, sh, val, sub_key_list=None): 
         """
             remove param iter
@@ -1602,9 +1611,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                 self.commit(info=1)
             elif self['algorithm'] == 'idmrg':
                 period, L, corr = corr
-                #temp = filter(lambda x:x[0]==0, corr.keys())
-                #L = max(temp)[1] + 1
-                #period = 2
                 print_vars(vars(),  ['period', 'L'])
                 if 1:
                     ij = [(i, j) for i in range(L) for j in range(L)]
@@ -1782,7 +1788,30 @@ class ResultDB(OrderedDict, AnalysisTools):
             gap = None
             
         return gap 
-     
+    
+    def _get_charge_gap_inf_len(db, sh=None, x_min=None, x_max=None):
+        """
+            sh is only a place holder
+        """
+        NN=db.get_shape_list(only_return_N=1, sh_min=(0, 1), from_energy_rec=1)
+        data=[]
+        for N in NN:
+            rec=db._get_charge_gap_2((N, 'max'))
+            if rec is not None:
+                data.append((1./N, rec))
+        if not data:
+            return np.nan 
+        data.reverse()
+        K=np.nan 
+        try:
+            func = lambda x, a0, a1, a2, a3: a0 + a1*x  + a2*x**2 +a3*x**3
+            res=db.fit_line(None, func=func, data=data, 
+                        x_min=x_min, x_max=x_max, )
+            K=res['param'][0] #except RuntimeError as err:
+        except Exception as err: 
+            warnings.warn(str(err))
+        return K
+
     def delete_rec(self, field_name_list, sh_list, need_comfirm=0): 
         """
             field_name_list: it can take parameter 'all'
@@ -1816,9 +1845,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         if sh_list == 'all' : 
             sh_list = self.get_shape_list() 
         
-        dir = self.parpath 
-        if RESULTDB_DIR in self.parpath:
-            dir = dir.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
+        #dir = self.parpath 
+        dir = self.state_parpath
        
         for sh in sh_list: 
             fn=self.__class__.shape_to_backup_fn(sh)
@@ -2076,7 +2104,9 @@ class ResultDB(OrderedDict, AnalysisTools):
         if algorithm  ==  'idmrg':  
             rec = rec.items()
             x, y = zip(*rec)
-        
+            if isinstance(x[0], tuple):
+                x = [a[1] for a in x]        
+                
         elif algorithm == 'mera' : 
             x, y = zip(*rec)
             
@@ -2096,8 +2126,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         else:
             x, y = zip(*rec)
         
-        if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
-            x = [a[1] for a in x]
+        #if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
+        #    x = [a[1] for a in x]
         x = np.array(x); y=np.array(y)
         
        
@@ -2587,7 +2617,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         y = np.asarray(y)
         #y = (y + 1.0)/2.0
         return y.mean()  
-    
 
     def plot_structure_factor(self, sh, direct=None, dist_max=100, show_fig=0,  **kwargs): 
         fft = np.fft.fft
@@ -2919,7 +2948,6 @@ class ResultDB(OrderedDict, AnalysisTools):
         """
         if self['version'] < 1.2 and update_what in ['all', 'remove_iter']:
             #this is big change, removed  -1 from the key list
-            print 'update version from %s to %s'%(self['version'], 1.2)
             kk = self.keys()
             kk = [k for k in kk if k not in ['algorithm', 'status', 'version', 'dim_max']]
             ss = self.get_shape_list(from_energy_rec=1)  #here I use from_energy_rec because state file may be lost, while only db file retained
@@ -3334,14 +3362,6 @@ class ResultDB_vmps(ResultDB):
             res= None
         return res
      
-    def _get_energy_total(self, sh):
-        e = self.fetch_easy('energy', sh)
-        if e is None:
-            return None
-        N = sh[0]
-        res = e*(N-1)
-        return res
-    
     def _get_corr_len(self, sh, k0=np.pi, per_site=1):
         """
             extract correlation length from structure factor
@@ -3362,7 +3382,7 @@ class ResultDB_vmps(ResultDB):
     
     
 class ResultDB_idmrg(ResultDB): 
-    VERSION = 1.2
+    VERSION = 1.21
     ALGORITHM = 'idmrg'
     ALL_FIELD_NAMES= list(ResultDB.ALL_FIELD_NAMES)
     ALL_FIELD_NAMES.extend(['length', 'entanglement', 'correlation_length'])
@@ -3479,7 +3499,6 @@ class ResultDB_idmrg(ResultDB):
             return fig, ax
     
     def calc_EE_from_finite_mps(self, sh, small_size=0, force=0, which_log='ln', fault_tol=1, info=0):
-        
         field = 'EE_from_finite_mps'
         field = '_'.join([field, which_log])
         if small_size: 
@@ -3547,50 +3566,87 @@ class ResultDB_idmrg(ResultDB):
             ver = 1.01
             print 'update version from %s to %s'%(self['version'], ver)
             sh_list = self.get_shape_list()
-            
-           
             self.get_dim_max_for_N(0, update_db=1)  
             self['version'] = ver 
             self.commit(info=1)
+        
         if self['version']<1.2:
+            ver = 1.2
+            print 'update version from %s to %s'%(self['version'], ver)
             ResultDB.update_db_structure(self, 'remove_iter')
+        
+        if self['version']<1.21:
+            ver = 1.21
+            print 'update version from %s to %s'%(self['version'], ver)
+            def update_correlation(db):
+                #ss= db.get_shape_list()
+                ss= db.get('correlation', {}).keys()
+                for sh in ss: 
+                    rec=db.fetch_easy('correlation', sh)
+                    if rec is None: 
+                        continue 
+                    rec_new = OrderedDict()
+                    for dir in rec.keys():
+                        if not isinstance(rec[dir], OrderedDict): 
+                            continue
+                        old = rec[dir]
+                        rec_new[dir] = OrderedDict()
+                        rr = old.keys()
+                        rr = [r[1] for r in rr]
+                        temp = [(r, old[(0, r)]) for r in rr]
+                        rec_new[dir][0] = OrderedDict(temp)
+                        #print_vars(vars(),  ['rec_new["zz"][0].keys()'])
+                    db.insert('correlation', sh, rec_new)
+            update_correlation(self) 
+            
+            self['version'] = ver 
+            self.commit(info=1)
 
-    def calc_correlation(self, sh, direct,  r_list=None, force=False, 
+    def calc_correlation(self, sh, direct, i0=0, r_list=None, force=False, 
             use_local_storage=False, info=0):
         """
             this is a temporary workaround 
         """
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
-        r_list = [] if r_list is None else r_list 
+        if r_list is None:
+            r_list = np.arange(0, 4, 0.05)
+            r_list = (10**r_list ).astype(int)
+            #r_list = range(10, 200, 10)
+        if isinstance(r_list[0], int):
+            r_list = [(0, r) for r in r_list]
+        
+        kk = ['correlation', sh, direct, i0]
         if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
             self = self.__class__(self.parpath_center, use_local_storage=1)
-        try: 
-            res_old = self['correlation'][sh][direct]
-        except KeyError: 
-            self.add_key_list(['correlation', sh, direct])
-            res_old = self['correlation'][sh][direct]
+        if not self.has_key_list(kk):
+            self.add_key_list(kk) 
+        res_old = self.fetch_from_key_list(kk)
         r_old = res_old.keys()
+        #print_vars(vars(),  ['res_old'])
+        #raise  
         if not force: 
             r_list = set(r_list)-set(r_old)
         if len(r_list)>0: 
             #state = self.load_S(sh, use_local_storage=self.use_local_storage)
             state = self.load_S(sh, use_local_storage=use_local_storage)
             rr = [r[1] for r in r_list]
-            temp=func(state, [direct], r_list=rr, r_max=max(rr))
+            temp=func(state, [direct], [i0], r_list=rr, r_max=max(rr))
         
-            res_old.update(temp[direct])
+            res_old.update(temp[direct][i0])
             res_new = OrderedDict(sorted(res_old.items()))
-            self['correlation'][sh][direct] = res_new 
+            
+            self['correlation'][sh][direct][i0] = res_new 
             
             self.commit(info=1, use_local_storage=use_local_storage)
      
-    def calc_correlation_submit(self, sh, direct, r_list):
+    def calc_correlation_submit(self, sh, direct, r_list=None):
         """
             this is a convenient function
         """
         
         from mypy.brokest.task_center import submit_one 
         from mypy.brokest.brokest import run_many 
+            
         db = self
         #parpath = db.parpath
         #db=db.__class__(parpath, use_local_storage=1)
@@ -3606,18 +3662,16 @@ class ResultDB_idmrg(ResultDB):
         else:
             tasks= [(func, (db, sh, 'zz'), kwargs)]
             run_many(tasks, servers=('localhost', None))
-
      
-    def _get_corr_conn(self, sh, **kwargs):
+    def _get_corr_conn(self, sh, period, **kwargs):
         """
         """
         corr = self.fetch_easy('correlation', sh, ['zz'])
         if corr is None:
             return None 
         corr = corr.iteritems()
-        #corr = corr.items()
         if 1:
-            p = kwargs.get('period')
+            p = period
             mag = {}
             mag2 = {}
             for i in range(p):
@@ -3700,44 +3754,41 @@ class TestResultDB(unittest.TestCase):
         a = dict()
         
         print '*'*80
-        from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
+        #from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
         #from vmps.run_hubbard.analysis import an_vmps
         #from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
         #xx = an_idmrg_psi.an_main_alt
-        #
-        xx=an_idmrg_psi.an_main_alt
-
-        xx=an_idmrg_psi.an_main_alt
-        sh=(0, 'field_max')
-        #sh=(0, 640)
-        xx.set_parpath_dict()
-        aa=xx.filter_alpha(nu=0.5, alpha=2.0, )
-
-        xx.set_rdb_dict(aa)
-
-        #fig, ax=xx.fig_layout(size=(5, 4))
+        xx=an_idmrg_psi.an_main_symm
+        aa=xx.filter_alpha(Jzz='0.3<Jzz<1.5')
+        aa = [1.0]
+        #xx.set_rdb_dict(aa)
+        for a in aa:
+            db = xx[a]
+            db.update_db_structure()
+        
+        sh=(0, 80)
+        rec=db.fetch_easy('correlation', sh, fault_tolerant=1)
+        db.calc_correlation(sh, 'zz', r_list=range(10))
+        rec=db.fetch_easy('correlation', sh, fault_tolerant=1)
+        print_vars(vars(),  ['rec'])
+        
+        raise  
+        fig, ax=xx.fig_layout(size=(6, 5))
         for a in aa:
             db=xx[a]
-        
-        rr = range(100)
-        rr=[(0, r) for r in rr]
-        if 0:
-            print_vars(vars(),  ['db.parpath'])
-            p = db.parpath
-            pp = db.parpath_map(db.parpath)
-            print_vars(vars(),  ['db.parpath_center'])
-            print 
-            print 
-            state_path = db.shape_to_backup_path((0, 160))
-            print_vars(vars(),  ['state_path'])
-            state_path = db.parpath_map(state_path)
-            print_vars(vars(),  ['state_path'])
-        p = db.path
-        p= db.parpath_map(p)
-        print_vars(vars(),  ['p'])
-        #db.calc_correlation((0, 320), 'pm', r_list=rr)             
-            
+            db.update_db_structure()
+            db.plot_field_vs_length('correlation', sh, 
+                xscale='log', 
+                yscale='log', ms=0,
+                label=a,
+                yfunc=np.abs,
+                #key_list=['zz', 0], 
+                key_list=['zz', 0], 
+                r_min=1, #r_max=sh[0]-20, 
+                period=2,
+                ax=ax)
+
         #xx.show_fig()
         
     def test_insert_and_fetch(self): 
