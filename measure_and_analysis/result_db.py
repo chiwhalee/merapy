@@ -3558,10 +3558,10 @@ class ResultDB_idmrg(ResultDB):
             r_old = res_old.keys()
             
             if not force: 
-                r_list = set(r_list)-set(r_old)
-            if len(r_list)>0: 
+                r_list_calc= set(r_list)-set(r_old)
+            if len(r_list_calc)>0: 
                 changed = True
-                temp=func(state, [direct], [i0], r_list=r_list, r_max=None)
+                temp=func(state, [direct], [i0], r_list=r_list_calc, r_max=None)
             
                 res_old.update(temp[direct][i0])
                 res_new = OrderedDict(sorted(res_old.items()))
@@ -3580,6 +3580,8 @@ class ResultDB_idmrg(ResultDB):
                 corr[direct]['aver'] = aver
                
             self.commit(info=1, use_local_storage=use_local_storage)
+        else:
+            print 'nothing changed'
      
     def calc_correlation_submit(self, sh, direct, r_list=None):
         """
@@ -3624,9 +3626,7 @@ class ResultDB_idmrg(ResultDB):
         return OrderedDict(res)
     
     def _get_corr_aver(self, sh, direct,  period=None):
-        rec = self.fetch_easy('correlation', sh, [direct])
-        ii = rec.keys() 
-        
+       pass 
     
 
 class ResultDB_ed(ResultDB): 
