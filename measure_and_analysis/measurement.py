@@ -308,10 +308,7 @@ def measure_S(S=None, parpath=None, path=None,
         changed = False
         if len(results)>0:
             for r in results: 
-                if db_version is None: 
-                    _rdb.put(**r)
-                else: 
-                    _rdb.insert(**r)
+                _rdb.insert(**r)
                 
             changed = True
         

@@ -854,8 +854,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                 rec = rec[key]
         except KeyError as err: 
             if fault_tol: 
-                #print 'error in get_from_key_list'
-                #print err
                 warnings.warn(str(err))
                 #print 'keys are', rec.keys()
                 return default
@@ -1023,41 +1021,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                 self.commit(info=info)
             return D 
     
-    def get_energy_min(self, sh=None, **kwargs): 
-        version = self.get('version')
-        
-        if version is None: 
-            if 0: 
-                eng_list = []
-                for k, v in self.iteritems(): 
-                    #print k
-                    eng=v.get('energy')
-                    if eng is not None : 
-                        eng_list.append((k, eng)) 
-                res= min(eng_list, key=lambda x: x[1])
-            if 1: 
-                recs= self.get_energy(sh).itervalues()
-                res= min(recs, key=lambda x: x[0])
-                res= res[0]
-                    
-                pass
-            
-        elif version == 1.0: 
-            #self['energy'][sh]
-            sh_list = self.get_shape_list()
-            eng_list = []
-            for sh in sh_list: 
-                eng = self.fetch_easy('energy', sh)
-                if eng is not None : 
-                    eng_list.append(eng)
-            res= min(eng_list)
-        
-        else: 
-            raise
-        
-        if kwargs.get('show_val'): 
-            print 'energy min is: ', res  
-        return res
     
     def get_energy_fluc_count(self, sh, bins=None): 
         if bins is None: 
@@ -1366,17 +1329,10 @@ class ResultDB(OrderedDict, AnalysisTools):
         if sub_key_list is None: 
             self[field_name][sh] = val
         else:
-            #self[field_name][sh][iter]  = OrderedDict()
-            #dic=self.__class__.make_nested_dict(
-            #        sub_key_list, old_dic=self[field_name][sh][iter],val=val)
-            #self[field_name][sh][iter] = dic 
             dic=self.__class__.make_nested_dict(
                     sub_key_list, old_dic=self[field_name][sh],val=val)
             self[field_name][sh] = dic 
 
-    def put(self, field_name, key, res, sub_key_list=None): 
-        self[key].update({field_name:res})
-    
     def rename_field(self, field_name_old, field_name_new): 
         print 'rename key %s -> %s'%(field_name_old, field_name_new)
         self[field_name_new] = self[field_name_old]
@@ -2782,7 +2738,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                         kk.pop('label')
                     self._plot(t, diff_log, label='$log(E_{t+1}-E_t)$', xlabel='t', **kk)
             elif switch  == 'err': 
-                #eng_min = db.get_energy_min()
                 eng = np.array(eng)
                 eng_min = np.min(eng)
                 err = eng - eng_min
@@ -3262,17 +3217,6 @@ class ResultDB_vmps(ResultDB):
         return res
     backup_fn_gen = shape_to_backup_fn 
     
-    def get_energy(self, sh): 
-        try:
-            #path='/'.join([self.parpath, 'N=%s-D=%s.pickle'%(sh[0], sh[1])])
-            S=self.load_S( sh)
-            #eng=S['energy']
-            eng = S['mps'].energy
-        except:
-            raise 
-            #print a, path
-        return eng
-    
     def update_db_structure(self): 
         if self['version'] < 1.01:   
             print 'update version from %s to %s'%(self['version'], 1.01)
@@ -3425,21 +3369,6 @@ class ResultDB_idmrg(ResultDB):
             self['correlation_bond'][sh][-1] = res_new 
             self.commit(info=info)
  
-    def get_energy(self, dim): 
-        try:
-            path='/'.join([self.parpath, 'N=0-D=%d.pickle'%dim])
-            S=self.load_S( path)
-            eng=S['energy']
-
-        except:
-            raise 
-            #print a, path
-        return eng
-    
-
-    def get_EE(self, dim): 
-        res=self._measure(self.calc_EE, dim=dim)
-        return res
    
     def _measure(self, func, dim):
         res = OrderedDict()
@@ -3602,7 +3531,7 @@ class ResultDB_idmrg(ResultDB):
             self['version'] = ver 
             self.commit(info=1)
 
-    def calc_correlation(self, sh, direct, i0=0, r_list=None, force=False, 
+    def calc_correlation(self, sh, direct, i0_list=None, r_list=None, force=False, 
             use_local_storage=False, info=0):
         """
             this is a temporary workaround 
@@ -3612,31 +3541,44 @@ class ResultDB_idmrg(ResultDB):
             r_list = np.arange(0, 4, 0.05)
             r_list = (10**r_list ).astype(int)
             #r_list = range(10, 200, 10)
-        if isinstance(r_list[0], int):
-            r_list = [(0, r) for r in r_list]
+        r_list = [r for r in r_list if 0<r<10000]
         
-        kk = ['correlation', sh, direct, i0]
         if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
             self = self.__class__(self.parpath_center, use_local_storage=1)
-        if not self.has_key_list(kk):
-            self.add_key_list(kk) 
-        res_old = self.fetch_from_key_list(kk)
-        r_old = res_old.keys()
-        #print_vars(vars(),  ['res_old'])
-        #raise  
-        if not force: 
-            r_list = set(r_list)-set(r_old)
-        if len(r_list)>0: 
-            #state = self.load_S(sh, use_local_storage=self.use_local_storage)
-            state = self.load_S(sh, use_local_storage=use_local_storage)
-            rr = [r[1] for r in r_list]
-            temp=func(state, [direct], [i0], r_list=rr, r_max=max(rr))
-        
-            res_old.update(temp[direct][i0])
-            res_new = OrderedDict(sorted(res_old.items()))
+        state = self.load_S(sh, use_local_storage=use_local_storage)
+        period = state['period']
+        i0_list = i0_list if i0_list is not None else range(period)
+        calc_aver = len(i0_list)==period
+        changed = False
+        for i0 in i0_list:
+            kk = ['correlation', sh, direct, i0]
+            if not self.has_key_list(kk):
+                self.add_key_list(kk) 
+            res_old = self.fetch_from_key_list(kk)
+            r_old = res_old.keys()
             
-            self['correlation'][sh][direct][i0] = res_new 
+            if not force: 
+                r_list = set(r_list)-set(r_old)
+            if len(r_list)>0: 
+                changed = True
+                temp=func(state, [direct], [i0], r_list=r_list, r_max=None)
             
+                res_old.update(temp[direct][i0])
+                res_new = OrderedDict(sorted(res_old.items()))
+                
+                self['correlation'][sh][direct][i0] = res_new 
+        if changed: 
+            if calc_aver:
+                corr = self['correlation'][sh]
+                if not corr.has_key('aver'):
+                    corr['aver'] = OrderedDict()
+                aver = corr['aver']
+                temp = [(r, np.mean([corr[direct][i0][r] for i0 in i0_list]))
+                            for  r in r_list]
+                aver.update(temp)
+                aver = OrderedDict(sorted(aver.items()))
+                corr[direct]['aver'] = aver
+               
             self.commit(info=1, use_local_storage=use_local_storage)
      
     def calc_correlation_submit(self, sh, direct, r_list=None):
@@ -3652,7 +3594,6 @@ class ResultDB_idmrg(ResultDB):
         #db=db.__class__(parpath, use_local_storage=1)
         
         func = db.__class__.calc_correlation.im_func
-        #kwargs= dict(r_list=[(0, r) for r in rr ], use_local_storage=1)
         kwargs = dict(r_list=r_list, use_local_storage=1)
         if 1:
             status=submit_one(func, 
@@ -3681,7 +3622,12 @@ class ResultDB_idmrg(ResultDB):
             #print_vars(vars(),  ['mag2'])
         res= [((i, j), c-mag2[j%p]) for ((i, j), c) in corr]
         return OrderedDict(res)
+    
+    def _get_corr_aver(self, sh, direct,  period=None):
+        rec = self.fetch_easy('correlation', sh, [direct])
+        ii = rec.keys() 
         
+    
 
 class ResultDB_ed(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -3760,35 +3706,12 @@ class TestResultDB(unittest.TestCase):
         #from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
         #xx = an_idmrg_psi.an_main_alt
         xx=an_idmrg_psi.an_main_symm
-        aa=xx.filter_alpha(Jzz='0.3<Jzz<1.5')
-        aa = [1.0]
-        #xx.set_rdb_dict(aa)
-        for a in aa:
-            db = xx[a]
-            db.update_db_structure()
         
-        sh=(0, 80)
-        rec=db.fetch_easy('correlation', sh, fault_tolerant=1)
-        db.calc_correlation(sh, 'zz', r_list=range(10))
-        rec=db.fetch_easy('correlation', sh, fault_tolerant=1)
-        print_vars(vars(),  ['rec'])
-        
-        raise  
-        fig, ax=xx.fig_layout(size=(6, 5))
-        for a in aa:
-            db=xx[a]
-            db.update_db_structure()
-            db.plot_field_vs_length('correlation', sh, 
-                xscale='log', 
-                yscale='log', ms=0,
-                label=a,
-                yfunc=np.abs,
-                #key_list=['zz', 0], 
-                key_list=['zz', 0], 
-                r_min=1, #r_max=sh[0]-20, 
-                period=2,
-                ax=ax)
-
+        db = xx[0.3]
+        rr = range(1, 10)
+        db.calc_correlation((0, 80), 'zz', r_list=rr)
+        res= db.fetch_from_key_list(['correlation', (0, 80), 'zz'])
+        print_vars(vars(),  ['res'])
         #xx.show_fig()
         
     def test_insert_and_fetch(self): 
