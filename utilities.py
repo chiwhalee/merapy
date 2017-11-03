@@ -193,7 +193,7 @@ def load(path, as_str=False, info=0):
                 print msg
         if as_str: 
             res= s
-        else: 
+        else:
             res= pickle.loads(s)
         #res= pickle_any.loads(s)
     return res

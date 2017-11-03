@@ -11,14 +11,15 @@ import tempfile
 import unittest
 import shutil
 import rpyc
-from plumbum import SshMachine
+from plumbum import SshMachine, PuttyMachine  #SshMachine means you can operate the remote machine via ssh
 import rpyc
-from rpyc.utils.zerodeploy import DeployedServer
+#from rpyc.utils.zerodeploy import DeployedServer
+from rpyc.utils.server import ThreadedServer
 import socket 
 import warnings 
 
 
-from merapy.utilities import load, save 
+from merapy.utilities import load, save, print_vars
 
 #issue: move these to config.py  
 #from merapy.config import LOCAL_IP, LOCAL_USERNAME 
@@ -116,20 +117,23 @@ def get_ip_address():
         
     return ip
 
-def ssh_connect(hostname, info=0, timeout=None): 
+def ssh_connect(hostname, user=None, info=0, timeout=None): 
     """
         a convenient func
     """
     
     timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
-    #if hostname in ['QTG-WS1-ubuntu', 'local']: 
+    args= dict(host=hostname, user=user, connect_timeout=timeout)
+    
     if hostname in [LOCAL_HOSTNAME, 'local']: 
         args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=timeout)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
         args= dict(host='211.86.151.102', user='zhihuali', connect_timeout=timeout)
-    else: 
-        raise ValueError(hostname)
+    else:
+        pass
+        
+        #raise ValueError(hostname)
     
     ip = get_ip_address()
     msg = 'try ssh connecting from %s to %s'%(ip, args['host'])
@@ -197,7 +201,10 @@ def rpyc_conn_local():
         get_ip_address()
         
         ssh = ssh_connect('local')
-        conn = rpyc.classic.ssh_connect(ssh, 17013)
+        #conn = rpyc.classic.ssh_connect(ssh, 17013)
+        #issue: the SlaveService of rpyc has security risk !!! see its doc
+        conn = rpyc.ssh_connect(ssh, 17013,  config={'sync_request_timeout':60*5}, 
+                service=rpyc.SlaveService)
         yield conn
     finally:
         try: 
@@ -345,13 +352,6 @@ def rpyc_save(path, obj, use_local_storage=False, compress=False):
             raise 
            
             
-           
-def replace_func(func, conn): 
-    pass 
-
-class DistCompute(object): 
-    pass
-    
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 
@@ -359,28 +359,33 @@ class TestIt(unittest.TestCase):
     
     def test_temp(self): 
         path = '/tmp/bbbbbbbbbbbbbbbbbbbb'
-        rpyc_save(path, {1: 2}, use_local_storage=1)
+        print rpyc_save(path, {1: 2}, use_local_storage=1)
         pass
     
     def xtest_save_and_load(self): 
-           
         with make_temp_dir() as dd: 
             fn = dd + '/aaa'
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
             rpyc_save(fn, obj, use_local_storage=1)
             a=rpyc_load(fn, use_local_storage=1)
             self.assertTrue(a==obj)
-    
-    def xtest_make_temp_dir(self): 
-        with make_temp_dir() as dd: 
-            print dd
 
     def test_redirect(self):
         with redirect(stdout=open("log.txt", "a")): # these print statements will go to /tmp/log.txt 
             print "Test entry 1"
             print "Test entry 2"
         print "Back to normal stdout again"
-    
+     
+    def xtest_ssh_connect(self):  #disable this, becuase fails on other machines
+        #with rpyc_conn_local() as conn: 
+        #    print conn.modules['os']  
+        #    print conn.modules.merapy
+        #a=ssh_connect('qtgc30', 'zhli')
+        a=ssh_connect('localhost')
+        cwd = a.cwd
+        print_vars(vars(),  ['a.cwd'])
+
+   
     def xtest_rpyc_conn_local(self):  #disable this, becuase fails on other machines
         with rpyc_conn_local() as conn: 
             print conn.modules['os']  
@@ -409,13 +414,14 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           TestIt('test_temp'), 
-           #TestIt('xtest_save_and_load'), 
-           #TestIt('xtest_rpyc_conn_local'), 
-           #TestIt('xtest_rpyc_conn_local_zero'), 
+           #'test_temp', 
+           #'xtest_ssh_connect', 
+           #'xtest_save_and_load', 
+           'xtest_rpyc_conn_local', 
+           #'xtest_rpyc_conn_local_zero', 
         ]
         for a in add_list: 
-            suite.addTest(a)
+            suite.addTest(TestIt(a))
         unittest.TextTestRunner().run(suite)
        
 
