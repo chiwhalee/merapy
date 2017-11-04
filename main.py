@@ -409,7 +409,11 @@ class Main(object):
             if nproc is None:   #setting default values of nproc of each machine. this assume NUM_OF_THREADS is uniform for each process
                 hostname = socket.gethostname()
                 nt = config_group[0]['NUM_OF_THREADS']
-                ncpu_tot = psutil.NUM_CPUS 
+                if psutil.__version__ <'1.3':
+                    ncpu = psutil.NUM_CPUS
+                else:
+                    ncpu = psutil.cpu_count()
+                ncpu_tot = ncpu
                 if 'node' in hostname:
                     ncpu_tot = min(ncpu_tot, 12)
                     nproc = ncpu_tot//nt 

@@ -195,7 +195,7 @@ def rpyc_conn_local_zerodeploy(info=0):
         ssh.close()
 
 @contextmanager
-def rpyc_conn_local(): 
+def rpyc_conn_local(timeout=60*30): 
     try: 
         #EOFError:
         get_ip_address()
@@ -203,7 +203,8 @@ def rpyc_conn_local():
         ssh = ssh_connect('local')
         #conn = rpyc.classic.ssh_connect(ssh, 17013)
         #issue: the SlaveService of rpyc has security risk !!! see its doc
-        conn = rpyc.ssh_connect(ssh, 17013,  config={'sync_request_timeout':60*5}, 
+        conn = rpyc.ssh_connect(ssh, 17013,  
+                config={'sync_request_timeout':timeout}, 
                 service=rpyc.SlaveService)
         yield conn
     finally:
@@ -308,12 +309,20 @@ def rpyc_load(path, use_local_storage=False, compress=False):
             #找不到动态库
             #故，放弃使用 zero_deploy 
         with rpyc_conn_local() as conn: 
-            #load_local = conn.modules['merapy.context_util'].rpyc_load
             load_local = conn.modules['merapy.utilities'].load 
             #res = rpyc.classic.obtain(res)
             #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
-            res= load_local(path, as_str=1)
-        res= pickle.loads(res)
+            s= load_local(path, decompress=False, as_str=1)
+        #first transfer string then decompress, this is of course faster!
+        head = s[:10]
+        if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
+            msg = 'discompress file ... '
+            s= zlib.decompress(s)
+            msg += 'done' 
+            if info>0: 
+                print msg
+            
+        res= pickle.loads(s)
             
     return res
 
@@ -329,10 +338,10 @@ def rpyc_save(path, obj, use_local_storage=False, compress=False):
         #    conn.modules.cPickle.dump(obj, out)
         #    out.close()
         try: 
+            s=save( obj, path=None, compress=compress, as_str=1)
             with rpyc_conn_local() as conn: 
                 #save_local = conn.modules['merapy.utilities'].save 
                 #save_local(obj, path, compress=compress)
-                s=save( obj, path=None, compress=compress, as_str=1)
                 f = conn.builtin.open(path, 'wb')
                 f.write(s)
                 f.close()
@@ -416,8 +425,8 @@ if __name__ == '__main__' :
         add_list = [
            #'test_temp', 
            #'xtest_ssh_connect', 
-           #'xtest_save_and_load', 
-           'xtest_rpyc_conn_local', 
+           'xtest_save_and_load', 
+           #'xtest_rpyc_conn_local', 
            #'xtest_rpyc_conn_local_zero', 
         ]
         for a in add_list: 

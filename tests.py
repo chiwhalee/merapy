@@ -45,7 +45,11 @@ else:
     if platform.system() != 'Windows':
         from concurrencytest import ConcurrentTestSuite, fork_for_tests
         #suite = ConcurrentTestSuite(suite, fork_for_tests(8))
-        suite = ConcurrentTestSuite(suite, fork_for_tests( psutil.NUM_CPUS))
+        if psutil.__version__ <'1.3':
+            ncpu = psutil.NUM_CPUS
+        else:
+            ncpu = psutil.cpu_count()
+        suite = ConcurrentTestSuite(suite, fork_for_tests(ncpu))
     unittest.TextTestRunner(verbosity=0).run(suite)
 
 

@@ -172,11 +172,12 @@ def __correlation(distance_max, direction, S=None, path=None, force_update=False
         #print "may be a problem\n odd even"*10
         warnings.warn("issue: this may be a problem. in some cases <sz_i> neq <sz_j> , even there sign are different!")
 
-    if 1:
+    if 0:
         x = np.array([i[0] for i in val])
         x = np.log10(x)
         y = np.array([i[1] for i in val])
         y = np.log10(y)
+        print x,  y
         k, b = np.polyfit(x, y, 1)
         nn = SIlayer
         k_first, b_first = np.polyfit(x[:nn], y[:nn], 1)   #only use transitiaon-layer tensors
@@ -185,10 +186,10 @@ def __correlation(distance_max, direction, S=None, path=None, force_update=False
     if 1: 
         res = {}
         res[direction] = {}
-        k = round(k, 6) 
-        res[direction]['exponent'] = k
-        res[direction]['exponent_first'] = k_first
-        res[direction]['exponent_last'] = k_last
+        #k = round(k, 6) 
+        #res[direction]['exponent'] = k
+        #res[direction]['exponent_first'] = k_first
+        #res[direction]['exponent_last'] = k_last
         res[direction]['val'] = val
 
     return res

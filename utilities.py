@@ -175,7 +175,7 @@ def random_str(size=6, head='', tail=''):
     res=''.join([head, middle, tail])
     return res
 
-def load(path, as_str=False, info=0):
+def load(path, as_str=False, decompress=True, info=0):
     with open(path, 'rb') as f:
         s= f.read()
         head = s[:10]
@@ -185,7 +185,7 @@ def load(path, as_str=False, info=0):
         if not len(head)>2: 
             raise EOFError('file is proberbly broken, %s'%(path, ))
         #head1 is different compress levels 
-        if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
+        if decompress and hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
             msg = 'discompress file ... '
             s= zlib.decompress(s)
             msg += 'done' 

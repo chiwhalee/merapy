@@ -2754,7 +2754,8 @@ class TestSystem(unittest.TestCase):
                 backup_parpath = dir, 
                 #USE_CUSTOM_RAND=1, rand_seed=1034, 
                 do_measure = 1, 
-                measure_only = ['correlation', 'entanglement_entropy'], 
+                measurement_args= {'fault_tolerant':0}, 
+                measure_only = ['correlation'], 
                 info=1)
         print_vars(vars(),  ['m.mera'])
         
