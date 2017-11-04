@@ -17,6 +17,7 @@ import rpyc
 from rpyc.utils.server import ThreadedServer
 import socket 
 import warnings 
+import zlib
 
 
 from merapy.utilities import load, save, print_vars
@@ -264,7 +265,7 @@ def rpyc_conn_easy(hostname, conn_type='classic',  port=17013):
     return conn 
    
 
-def rpyc_load(path, use_local_storage=False, compress=False): 
+def rpyc_load(path, use_local_storage=False, compress=False, info=0): 
     if not use_local_storage: 
         #inn = open(path, "rb")
         #res = pickle.load(inn)
@@ -375,7 +376,7 @@ class TestIt(unittest.TestCase):
         with make_temp_dir() as dd: 
             fn = dd + '/aaa'
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-            rpyc_save(fn, obj, use_local_storage=1)
+            rpyc_save(fn, obj, compress=1,  use_local_storage=1)
             a=rpyc_load(fn, use_local_storage=1)
             self.assertTrue(a==obj)
 
