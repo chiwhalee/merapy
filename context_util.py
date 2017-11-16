@@ -30,9 +30,14 @@ from merapy.utilities import load, save, print_vars
 #LOCAL_IP = '210.45.117.111'
 #LOCAL_USERNAME = 'lizh' 
 
-LOCAL_IP = '210.45.74.76'
+#LOCAL_IP = '210.45.74.76'
+#LOCAL_USERNAME = 'zhli' 
+#LOCAL_HOSTNAME = 'qtg7501'
+
+LOCAL_IP = '210.45.74.88'
 LOCAL_USERNAME = 'zhli' 
-LOCAL_HOSTNAME = 'qtg7501'
+LOCAL_HOSTNAME = 'qtgc30'
+
 
 LOCAL_MERA_PATH =  "/home/%s/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"%(LOCAL_USERNAME, )
 
@@ -202,11 +207,11 @@ def rpyc_conn_local(timeout=60*30):
         get_ip_address()
         
         ssh = ssh_connect('local')
-        #conn = rpyc.classic.ssh_connect(ssh, 17013)
+        conn = rpyc.classic.ssh_connect(ssh, 17013)
         #issue: the SlaveService of rpyc has security risk !!! see its doc
-        conn = rpyc.ssh_connect(ssh, 17013,  
-                config={'sync_request_timeout':timeout}, 
-                service=rpyc.SlaveService)
+        #conn = rpyc.ssh_connect(ssh, 17013,  
+        #        config={'sync_request_timeout':timeout}, 
+        #        service=rpyc.SlaveService)
         yield conn
     finally:
         try: 
@@ -264,6 +269,7 @@ def rpyc_conn_easy(hostname, conn_type='classic',  port=17013):
         raise 
     return conn 
    
+
 
 def rpyc_load(path, use_local_storage=False, compress=False, info=0): 
     if not use_local_storage: 
@@ -326,6 +332,7 @@ def rpyc_load(path, use_local_storage=False, compress=False, info=0):
         res= pickle.loads(s)
             
     return res
+
 
 def rpyc_save(path, obj, use_local_storage=False, compress=False): 
     if not use_local_storage: 
@@ -425,8 +432,8 @@ if __name__ == '__main__' :
         suite = unittest.TestSuite()
         add_list = [
            #'test_temp', 
-           #'xtest_ssh_connect', 
-           'xtest_save_and_load', 
+           'xtest_ssh_connect', 
+           #'xtest_save_and_load', 
            #'xtest_rpyc_conn_local', 
            #'xtest_rpyc_conn_local_zero', 
         ]

@@ -14,6 +14,10 @@ import string
 import random
 import gzip 
 import zlib 
+
+#from merapy.decorators import timer
+
+
 try: 
     import cloud 
     pickle_any = cloud.serialization.cloudpickle
@@ -175,6 +179,7 @@ def random_str(size=6, head='', tail=''):
     res=''.join([head, middle, tail])
     return res
 
+#@timer
 def load(path, as_str=False, decompress=True, info=0):
     with open(path, 'rb') as f:
         s= f.read()
@@ -198,6 +203,7 @@ def load(path, as_str=False, decompress=True, info=0):
         #res= pickle_any.loads(s)
     return res
 
+#@timer
 def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0): 
     """
         params:
