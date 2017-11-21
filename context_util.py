@@ -12,6 +12,7 @@ import unittest
 import shutil
 import rpyc
 from plumbum import SshMachine, PuttyMachine  #SshMachine means you can operate the remote machine via ssh
+import paramiko
 import rpyc
 #from rpyc.utils.zerodeploy import DeployedServer
 from rpyc.utils.server import ThreadedServer
@@ -123,7 +124,7 @@ def get_ip_address():
         
     return ip
 
-def ssh_connect(hostname, user=None, info=0, timeout=None): 
+def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None): 
     """
         a convenient func
     """
@@ -143,7 +144,19 @@ def ssh_connect(hostname, user=None, info=0, timeout=None):
     
     ip = get_ip_address()
     msg = 'try ssh connecting from %s to %s'%(ip, args['host'])
-    ssh = SshMachine(**args)
+    if backend == 'rpyc':
+        ssh = SshMachine(**args)
+    elif backend == 'paramiko' :
+        mapping = {'host':'hostname', 'user':'username', 
+                'connect_timeout':'timeout'}
+        for k, v in mapping.items():
+            if args.has_key(k):
+                args[v] = args[k]
+                args.pop(k)
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(**args)
+        
     msg +=   '  ... succeed'
     if info>0: 
         print(msg)
@@ -269,57 +282,65 @@ def rpyc_conn_easy(hostname, conn_type='classic',  port=17013):
         raise 
     return conn 
    
-
-
-def rpyc_load(path, use_local_storage=False, compress=False, info=0): 
+def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, info=0): 
     if not use_local_storage: 
         #inn = open(path, "rb")
         #res = pickle.load(inn)
         #inn.close()
         res= load(path)
     else:
-        if 0: # previouse trials and errors, keep this, from it can better understand rpyc
-            if 0: # cannot load,  reason is that inn and load are not in the same namespace    
-                with rpyc_conn_local() as conn: 
-                    pass
-                    print conn
-                    inn = conn.builtin.open(path, "rb")
-                    res = None
-                    res = cPickle.load(inn)
-                    inn.close()
-                    res = conn.modules['merapy.hamiltonian'].System.load(path) 
-            
-            if 0: # can load,  but cannot return; reason is that, when conn closed,  S is not available
-                with rpyc_conn_local() as conn: 
-                    pass
-                    res= None
-                    path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
-                    inn = conn.builtin.open(path, "rb")
-                    res = conn.modules.cPickle.load(inn) 
-                    #res = pickle.load(inn) 
-                    res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
-                    print res
-                    inn.close()
-            if 0:  #this worked , but below is better 
-                with rpyc_conn_local() as conn: 
-                    #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
-                    inn = conn.builtin.open(path, "rb")
-                    res = conn.modules.cPickle.load(inn) 
-                    res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
-                    res = rpyc.classic.obtain(res)
-                    inn.close()
-            
-        #with rpyc_conn_local_zerodeploy() as conn:
-            #注意 rpyc_conn_local_zerodeploy 虽然能连接上，但是有限制:
-            #下面的一行  load_local = conn.modules['merapy.utilities'].load 会报错：
-            #ImportError: libifport.so.5: cannot open shared object file: No such file or directory
-            #找不到动态库
-            #故，放弃使用 zero_deploy 
-        with rpyc_conn_local() as conn: 
-            load_local = conn.modules['merapy.utilities'].load 
-            #res = rpyc.classic.obtain(res)
-            #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
-            s= load_local(path, decompress=False, as_str=1)
+        if backend == 'rpyc':
+            if 0: # previouse trials and errors, keep this, from it can better understand rpyc
+                if 0: # cannot load,  reason is that inn and load are not in the same namespace    
+                    with rpyc_conn_local() as conn: 
+                        pass
+                        print conn
+                        inn = conn.builtin.open(path, "rb")
+                        res = None
+                        res = cPickle.load(inn)
+                        inn.close()
+                        res = conn.modules['merapy.hamiltonian'].System.load(path) 
+                
+                if 0: # can load,  but cannot return; reason is that, when conn closed,  S is not available
+                    with rpyc_conn_local() as conn: 
+                        pass
+                        res= None
+                        path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
+                        inn = conn.builtin.open(path, "rb")
+                        res = conn.modules.cPickle.load(inn) 
+                        #res = pickle.load(inn) 
+                        res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
+                        print res
+                        inn.close()
+                if 0:  #this worked , but below is better 
+                    with rpyc_conn_local() as conn: 
+                        #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0/4.pickle' 
+                        inn = conn.builtin.open(path, "rb")
+                        res = conn.modules.cPickle.load(inn) 
+                        res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
+                        res = rpyc.classic.obtain(res)
+                        inn.close()
+                
+            #with rpyc_conn_local_zerodeploy() as conn:
+                #注意 rpyc_conn_local_zerodeploy 虽然能连接上，但是有限制:
+                #下面的一行  load_local = conn.modules['merapy.utilities'].load 会报错：
+                #ImportError: libifport.so.5: cannot open shared object file: No such file or directory
+                #找不到动态库
+                #故，放弃使用 zero_deploy 
+            with rpyc_conn_local() as conn: 
+                load_local = conn.modules['merapy.utilities'].load 
+                #res = rpyc.classic.obtain(res)
+                #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
+                s= load_local(path, decompress=False, as_str=1)
+        elif backend == 'sftp' :
+            ssh = ssh_connect('localhost', backend='paramiko')
+            ftp = ssh.open_sftp()
+            f=ftp.file(path, 'r', -1)
+            s=f.read()
+            #f.flush()
+            ftp.close()
+            ssh.close()           
+        
         #first transfer string then decompress, this is of course faster!
         head = s[:10]
         if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
@@ -332,52 +353,82 @@ def rpyc_load(path, use_local_storage=False, compress=False, info=0):
         res= pickle.loads(s)
             
     return res
-
-
-def rpyc_save(path, obj, use_local_storage=False, compress=False): 
+           
+def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=False): 
+    """
+        comparison of speed  'scp' > 'paramiko.sftp' >'rpyc'
+    """
     if not use_local_storage: 
-        #out = open(path, "wb")
-        #pickle.dump(obj, out)
-        #out.close()
         save(obj, path, compress)
     else: 
         #with rpyc_conn_local_zerodeploy() as conn:
         #    out = conn.builtin.open(path, 'wb')
         #    conn.modules.cPickle.dump(obj, out)
         #    out.close()
-        try: 
-            s=save( obj, path=None, compress=compress, as_str=1)
+        s=save( obj, path=None, compress=compress, as_str=1)
+        if backend == 'auto' :
+            l = len(s)
+            backend = 'sftp' if l<1e8 else 'scp'
+        if backend == 'rpyc':
+            #except EOFError:  #最近遇到一个错误，rpyc_save write 有有可能会timeout，所以绕弯改成用scp
             with rpyc_conn_local() as conn: 
                 #save_local = conn.modules['merapy.utilities'].save 
                 #save_local(obj, path, compress=compress)
                 f = conn.builtin.open(path, 'wb')
                 f.write(s)
                 f.close()
-
-        except EOFError:  #最近遇到一个错误，rpyc_save write 有有可能会timeout，所以绕弯改成用scp
-            warnings.warn('save failed using rpyc, trying again with os.system scp...')
-            temp_dir =tempfile.mkdtemp()
-            fn = os.path.basename(path)
-            temp_path = '/'.join([temp_dir, fn])
-            rpyc_save(temp_path, obj, compress=compress)
-            cmd = 'scp %s %s@%s:%s'%(temp_path, LOCAL_USERNAME, LOCAL_IP, path)
-            print cmd 
-            a = os.system(cmd)
-            if a != 0: 
-                raise 
-        except Exception: 
-            raise 
-           
+        
+        elif backend == 'scp':
+             temp_dir =tempfile.mkdtemp()
+             fn = os.path.basename(path)
+             temp_path = '/'.join([temp_dir, fn])
+             #rpyc_save(temp_path, obj, compress=compress)
+             save(obj, temp_path, compress=compress)
+             cmd = 'scp %s %s@%s:%s'%(temp_path, LOCAL_USERNAME, LOCAL_IP, path)
+             print cmd 
+             a = os.system(cmd)
+             if a != 0: 
+                 raise 
+        
+        elif backend == 'sftp':
+            #ssh = paramiko.SSHClient()
+            ##ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            #ssh.connect(LOCAL_IP, username='zhli')
+            ssh = ssh_connect('localhost', backend='paramiko')
             
+            ftp = ssh.open_sftp()
+            f=ftp.file(path, 'w', -1)
+            f.write(s)
+            f.flush()
+            ftp.close()
+            ssh.close()           
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass
     
     def test_temp(self): 
-        path = '/tmp/bbbbbbbbbbbbbbbbbbbb'
-        print rpyc_save(path, {1: 2}, use_local_storage=1)
-        pass
+        #a=ssh_connect('localhost', backend='paramiko')
+        from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
+        from vmps.measure_and_analysis.measurement_vmps import variance
+        from merapy.context_util import rpyc_save, rpyc_load
+        xx = an_vmps.an_test.an_energy
+        xx=an_vmps.an_test.an_energy
+        db = xx[1.2, 0.8, 0.0, 2.0]
+        print_vars(vars(),  ['db.state_parpath'])
+        p = '/'.join([db.state_parpath, 'N=60-D=400.pickle'])
+        state=rpyc_load(p, backend='sftp',  use_local_storage=0)
+        #state=rpyc_load(p, backend='rpyc',  use_local_storage=1)
+        #rpyc_save('/tmp/uuuuu', state, use_local_storage=1)
+        #rpyc_save('/tmp/xyyyyy', state, use_local_storage=1)
+        rpyc_save('/tmp/xyyyyy', state, backend='auto',  use_local_storage=1)
+        #rpyc_save('/tmp/xyyyyy', state, backend='sftp',  use_local_storage=1)
+        if 0:
+            p = '/tmp/asdfaa'
+            rpyc_save(p, 'bbbbbbbbb', 'sftp', 
+                    use_local_storage = 1)
+            
+            print rpyc_load(p) 
     
     def xtest_save_and_load(self): 
         with make_temp_dir() as dd: 
@@ -431,8 +482,8 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_temp', 
-           'xtest_ssh_connect', 
+           'test_temp', 
+           #'xtest_ssh_connect', 
            #'xtest_save_and_load', 
            #'xtest_rpyc_conn_local', 
            #'xtest_rpyc_conn_local_zero', 
