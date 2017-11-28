@@ -394,7 +394,8 @@ def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=Fals
             #ssh = paramiko.SSHClient()
             ##ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             #ssh.connect(LOCAL_IP, username='zhli')
-            ssh = ssh_connect('localhost', backend='paramiko')
+            #ssh = ssh_connect('localhost', backend='paramiko')
+            ssh = ssh_connect('local', backend='paramiko')
             
             ftp = ssh.open_sftp()
             f=ftp.file(path, 'w', -1)
