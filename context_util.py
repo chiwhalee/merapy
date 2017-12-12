@@ -333,7 +333,7 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
                 #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
                 s= load_local(path, decompress=False, as_str=1)
         elif backend == 'sftp' :
-            ssh = ssh_connect('localhost', backend='paramiko')
+            ssh = ssh_connect('local', backend='paramiko')
             ftp = ssh.open_sftp()
             f=ftp.file(path, 'r', -1)
             s=f.read()
@@ -438,6 +438,14 @@ class TestIt(unittest.TestCase):
             rpyc_save(fn, obj, compress=1,  use_local_storage=1)
             a=rpyc_load(fn, use_local_storage=1)
             self.assertTrue(a==obj)
+    
+    def test_save_and_load_sftp(self): 
+        with make_temp_dir() as dd: 
+            fn = dd + '/aaa'
+            obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+            rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1)
+            a=rpyc_load(fn, backend='sftp', use_local_storage=1)
+            self.assertTrue(a==obj)
 
     def test_redirect(self):
         with redirect(stdout=open("log.txt", "a")): # these print statements will go to /tmp/log.txt 
@@ -483,9 +491,10 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           'test_temp', 
+           #'test_temp', 
            #'xtest_ssh_connect', 
            #'xtest_save_and_load', 
+           'test_save_and_load_sftp', 
            #'xtest_rpyc_conn_local', 
            #'xtest_rpyc_conn_local_zero', 
         ]
