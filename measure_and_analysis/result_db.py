@@ -322,7 +322,7 @@ class AnalysisTools(object):
                 
         return temp 
     
-    def fig_layout(self, ncol=1, nrow=1,  size=None, dim=2): 
+    def fig_layout(self, ncol=1, nrow=1, size=(6, 5), dim=2): 
         if size is None and ncol == 1 and nrow == 1: 
             size = (4, 3)
         #size= size if size is not None else (3.5, 2.5)
@@ -698,7 +698,6 @@ class ResultDB(OrderedDict, AnalysisTools):
                     
         elif self.AUTO_UPDATE:   
             if self['version']<self.VERSION: 
-                print 'update_db_structure ... '
                 self.update_db_structure()
     
     @property
@@ -920,9 +919,9 @@ class ResultDB(OrderedDict, AnalysisTools):
         print 'ResultDB %s has been created'%path
     
     def get_fn_list(self, dir=None):
-        dir = dir if dir is not None else self.parpath
+        dir = dir if dir is not None else self.state_parpath
         #issue: this could be slow if do this each time , find better way later 
-        dir = dir.replace('resultdb_dir', 'backup_tensor_dir')
+        #dir = dir.replace('resultdb_dir', 'backup_tensor_dir')
         if not os.path.exists(dir):
             return []
         nlist = os.listdir(dir) 
@@ -987,8 +986,8 @@ class ResultDB(OrderedDict, AnalysisTools):
         if only_return_max:
             NN = [i[0] for i in sh]
             NN = list(set(NN))
-            #sh = [(N, max(filter(lambda x:x[0]==N, sh))[1]) for N in NN]
-            sh = [(N, self.get_dim_max_for_N(N)) for N in NN]
+            sh = [(N, max(filter(lambda x:x[0]==N, sh))[1]) for N in NN]
+            #sh = [(N, self.get_dim_max_for_N(N)) for N in NN]
         if only_return_N:
             sh = [i[0] for i in sh]
             sh = list(set(sh))
@@ -1985,28 +1984,30 @@ class ResultDB(OrderedDict, AnalysisTools):
     def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, 
             data=None, inverse_N=True, xfunc=None, yfunc=None, 
             rec_getter=None, rec_getter_args=None, **kwargs): 
-        if 1: 
-            sub_key_list = sub_key_list if sub_key_list is not None else []
-            info = kwargs.get('info', 0)
-            #sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
-            #aa=list(self.alpha_list)
-            not_found=[]
-            if data is None:  
-                data=[]
-                for sh in sh_list:  
-                    if rec_getter is None: 
-                        rec=self.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
-                    else: 
-                        rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
-                        if type(rec_getter)==types.MethodType:
-                            rec_getter = rec_getter.im_func
-                        rec = rec_getter(self, sh, **rec_getter_args)
-                    size = sh[0]
-                    if rec is not None:
-                        data.append((size, rec))
-                    else:
-                        not_found.append(size)
-            
+        
+        sub_key_list = sub_key_list if sub_key_list is not None else []
+        info = kwargs.get('info', 0)
+        #sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
+        #aa=list(self.alpha_list)
+        not_found=[]
+        if data is None:  
+            data=[]
+            for sh in sh_list:  
+                if rec_getter is None: 
+                    rec=self.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
+                else: 
+                    rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
+                    if type(rec_getter)==types.MethodType:
+                        rec_getter = rec_getter.im_func
+                    rec = rec_getter(self, sh, **rec_getter_args)
+                size = sh[0]
+                if rec is not None:
+                    data.append((size, rec))
+                else:
+                    not_found.append(size)
+        if not data:
+            warnings.warn('empty data')
+        else:
             try: 
                 x,y=zip(*data)        
                 x = np.asarray(x)
@@ -2021,19 +2022,19 @@ class ResultDB(OrderedDict, AnalysisTools):
                 print err
                 #x, y = np.nan, np.nan 
                 return 
-        
-        if yfunc is not None : 
-            y = yfunc(y)
-        xlabel = '1/N' if inverse_N else 'N'
-        ylabel = field_name if rec_getter is None else (
-                rec_getter.__name__.replace('_get', ''))
-        kwargs.update(xlabel=xlabel, ylabel=field_name, return_ax=1)
-        fig, ax = self._plot(x, y, **kwargs) 
-        
-        #below may cause problem
-        #tic= ax.get_xticks().tolist()
-        #tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
-        #_ = ax.set_xticklabels(tic)    
+            
+            if yfunc is not None : 
+                y = yfunc(y)
+            xlabel = '1/N' if inverse_N else 'N'
+            ylabel = field_name if rec_getter is None else (
+                    rec_getter.__name__.replace('_get', ''))
+            kwargs.update(xlabel=xlabel, ylabel=field_name, return_ax=1)
+            fig, ax = self._plot(x, y, **kwargs) 
+            
+            #below may cause problem
+            #tic= ax.get_xticks().tolist()
+            #tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
+            #_ = ax.set_xticklabels(tic)    
         
         if kwargs.get('return_fig'): 
             return fig 
@@ -2227,6 +2228,30 @@ class ResultDB(OrderedDict, AnalysisTools):
             kwargs['ax'] = ax 
             count += y.size  
     
+    def plot_spectrum(db, field_name, sh, key_list=None, 
+            num_level=20, rec_getter=None, rec_getter_args=None, fault_tol=True,  **kwargs):
+        
+        if rec is None: 
+            if rec_getter is None: 
+                rec = self.fetch_easy(field_name, mera_shape=sh, sub_key_list=key_list, 
+                        fault_tolerant=fault_tolerant, info=info-1) 
+            else: 
+                if type(rec_getter)==types.MethodType:
+                    rec_getter = rec_getter.im_func
+                rec = rec_getter(self, sh, **rec_getter_args)
+                field_name=rec_getter.__name__.replace('_get_', '').replace('_', ' ')  #for ylabel
+        
+        rec =db.fetch_easy(field_name, sh, key_list)
+        if rec is None:
+            warnings.warn('no record')
+        else:
+            n=num_level
+            y=-np.log10(rec[:n])
+            x=range(min(n, y.size))
+            kwargs.update(return_ax=1)
+            kwargs['lw'] = kwargs.get('lw', 0)
+            fig, ax=db._plot(x, y, 
+                    **kwargs)    
         
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
         if layer=='top':
