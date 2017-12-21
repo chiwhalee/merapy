@@ -662,7 +662,7 @@ class ResultDB(OrderedDict, AnalysisTools):
         #    db = rpyc_load(self.path, use_local_storage)
         #    OrderedDict.__init__(self, db)
         try: 
-            db = rpyc_load(self.path, use_local_storage)
+            db = rpyc_load(self.path, use_local_storage=use_local_storage)
         except IOError as err: 
             db = {}
             #print err 
