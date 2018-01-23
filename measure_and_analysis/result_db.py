@@ -12,6 +12,7 @@ import cPickle as pickle
 from collections import OrderedDict
 from operator import itemgetter
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import itertools 
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
@@ -36,21 +37,51 @@ from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOST
 #from mypy.brokest.task_center import submit_one 
 #from mypy.brokest.brokest import queue, run_many, pack_runnable_msg, send_msg 
 
-if 1: 
-    import matplotlib as mpl
+
+__all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
+    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
+    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 
+    ]
+
+
+HOME = os.path.expanduser('~')
+HOME=HOME.replace('\\', '/') 
+if 'cygwin' in HOME:  #properly deal with cygwin path
+    assert 'cygwin64/home' in HOME
+    HOME = HOME.replace('cygwin64/home', 'Users')
+
+BACKUP_STATE_DIR = 'backup_tensor_dir'
+RESULTDB_DIR = 'resultdb_dir'
+if platform.system()=='Linux':
+    #RESULTDB_ROOT = '/'.join([HOME, RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
+    RESULTDB_ROOT = '/'.join([HOME,'dropbox', RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
+else:
+    RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
+    #RESULTDB_ROOT = '/'.join([HOME, 'Onedrive', RESULTDB_DIR], )
+
+if 1:  #some useful functions
+    expij=  lambda k,N: np.fromfunction(lambda i,j:np.exp(1J*k*(i-j)), (N, N))
+
+def html_border(s, fontsize=20): 
+    sss=  """
+    <div id='page' style='width: 600px'>
+      <h1 style='border:1.5px black solid; font-size:%(fontsize)dpx;'>
+       %(s)s
+      </h1>
+    </div>
+    """%vars() 
+    return sss
+
+
+def set_matplotlib_style():
     mpl.rcParams['figure.figsize'] = (4, 3)
     mpl.rcParams['axes.labelsize'] = 16
     #mpl.rcParams['legend.frameon'] = False  # whether or not to draw a frame around legend   
     v = mpl.__version__
-    MATPLOTLIBRC = {
-            'legend.alpha': 0,    # this will make the box totally transparent 
-            'legend.edege_color': 'white',   # this will make the edges of the border white to match the background instead 
-            'legend.frameon': 0,# whether or not to draw a frame around legend    
-            'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
-            }
     #if platform.system()=='Windows':
     if v<'2.0.0':
         MATPLOTLIBRC = {
+            u'grid.linestyle':'dotted', 
             #'legend.alpha': 0,    # this will make the box totally transparent 
             #'legend.edge_color': 'white',   # this will make the edges of the border white to match the background instead 
             'legend.frameon': 0,# whether or not to draw a frame around legend    
@@ -72,7 +103,6 @@ if 1:
         #MATPLOTLIBRC.update({'legend.framealpha':0})
     mpl.rcParams.update(MATPLOTLIBRC)
     
-    from matplotlib.lines import Line2D
     #print Line2D.marker
     marker_cycle = itertools.cycle(Line2D.markers)
     ## for reference 
@@ -123,50 +153,9 @@ if 1:
     COLOR_CYCLE = itertools.cycle(COLOR_LIST)
     lines = ["-","--","-.",":"]
     LINE_CYCLE= itertools.cycle(lines)
+    return MARKER_CYCLE, MATPLOTLIBRC
     
-
-__all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
-    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
-    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 
-    ]
-
-FIELD_NAME_LIST = [
-        'energy', 
-    'central_charge', 'scaling_dim', 'correlation', 'correlation_extra',  
-    'entanglement_entropy', 'entanglement_spectrum', 'magnetization', 
-    'entanglement_brute_force', 'entanglement_brute_force_6', 
-    # these are too slow and not useful,  disable them
-    #'entanglement_brute_force_9',   
-    #'entanglement_brute_force_aver', 
-    #'entanglement_brute_force_6_aver',
-    #'entanglement_brute_force_9_aver' , 
-    ]
-
-HOME = os.path.expanduser('~')
-HOME=HOME.replace('\\', '/') 
-if 'cygwin' in HOME:  #properly deal with cygwin path
-    assert 'cygwin64/home' in HOME
-    HOME = HOME.replace('cygwin64/home', 'Users')
-
-BACKUP_STATE_DIR = 'backup_tensor_dir'
-RESULTDB_DIR = 'resultdb_dir'
-if platform.system()=='Linux':
-    #RESULTDB_ROOT = '/'.join([HOME, RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
-    RESULTDB_ROOT = '/'.join([HOME,'dropbox', RESULTDB_DIR]) # attention,  I symbol linded RESULTDB_DIR from dropbox to home
-else:
-    RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
-
-
-
-def html_border(s, fontsize=20): 
-    sss=  """
-    <div id='page' style='width: 600px'>
-      <h1 style='border:1.5px black solid; font-size:%(fontsize)dpx;'>
-       %(s)s
-      </h1>
-    </div>
-    """%vars() 
-    return sss
+MARKER_CYCLE, MATPLOTLIBRC = set_matplotlib_style()
 
 class AnalysisTools(object): 
     """
@@ -216,6 +205,7 @@ class AnalysisTools(object):
             x = np.asarray(x)
         if not isinstance(y, np.ndarray): 
             y = np.asarray(y)
+        
         param, cov = curve_fit(func, x, y)    
        
         return func, param, cov 
@@ -310,7 +300,8 @@ class AnalysisTools(object):
             if plot_fit: 
                 args= kwargs.copy()
                 color = kwargs['color'] if kwargs.has_key('color') else l.get_color()
-                args.update(color=color, marker=None)
+                marker = kwargs.get('marker', None)
+                args.update(color=color, marker=marker)
                 #_ = self._plot.im_func(None, res['x'], res['y'], 
                 #        ax=ax, color=l.get_color(), label='', marker=None)        
                 _ = self._plot.im_func(None, res['x'], res['y'], 
@@ -594,20 +585,43 @@ class AnalysisTools(object):
                 tic[0] = 1e-10
             tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
             _ = ax.set_xticklabels(tic)    
-    
-def algorithm_name_to_rdb(alg_name):
-    mapping = {'mera':ResultDB_mera, 
-            'mps':ResultDB_vmps, 
-            'vmps':ResultDB_vmps, 
-            'idmrg':ResultDB_idmrg, 
-            }
-    return mapping[alg_name]
 
-#class ResultDB_Utills
-if 1:  #some useful functions
-    expij=  lambda k,N: np.fromfunction(lambda i,j:np.exp(1J*k*(i-j)), (N, N))
-    
-class ResultDB(OrderedDict, AnalysisTools): 
+class AnalyticFormular(object):
+    """
+       some formular for comparing with numerics or extracting values
+    """
+    @staticmethod
+    def corr_luttinger( which='zz', nu=0.5):
+        """  ref. Giamarchi's book p.168"""
+        _nu={0.5:0.5, 0.33:1./3}.get(nu, nu)
+        m = 0.5*(2*_nu - 1.0)
+        if which == 'zz':
+            if nu==0.5:
+                def func(x,  K, C1, C2):
+                    res= C1/x**2 + C2*(-1.)**x * (1./x)**(2*K)
+                    return res
+            else:
+                def func(x, K, C2):
+                    res=0
+                    res += m**2
+                    res += K/(2*pi**2)*(- 1./x**2)
+                    res += C2*cos(pi*(1+2*m)*x)*(1./x)**(2*K)
+                    return res
+        elif which =='pm':
+            if nu==0.5:
+                def func(x,  K, C1, C2):
+                    res= C1*(1/x)**(2*K+1./(2*K)) + C2*(-1.)**x * (1./x)**(1./(2*K))
+                    return res
+            else:
+                def func(x,  K, C1, C2 ):
+                    res=(# C1*cos(2*pi*m*x)**(2*K+1./(2*K)) + 
+                        C2*(-1.)**x * (1./x)**(1./(2*K))  )
+                    return res
+        return func
+
+
+
+class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools): 
     """
         a DB to store measurement results 
         
@@ -700,6 +714,16 @@ class ResultDB(OrderedDict, AnalysisTools):
             if self['version']<self.VERSION: 
                 self.update_db_structure()
     
+    
+    @staticmethod
+    def algorithm_name_to_rdb(alg_name):
+        mapping = {'mera':ResultDB_mera, 
+                'mps':ResultDB_vmps, 
+                'vmps':ResultDB_vmps, 
+                'idmrg':ResultDB_idmrg, 
+                }
+        return mapping[alg_name]
+
     @property
     def state_parpath(self): 
         dir = self.parpath.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
@@ -1696,6 +1720,34 @@ class ResultDB(OrderedDict, AnalysisTools):
         #q = PI/L
         return PI*func(q)/q
     
+    def _get_Luttinger_param_fit_corr(self, sh, i0=0, x_min=None, x_max=400, which='zz', nu=0.5):
+        x_min = x_min if x_min is not None else 60
+        x_max = x_max if x_max is not None else 400
+        db = self
+        rec=db.fetch_easy('correlation', mera_shape=sh, sub_key_list=[which, i0])
+        if rec is not None:
+            rec=rec.items()
+            x,y=zip(*rec)
+            #x=[i[1] for i in x]
+            data=zip(x,y)
+        else:
+             return None
+       
+        #func=self.corr_luttinger.im_func(which, nu)
+        func=self.corr_luttinger(which, nu)
+        try:
+            res=db.fit_line(None, func=func, data=data, period=2,
+                        x_min=x_min, x_max=x_max, )
+            K=res['param'][0]
+        except RuntimeError as err:
+            warnings.warn(str(err))
+            K=np.nan
+        except TypeError as err:
+            warnings.warn(str(err))
+            K=np.nan
+        #_aa.append(a)
+        #KK.append(K)
+        return K    
     
     def _get_charge_gap(self, sh):
         p = self.__class__(self.parpath + '-Np1')
@@ -3730,14 +3782,25 @@ class TestResultDB(unittest.TestCase):
         #from vmps.run_hubbard.analysis import an_vmps
         #from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
         #xx = an_idmrg_psi.an_main_alt
-        xx=an_idmrg_psi.an_main_symm
         
-        db = xx[0.3]
-        rr = range(1, 10)
-        db.calc_correlation((0, 80), 'zz', r_list=rr)
-        res= db.fetch_from_key_list(['correlation', (0, 80), 'zz'])
-        print_vars(vars(),  ['res'])
-        #xx.show_fig()
+        xx=an_idmrg_psi.an_main_symm
+        xx.reset()
+        sh=(0, 640)
+        ss=[sh]
+        aa=xx.filter_alpha(Jzz='0.0<=Jzz<1.1',   resolution=(0.1,))
+        fig, ax=xx.fig_layout(size=(5, 4))
+         
+        ii=[2, 40, 60, 80, 100, 150]
+        w='zz'
+        for i in ii:
+            xx.plot_field_vs_alpha('None', aa, ss,  label=i, empty_to_nan=0, 
+                rec_getter=xx.result_db_class._get_Luttinger_param_fit_corr, 
+                   rec_getter_args={'which':w, 'x_min':i, 'x_max':i+200}, 
+                ax=ax)
+
+        
+        xx.show_fig()
+        
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -3779,6 +3842,18 @@ class TestResultDB(unittest.TestCase):
 if __name__ == '__main__': 
 
     if 1: 
+        FIELD_NAME_LIST = [
+            'energy', 
+        'central_charge', 'scaling_dim', 'correlation', 'correlation_extra',  
+        'entanglement_entropy', 'entanglement_spectrum', 'magnetization', 
+        'entanglement_brute_force', 'entanglement_brute_force_6', 
+        # these are too slow and not useful,  disable them
+        #'entanglement_brute_force_9',   
+        #'entanglement_brute_force_aver', 
+        #'entanglement_brute_force_6_aver',
+        #'entanglement_brute_force_9_aver' , 
+        ]
+           
         which_list = FIELD_NAME_LIST + ['structure_factor', 'fit_correlation']
         temp  =  ResultDB.__dict__.keys()
         which_list = filter(lambda x: 'plot' in x or 'show' in x or 'get' in x,  temp)
