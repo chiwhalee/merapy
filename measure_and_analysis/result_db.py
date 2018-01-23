@@ -3609,9 +3609,12 @@ class ResultDB_idmrg(ResultDB):
             self.commit(info=1)
 
     def calc_correlation(self, sh, direct, i0_list=None, r_list=None, force=False, 
-            use_local_storage=False, test_run=False,  info=0):
+            use_local_storage=False, parpath_center=None, test_run=False,  info=0):
         """
             this is a temporary workaround 
+            params:
+                parpath_center:  needed only in remote compute
+                    
         """
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
         if r_list is None:
@@ -3624,7 +3627,8 @@ class ResultDB_idmrg(ResultDB):
         if self is not None:
             db = self
         else:
-            db = ResultDB_idmrg(db.parpath_center, use_local_storage=1)
+            db = ResultDB_idmrg(parpath_center, use_local_storage=1)
+            print_vars(vars(),  ['db'])
         state = db.load_S(sh, use_local_storage=use_local_storage)
         period = state['period']
         i0_list = i0_list if i0_list is not None else range(period)
@@ -3665,7 +3669,7 @@ class ResultDB_idmrg(ResultDB):
         else:
             print 'nothing changed'
      
-    def calc_correlation_submit(self, sh, direct, r_list=None):
+    def calc_correlation_submit(self, sh, direct, i0_list=None, r_list=None):
         """
             this is a convenient function
         """
@@ -3678,14 +3682,16 @@ class ResultDB_idmrg(ResultDB):
         #db=db.__class__(parpath, use_local_storage=1)
         
         func = self.__class__.calc_correlation.im_func
-        kwargs = dict(r_list=r_list, use_local_storage=1)
-        if 1:
+        kwargs = dict(i0_list=i0_list, r_list=r_list, 
+                use_local_storage=1, parpath_center = self.parpath_center)
+        args= (None, sh, direct)
+        if 0:
             status=submit_one(func, 
-                    args= (None, sh, direct), kwargs=kwargs, 
+                    args=args, kwargs=kwargs, 
                     job_info = {'priority': 1, 'job_group_name': 'calcl-correlation', 'delay_send': 20, })
             print '\tresponse: ', status
         else:
-            tasks= [(func, (None, sh, 'zz'), kwargs)]
+            tasks= [(func, args, kwargs)]
             run_many(tasks, servers=('localhost', None))
      
     def _get_corr_conn(self, sh, period, **kwargs):
@@ -3790,9 +3796,9 @@ class TestResultDB(unittest.TestCase):
         xx=an_idmrg_psi.an_main_alt
         db = xx[0.5, 1.0, 0.0]
         print_vars(vars(),  ['db'])
-        db.calc_correlation((0, 80), 'zz', i0_list=[1], 
-                r_list=range(100, 120), info=1, 
-                test_run=0)
+        db.calc_correlation_submit((0, 80), 'zz', i0_list=[1], 
+                r_list=range(100, 124), #info=1, test_run=0
+                )
         
         #xx.show_fig()
         
