@@ -3692,7 +3692,8 @@ class ResultDB_idmrg(ResultDB):
             print '\tresponse: ', status
         else:
             tasks= [(func, args, kwargs)]
-            run_many(tasks, servers=('localhost', None))
+            #run_many(tasks, servers=('localhost', None))
+            run_many(tasks, servers=('qtg7501', None))
      
     def _get_corr_conn(self, sh, period, **kwargs):
         """
@@ -3796,8 +3797,8 @@ class TestResultDB(unittest.TestCase):
         xx=an_idmrg_psi.an_main_alt
         db = xx[0.5, 1.0, 0.0]
         print_vars(vars(),  ['db'])
-        db.calc_correlation_submit((0, 80), 'zz', i0_list=[1], 
-                r_list=range(100, 124), #info=1, test_run=0
+        db.calc_correlation((0, 80), 'zz', i0_list=[1], 
+                r_list=range(100, 128), #info=1, test_run=0
                 )
         
         #xx.show_fig()

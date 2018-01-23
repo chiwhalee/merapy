@@ -260,7 +260,9 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
     if head is None: 
         lineno = inspect.currentframe().f_back.f_lineno
         frm = inspect.stack()[1]
-        module_name = inspect.getmodule(frm[0]).__name__
+        #module_name = inspect.getmodule(frm[0]).__name__
+        module_name = getattr(inspect.getmodule(frm[0]), '__name__', '???')  #this line is more robust
+        
         #inspect.getfile(inspect.currentframe())
         caller_name =  frm[3] #inspect.stack()[1][3] 
         #head = '\n---print at %s line %s---\n'%(module_name, lineno)
@@ -463,7 +465,7 @@ class TestIt(unittest.TestCase):
 if __name__ == "__main__": 
     
 
-    if 0: 
+    if 1: 
         unittest.main()
     else: 
         suite = unittest.TestSuite()
