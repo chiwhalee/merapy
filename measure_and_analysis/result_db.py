@@ -3609,7 +3609,7 @@ class ResultDB_idmrg(ResultDB):
             self.commit(info=1)
 
     def calc_correlation(self, sh, direct, i0_list=None, r_list=None, force=False, 
-            use_local_storage=False, info=0):
+            use_local_storage=False, test_run=False,  info=0):
         """
             this is a temporary workaround 
         """
@@ -3620,22 +3620,27 @@ class ResultDB_idmrg(ResultDB):
             #r_list = range(10, 200, 10)
         r_list = [r for r in r_list if 0<r<10000]
         
-        if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
-            self = self.__class__(self.parpath_center, use_local_storage=1)
-        state = self.load_S(sh, use_local_storage=use_local_storage)
+        #if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
+        if self is not None:
+            db = self
+        else:
+            db = ResultDB_idmrg(db.parpath_center, use_local_storage=1)
+        state = db.load_S(sh, use_local_storage=use_local_storage)
         period = state['period']
         i0_list = i0_list if i0_list is not None else range(period)
         calc_aver = len(i0_list)==period
         changed = False
         for i0 in i0_list:
             kk = ['correlation', sh, direct, i0]
-            if not self.has_key_list(kk):
-                self.add_key_list(kk) 
-            res_old = self.fetch_from_key_list(kk)
+            if not db.has_key_list(kk):
+                db.add_key_list(kk) 
+            res_old = db.fetch_from_key_list(kk)
             r_old = res_old.keys()
-            
             if not force: 
                 r_list_calc= set(r_list)-set(r_old)
+            #if info:
+            print_vars(vars(),  ['len(r_old)', 'len(r_list)', 'len(r_list_calc)'])
+            
             if len(r_list_calc)>0: 
                 changed = True
                 temp=func(state, [direct], [i0], r_list=r_list_calc, r_max=None)
@@ -3643,10 +3648,10 @@ class ResultDB_idmrg(ResultDB):
                 res_old.update(temp[direct][i0])
                 res_new = OrderedDict(sorted(res_old.items()))
                 
-                self['correlation'][sh][direct][i0] = res_new 
+                db['correlation'][sh][direct][i0] = res_new 
         if changed: 
             if calc_aver:
-                corr = self['correlation'][sh]
+                corr = db['correlation'][sh]
                 if not corr.has_key('aver'):
                     corr['aver'] = OrderedDict()
                 aver = corr['aver']
@@ -3655,8 +3660,8 @@ class ResultDB_idmrg(ResultDB):
                 aver.update(temp)
                 aver = OrderedDict(sorted(aver.items()))
                 corr[direct]['aver'] = aver
-               
-            self.commit(info=1, use_local_storage=use_local_storage)
+            if not test_run:   
+                db.commit(info=1, use_local_storage=use_local_storage)
         else:
             print 'nothing changed'
      
@@ -3668,19 +3673,19 @@ class ResultDB_idmrg(ResultDB):
         from mypy.brokest.task_center import submit_one 
         from mypy.brokest.brokest import run_many 
             
-        db = self
+        #db = self
         #parpath = db.parpath
         #db=db.__class__(parpath, use_local_storage=1)
         
-        func = db.__class__.calc_correlation.im_func
+        func = self.__class__.calc_correlation.im_func
         kwargs = dict(r_list=r_list, use_local_storage=1)
         if 1:
             status=submit_one(func, 
-                    args= (db, sh, direct), kwargs=kwargs, 
+                    args= (None, sh, direct), kwargs=kwargs, 
                     job_info = {'priority': 1, 'job_group_name': 'calcl-correlation', 'delay_send': 20, })
             print '\tresponse: ', status
         else:
-            tasks= [(func, (db, sh, 'zz'), kwargs)]
+            tasks= [(func, (None, sh, 'zz'), kwargs)]
             run_many(tasks, servers=('localhost', None))
      
     def _get_corr_conn(self, sh, period, **kwargs):
@@ -3777,29 +3782,19 @@ class TestResultDB(unittest.TestCase):
         a = dict()
         
         print '*'*80
-        #from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
+        from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
         #from vmps.run_hubbard.analysis import an_vmps
-        #from vmps.run_experiment.run_soc_hubbard_ladder.analysis_soc_hubbard_ladder import an_vmps
         #xx = an_idmrg_psi.an_main_alt
         
-        xx=an_idmrg_psi.an_main_symm
-        xx.reset()
-        sh=(0, 640)
-        ss=[sh]
-        aa=xx.filter_alpha(Jzz='0.0<=Jzz<1.1',   resolution=(0.1,))
-        fig, ax=xx.fig_layout(size=(5, 4))
-         
-        ii=[2, 40, 60, 80, 100, 150]
-        w='zz'
-        for i in ii:
-            xx.plot_field_vs_alpha('None', aa, ss,  label=i, empty_to_nan=0, 
-                rec_getter=xx.result_db_class._get_Luttinger_param_fit_corr, 
-                   rec_getter_args={'which':w, 'x_min':i, 'x_max':i+200}, 
-                ax=ax)
-
+        xx=an_idmrg_psi.an_main_alt
+        db = xx[0.5, 1.0, 0.0]
+        print_vars(vars(),  ['db'])
+        db.calc_correlation((0, 80), 'zz', i0_list=[1], 
+                r_list=range(100, 120), info=1, 
+                test_run=0)
         
-        xx.show_fig()
+        #xx.show_fig()
         
         
     def test_insert_and_fetch(self): 
