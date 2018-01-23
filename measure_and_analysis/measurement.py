@@ -46,9 +46,7 @@ except ImportError as err:
     print err 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_vmps, ResultDB_mera, 
-        ResultDB_idmrg, FIELD_NAME_LIST, BACKUP_STATE_DIR, RESULTDB_DIR, 
-        algorithm_name_to_rdb, 
-        )
+        ResultDB_idmrg,  BACKUP_STATE_DIR, RESULTDB_DIR, )
 from merapy.decorators import timer
 
 
@@ -137,7 +135,6 @@ def measure_S(S=None, parpath=None, path=None,
             algorithm = 'mera'
         
         if algorithm == 'mera':  
-            #field = list(FIELD_NAME_LIST)
             all_func = all_mera
            
             #if S.symmetry == 'U1': 
@@ -370,7 +367,7 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
             rdb_class= ResultDB_idmrg 
         else: 
             raise
-    rdb_class= algorithm_name_to_rdb(algorithm)
+    rdb_class= ResultDB.algorithm_name_to_rdb(algorithm)
         
    
     path_list = []

@@ -3263,10 +3263,6 @@ class iTensorFactory(object):
         return res 
     
     @staticmethod
-    def V111_1():
-        pass
-    
-    @staticmethod
     def pauli_mat_2site(symmetry, which=None):
         """
             todo: 
@@ -3963,14 +3959,34 @@ class iTensorFactory(object):
         return res 
     
     @staticmethod
-    def base_state(which, symmetry, shift_qn=True, **kwargs):
+    def boson_op(symmetry, n_boson):
+        vec = iTensorFactory.base_state(which='boson', n_boson=n_boson,  
+                symmetry=symmetry)
+        def make_op(xx):
+            op = 0.0
+            for a, b, c in xx:
+                #print_vars(vars(),  ['a', 'b'])
+                a = vec[a].insert_1d_qsp(1)  #|a>
+                b = vec[b].insert_1d_qsp(1) #|b>
+                a_tc = a.T.conj()
+                #a_tc.totQN.reverse()
+                cba = c*b.dot(a_tc)  #  + c|b><a|
+                op += cba
+            return op
+        
+        b = [('0', 'u', 1.0), ('d', 'ud', 1.0)]  
+        bdag = make_op(cdag_up)
+        c_up = b.T.conj()  #[('u', '0', 1.0), ('ud', 'd', 1.0)]
+    
+    @staticmethod
+    def base_state(which, symmetry, n_boson=None, shift_qn=True, **kwargs):
         """
             params:
                 shift_qn: only for fermions
             
         """
+        vec = OrderedDict()
         if which == 'fermion':
-            vec = OrderedDict()
             names = ['0', 'u', 'd', 'ud']
             if symmetry ==  "Travial":
                 q = QspTravial.easy_init([1], [4])
@@ -4003,6 +4019,16 @@ class iTensorFactory(object):
                 vec['ud'].data[:] = [1.0]
             else:
                 raise ValueError
+        
+        elif which == 'boson':
+            assert n_boson is not None 
+            names= ['%d'%i for i in range(n_boson + 1)]
+            if symmetry == 'Travial':
+                q = QspTravial.easy_init([1], [n_boson + 1])                
+                for i, n in enumerate(names) :
+                    vec[n] = iTensor(QSp=[q.copy()])
+                    vec[n].data[:] = 0.0
+                    vec[n].data[i] = 1.0
         else:
             raise 
         return vec
@@ -4039,9 +4065,7 @@ class iTensorFactory(object):
             res.data[0] = 1.0 + 0j 
         return res 
     
-    
-    
-        
+
 class test_iTensor(object):
     def __init__(self, symmetry, dim=None):
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
@@ -5008,24 +5032,12 @@ class Test_iTensorFactory(unittest.TestCase):
         
             ni = res['n_i']
             self.assertTrue(np.all(ni.matrix_view().diagonal()==[0, 1, 1, 2]))
-        
 
     def test_temp_itf(self):
-        symmetry = 'U1'
-        #symmetry = 'Travial'
-        res=iTensorFactory.fermion_op(symmetry)
-        cdag_up, cdag_dn, c_up, c_dn = res['cdag_up'], res['cdag_dn'], res['c_up'], res['c_dn']
-        n_up_prod_n_dn = res['n_up_prod_n_dn']
-        n_up, n_dn = res['n_up'], res['n_dn']
-        #print_vars(vars(),  ['n_up_prod_n_dn.matrix_view()'])
-        #print_vars(vars(),  ['n_up.matrix_view()', 'n_dn.matrix_view()'])
-        #print_vars(vars(),  ['cdag_up.matrix_view()', 'c_up.matrix_view()'])
-        
-        print c_up.commutator_plus(cdag_up).matrix_view()
-        print c_dn.commutator_plus(cdag_dn).matrix_view()
-        
-        print c_up.commutator_plus(cdag_up).is_close_to(1)
-        print c_dn.commutator_plus(cdag_dn).is_close_to(1)
+        #symmetry = 'U1'
+        symmetry = 'Travial'
+        res=iTensorFactory.base_state('boson', symmetry,  n_boson=3)
+        print_vars(vars(),  ['res'])
             
 
 class performance_iTensor(object):
@@ -5272,8 +5284,8 @@ if __name__ == "__main__":
         add_list_iTF = [
             #'test_diagonal_tensor_rank2', 
             #'test_spin_one_mat', 
-            'test_fermion_op', 
-            #'test_temp_itf', 
+            #'test_fermion_op', 
+            'test_temp_itf', 
             
                 ]
         

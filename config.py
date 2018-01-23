@@ -359,7 +359,7 @@ class Config(dict):
                 #if db.has_shape(sh, from_energy_rec=1):
                 v = db.fetch_easy('variance', (N, 'max'))
                 v = v if v is not None else 1.0
-                if  v <= cfg['variance_lim']:
+                if  abs(v) <= cfg['variance_lim']:
                     allow = False
             else:
                 Dmax_schedule = max([s['D'] for s in schedule])
