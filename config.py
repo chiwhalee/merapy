@@ -335,7 +335,7 @@ class Config(dict):
             cfg['use_local_storage'] = 1
      
     @staticmethod 
-    def filter(cfg, db_class=None, info=0):
+    def filter(cfg, db_class=None, from_energy_rec=True, info=0):
         if db_class is None:
             from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
             alg = cfg['algorithm']
@@ -373,11 +373,11 @@ class Config(dict):
                         v <= cfg['variance_lim'] or 
                         Dmax_schedule <= Dmax ):
                     allow = False
-        elif alg == 'idmrg' :
+        elif alg == 'idmrg':
             schedule = cfg['schedule']
             Dmax = max(schedule)
             sh = (0, Dmax)
-            if db.has_shape(sh, from_energy_rec=1):
+            if db.has_shape(sh, from_energy_rec=from_energy_rec):
                 allow = False
             
         if not allow:

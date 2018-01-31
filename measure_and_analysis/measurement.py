@@ -62,14 +62,22 @@ class Measurement(object):
         self.rdb = ResultDB(self.parpath)
 
 
-def measure_decorator(result_db_class=None): 
+def measure_decorator_old(result_db_class=None): 
     """
         status: 
             incomplete
         complete this in future 
     """
-    raise NotImplemented
+    
     def inner(func):
+        parpath = kwargs.get('parpath')
+        rdb = kwargs.get('rdb')
+        use_local_storage = kwargs.get('use_local_storage', False)
+        if rdb is None: 
+            _rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+        else:
+            _rdb = rdb
+        
         def wrapper(*args, **kwargs):
            
             res = func(*args, **kwargs)
@@ -77,7 +85,143 @@ def measure_decorator(result_db_class=None):
 
             return retval
         return wrapper
+    
     return inner
+
+def store_result_decorator(measure_func, state=None, state_path=None,
+        force=0, use_local_storage=False, fault_tolerant=1,
+        num_of_threads=None,  param=None, check_convergence=True,
+        field_surfix='', rdb=None, **kwargs):
+    """
+        params: 
+            measure_func: arbitrary function can be supported if it is provided 
+                it must have one positional arg  state 
+    """
+    if num_of_threads is not None:  
+        set_num_of_threads(num_of_threads)
+    
+    if state is None:   #load state
+        path = state_path
+        assert path is not None
+        try: 
+            state = rpyc_load(path, use_local_storage=use_local_storage)
+            parpath = os.path.dirname(os.path.abspath(path))
+            #issue: it can happen ~/backup_tensor_dir, ~/dropbox/resultdb_dir/ 
+            #then it becomes ~/resultdb_dir so cause mismatch !
+            parpath = parpath.replace(BACKUP_stateTATE_DIR, REstateULTDB_DIR)
+        except IOError as err: 
+            if fault_tolerant: 
+                return 
+            else: 
+                raise 
+        except Exception as err:  # 比如 pickle file danmaged, exist but still cant load 
+            if fault_tolerant: 
+                err_str = str(err)
+                warnings.warn('error'  + err_str[: 300]  + '......'  + err_str[-300: ])
+                return 
+            else: 
+                raise 
+    
+    allow_measure = True
+    
+    if param is None: 
+        param = {}
+    
+    print  'meassuring %s at %s %s'%(path, shape, iter)
+    if not allow_measure and not force: 
+        print '\tstate is not converged. not allowing measure. return None'
+        return 
+
+    if rdb is None: 
+        _rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+    else:
+        _rdb = rdb
+    
+    #if algorithm == 'mera' :  # backward compatibiliy for ResultDB version = None
+    db_version = _rdb.get('version')
+    if not force: 
+        found = []
+        #for w in which: 
+        w = measure_func.__name__
+        if 1:
+            if db_version is None: 
+                is_found = _rdb[k].has_key(w)
+            else:
+                #key_list = [w] + [shape, iter]
+                key_list = [w] + [shape]
+                is_found = _rdb.has_key_list(key_list)
+            if is_found: 
+                found.append(w)
+        if found:
+            print 'found these fields {}, omit them.'.format(found)
+        #which = [w for w in which if w not in found]
+     
+    failed_list = []
+    results= []
+
+    ff = func[w]
+    w = func_name_map.get(ff.__name__, ff.__name__)
+    field_name = w if field_surfix  == ''  else w + '_' +  field_surfix  
+    print '\t%s...   '%field_name,
+    
+    try:
+        _param = param.get(w, {})
+        res = ff(state, **_param)
+        msg = '%20s'%('done')
+        if kwargs.get('show', False): 
+            pprint.pprint(res, indent=1, width=200)
+        
+        if db_version is None: 
+            results.append(dict(field_name=field_name, key=k, res=res, sub_key_list=None))
+        else: 
+            #results.append(dict(field_name=field_name, sh=shape, iter=iter, val=res))
+            results.append(dict(field_name=field_name, sh=shape, val=res))
+            
+    except Exception as err:
+        failed_list.append((w, shape, iter, err))
+        msg = '%20s'%('FAILED skip')
+        if not fault_tolerant: 
+            raise 
+    print msg
+
+    if 1: 
+        #load _rdb again! so that avoid chance of confliction due to measure time delay
+        if rdb is None: 
+            _rdb = rdb_class(parpath, use_local_storage=use_local_storage)
+        else:
+            _rdb = rdb
+            
+        changed = False
+        if len(results)>0:
+            for r in results: 
+                _rdb.insert(**r)
+                
+            changed = True
+        
+        if 1: 
+            if not _rdb.has_key('algorithm'): 
+                _rdb['algorithm'] = algorithm
+                changed = True
+                
+            if algorithm in ['mps', 'idmrg']: 
+                if not _rdb.has_key('dim_max'): 
+                    _rdb['dim_max'] = {}
+                if _rdb.has_key_list(['dim_max', shape[0]], info=0): 
+                    dmax = _rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
+                    if dmax<shape[1]: 
+                        _rdb['dim_max'][shape[0]] = shape[1]
+                        changed = True
+                else: 
+                    dmax = shape[1]
+                    _rdb['dim_max'][shape[0]] = dmax 
+                    changed = True
+            
+        if changed: 
+            _rdb.commit(info=1)
+        else: 
+            print 'No change to commit.'
+    if len(failed_list)>0: 
+        print 'failed_list: %s'%failed_list
 
 def measure_S(S=None, parpath=None, path=None,
         measure_func=None, 

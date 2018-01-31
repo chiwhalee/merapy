@@ -17,7 +17,7 @@ import itertools
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
-from math import pi as PI
+from math import pi, cos
 import socket 
 import platform 
 import types
@@ -592,31 +592,41 @@ class AnalyticFormular(object):
     """
     @staticmethod
     def corr_luttinger( which='zz', nu=0.5):
-        """  ref. Giamarchi's book p.168"""
+        """  
+            ref. 
+                Giamarchi's book p.168
+                Haldane 1981 effectie:  eq.7-9
+        """
         _nu={0.5:0.5, 0.33:1./3}.get(nu, nu)
-        m = 0.5*(2*_nu - 1.0)
+        m = 0.5*(2*_nu - 1.0)   #magnetization
         if which == 'zz':
             if nu==0.5:
-                def func(x,  K, C1, C2):
+                def func(x,  K, C1, C2): #eq.6.38 first line
                     res= C1/x**2 + C2*(-1.)**x * (1./x)**(2*K)
                     return res
             else:
                 def func(x, K, C2):
                     res=0
                     res += m**2
-                    res += K/(2*pi**2)*(- 1./x**2)
+                    res += K/(2*pi**2)*(- 1./x**2)   #need this line?
                     res += C2*cos(pi*(1+2*m)*x)*(1./x)**(2*K)
                     return res
         elif which =='pm':
             if nu==0.5:
-                def func(x,  K, C1, C2):
+                def func(x,  K, C1, C2):   #eq.6.38 sec line
                     res= C1*(1/x)**(2*K+1./(2*K)) + C2*(-1.)**x * (1./x)**(1./(2*K))
                     return res
             else:
-                def func(x,  K, C1, C2 ):
-                    res=(# C1*cos(2*pi*m*x)**(2*K+1./(2*K)) + 
-                        C2*(-1.)**x * (1./x)**(1./(2*K))  )
+                def func(x,  K, C1, C2 ):   #attention  may be not right
+                    """
+                        it seems not need (-1.)**x for long range fermion !!
+                    """
+                    #res=( C1*cos(2*pi*m*x)*(1./x)**(2*K+1./(2*K)) + C2*(-1.)**x * (1./x)**(1./(2*K))  )
+                    #res=(  C2*(-1.)**x * (1./x)**(1./(2*K))  )
+                    res=(  C2*(1./x)**(1./(2*K))  )   
+                    #res=( C1*cos(2*pi*m*x)*(1./x)**(2*K+1./(2*K)) + C2* (1./x)**(1./(2*K))  )
                     return res
+                
         return func
 
 
@@ -835,9 +845,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
         if system_class is None:
             system_class= self.__class__ 
-        #fn = system_class.shape_to_backup_fn.im_func(None, sh)
         fn = self.shape_to_backup_fn(sh)
-        #path = '/'.join([self.parpath, fn])
         path = '/'.join([self.state_parpath, fn])
         return os.path.exists(path)
 
@@ -1720,11 +1728,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #q = PI/L
         return PI*func(q)/q
     
-    def _get_Luttinger_param_fit_corr(self, sh, i0=0, x_min=None, x_max=400, which='zz', nu=0.5):
+    def _get_Luttinger_param_fit_corr(self, sh, i0=0, x_min=None, x_max=400, period=2, which='zz', nu=0.5):
         x_min = x_min if x_min is not None else 60
         x_max = x_max if x_max is not None else 400
         db = self
-        rec=db.fetch_easy('correlation', mera_shape=sh, sub_key_list=[which, i0])
+        rec=db.fetch_easy('correlation', mera_shape=sh, 
+                sub_key_list=[which, i0])
         if rec is not None:
             rec=rec.items()
             x,y=zip(*rec)
@@ -1736,7 +1745,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #func=self.corr_luttinger.im_func(which, nu)
         func=self.corr_luttinger(which, nu)
         try:
-            res=db.fit_line(None, func=func, data=data, period=2,
+            res=db.fit_line(None, func=func, data=data, period=period,
                         x_min=x_min, x_max=x_max, )
             K=res['param'][0]
         except RuntimeError as err:
@@ -3401,6 +3410,33 @@ class ResultDB_vmps(ResultDB):
             res *= N
         return res
     
+    def _get_corr_k(self, sh, i0='aver'):
+        """
+            get Ck i.e. the static structure factor
+            applicable to XXZ or spinless fermion like models
+            ref. Karrasch 2012  eq.17
+        
+        """
+        
+        db = self
+        corr=db.fetch_easy('correlation', sh, ['zz', i0])
+        mag=db.fetch_easy('magnetization', sh, ['z'])
+        if corr is None or mag is None:
+            return None
+        #corr_conn=db._get_corr_conn((0, 320), period=2)
+        data=corr.items()
+        corr[0]=0.5 # this value affects C(k=0)
+        corr_conn=lambda x: 0.5* corr[x]    # ok 
+        #corr_conn=lambda x: 0.25*corr[x]  #+0.25
+        _i0=i0 if i0 != 'aver' else 0
+        #corr_conn=lambda x: corr[x] - mag[_i0%2]*mag[x%2]
+        #corr_conn=lambda x: 0.25* (corr[0, x] + mag[0]*mag[x%2] +1.0)   - 0.25*mag[0]*mag[x%2]
+
+        Ck = lambda k, x_min=0, x_max=len(corr): np.sum( 
+            [ np.exp(-1j*k*x)* corr_conn(x)  for x in range(x_min, x_max)]   )
+        warnings.warn('note the range of x should be from 0 to L')
+        return  Ck
+    
     
 class ResultDB_idmrg(ResultDB): 
     VERSION = 1.21
@@ -3608,8 +3644,9 @@ class ResultDB_idmrg(ResultDB):
             self['version'] = ver 
             self.commit(info=1)
 
-    def calc_correlation(self, sh, direct, i0_list=None, r_list=None, force=False, 
-            use_local_storage=False, parpath_center=None, test_run=False,  info=0):
+    def calc_correlation(self, sh, direct, i0_list=None, r_max=None, r_list=None, force=False, 
+            use_local_storage=False, parpath_center=None, test_run=False,  
+            info=0):
         """
             this is a temporary workaround 
             params:
@@ -3617,11 +3654,16 @@ class ResultDB_idmrg(ResultDB):
                     
         """
         from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation  as func 
-        if r_list is None:
-            r_list = np.arange(0, 4, 0.05)
-            r_list = (10**r_list ).astype(int)
-            #r_list = range(10, 200, 10)
-        r_list = [r for r in r_list if 0<r<10000]
+        if r_list is None: 
+            if r_max is None:
+                D = sh[1]
+                r_max = 400 if D<= 160 else (1000 if D<=320 else 4000) 
+            r_max_log10= np.log10(r_max)    
+            r_list = np.arange(0, r_max_log10, 0.02)
+            r_list = (10**r_list).astype(int)
+            r_list = list(set(r_list))
+            r_list = [r for r in r_list if 0<r<10000]
+            r_list.sort()
         
         #if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
         if self is not None:
@@ -3640,9 +3682,8 @@ class ResultDB_idmrg(ResultDB):
                 db.add_key_list(kk) 
             res_old = db.fetch_from_key_list(kk)
             r_old = res_old.keys()
-            if not force: 
-                r_list_calc= set(r_list)-set(r_old)
-            #if info:
+            
+            r_list_calc = set(r_list)-set(r_old) if not force  else r_list
             print_vars(vars(),  ['len(r_old)', 'len(r_list)', 'len(r_list_calc)'])
             
             if len(r_list_calc)>0: 
@@ -3685,15 +3726,16 @@ class ResultDB_idmrg(ResultDB):
         kwargs = dict(i0_list=i0_list, r_list=r_list, 
                 use_local_storage=1, parpath_center = self.parpath_center)
         args= (None, sh, direct)
-        if 0:
+        if 1:
             status=submit_one(func, 
                     args=args, kwargs=kwargs, 
                     job_info = {'priority': 1, 'job_group_name': 'calcl-correlation', 'delay_send': 20, })
             print '\tresponse: ', status
         else:
             tasks= [(func, args, kwargs)]
-            #run_many(tasks, servers=('localhost', None))
-            run_many(tasks, servers=('qtg7501', None))
+            run_many(tasks, servers=('localhost', None))
+            #run_many(tasks, servers=('qtg7501', None))
+            #run_many(tasks, servers=('qtg7501', 90901))
      
     def _get_corr_conn(self, sh, period, **kwargs):
         """
@@ -3793,15 +3835,43 @@ class TestResultDB(unittest.TestCase):
         #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
         #from vmps.run_hubbard.analysis import an_vmps
         #xx = an_idmrg_psi.an_main_alt
-        
         xx=an_idmrg_psi.an_main_alt
-        db = xx[0.5, 1.0, 0.0]
-        print_vars(vars(),  ['db'])
-        db.calc_correlation((0, 80), 'zz', i0_list=[1], 
-                r_list=range(100, 128), #info=1, test_run=0
-                )
         
-        #xx.show_fig()
+        #db = xx[0.5, 2.0, 0.4]
+        #db.calc_correlation_submit((0, 320), 'zz', None, r_list=range(41, 47))
+        
+        
+        xx=an_idmrg_psi.an_main_ham3
+        sh=(0, 'field_max')
+        sh=(0, 320)
+        sh=(0, 160)
+        xx.set_parpath_dict()
+        aa=xx.filter_alpha(nu=0.33, alpha=1.0, )
+
+        xx.set_rdb_dict(aa)
+        direct='pm'
+        fig, ax=xx.fig_layout(size=(5, 4))
+        for a in aa[-5:]:
+            db=xx[a]
+            db.plot_field_vs_length('correlation', sh, key_list=[direct, 0],  
+                   label=a[2],
+                xscale='log', yscale='log',  
+                lw=1,
+                r_min=0, r_max=1000, 
+                period=1, ax=ax)
+        ax.set_ylim(1e-6, 0.5)
+        if 1:
+            #ax.set_xlim(40, 400)
+            func=ResultDB.corr_luttinger(direct, nu=0.33)
+            res = xx.fit_lines_many(ax, func=func, lw=1, color='r', 
+                    add_text=1, period=1,
+                    x_min=20, x_max=2000, return_all_params=0)          
+            print res
+            if 1:
+                ax=xx.add_ax(fig)
+                x,y=zip(*res)
+                xx._plot(x, y, ax=ax)        
+        xx.show_fig()
         
         
     def test_insert_and_fetch(self): 
