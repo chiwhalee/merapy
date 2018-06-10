@@ -25,11 +25,7 @@ from merapy.utilities import load, save, print_vars
 
 #issue: move these to config.py  
 #from merapy.config import LOCAL_IP, LOCAL_USERNAME 
-#LOCAL_IP = '222.195.73.70'
-#LOCAL_USERNAME = 'zhli' 
 
-#LOCAL_IP = '210.45.117.111'
-#LOCAL_USERNAME = 'lizh' 
 
 #LOCAL_IP = '210.45.74.76'
 #LOCAL_USERNAME = 'zhli' 

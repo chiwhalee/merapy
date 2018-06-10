@@ -2,7 +2,10 @@
 
 from matplotlib import pyplot as plt 
 from merapy.measure_and_analysis.analysis import (RESULTDB_ROOT, 
-        Analysis_mera , Analysis_idmrg, Analysis_vmps, Analysis_proj_qmc)
+        Analysis, 
+        Analysis_mera , Analysis_idmrg, Analysis_vmps, Analysis_proj_qmc, 
+        ResultDB_bethe_ansatz, 
+        )
 
 #heisbg_root = root = '/home/zhli/backup_tensor_dir/run-heisbg'  
 
@@ -16,6 +19,7 @@ if 0:
     an_mera.alpha_parpath_dict['backup']= heisbg_root + '/ternary/backup'
     an_mera.alpha_list = [1.0, 'prod-state', 'backup']
     an = an_mera
+
 if 1:     
     an_mera = Analysis_mera(local_root='/'.join([root, 'mera']), param_list=['Jzz']) 
     an_mera.set_parpath_dict()
@@ -82,6 +86,12 @@ if 1:
 if 1:
     an_qmc = Analysis_proj_qmc(local_root='/'.join([root, 'proj_qmc']), param_list=['Jzz']) 
     an_qmc.set_parpath_dict()
+
+if 1:
+    an_bethe_ansatz = Analysis(local_root='/'.join([root, 'bethe_ansatz']), 
+            result_db_class= ResultDB_bethe_ansatz, 
+            param_list=['Jzz', 'nu']) 
+    an_bethe_ansatz.set_parpath_dict()
 
 
 

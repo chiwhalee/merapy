@@ -1088,7 +1088,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
             X=X.transpose(indXl+indX)
             X=X.reshape((np.prod(sizeXl), np.prod(sizeX)))
             Y=Y.transpose(indY )
-            Y=Y.reshape(np.prod(sizeY), np.prod(sizeYr))
+            Y=Y.reshape(np.prod(sizeY, dtype=int), np.prod(sizeYr, dtype=int))
             Zsize =  sizeXl
             if out is None: 
                 Z = X.dot(Y)
@@ -1103,7 +1103,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
     
     #print X.shape, indXl, indX,  indXl + indX
     X=X.transpose(indXl+indX)
-    X=X.reshape((np.prod(sizeXl), np.prod(sizeX)))
+    X=X.reshape((np.prod(sizeXl, dtype=int), np.prod(sizeX, dtype=int)))
     Y=Y.transpose(indY+indYr)
     Y=Y.reshape((np.prod(sizeY),np.prod(sizeYr)))
     #print X.shape,Y.shape

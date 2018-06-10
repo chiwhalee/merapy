@@ -10,10 +10,10 @@ import pprint
 import cPickle as pickle
 from collections import OrderedDict
 import warnings
-try: 
-    import dispy 
-except: 
-    warnings.warn('not able to import dispy')
+#try: 
+#    import dispy 
+#except: 
+#    warnings.warn('not able to import dispy')
 from  multiprocessing import Process
 import tempfile 
 
@@ -110,6 +110,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
             #then it becomes ~/resultdb_dir so cause mismatch !
             parpath = parpath.replace(BACKUP_stateTATE_DIR, REstateULTDB_DIR)
         except IOError as err: 
+            print 'loading %s faild'%(parpath, )
             if fault_tolerant: 
                 return 
             else: 
@@ -765,8 +766,8 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-                #'test_temp', 
-                'test_measure_all', 
+                'test_temp', 
+                #'test_measure_all', 
                 #'test_vmps_all', 
                 #'test_idmrg_all', 
                 #'test_make_measure_many_args', 
