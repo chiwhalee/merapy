@@ -640,13 +640,14 @@ class Main(object):
 class TestMain(unittest.TestCase): 
     def setUp(self): 
         if 1: 
-            from config import CFG_HEISBG_BASIC, updaters_u1
+            from config import CFG_HEISBG_BASIC #, updaters_u1
+            from updaters_all import updaters_u1
             temp = dict(USE_CUSTOM_RAND=True, updaters=updaters_u1, trunc_dim=4, tot_layer=4, use_player=True, 
                     SYMMETRY="Travial", 
                     NUM_OF_THREADS=1, do_measure=0)
             cfg_heisbg = CFG_HEISBG_BASIC.copy();   cfg_heisbg.update(temp)
         if 1: 
-            from merapy.config import CFG_ISING_BASIC, copy_config, updaters_u1 
+            from merapy.config import CFG_ISING_BASIC, copy_config #, updaters_u1 
             from merapy.finite_site import finite_site_u1
             cfg_ising = copy_config(CFG_ISING_BASIC) 
             cfg_ising['updaters'] = updaters_u1
@@ -793,7 +794,8 @@ class TestMain(unittest.TestCase):
     def test_run_many(self): 
         h = [1.0, 1.1] 
         NNN = len(h)
-        from merapy.config import CFG_ISING_BASIC, copy_config, updaters_u1 
+        from merapy.config import CFG_ISING_BASIC, copy_config #, updaters_u1 
+        from merapy.updaters_all import updaters_u1
         config = copy_config(CFG_ISING_BASIC) 
         from merapy.finite_site import finite_site_u1
         config['updaters'] = updaters_u1

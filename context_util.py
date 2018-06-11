@@ -23,17 +23,7 @@ import zlib
 
 from merapy.utilities import load, save, print_vars
 
-#issue: move these to config.py  
-#from merapy.config import LOCAL_IP, LOCAL_USERNAME 
-
-
-#LOCAL_IP = '210.45.74.76'
-#LOCAL_USERNAME = 'zhli' 
-#LOCAL_HOSTNAME = 'qtg7501'
-
-LOCAL_IP = '210.45.74.88'
-LOCAL_USERNAME = 'zhli' 
-LOCAL_HOSTNAME = 'qtgc30'
+from merapy.config import LOCAL_IP, LOCAL_USERNAME, LOCAL_HOSTNAME
 
 
 LOCAL_MERA_PATH =  "/home/%s/dropbox/My-documents/My-code/quantum-many-body/mera-algorithms/python"%(LOCAL_USERNAME, )

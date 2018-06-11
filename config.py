@@ -2,26 +2,14 @@ import unittest
 import os, argparse
 import platform
 import socket
+import collections
 
-if 1:   #issue: remove these from config !
-    from merapy.ascending import ascending_ham
-    from merapy.descending import descending_ham
-    from merapy.iteration import iterative_optimize_all
-    from merapy.all_in_once import update_all_in_once
-    from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
-    from merapy.finite_site import finite_site, finite_site_u1
-    #import merapy.finite_site as finite_site_module
-    import merapy.updaters_binary as upbin
-    import merapy.schedule as schedule_module
-
-from merapy.context_util import LOCAL_IP, LOCAL_USERNAME, LOCAL_HOSTNAME
-#LOCAL_IP = '222.195.73.70'
-#LOCAL_USERNAME = 'zhli' 
-
+LOCAL_IP = '210.45.74.88'
+LOCAL_USERNAME = 'zhli' 
+LOCAL_HOSTNAME = 'qtgc30'
 
 
 __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_model_param", "heisbg_model_param", 
-        "updaters_z2", "updaters_u1", "updaters_binary", 
         "cfg_graph", "cfg_binary", "cfg_modified_binary", "cfg_quaternary", "cfg_quinary"]
 
 uname=platform.uname()[1]
@@ -31,26 +19,15 @@ if 'cygwin' in HOME:  #properly deal with cygwin path
     assert 'cygwin64/home' in HOME
     HOME = HOME.replace('cygwin64/home', 'Users')
 
-#LOCAL_HOSTNAME = 'QTG-WS1-ubuntu'
 BACKUP_BASE_DIR =  '/'.join([HOME, 'backup_tensor_dir'])
 #BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
 BACKUP_BASE_DIR_LOCAL =  '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir'])
 
 
-updaters_u1 = {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
-        "finite_range_func":finite_site_u1, "rho_top_func":top_level_product_state_u1}
-
-updaters_binary = updaters_u1.copy()
-updaters_binary.update({"ascending_func":upbin.ascending_ham, "descending_func":upbin.descending_ham, "update_mera_func":upbin.iterative_optimize_all})
-
-
-updaters_z2= [ascending_ham, None, update_all_in_once,finite_site, top_level_product_state]
-
 
 ising_model_param = {"h":-1.0, "J_NN":-1.0, "J_NNN":0.0}
 heisbg_model_param = {"J_NN":1.0, "J_NNN":0.241186}
 
-import collections
 def recursive_update_cfg(d, u):
     """
         this will be used later 
@@ -93,10 +70,12 @@ CFG_BASE = {
 #issue: only_NN and only_NNN are ambiguous, they dont specify which layer.  this may cause problem when dealing with e.g. binary graph, in which
 #in bottom layer it should be only_NN, but in higher layers should be only_NNN
 
+
 CFG_MERA = copy_config(CFG_BASE)
 CFG_MERA.update({
         'algorithm': 'mera', 
         'algorithm_surfix': '', 
+        'updaters':{ "ascending_func":None, "descending_func":None, "update_mera_func":None, "finite_range_func":None, "rho_top_func":None}, 
         
         'USE_CUSTOM_RAND':False,  #always need try different seeds 
         'USE_REFLECTION': False,
@@ -125,7 +104,7 @@ CFG_MERA.update({
         
         'schedule':{
             #'schedule': None, 
-            'schedule': schedule_module.schedule_scale_invar,  
+            #'schedule': schedule_module.schedule_scale_invar,  
             'mera_shape_min': (4, 4), 
             'mera_shape_max': (12, 4), 
             'dim_diff_remap': {}, 
@@ -147,19 +126,17 @@ CFG_ISING_BASIC.update({
      'SYMMETRY': "Z2", 
      'model_param':{"h":-1.0, "J_NN":-1.0, "J_NNN":0.0, 'gamma':1.0},
      'unitary_init': 'unit_tensor',
-     'updaters':None, 
+     #'updaters':None, 
      'combine_2site':False, 
      'trunc_dim': 4,
      })
 
 
-
-
 CFG_HEISBG_BASIC = copy_config(CFG_MERA)
 CFG_HEISBG_BASIC.update({
     'unitary_init': 'random_unit_tensor',
-    #'updaters':None, 
-    'updaters':updaters_u1, 
+    #'updaters':updaters_u1, 
+    #'updaters':'updaters_u1', 
     #model specific
     'combine_2site':True, 
     'MODEL': 'Heisenberg',
@@ -172,7 +149,7 @@ CFG_HEISBG_BASIC.update({
 CFG_POTTS_BASIC = CFG_MERA.copy()
 CFG_POTTS_BASIC.update({
     'unitary_init': 'unit_tensor',
-    'updaters':None, 
+    #'updaters':None, 
     'trunc_dim': 3,  
     #model specific
     'combine_2site':False, 
@@ -205,7 +182,10 @@ if 1:
         mera_kwargs= {"tensor_defs":tensor_defs}
         #sys_kwargs= {"graph_module":graph_binary, }
         sys_kwargs= {"graph_module":'merapy.diagrams.V21.graph_binary', }
-        new = {"updaters":updaters_binary, "mera_kwargs":mera_kwargs, "sys_kwargs":sys_kwargs, "only_NN":False, "only_NNN":True}
+        new = {
+                #"updaters":updaters_binary, 
+                #"updaters":'updaters_binary', 
+                "mera_kwargs":mera_kwargs, "sys_kwargs":sys_kwargs, "only_NN":False, "only_NNN":True}
         return new
     cfg_binary = _cfg_binary()
 
@@ -365,13 +345,17 @@ class Config(dict):
                 Dmax_schedule = max([s['D'] for s in schedule])
                 Dmax = db.get_dim_max_for_N(N)
                 
-                tem = db.fetch_easy('run_info', (N, 'max'), sub_key_list=['trunc_err_max'])
+                tem = db.fetch_easy('run_info', (N, 'max'), 
+                        sub_key_list=['trunc_err_max'])
                 tem = tem if tem is not None else 1
                 v = db.fetch_easy('variance', (N, 'max'))
                 v = v if v is not None else 10
-                if (tem <= cfg['trunc_err_TOL'] or 
-                        v <= cfg['variance_lim'] or 
-                        Dmax_schedule <= Dmax ):
+                #if (tem <= cfg['trunc_err_TOL'] or 
+                #        v <= cfg['variance_lim'] or 
+                #        Dmax_schedule <= Dmax ):
+                #print tem , v>cfg['variance_lim']
+                if (tem <= cfg['trunc_err_TOL'] and 
+                        v <= cfg['variance_lim'] ):
                     allow = False
         elif alg == 'idmrg':
             schedule = cfg['schedule']

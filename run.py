@@ -16,7 +16,8 @@ from merapy.main import Main
 from merapy.decorators import profileit, tensor_player
 #import common_util
 from merapy import common_util
-from merapy.config import CFG_ISING_BASIC, CFG_HEISBG_BASIC, CFG_POTTS_BASIC ,  updaters_z2, updaters_u1
+from merapy.config import CFG_ISING_BASIC, CFG_HEISBG_BASIC, CFG_POTTS_BASIC
+from merapy.updaters_all import  updaters_z2, updaters_u1
 
 cfg = {}
 warnings.filterwarnings('ignore') 
@@ -33,6 +34,7 @@ class TestIt(unittest.TestCase):
         c = copy_config(CFG_HEISBG_BASIC)
         c.update(USE_CUSTOM_RAND=1, rand_seed=1234)
         
+        c['updaters'] = updaters_u1
         c['updaters']['rho_top_func'] = top_level_eigenstate  
         print_vars(vars(),  ['c["updaters"]'])
         main = Main(**c)
