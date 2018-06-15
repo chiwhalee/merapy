@@ -11,7 +11,7 @@ some Gotchas:
 """
 
 msg =  "issue: in graph_quaternary.py Im not sure wether use G_2_2[2, 6] both or only 2, since they are symmetric"
-warnings.warn(msg)
+#warnings.warn(msg)
 
 
 __all__ = ["G_2_2", "G_3_3", "G_3_2", "G_22_2", "G_22_3"]
@@ -212,7 +212,7 @@ if 0:
     G_2_2.pop(6)
 else:
     msg = "in graph_quaternary G_2_2[2 and 6] are averaged"
-    warnings.warn(msg)
+    #warnings.warn(msg)
     G_2_2[2].weight = 1./8
     G_2_2[6].weight = 1./8
 
