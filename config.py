@@ -1,8 +1,17 @@
 import unittest
+import warnings
 import os, argparse
 import platform
 import socket
 import collections
+
+CFG_LOCAL = None
+try:
+    from config_local import  config as CFG_LOCAL
+except:
+    warnings.warn('config_local.py not found')
+
+
 
 LOCAL_IP = '210.45.74.88'
 LOCAL_USERNAME = 'zhli' 
@@ -10,17 +19,23 @@ LOCAL_HOSTNAME = 'qtgc30'
 
 
 __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_model_param", "heisbg_model_param", 
+        'gen_backup_base_dir', 
         "cfg_graph", "cfg_binary", "cfg_modified_binary", "cfg_quaternary", "cfg_quinary"]
 
-uname=platform.uname()[1]
-HOME = os.path.expanduser('~')
-HOME=HOME.replace('\\', '/') 
-if 'cygwin' in HOME:  #properly deal with cygwin path
-    assert 'cygwin64/home' in HOME
-    HOME = HOME.replace('cygwin64/home', 'Users')
+def gen_backup_base_dir():
+    """
+        dynamically generate it,  depend on machines
+    """
+    HOME = os.path.expanduser('~')
+    HOME=HOME.replace('\\', '/') 
+    if 'cygwin' in HOME:  #properly deal with cygwin path
+        assert 'cygwin64/home' in HOME
+        HOME = HOME.replace('cygwin64/home', 'Users')
+    res = '/'.join([HOME, 'backup_tensor_dir'])
+    return res
 
-BACKUP_BASE_DIR =  '/'.join([HOME, 'backup_tensor_dir'])
-#BACKUP_BASE_DIR_LOCAL =  '/'.join([HOME, 'backup_tensor_dir'])
+BACKUP_BASE_DIR =  gen_backup_base_dir()
+
 BACKUP_BASE_DIR_LOCAL =  '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir'])
 
 
@@ -59,13 +74,16 @@ CFG_BASE = {
         'LOCAL_HOSTNAME': LOCAL_HOSTNAME ,  
         'LOCAL_USERNAME': LOCAL_USERNAME, 
         'LOCAL_IP': LOCAL_IP, 
-        'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
+        #'BACKUP_BASE_DIR':BACKUP_BASE_DIR,       
         'BACKUP_BASE_DIR_LOCAL':BACKUP_BASE_DIR_LOCAL,       
         'register_job': 0, 
 
         'use_local_storage': False,  #store and save to local (local means center, my computer)
        
         }
+
+if CFG_LOCAL is not None:
+    CFG_BASE.update(CFG_LOCAL)
 
 #issue: only_NN and only_NNN are ambiguous, they dont specify which layer.  this may cause problem when dealing with e.g. binary graph, in which
 #in bottom layer it should be only_NN, but in higher layers should be only_NNN
@@ -97,8 +115,7 @@ CFG_MERA.update({
         
         'backup_parpath': None, 
         'backup_parpath_local': None,   #used for distributive compute
-        'backup_relpath': [], 
-        'backup_root': None, 
+        'parpath_relative':None, 
          
         'do_measure': 1, 
         
@@ -109,7 +126,7 @@ CFG_MERA.update({
             'mera_shape_max': (12, 4), 
             'dim_diff_remap': {}, 
             } , 
-        #'BACKUP_BASE_DIR': MERA_BACKUP_DIR,         
+        
         #'BACKUP_BASE_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL,         
         #'MERA_BACKUP_DIR': MERA_BACKUP_DIR, 
         #'MERA_BACKUP_DIR_LOCAL': MERA_BACKUP_DIR_LOCAL, 
@@ -284,35 +301,28 @@ def check_config(cfg):
 class Config(dict): 
     
     @staticmethod       
-    def set_backup_parpath(cfg, project_name, fn, backup_parpath=None, root1='', surfix=''): 
-        ROOT = cfg['BACKUP_BASE_DIR']
-        ROOT_LOCAL = cfg['BACKUP_BASE_DIR_LOCAL']
+    def set_backup_parpath(cfg, project_name, fn, root1='', surfix=''): 
+        """
+            naming rule for path of storage 
+        """
         alg = cfg['algorithm']
         alg_sur = cfg['algorithm_surfix']
         if alg_sur: 
             alg = '-'.join([alg, alg_sur])
-        root = '/'.join([ROOT, project_name, alg,  root1]) 
-        root_local = '/'.join([ROOT_LOCAL, project_name,alg,  root1])  
-        cfg['root'] = root
-        cfg['root_local'] = root_local
-        #surfix  = '-'+surfix if surfix != ''  else ''
         if surfix != '': 
             fn = '-'.join([fn, surfix])
-        #if backup_parpath != 0: #CONVENTION: 0 means not set it
-        if 1: 
-            if backup_parpath is None :  
-                #fn =  'alpha=%s'%alpha  + surfix
-                backup_parpath = '/'.join([root, fn ]).replace('//', '/')
-                backup_parpath_local = '/'.join([root_local, fn]).replace('//', '/')
+            
+        if 0: 
+            root = '/'.join([BACKUP_BASE_DIR,  project_name, alg,  root1]) 
+            root_local = '/'.join([cfg['BACKUP_BASE_DIR_LOCAL'], project_name,alg,  root1])  
+            backup_parpath = '/'.join([root, fn ]).replace('//', '/')
+            backup_parpath_local = '/'.join([root_local, fn]).replace('//', '/')
                 
             cfg['backup_parpath'] = backup_parpath
-            cfg['backup_parpath_local'] = locals().get('backup_parpath_local')
+            cfg['backup_parpath_local'] = backup_parpath_local
+        else:
+            cfg['parpath_relative']=  '/'.join([project_name, alg,  root1, fn]) 
             
-        if 1:    
-            #if cfg['hostname'] != cfg['LOCAL_HOSTNAME'] : 
-            #    cfg['use_local_storage'] = 1
-            #because there is issue in brokest, so always use_local_storage 
-            cfg['use_local_storage'] = 1
      
     @staticmethod 
     def filter(cfg, db_class=None, from_energy_rec=True, info=0):
@@ -320,12 +330,18 @@ class Config(dict):
             from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
             alg = cfg['algorithm']
             db_class= {'idmrg':ResultDB_idmrg, 'vmps':ResultDB_vmps}[alg]
-        if cfg['backup_parpath'] is None:
+        #if cfg['backup_parpath'] is None:
+        #     return True
+        if cfg['parpath_relative'] is None:
              return True
+        parpath = '/'.join([ BACKUP_BASE_DIR, cfg['parpath_relative']])
         if platform.system()=='Linux':
-            parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
+            #parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
+            parpath = parpath.replace('backup_tensor_dir', 'resultdb_dir')
         else:
-            parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
+            #parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
+            parpath = parpath.replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
+        
         db=db_class(parpath)
         allow = True 
         N = 0 if alg == 'idmrg' else cfg['N']
@@ -350,13 +366,15 @@ class Config(dict):
                 tem = tem if tem is not None else 1
                 v = db.fetch_easy('variance', (N, 'max'))
                 v = v if v is not None else 10
-                #if (tem <= cfg['trunc_err_TOL'] or 
-                #        v <= cfg['variance_lim'] or 
-                #        Dmax_schedule <= Dmax ):
-                #print tem , v>cfg['variance_lim']
-                if (tem <= cfg['trunc_err_TOL'] and 
-                        v <= cfg['variance_lim'] ):
+                if (tem <= cfg['trunc_err_TOL'] or 
+                        v <= cfg['variance_lim'] or 
+                        Dmax_schedule <= Dmax ):
                     allow = False
+                
+                #if (tem <= cfg['trunc_err_TOL'] and 
+                #        v <= cfg['variance_lim'] ):
+                #    allow = False
+                    
         elif alg == 'idmrg':
             schedule = cfg['schedule']
             Dmax = max(schedule)
@@ -383,9 +401,12 @@ class TestIt(unittest.TestCase):
     def test_set_backup_parpath(self): 
         cfg = copy_config(CFG_ISING_BASIC)
         Config.set_backup_parpath(cfg, 'proj', fn='h=1.0', root1='middle', surfix='surf')
-        path  = cfg['backup_parpath_local']
+        #path  = cfg['backup_parpath_local']
+        path  = cfg['parpath_relative']
+        path = '/'.join([cfg['BACKUP_BASE_DIR_LOCAL'], path])
         a = '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir/proj/mera/middle/h=1.0-surf']) 
-        print path , a
+        print 'path', path
+        print 'a', a
         self.assertTrue(path==a)
         
 

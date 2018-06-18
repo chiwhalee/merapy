@@ -459,6 +459,7 @@ class Main(object):
     @classmethod #@staticmethod 
     def run_many_dist(cls, config_group, 
             submit=True, job_info=None,  
+            task_center_server=None, 
             servers=None, func=None, need_confirm=True,  **kwargs): 
         """
             status: workable now!
@@ -472,7 +473,6 @@ class Main(object):
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
         from brokest.task_center import TaskCenter, submit_one, submit_many, LOCAL_IP
-        
         if not submit: 
             tasks = [(cls.run_one, (c, )) for c in config_group] 
             run_many(tasks, servers, 
@@ -494,12 +494,17 @@ class Main(object):
             #    if kwargs.has_key(t): 
             #        job_info[t] = kwargs[t]
             #raise  #modify job_info !!
+            task_center_server = (LOCAL_IP, 90999) if task_center_server is None else task_center_server
             for c in config_group:
                 p = c.get('backup_parpath_local')
                 if p is not None and c.get('job_description') is None: 
                     fn = os.path.basename(p)
                     c['job_description'] = (fn, c.get('N'), c.get('schedule'))
-                status=submit_one(cls.run_one, (c, ),  job_info=job_info, querry_timeout=kwargs.get('querry_timeout', 10))
+                status=submit_one(cls.run_one, 
+                        args=(c, ),
+                        server=task_center_server, 
+                        job_info=job_info, 
+                        querry_timeout=kwargs.get('querry_timeout', 10))
                 print status
             
             #if 1:
@@ -511,11 +516,11 @@ class Main(object):
                 job_group_name = job_info['job_group_name']
                 i=raw_input('add_notify for %s ? yes(y)\n'%(job_group_name))
                 if i.lower()=='y':
-                    tc = TaskCenter(host=LOCAL_IP)
+                    host = task_center_server[0]
+                    tc = TaskCenter(host=host)
                     print tc.add_notify(job_group_name)
                 else:
                     print  'canceled'
-                
             
     @staticmethod 
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 

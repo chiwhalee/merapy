@@ -5,6 +5,7 @@ import unittest
 import psutil 
 
 from merapy.graphics import TestIt as Test_graphics 
+from merapy.config import TestIt as Test_config
 from merapy.run import TestIt as Test_run 
 from merapy.utilities import TestIt as Test_util 
 from merapy.context_util import TestIt as Test_context 

@@ -19,7 +19,7 @@ import tempfile
 
 
 from vmps.iterative_optimize import IterativeOptimize 
-
+from merapy.config import gen_backup_base_dir
 from merapy.decorators import tensor_player 
 from merapy.utilities import print_vars
 import merapy.crandom as crandom 
@@ -164,6 +164,8 @@ class System(IterativeOptimize):
                 'pinning_term': None, 
             
             #IO
+                'BACKUP_BASE_DIR':gen_backup_base_dir(), 
+                'BACKUP_BASE_DIR_LOCAL':None, 
                 'use_local_storage': False, 
                 'backup_parpath': None, 
                 'backup_parpath_local': None, 
