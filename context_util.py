@@ -114,7 +114,6 @@ def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None):
     """
         a convenient func
     """
-    
     timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
     args= dict(host=hostname, user=user, connect_timeout=timeout)
     
@@ -133,6 +132,7 @@ def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None):
     if backend == 'rpyc':
         ssh = SshMachine(**args)
     elif backend == 'paramiko' :
+        
         mapping = {'host':'hostname', 'user':'username', 
                 'connect_timeout':'timeout'}
         for k, v in mapping.items():

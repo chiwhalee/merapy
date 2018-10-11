@@ -13,9 +13,14 @@ except:
 
 
 
-LOCAL_IP = '210.45.74.88'
-LOCAL_USERNAME = 'zhli' 
-LOCAL_HOSTNAME = 'qtgc30'
+#LOCAL_IP = '210.45.74.88'
+#LOCAL_USERNAME = 'zhli' 
+#LOCAL_HOSTNAME = 'qtgc30'
+
+LOCAL_IP = '222.25.16.117'
+LOCAL_USERNAME = 'ws' 
+LOCAL_HOSTNAME = 'ws-Precision-Tower-7910'
+
 
 
 __all__ = ["CFG_ISING_BASIC", "CFG_HEISBG_BASIC", "CFG_POTTS_BASIC", "ising_model_param", "heisbg_model_param", 
@@ -325,7 +330,8 @@ class Config(dict):
             
      
     @staticmethod 
-    def filter(cfg, db_class=None, from_energy_rec=True, info=0):
+    def filter(cfg,  strict=False,  db_class=None, 
+            from_energy_rec=True, info=0):
         if db_class is None:
             from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
             alg = cfg['algorithm']
@@ -350,30 +356,41 @@ class Config(dict):
                 'threads=%d'%cfg['NUM_OF_THREADS']]
         if alg == 'vmps' :
             schedule = cfg['schedule']
+            v = db.fetch_easy('variance', (N, 'max'), default=10.0)
+            Dmax = db.get_dim_max_for_N(N)
+            
             if cfg.get('which_minimize', '1site')=='1site':  #old for 1site algrithm and save file for each D 
                 #sh = (N, max(schedule))
                 #if db.has_shape(sh, from_energy_rec=1):
-                v = db.fetch_easy('variance', (N, 'max'))
-                v = v if v is not None else 1.0
                 if  abs(v) <= cfg['variance_lim']:
                     allow = False
+                if info>0:
+                    print '\tvariance',  '%1.2e'%v
+                    
             else:
                 Dmax_schedule = max([s['D'] for s in schedule])
-                Dmax = db.get_dim_max_for_N(N)
                 
                 tem = db.fetch_easy('run_info', (N, 'max'), 
                         sub_key_list=['trunc_err_max'])
                 tem = tem if tem is not None else 1
-                v = db.fetch_easy('variance', (N, 'max'))
-                v = v if v is not None else 10
-                if (tem <= cfg['trunc_err_TOL'] or 
-                        v <= cfg['variance_lim'] or 
-                        Dmax_schedule <= Dmax ):
-                    allow = False
-                
-                #if (tem <= cfg['trunc_err_TOL'] and 
-                #        v <= cfg['variance_lim'] ):
+                #if (tem <= cfg['trunc_err_TOL'] or 
+                #        v <= cfg['variance_lim'] or 
+                #        Dmax_schedule <= Dmax ):
                 #    allow = False
+                if info>0:
+                    print '\tvariance',  '%1.2e'%v
+                    print '\ttrunc_err',  '%1.2e'%tem 
+                
+                conditions = [
+                        tem <= cfg['trunc_err_TOL'], 
+                        abs(v) <= cfg['variance_lim']
+                        ]
+                if strict:
+                    if all(conditions):
+                        allow  = False
+                else:
+                    if any(conditions):
+                        allow = False
                     
         elif alg == 'idmrg':
             schedule = cfg['schedule']
@@ -381,7 +398,12 @@ class Config(dict):
             sh = (0, Dmax)
             if db.has_shape(sh, from_energy_rec=from_energy_rec):
                 allow = False
+        
+        
+        if not cfg.get('auto_resume', True):
+            allow = True
             
+        
         if not allow:
             msg = ['FOUND '] + msg[:2]
         else:

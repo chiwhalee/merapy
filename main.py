@@ -379,7 +379,8 @@ class Main(object):
             job_status = 'FAILED'
             raise
         finally: 
-            msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
+            #msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
+            msg += ' EXIT.\n final status is %s'%(job_status)
             print msg
             if is_registered:  
                 parpath = config['backup_parpath_local']
@@ -399,7 +400,7 @@ class Main(object):
                 map is used for one unique function, while apply for different functions
                 the former is simple,  while the later is more flexible
         """
-        res= []
+        res = []
         #init_worker = lambda: signal.signal(signal.SIGINT, signal.SIG_IGN)
         if func is None: 
             func = cls.run_one
