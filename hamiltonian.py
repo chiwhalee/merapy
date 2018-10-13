@@ -19,6 +19,8 @@ import tempfile
 
 
 from vmps.iterative_optimize import IterativeOptimize 
+
+from merapy.tensor_factory import iTensorFactory
 from merapy.config import gen_backup_base_dir
 from merapy.decorators import tensor_player 
 from merapy.utilities import print_vars

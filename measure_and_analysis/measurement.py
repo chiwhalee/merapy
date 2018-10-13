@@ -385,7 +385,7 @@ def measure_S(S=None, parpath=None, path=None,
    
     #------------------------  start measureing ----------------------------------------#
     
-    print  'meassuring %s at %s %s'%(path, shape, iter)
+    print  'meassuring %s at %s'%(path, shape)
     if not allow_measure and not force: 
         print '\tstate is not converged. not allowing measure. return None'
         return 
@@ -460,16 +460,18 @@ def measure_S(S=None, parpath=None, path=None,
                 changed = True
                 
             if algorithm in ['mps', 'idmrg']: 
+                N = shape[0]
+                D = shape[1]
                 if not _rdb.has_key('dim_max'): 
                     _rdb['dim_max'] = {}
-                if _rdb.has_key_list(['dim_max', shape[0]], info=0): 
-                    dmax = _rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
-                    if dmax<shape[1]: 
-                        _rdb['dim_max'][shape[0]] = shape[1]
+                if _rdb.has_key_list(['dim_max', N], info=0): 
+                    dmax = _rdb.get_dim_max_for_N(N)   #note this need access to local file system
+                    if dmax<D: 
+                        _rdb['dim_max'][N] = D
                         changed = True
                 else: 
-                    dmax = shape[1]
-                    _rdb['dim_max'][shape[0]] = dmax 
+                    dmax = D
+                    _rdb['dim_max'][N] = dmax 
                     changed = True
             
         if changed: 

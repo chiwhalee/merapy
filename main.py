@@ -35,7 +35,7 @@ from merapy.context_util import (make_temp_dir, rpyc_conn_local,
 from merapy.quantum_number import *
 
 from merapy.hamiltonian import System
-from merapy.tensor_py import iTensor, iTensorFactory
+from merapy.tensor_py import iTensor
 from merapy.scale_invariant import ScaleInvar
 from merapy import common_util
 from merapy import crandom

@@ -20,7 +20,7 @@ from collections import OrderedDict
 import argparse
 
 from merapy.hamiltonian import System
-from merapy.tensor_py import iTensorFactory
+from merapy.tensor_factory import iTensorFactory
 from merapy.decorators import timer
 from merapy.diagrams.V31 import graph_ternary
 
