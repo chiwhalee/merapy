@@ -17,6 +17,26 @@ from merapy.tensor_py import iTensor
 from merapy.quantum_number_py import  (QspU1, QspZ2, 
         QspTravial, symmetry_to_Qsp, symmetry_to_QspClass, make_qsp, QnU1, QnZ2)
 
+   
+def pauli_mat(): 
+    """
+        Note these are pauli mats,  not their half--- spin operators
+        s_alpha means sigma_alpha
+    """
+    s0 = np.identity(2)
+    sx = np.array([[0, 1],[1, 0]] )
+    sy = np.array([[0, -1j],[1j, 0]])
+    sz = np.array([[1, 0],[0, -1]])   
+    #sp = sx + 1j*sy  #a BAD mistake !!! should be 1/2.0(sx + 1j*sy)
+    #sm = sx - 1j*sy
+    sp = np.array([[0, 1],[0, 0]])   
+    sm = np.array([[0, 0],[1, 0]])   
+    
+    res = vars()
+    res[0] = np.zeros((2, 2)); 
+    res['X'] = res['sx'];  res['Z'] = res['sz']; res['Y']=res['sy']; res['I'] = res['s0']
+    res['op_type'] = 'spin'
+    return res
 
 class iTensorFactory(object):
     """
@@ -530,6 +550,8 @@ class iTensorFactory(object):
         zero = res['I'].copy()
         zero.data[:] = 0.0
         res['zero'] = zero
+        
+        res['op_type'] = 'spin'
             
         return res 
     
@@ -773,6 +795,9 @@ class iTensorFactory(object):
         res= {a:dic[a] for a in temp}
         for i in res:
             res[i].type_name = i
+        
+       
+            
         return res 
     
     @staticmethod
@@ -816,6 +841,9 @@ class iTensorFactory(object):
         res= {a:dic[a] for a in temp if dic.has_key(a)}
         for i in res:
             res[i].type_name = i
+        
+        
+        
         return res 
     
     @staticmethod
@@ -839,6 +867,9 @@ class iTensorFactory(object):
             mapping = iTensorFactory.boson_op(symmetry, nmax)
         else:
             raise  
+        
+        mapping['op_type'] = op_type
+        
         return mapping 
     
     @staticmethod
@@ -982,6 +1013,29 @@ class TestIt(unittest.TestCase):
             ni = res['n_i']
             self.assertTrue(np.all(ni.matrix_view().diagonal()==[0, 1, 1, 2]))
 
+    def test_boson_op(self):
+        for symm in ['Travial', 'U1']:
+            
+            
+            nmax = 4
+            res = iTensorFactory.boson_op(symm, nmax, 
+                    shift_qn=1)
+            bdag, b = res['bdag'], res['b']
+            I, n_i  =  res['I'], res['n_i']
+            
+            # test [b, b^+]  is almost 1 
+            c = b.commutator(bdag)  #After truncation of nmax [b, b^+1] no longer strictly equals 1 
+            c = c.to_ndarray().diagonal().round(5)
+            
+            
+            self.assertTrue(np.all(c[:-1]==[1]*nmax))
+            print_vars(vars(),  ['b.dot(bdag)'])
+            
+            # test n_i 
+            n_i = n_i.to_ndarray().diagonal().round(5)
+            print_vars(vars(),  ['n_i'])
+            self.assertTrue(np.all(n_i==np.arange(0, nmax + 1, 1.0)))
+        
     def test_temp(self):
         
         for symm in ['Travial', 'U1']:
@@ -996,7 +1050,7 @@ class TestIt(unittest.TestCase):
             # test [b, b^+]  is almost 1 
             c = b.commutator(bdag)  #After truncation of nmax [b, b^+1] no longer strictly equals 1 
             c = c.to_ndarray().diagonal().round(5)
-            #print_vars(vars(),  ['c', 'nmax'])
+            
             
             self.assertTrue(np.all(c[:-1]==[1]*nmax))
             print_vars(vars(),  ['b.dot(bdag)'])
@@ -1021,6 +1075,7 @@ if __name__ == "__main__":
         #'test_diagonal_tensor_rank2', 
         #'test_spin_one_mat', 
         #'test_fermion_op', 
+        #'test_boson_op', 
         'test_temp', 
         
             ]

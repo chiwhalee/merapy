@@ -497,7 +497,8 @@ class Main(object):
             #raise  #modify job_info !!
             task_center_server = (LOCAL_IP, 90999) if task_center_server is None else task_center_server
             for c in config_group:
-                p = c.get('backup_parpath_local')
+                #p = c.get('backup_parpath_local')
+                p = c.get('parpath_relative')
                 if p is not None and c.get('job_description') is None: 
                     fn = os.path.basename(p)
                     c['job_description'] = (fn, c.get('N'), c.get('schedule'))
