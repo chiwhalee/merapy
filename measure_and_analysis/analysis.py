@@ -20,35 +20,38 @@ import pandas as pd
 from collections import OrderedDict
 import platform
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.font_manager import FontProperties
+from mpl_toolkits.mplot3d import Axes3D
 import inspect
 import warnings
 import importlib
 import datetime
 import itertools 
 import socket 
+import types
 
 from merapy.utilities import print_vars, OrderedSet 
 from merapy.hamiltonian import System
 from tabulate import tabulate
 from merapy.measure_and_analysis.measurement import mera_backup_dir_finder,  measure_all as measure_all_orig
 from merapy.context_util import rpyc_conn 
-
+import merapy.measure_and_analysis.result_db as result_db_module 
 from merapy.measure_and_analysis.result_db import (ResultDB, 
-        ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, ResultDB_proj_qmc, 
-        BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT)
-from result_db import (MATPLOTLIBRC, MARKER_LIST, MARKER_CYCLE, 
-        AnalysisTools, 
+        MATPLOTLIBRC, 
+        ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
+        ResultDB_proj_qmc, ResultDB_bethe_ansatz, 
+        BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT, LOCAL_HOSTNAME)
+from result_db import (  MARKER_CYCLE, 
+        AnalysisTools, AnalyticFormular
         )
 
 import matplotlib as mpl
 mpl.rcParams.update(MATPLOTLIBRC)
-#from vmps.measure_and_analysis.measurement_idmrg_mcc import __all__  as ALL_IDMRG_FIELDS 
+
 
 
 __all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 
-        'MARKER_LIST', 'MARKER_CYCLE', ]
+         'MARKER_CYCLE', ]
 
 class OrderedDictLazy(OrderedDict): 
     """
@@ -61,30 +64,21 @@ class OrderedDictLazy(OrderedDict):
         self.result_db_class= result_db_class
         self.result_db_args= result_db_args
     
-    def __getitem__(self, a): 
+    def __getitem__(self, a, fault_tol=True): 
         if isinstance(a, float): 
             a = (a, )
         if a[-1] == '' : 
             a = a[: -1]
         if not self.has_key(a): 
-            #if self.alpha_parpath_dict.has_key(a): 
-            #    p = self.alpha_parpath_dict[a]
-            #    db =self.result_db_class(parpath=p, **self.result_db_args) 
-            #    self[a] = db
-            #else: 
-            #    msg = '%s not in self.alpha_parpath_dict'%(a, )
-            #    warnings.warn(msg)
-            #    #db = self.result_db_class(parpath='/tmp/empty.db.pickle', **self.result_db_args)
-            #    db = self.result_db_class(parpath='/tmp', dbname='empty.db.pickle', **self.result_db_args)
-            #if self.alpha_parpath_dict.has_key(a): 
             try: 
                 p = self.alpha_parpath_dict[a]
-                db =self.result_db_class(parpath=p, **self.result_db_args) 
+                db =self.result_db_class(parpath=p,  
+                        create_empty_db=False, **self.result_db_args) 
                 self[a] = db
             except KeyError:  
                 msg = '%s not in self.alpha_parpath_dict'%(a, )  #both parpathdir and db file not exists 
                 warnings.warn(msg)
-                db = self.result_db_class(parpath='/tmp', dbname='empty.db.pickle', **self.result_db_args)
+                db = self.result_db_class(parpath='/tmp',  dbname='empty.db.pickle', **self.result_db_args)
             except Exception as err:   #this happen when db file exists but file broken 
                 warnings.warn(str(err)  + '\n a=%s'%(a, ))
                 db = self.result_db_class(parpath='/tmp', dbname='empty.db.pickle', **self.result_db_args)
@@ -110,7 +104,11 @@ class AlphaList(list):
     def identify_param(self, aa): 
         if len(self.param_list)==1: 
             return self.param_list[0], 0 
+            
         temp = zip(*aa)
+        if len(aa) == 1: #then cant identify, just return empty str
+            return 'NaN', 0
+            
         # 这么做需要保证aa只有一个轴是不同的
         i = None   # some times aa is empty 
         for i in xrange(len(temp)): 
@@ -124,7 +122,7 @@ class AlphaList(list):
             param_name_id = None 
         return param_name, param_name_id 
 
-class Analysis(AnalysisTools):
+class Analysis(AnalysisTools, AnalyticFormular):
     """
     """
     REMOTE_HOST = 'zhihuali@211.86.151.102:'
@@ -132,16 +130,27 @@ class Analysis(AnalysisTools):
             'correlation', 'concurrence', 'concurrence_2', 'concurrence_neighbour']
     
     #DISTANCE_LIST = [3**i for i in range(1, 9)]
-    def __init__(self, fn=None, path=None, parpath=None, backup_tensor_root='./', 
+    def __init__(self,  backup_tensor_root='./', 
             remote_root=None, local_root=None, param_list=None,
             default_resolution=None, 
-            result_db_class=None, result_db_args= {}, algorithm=None):
+            result_db_class=None, result_db_args=None, algorithm='all'):
         self.remote_root = remote_root
         self.local_root = local_root
+        if local_root is not None and not os.path.exists(self.local_root): 
+            msg="local_root '%s' not exists, create one? yes(y) "%(self.local_root, )
+            i=raw_input(msg)
+            if i.lower()=='y':
+                os.makedirs(self.local_root)
+                msg = 'path created'
+            else:
+                raise  
         self.param_list= param_list
         self.default_resolution = default_resolution 
         self.result_db_class= result_db_class if result_db_class is not None else ResultDB
-        self.result_db_args= result_db_args if result_db_args is not None else ResultDB
+        self.result_db_args = {'analysis_hook':self}
+        if result_db_args is not None:
+            self.result_db_args.update(result_db_args)
+       
         self.algorithm = algorithm
         self.name = ''  # a name to describe self 
         
@@ -152,6 +161,9 @@ class Analysis(AnalysisTools):
         
         self.sh_list_max = None 
         self.sub_analysis= []
+        if local_root is not None: 
+            self._last_modify_time = os.path.getmtime(self.local_root)
+            self.set_parpath_dict()   #scan disc
         if 1: #plotting configs
             self.invert_xaxis= 0
             self.invert_alpha_order = 0
@@ -183,6 +195,10 @@ class Analysis(AnalysisTools):
         res += 'local_root = %s\n'%(self.local_root, )  
         return res 
 
+    @property
+    def last_modify_time(self):
+        return os.path.getmtime(self.local_root)
+    
     def copy(self): 
         #self.reload_class(info=0)   #reload 一下，避免下面调用__class__时容易报错
         #res= self.__class__()
@@ -239,33 +255,25 @@ class Analysis(AnalysisTools):
             temp = self.get_param_range(p, aa) 
             print_vars(vars(),  ['p, temp'])
 
-    def alpha_filter_bac(self, a=None, h=None, V=None):  #, **kwargs): 
-        """
-            for wigner_crystal 
-        """
-        aa = list(self.alpha_list)
-        if h == 1.4: 
-            h = 1.4142135
-        param_list = ['a', 'h', 'V']
-        #print vars()
-        for i, x in enumerate(param_list): 
-            #i = param_list.index(x)
-            x_val=vars()[x]
-            if x_val is not None : 
-                aa = filter(lambda x: x[i]== x_val, aa)
-        return aa
     
     def filter_alpha(self, aa=None, sh=None, field=None, no_field=None, param_list=None, 
-            surfix='', resolution='default', no_bad=False, field_range=None,   **kwargs): 
+            surfix='', resolution='default', auto_refrese=1,  no_bad=False, field_range=None,   **kwargs): 
         """
             from wigner_crystal 
             parmas: 
                 no_bad: remove points if db['status'] == 'bad' 
                 field_range: is used specifically for select (mainly for bad) points within the range
         """
+        if auto_refrese:
+            if self.last_modify_time >  self._last_modify_time:
+                self._last_modify_time = self.last_modify_time
+                print 'set_parpath_dict called in filter_alpha'
+                self.set_parpath_dict()
+        
         aa = aa if aa is not None else list(self.alpha_list) 
         param_list = param_list if param_list is not None else self.param_list #['a', 'h', 'V']
-        
+        if len(aa)<1:
+            return []
         num_param = len(param_list)
         #make each a into a tuple  if it is not 
         aa = map(lambda a:  a if hasattr(a, '__iter__') else (a, ), aa)
@@ -289,6 +297,9 @@ class Analysis(AnalysisTools):
         for k, v in kwargs.items(): 
             if v is None:  # None means no constraint 
                 continue 
+            if k not in param_list:
+                warnings.warn('param name {} not in param_list'.format(k))
+                continue
             i = param_list.index(k)
             
             if isinstance(v, float): 
@@ -330,7 +341,10 @@ class Analysis(AnalysisTools):
                     print 'ppp', path 
                     return os.path.exists(path)
             else: 
-                func = lambda a:  self[a].has_key_list(['energy', sh])
+                if sh[1] != 'max': 
+                    func = lambda a:  self[a].has_key_list(['energy', sh])
+                else:
+                    func = lambda a:  self[a].has_key_list(['dim_max', sh[0]])
             aa = filter(func, aa)
 
         if field is not None: 
@@ -355,6 +369,11 @@ class Analysis(AnalysisTools):
             assert sh is not None , "'sh' is requird when select by field_range"
             aa = [a for a in aa if  
                     field_range[0] <= self[a].fetch_easier(field, sh) <= field_range[1]]
+        if auto_refrese:
+            temp = [a for a in aa if self[a].last_modify_time>self[a]._last_modify_time]
+            if temp:
+                print 'set_rdb_dict called in filter_alpha'
+                self.set_rdb_dict(temp)
             
         return aa
     
@@ -441,12 +460,37 @@ class Analysis(AnalysisTools):
         temp = [{'sub_dir': i} for i in temp]
         return temp 
     
-    def add_sub_analysis(self,  hook_list=None): 
+    def create_db_parpath(self, param_val_tuple):
+        param_name = self.param_list
+        assert param_name is not None 
+        assert len(param_val_tuple)==len(param_name)
+        param_val_tuple = map(str, param_val_tuple)
+        fn = zip(param_name, param_val_tuple)
+        fn = ['='.join(x) for x in fn]
+        fn = '-'.join(fn)
+        db_parpath = '/'.join([self.local_root, fn])
+        if not os.path.exists(db_parpath): 
+            #cmd = 'mkdir %s'%db_parpath
+            #os.system(cmd)
+            os.makedirs(db_parpath)
+            msg = 'create parpath ... done'
+        else:
+            msg = 'parpath exists, denied'
+        print msg
+        return db_parpath
+            
+    def get_db(self, param):
+        p = self.create_db_parpath(param)
+        db =self.result_db_class(parpath=p,  
+                create_empty_db=False, **self.result_db_args) 
+        
+        return db
+    
+    def add_sub_analysis(self,  hook_list='auto'): 
         if hook_list is None: 
             hook_list = []
-        if hook_list == 'auto': 
+        elif hook_list == 'auto': 
             hook_list = self.scan_sub_analysis_top()
-            #print_vars(vars(),  ['hook_list'])
 
         for h in hook_list: 
             #sub_dir = h if isinstance(h, str) else h['sub_dir']   #h may be a dir name or in the old format {'sub_dir': dir_name_str}
@@ -463,10 +507,16 @@ class Analysis(AnalysisTools):
                     default_resolution=self.default_resolution, 
                     param_list=self.param_list)
             antemp.name = name
-            antemp.set_parpath_dict()
             setattr(self, name, antemp)
-            #print_vars(vars(),  ['name', 'h', 'antemp.name', 'antemp.local_root[-10: ]'], head='', sep=', ')
             self.sub_analysis.append(name)
+        
+        # below is recursive. may be not safe or very slow!!    
+        if hasattr(self, 'an_test'): 
+            warnings.warn('auto added sub analisys of an_test')
+            self.an_test.add_sub_analysis('auto')
+        if hasattr(self, 'an_temp'): 
+            warnings.warn('auto added sub analisys of an_temp')
+            self.an_temp.add_sub_analysis('auto')
     
     def search_sub_analysis(self, s, recursive=False): 
         for sub in self.sub_analysis: 
@@ -478,18 +528,13 @@ class Analysis(AnalysisTools):
             db_version=None, algorithm=None, reload_db_class=0, info=0):        
         if reload_db_class: 
             self.reload_db_class()
-            #module_name = self.result_db_class.__module__
-            #module = importlib.import_module(module_name)
-            #reload(module)
-            #self.result_db_class= module.__getattribute__(self.result_db_class.__name__)
-            #if info>0: 
-            #    print '%s is reloaded'%(self.result_db_class.__name__, )
         
         part_update = 0
         if alpha_list is not None: 
             part_update = 1
             
         alpha_list = alpha_list if alpha_list is not None else  sorted(self.alpha_parpath_dict)
+        alpha_list = [a if isinstance(a, tuple) else (a, )  for a in alpha_list]
         error = []
         for a in alpha_list: 
             try: 
@@ -509,7 +554,9 @@ class Analysis(AnalysisTools):
             print msg
         
         if len(error)>1: 
-            print error
+            msg = 'error in set_rdb_dict\n'
+            msg +=  str(error)
+            warnings.warn(msg)
     
     def set_parpath_dict(self, root=None, signiture=None, info=0): 
         if root is None: 
@@ -525,9 +572,16 @@ class Analysis(AnalysisTools):
             msg = 'alpha_parpath_dict has been reset'
             print(msg)
         
-        self.alpha_list_all = dic.keys()
-        self.alpha_list_all.sort()
-        self.alpha_list = list(self.alpha_list_all)
+        alpha_list = dic.keys()
+        alpha_list.sort()
+        self.alpha_list = list(alpha_list)
+    
+    def reset(self, aa=None, root=None):
+        """
+            just a convenient function to put the two in one func
+        """
+        self.set_parpath_dict(root=root)
+        self.set_rdb_dict(aa)
     
     def search_alpha(self, alpha_str, alpha_list=None):
         if not isinstance(alpha_str, str): 
@@ -567,7 +621,7 @@ class Analysis(AnalysisTools):
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
         if 'C:' in dir_list[0] and use_dist_comp:
-            func = ResultDB.parpath_map 
+            func = ResultDB.parpath_map.im_func
             dir_list = [func(a).replace('dropbox', '') for a in dir_list]
         dir_list = [d.replace(RESULTDB_DIR, BACKUP_STATE_DIR) for d in dir_list]
         if use_dist_comp: 
@@ -578,30 +632,65 @@ class Analysis(AnalysisTools):
                 fault_tolerant = fault_tolerant, force=force, **kwargs)
         self.set_rdb_dict(aa)
 
-    def measure_all_new(self, aa, sh_list=None, sh_min=None, sh_max=None,  which=None, num_of_threads=2, 
-             force=0, fault_tolerant=1,
+    
+    def measure_all_new(self, aa, sh_list=None, sh_min=None, sh_max=None,  
+            which=None, num_of_threads=2, force=0, fault_tolerant=1,
             **kwargs): 
         """
-            take use of db.measure 
+            take use of db.measure and use distributive compute 
         """
-        aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
-        aa = list(aa)
-        if isinstance(sh_list, tuple):
-            sh_list = [sh_list]
+        if 1:
+            aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
+            aa = list(aa)
+            if isinstance(sh_list, tuple):
+                sh_list = [sh_list]
+            if isinstance(which, str):
+                which = [which]
+            
+        temp = []
+        msg = ''
         for a in aa:
+            msg += '\n' 
             db = self[a]
+            msg += '\n{}\n\t'.format(a)
+            
             for sh in sh_list:
-                #if sh[1] == 'max':
-                #    sh = sh[0], db.get_dim_max_for_N(sh[0])
-                #msg = '%s, %s ... '%(a, sh)
-                #if db.has_key_list([which, sh]):
-                #    msg += '  found, skip it'  
-                #    print msg 
-                #else:
-                #    print msg 
-                #    db.measure(sh, which=which, num_of_fields=num_of_fields)
-                print a, sh
-                db.measure(sh, which=which, num_of_threads=num_of_threads)
+                add_it = True
+                msg += '  {} '.format(sh)
+                if not force:
+                    if sh[1] == 'max' or sh[1] == 0:
+                        _sh = sh[0], db.get_dim_max_for_N(sh[0])
+                    else:
+                        _sh = sh
+                    has_sh = True if db.has_shape(_sh, from_energy_rec=1) else False
+                    if not has_sh:
+                        msg += 'not exist'  
+                        
+                        add_it = 0
+                    else:    
+                        ww = list(which)
+                        for w in ww:
+                            if db.has_key_list([w, _sh]):
+                                ww.remove(w)
+                        if not ww:
+                            msg += 'found' 
+                            add_it = 0
+                else:
+                    ww = which
+                if add_it:
+                    msg += 'added' 
+                    
+                    temp.append((a, sh, ww))    
+        #print msg
+        for t in temp:
+            print t
+        i=raw_input('submit %s jobs? yes(y)\n'%(len(temp)))
+        if i.lower()!='y':
+            print  'canceled'
+            return 
+        for a, sh, w in temp:
+            db = self[a]
+            db.measure(sh, which=which, force=force, num_of_threads=num_of_threads, **kwargs)
 
     def measure_two(self, alpha_paier_list): 
         """
@@ -688,6 +777,7 @@ class Analysis(AnalysisTools):
         """
             outline_db, outline_file will be deprecated in future 
         """
+        #self.set_parpath_dict()
         alpha_list = alpha_list if alpha_list is not None else self.alpha_list
         tab = '\t'*indent 
         sh_list_max = set()
@@ -740,12 +830,12 @@ class Analysis(AnalysisTools):
             #warnings.warn('keys %s are not in self.alpha_parpath_dict'%aa_bad)
         return aa
             
-    def fetch_many(self, field_name, aa, sh): 
+    def fetch_many(self, field_name, aa, sh, key_list=None): 
         aa_dic = self.preprocess_alpha_list(aa)
         res= OrderedDict()
         for a in aa_dic:
             db = aa_dic[a]
-            rec=db.fetch_easy(field_name, sh)
+            rec=db.fetch_easy(field_name, sh, key_list)
             res[a] = rec
         return res
              
@@ -837,15 +927,16 @@ class Analysis(AnalysisTools):
                 mm.measure_all(S, path, which=None, show=False, exclude_which=['scaling_dim'])
     
     def get_shape_list_all(self, N=None, D=None, aa=None, sh_min=None, 
-            sh_max=None, from_energy_rec=False, only_return_N=False, force=0):
-        if self.sh_list_max is not None and not force : 
+            sh_max=None, from_energy_rec=True, only_return_N=False, force=0):
+        #if self.sh_list_max is not None and not force : 
+        if self.sh_list_max  and not force : 
             sh_list_max = list(self.sh_list_max)
         else:
             sh_list_max = set()
             aa = aa if aa is not None else list(self.alpha_list)
             rdb_cls = self.result_db_class 
             #if not from_energy_rec:
-            if socket.gethostname()=='ThinkStation-C30' and not from_energy_rec: 
+            if socket.gethostname()==LOCAL_HOSTNAME and not from_energy_rec: 
                 for a in aa: 
                     #using db meth is slow 
                     #db = self[a]             
@@ -878,7 +969,7 @@ class Analysis(AnalysisTools):
             sh_list_max = [i[0] for i in sh_list_max]
             sh_list_max = list(set(sh_list_max))
         sh_list_max.sort()
-        return sh_list_max  
+        return list(sh_list_max)
     
     def get_surfix_list(self, aa=None, force=0):
         if hasattr(self, 'surfix_list') and not force: 
@@ -933,9 +1024,11 @@ class Analysis(AnalysisTools):
             try: 
                 #print a
                 #self[a].delete_db()
-                path = '/'.join([self.alpha_parpath_dict[a], 'RESULT.pickle.db'])
-                print 'removing db %s'%(path[-30: ]), 
+                db_parpath = self.alpha_parpath_dict[a]
+                path = '/'.join([db_parpath, 'RESULT.pickle.db'])
+                print 'removing db %s and its parpath'%(path[-30: ]), 
                 os.remove(path) 
+                os.rmdir(db_parpath)
                 print '  ... done'
             except Exception as err:
                 print '  ..failed'
@@ -957,30 +1050,40 @@ class Analysis(AnalysisTools):
                 print err
 
     def delete_file(self, aa, info=1): 
+        """
+            
+        """
         for a in aa: 
             db = self[a]
-            db.delete_file(sh='all', info=1)
+            db.delete_file(sh='all', delete_rec=0, need_comfirm=0, info=1)
     
-    def delete_dir(self, aa):
+    def delete_dir(self, aa, ):
+        """
+            delete the data points , i.e delete *both* tensor file and db file
+        """
         for a in aa: 
             db = self[a]
-            msg = 'a=%s, rm dir %s ...'%(a, db.parpath[-30: ], )
+            msg = 'a=%s'%(a, )
             try: 
-                db.delete_file('all', info=0)
+                msg += '\n\trm dir %s ...'%(db.state_parpath, )
+                db.delete_file('all', delete_rec=0, need_comfirm=0, info=0)
                 os.rmdir(db.state_parpath)
+                
+                msg += '\n\trm dir %s ...'%(db.parpath, )
                 db.delete_db(info=0)
                 os.rmdir(db.parpath)
-                msg += 'done' 
+                msg += '\n\tdone' 
             except Exception as err: 
                 msg += str(err)
             print msg 
             
     
-    def rename_folder_surfix(self, aa, new_sur): 
+    def rename_folder_surfix(self, aa, new_sur, dry_run=1): 
         #aa = self.filter_alpha(aa=aa, surfix=old_sur)
         for a in aa: 
             db = self[a]
-            db.rename_folder_surfix(new_sur)
+            db.rename_folder_surfix(new_sur, dry_run=dry_run)
+            print '\n'
         self.set_parpath_dict(info=1)
     
     def move_folder(self, aa, local_root): 
@@ -1079,6 +1182,9 @@ class Analysis(AnalysisTools):
         return fig
     
     def _plot3d(self, xx, yy, data, which_plot=None, zfunc=None,   **kwargs):
+        """
+            pass
+        """
         which_plot = 'imshow' if which_plot is None else which_plot 
         figsize = kwargs.get('figsize')
         figsize = (4, 4) if figsize is None else figsize
@@ -1112,7 +1218,6 @@ class Analysis(AnalysisTools):
                 'aspect':'auto',
                 }
         for t in style_dic: 
-            #if kwargs.get(t):  
             if kwargs.has_key(t): 
                 style_dic[t]=kwargs[t]
      
@@ -1162,27 +1267,33 @@ class Analysis(AnalysisTools):
             zmax= kwargs['zmax']
             Z[Z>zmax] = np.nan 
         cb = None 
-        if which_plot == 'contourf': 
+        if which_plot == 'contour': 
+            pass
+            cb = ax.contour(X, Y, Z, 
+                   colors=kwargs.get('colors', None), 
+                   levels=kwargs.get('levels', None), 
+                   linestyles=kwargs.get('linestyles', None), 
+                    )
+            ax.clabel(cb, inline=kwargs.get('inline', True), fontsize=10)
+            
+        elif which_plot == 'contourf': 
             #levels control intersection at where 
             #cb = ax.contourf(Y, X, Z, zdir='z', offset=0, cmap=plt.cm.coolwarm, alpha=0.9, aspect=1 )
-            cb = ax.contourf(X, Y, Z, zdir='z', offset=0, levels=kwargs.get('levels', None), 
+            cb = ax.contourf(X, Y, Z, zdir='z', offset=0, 
+                    levels=kwargs.get('levels', None), 
                     cmap=plt.cm.coolwarm, aspect=1 )
-            #cb = ax.imshow(X, Y, Z, zdir='z', offset=0, cmap=plt.cm.coolwarm, aspect=1 )
             fig.colorbar(cb, ax=ax)
             clim = kwargs.get('clim')
             if clim is not None : 
                 cb.set_clim(clim)
         elif which_plot == 'imshow' : 
-            #extent = [min(xx)-0.05, max(xx) + 0.05, min(yy), max(yy)]
-            if style_dic.get('extent') is None and (len(xx)>1) and (len(yy)>1):
-                dx = (max(xx)-min(xx))*1.0/(len(xx)-1)
-                dy = (max(yy)-min(yy))*1.0/(len(yy)-1)
-                #print 'dddd', dx, dy
+            if style_dic.get('extent') is None and (len(xx)>1) and (len(yy)>1): #extent = [min(xx)-0.05, max(xx) + 0.05, min(yy), max(yy)]
+                dx, dy = (max(xx)-min(xx))*1.0/(len(xx)-1), (max(yy)-min(yy))*1.0/(len(yy)-1)
+                #dx2, dy2 = dx/2.,  dy/2.
+                #style_dic['extent'] = [min(xx)-dx2, max(xx)+dx2, min(yy)-dy2, max(yy)+dy2]
                 style_dic['extent'] = [min(xx), max(xx)+dx, min(yy), max(yy)+dy]
-            im = ax.imshow(Z,  #extent=extent, 
-                    origin='lower', 
-                     **style_dic) 
-                    #aspect=len(xx)*0.5/len(yy), **style_dic) ,aspect=1 )
+            im = ax.imshow(Z,  origin='lower', **style_dic) 
+                    
             cb=fig.colorbar(im, ax=ax)
             clim = kwargs.get('clim')
             if clim is not None : 
@@ -1222,7 +1333,38 @@ class Analysis(AnalysisTools):
         res = self.search_str(name, all_field_names, only_first=only_first, 
                 only_one = only_one, assert_found = assert_found,) 
         return res 
-    
+
+    def get_rec_1d(self, field_name, aa, sh, sub_key_list=None, rec_getter=None, rec_getter_args=None, **kwargs): 
+        info = kwargs.get('info', 0)
+        
+        aa = map(lambda a:  a if hasattr(a, '__iter__') else (a, ), aa)
+        param_name, param_name_id = AlphaList.identify_param.im_func(self, aa)    
+        data=[]
+        not_found = []
+        for a in aa:
+            db=self[a]
+            if rec_getter is None: 
+                rec=db.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
+            else: 
+                rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
+                rec = rec_getter(db, sh, **rec_getter_args)
+            
+            a1 = a[param_name_id]
+            if rec is not None:
+                data.append((a1, rec))
+            else:
+                data.append((a1, np.nan))
+                not_found.append(a)
+                
+        if not_found and info>0: 
+            print 'not_found is ', not_found
+        try: 
+            x,y=zip(*data)        
+        except ValueError as err: 
+            print err
+            x, y = np.nan, np.nan 
+        x = np.asarray(x); y=np.asarray(y)
+        return x,  y
 
     def plot_field_vs_alpha(self, field_str, aa=None, sh_list=None,
             sub_key_list=None, alpha_db_map=None, empty_to_nan=True,  
@@ -1234,8 +1376,11 @@ class Analysis(AnalysisTools):
         #        assert_found=True)[0]
         
         field_name = self.search_field_name( field_str, only_first=False, only_one=True,  
-                assert_found=True)[0]
-        
+                assert_found=False)
+        if len(field_name)==1:
+            field_name = field_name[0]
+        else:
+            field_name = field_str
         aa = aa if aa is not None else list(self.alpha_list)
         if isinstance(sh_list, tuple):  
             sh_list = [sh_list]
@@ -1243,7 +1388,7 @@ class Analysis(AnalysisTools):
         sh_max = kwargs.get('sh_max')
         sh_list = sh_list if sh_list is not None else self.get_shape_list_all(aa=aa, sh_min=sh_min, sh_max=sh_max)
         #sh_list = list(reversed(sorted(sh_list)))
-        sh_list.reverse()
+        #sh_list.reverse()
         
         alpha_db_map = alpha_db_map if alpha_db_map is not None else {}
         rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
@@ -1267,7 +1412,6 @@ class Analysis(AnalysisTools):
         for sh in sh_list: 
             
             if algorithm == 'vmps' and field_name == 'entanglement_entropy' : 
-                #sub_key_list = kwargs_orig.get('sub_key_list', ['EE', sh[0]//2, 1])
                 skl = sub_key_list if sub_key_list is not None else ['EE', sh[0]//2, 1]
             else: 
                 skl = sub_key_list 
@@ -1281,6 +1425,8 @@ class Analysis(AnalysisTools):
                 if rec_getter is None: 
                     rec=db.fetch_easy(field_name, sh, sub_key_list=skl, fault_tolerant=fault_tol)
                 else: 
+                    if type(rec_getter)==types.MethodType:
+                        rec_getter = rec_getter.im_func
                     rec = rec_getter(db, sh, **rec_getter_args)
                 
                 a1 = a[param_name_id]
@@ -1290,20 +1436,24 @@ class Analysis(AnalysisTools):
                     if empty_to_nan: 
                         data.append((a1, np.nan))
                     not_found.append(a)
-                    
             if not_found and info>0: 
                 print 'not_found is ', not_found
-            
+            if not data:
+                warnings.warn('empty data for sh=%s'%(sh, ))
+                continue
             try: 
                 x,y=zip(*data)        
             except ValueError as err: 
-                print err
+                warnings.warn(str(err))
                 x, y = np.nan, np.nan 
             x = np.asarray(x); y=np.asarray(y)
+            
             label = kwargs_orig.get('label', str(sh))
-            marker = kwargs_orig.get('marker', MARKER_CYCLE.next())
-            kwargs.update(ylabel=field_name, return_ax=1, label=label, 
-                    maker=marker, xlabel='$%s$'%param_name_tex)
+            #marker = kwargs_orig.get('marker', MARKER_CYCLE.next())
+            ylabel = field_name if rec_getter is None else (
+                    rec_getter.__name__.replace('_get', ''))
+            kwargs.update(ylabel=ylabel, return_ax=1, label=label, 
+                     xlabel='$%s$'%param_name_tex)
             
             try: 
                 fig, ax = self._plot(x, y, **kwargs) 
@@ -1311,8 +1461,7 @@ class Analysis(AnalysisTools):
                 kwargs['fig'] = fig 
                 kwargs['ax'] = ax
             except Exception as err: 
-                #warnings.warn(str(err))
-                print err 
+                warnings.warn(str(err))
             
         if kwargs.get('return_fig'): 
             return fig 
@@ -1393,87 +1542,67 @@ class Analysis(AnalysisTools):
             fig, ax, cb = dic['fig'], dic['ax'], dic['cb']
         else: 
             pass 
-       
-        #ax.set_aspect(1)
         
-        if kwargs.get('return_fig'): 
-            return fig 
-    
-    def get_rec_1d(self, field_name, aa, sh, sub_key_list=None, rec_getter=None, rec_getter_args=None, **kwargs): 
-        info = kwargs.get('info', 0)
-        param_name, param_name_id = AlphaList.identify_param.im_func(self, aa)    
-        data=[]
-        not_found = []
-        for a in aa:
-            db=self[a]
-            if rec_getter is None: 
-                rec=db.fetch_easy(field_name, sh, sub_key_list=sub_key_list)
-            else: 
-                rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
-                rec = rec_getter(db, sh, **rec_getter_args)
-            
-            a1 = a[param_name_id]
-            if rec is not None:
-                data.append((a1, rec))
-            else:
-                data.append((a1, np.nan))
-                not_found.append(a)
-                
-        if not_found and info>0: 
-            print 'not_found is ', not_found
-        try: 
-            x,y=zip(*data)        
-        except ValueError as err: 
-            print err
-            x, y = np.nan, np.nan 
-        x = np.asarray(x); y=np.asarray(y)
-        return x,  y
-    
+        #if kwargs.get('return_fig'): 
+        #    return fig 
+        return dic
         
     def get_rec_2d(self, field_name, aa, sh, xparam, yparam, 
-            sub_key_list=None, rec_getter=None,  **kwargs): 
+            rec_getter=None, rec_getter_args= None,  fault_tol=True, 
+           make_up=False, alpha_db_map=None,  sub_key_list=None, **kwargs): 
         info = kwargs.get('info', 0)
         aa = aa if aa is not None else self.alpha_list
+        alpha_db_map = alpha_db_map if alpha_db_map is not None else {}
+        rec_getter_args= rec_getter_args if rec_getter_args is not None else {}
         xx = self.get_param_range(xparam, aa=aa)
         yy = self.get_param_range(yparam, aa=aa)
          
         XX,YY=np.meshgrid(xx,yy)
         data=np.ndarray((len(xx),len(yy)))
-        #data[:, :] = np.nan 
+        data[: ] = np.nan 
         alg = self.algorithm
-        
-        sub_key = ['EE'] if self.algorithm == 'vmps' else None 
-        #sub_key = None 
         not_found = []
-         
         p1=self.param_list.index(xparam) 
         p2=self.param_list.index(yparam) 
         x_to_i = {x:xx.index(x) for x in xx}
         y_to_j = {y:yy.index(y) for y in yy}
+        if info>0: 
+            grid = itertools.product(xx, yy)
+            grid1 = map(lambda a:(a[p1], a[p2]),   aa)
+            temp=set(grid)-set(grid1)
+            temp = list(temp)
+            temp.sort()
+            if temp: 
+                print 'points not in alpha_parpath_dict is', temp
+        
         for a in aa: 
             x = a[p1]; y = a[p2]
             i = x_to_i[x]; j = y_to_j[y]
-            db = self[a]
-            if rec_getter is None: 
-                rec = db.fetch_easy(field_name, sh, sub_key_list, info=0)
+            if alpha_db_map.has_key(a): 
+                db = alpha_db_map[a]
             else: 
-                rec = rec_getter(db, sh)
+                db=self[a]
+            
+            if rec_getter is None: 
+                rec=db.fetch_easy(field_name, sh, sub_key_list=sub_key_list, fault_tolerant=fault_tol)
+            else: 
+                rec = rec_getter(db, sh, **rec_getter_args)
+            #rec = db.fetch_easy(field_name, sh, sub_key_list, info=0)
+            
             if rec is not None : 
                 data[i, j] = rec 
             else:
                 data[i, j] = np.nan 
                 not_found.append((x, y))
-                
-        return xx, yy, data  
-        #print XX.shape, xx.shape, YY.shape, yy.shape, data.shape
-    
-    
+        
+        if not_found and info>0: 
+            print  'not_found is ', not_found 
+        
+        return xx, yy, data
+
     def show_fig(self): 
         plt.show()
     
-    #def fig_layout(self, ncol=1, nrow=1,  size=(3.5, 2.5), dim=2): 
-    #    return ResultDB.fig_layout.im_func(None, ncol, nrow, size, dim=dim)
-   
     def _scaling_dim_exact(self, model_name):
         exact = {}
 
@@ -1808,27 +1937,6 @@ class Analysis(AnalysisTools):
         if return_fig: 
             return fig
         
-    def get_correlation(self, dir='xx', alpha=None, mera_shape=None, info=0): 
-        """
-            mera_shape: a tuple (dim, layer)
-        
-        """
-        #if dir  == 'xx': dir = 'pm'
-        
-        db = self.alpha_rdb_dict[alpha]
-        dim = mera_shape[0]
-        layer = mera_shape[1]
-        record = db.fetch(field_name='correlation', dim=dim, num_of_layer=layer)
-        items = record[dir]['val']
-        x, y = zip(*items)
-        x = np.array(x)
-        y = np.array(y) 
-        if info>0: 
-            print 'X=', x
-        if dir=='pm': 
-            y=y*2 
-        return y
-
     def get_energy_diff(self):
         """
         one record is like this:
@@ -2266,14 +2374,15 @@ class Analysis(AnalysisTools):
     def plot_entanglement_spectrum(self, aa, sh, sub_key_list=None,  which_level=None, 
             num_level=None, param_name=None, **kwargs): 
         num_level= 20  if num_level is None else num_level
-        #if sub_key_list is None: 
-        #    pass 
+        if sub_key_list is None: 
+            pass 
         if self.algorithm == 'vmps': 
             which = 'entanglement_entropy'
         elif self.algorithm == 'idmrg' : 
             which = 'entanglement_spectrum'
         else: 
             raise ValueError(self.algorithm)
+        
         if which_level is not None : 
             num_level = len(which_level)
         ES=np.ndarray((len(aa), num_level))
@@ -2295,8 +2404,7 @@ class Analysis(AnalysisTools):
         fig, ax=self._plot(x, -np.log10(ES), **kwargs)
         ax.set_xlabel(param_name)
         ax.set_ylabel('ES')
-        
-
+    
     def plot_magnetization(self, aa=None, sh=None, direct='z', pos=0, **kwargs): 
         if aa is None: 
             aa = list(self.alpha_list)
@@ -2443,12 +2551,35 @@ class Analysis(AnalysisTools):
             print('class %s is reloaded'%(name, ))
     
     def reload_db_class(self, info=1):
+        """
+            this method is not perfect, it is due to limitation of python
+            itself. After reload, old objects are still referred to.
+            https://www.dup2.org/node/950 
+            https://docs.python.org/3/library/imp.html 
+            When reload(module) is executed:
+                Python modules’ code is recompiled and the module-level code reexecuted, defining a new set of objects which are bound to names in the module’s dictionary. The init function of extension modules is not called a second time.
+                As with all other objects in Python the old objects are only reclaimed after their reference counts drop to zero.
+                The names in the module namespace are updated to point to any new or changed objects.
+                Other references to the old objects (such as names external to the module) are not rebound to refer to the new objects and must be updated in each namespace where they occur if that is desired.            
+                
+                
+            #sys.getrefcount(an_vmps.an_main_2site.result_db_class)
+        
+        """
+        #print 'old 11', id(result_db_module)
         module_name = self.result_db_class.__module__
         module = importlib.import_module(module_name)
         reload(module)
-        self.result_db_class= module.__getattribute__(self.result_db_class.__name__)
+        class_name = self.result_db_class.__name__
+        new_class = module.__getattribute__(class_name)
+        self.result_db_class = new_class 
+        if 0:  # below has no use 
+            #setattr(result_db_module, class_name, new_class)
+            print 'old 2', id(result_db_module)
+            print 'new', id(module)
         if info>0: 
             print '%s is reloaded'%(self.result_db_class.__name__, )
+        return module 
         
     
     def plot_fidelity_2d(self, aa, data,  **kwargs): 
@@ -2621,7 +2752,6 @@ class Analysis(AnalysisTools):
                             db2.insert(which, sh, iter=-1, sub_key_list=[a1], val=ff)
                             db2.commit()                
                             db_changed = True 
-                            #self.set_rdb_dict([a2])
                         except Exception as err:
                         
                             if not fault_tolerant: 
@@ -2646,6 +2776,9 @@ class Analysis(AnalysisTools):
             save(res, save_to)
         return res     
 
+    def submit_job(self, N=None):
+        pass
+
 class Analysis_mera(Analysis): 
     def __init__(self, **kwargs): 
         kwargs.update(algorithm='mera', result_db_class=ResultDB_mera)
@@ -2653,7 +2786,6 @@ class Analysis_mera(Analysis):
 
 class Analysis_vmps(Analysis): 
      def __init__(self, **kwargs): 
-        #kwargs['result_db_class'] =  ResultDB_vmps
         kwargs.update(algorithm='vmps', result_db_class=ResultDB_vmps)
         Analysis.__init__(self, **kwargs)
 
@@ -2707,7 +2839,6 @@ class Analysis_idmrg(Analysis):
   
 class Analysis_proj_qmc(Analysis): 
      def __init__(self, **kwargs): 
-        #kwargs['result_db_class'] =  ResultDB_vmps
         kwargs.update(algorithm='proj_qmc', result_db_class=ResultDB_proj_qmc)
         Analysis.__init__(self, **kwargs)
   
@@ -2719,18 +2850,23 @@ class TestAnalsysis(unittest.TestCase):
     def test_temp(self): 
         #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
         #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
-        from mera_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        #from merapy.run_heisbg.analysis import *
-        #sys.path.append(r"C:\Users\zhihua\Dropbox\My-documents\My-code\my-python")
-        xx=an_idmrg_psi.an_main_alt_fix_err
-        aa = xx.filter_alpha(nu=0.33, alpha=1.2, sh=(0, 320), surfix=None)
-        print_vars(vars(),  ['aa'])
-        xx.measure_all_new(aa, [(0, 'max')], which='magnetization')
-
+        from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        #from vmps.run_hubbard.analysis import an_vmps
+        #from merapy.run_heisbg.analysis import an_idmrg_psi
         
-       
-        #xx.measure_all(aa, sh_list='all', sh_min=(60, 40),  use_dist_comp=1, fault_tolerant=0)        
-        #xx.show_fig()
+        #
+        xx=an_vmps.an_main_ham3
+        print_vars(vars(),  ['xx.last_modify_time'])
+        aa = xx.filter_alpha(alpha=3.0)
+        print_vars(vars(),  ['aa'])
+         
+        #xx.plot_field_vs_alpha('None', aa, ss,  label=(alpha, 'pm'), empty_to_nan=0, 
+        #                rec_getter=xx.result_db_class._get_K_by_nk, 
+        #                rec_getter_args = {'nu':0.33, 'x_min':32, 'x_max':60},
+        #                ax=ax)
+        #ax.invert_xaxis()   
+        
+        xx.show_fig()
     
     def test_preprocess_alpha_list(self): 
         an = self.an

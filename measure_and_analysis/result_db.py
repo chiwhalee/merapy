@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 #coding=utf8
 #PYTHON_ARGCOMPLETE_OK 
-
+from __future__ import division
 import argparse, argcomplete
+import inspect 
 import os, sys
 import shutil 
 import warnings 
@@ -11,25 +12,33 @@ from tabulate import tabulate
 import cPickle as pickle
 from collections import OrderedDict
 from operator import itemgetter
+import time
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib.lines import Line2D
+
 import itertools 
 from mpl_toolkits.mplot3d import Axes3D
 import pandas as pd 
 import math 
-from math import pi, cos
+from math import pi, cos, sin
 import socket 
 import platform 
 import types
 
 import importlib
-from matplotlib.lines import Line2D
 import numpy as np
 import pandas
 from scipy.optimize import curve_fit
 from scipy.special import sici
 import unittest
 
+from sympy import fourier_transform
+from sympy.utilities.lambdify import lambdify
+
+
+from IPython.display import display
 
 from merapy.utilities import dict_to_object , load , print_vars
 from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOSTNAME 
@@ -38,9 +47,10 @@ from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOST
 #from mypy.brokest.brokest import queue, run_many, pack_runnable_msg, send_msg 
 
 
-__all__ = ['MARKER_LIST', 'MARKER_CYCLE', 'COLOR_CYCLE', 'COLOR_LIST',  
+__all__ = ['MARKER_LIST', 'MARKER_CYCLE', 
     'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
-    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 
+    'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 'ResultDB_bethe_ansatz', 
+    'display', 'lambdify', 'fourier_transform', 
     ]
 
 
@@ -59,8 +69,6 @@ else:
     RESULTDB_ROOT = '/'.join([HOME, 'Dropbox', RESULTDB_DIR], )
     #RESULTDB_ROOT = '/'.join([HOME, 'Onedrive', RESULTDB_DIR], )
 
-if 1:  #some useful functions
-    expij=  lambda k,N: np.fromfunction(lambda i,j:np.exp(1J*k*(i-j)), (N, N))
 
 def html_border(s, fontsize=20): 
     sss=  """
@@ -80,23 +88,29 @@ def set_matplotlib_style():
     v = mpl.__version__
     #if platform.system()=='Windows':
     if v<'2.0.0':
+        raise  
         MATPLOTLIBRC = {
             u'grid.linestyle':'dotted', 
-            #'legend.alpha': 0,    # this will make the box totally transparent 
+            #'legend.alpha': 0,    # this will make the box totally transanalysis_hook 
             #'legend.edge_color': 'white',   # this will make the edges of the border white to match the background instead 
             'legend.frameon': 0,# whether or not to draw a frame around legend    
             'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
             'figure.facecolor': 'white', 
+            u'axes.titlesize':'x-large',
             }
     else:
         MATPLOTLIBRC = {
+            'axes.grid':1, 
             u'legend.fontsize':'large', 
             u'grid.linestyle':'dotted', 
-            #'Legend.alpha': 0,    # this will make the box totally transparent 
+            #'Legend.alpha': 0,    # this will make the box totally transanalysis_hook 
             u'legend.edgecolor': 'white',   # this will make the edges of the border white to match the background instead 
             u'legend.frameon': False,# whether or not to draw a frame around legend    
             u'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
             u'figure.facecolor': 'white', 
+            
+            u'axes.titlesize':'x-large',
+            
             }
         #MATPLOTLIBRC.pop('legend.alpha')
         #MATPLOTLIBRC.pop('legend.edege_color')
@@ -151,11 +165,11 @@ def set_matplotlib_style():
             'silver',   'skyblue', 'gray',   'darkgreen',  'grey',  'violet',
             'blue', 'purple',  ]
     COLOR_CYCLE = itertools.cycle(COLOR_LIST)
-    lines = ["-","--","-.",":"]
+    lines = ['', ' ', 'None', '--', '-.', '-', ':']
     LINE_CYCLE= itertools.cycle(lines)
-    return MARKER_CYCLE, MATPLOTLIBRC
+    return MARKER_LIST, MARKER_CYCLE, MATPLOTLIBRC
     
-MARKER_CYCLE, MATPLOTLIBRC = set_matplotlib_style()
+MARKER_LIST, MARKER_CYCLE, MATPLOTLIBRC = set_matplotlib_style()
 
 class AnalysisTools(object): 
     """
@@ -196,21 +210,35 @@ class AnalysisTools(object):
         return arg 
     
     @staticmethod 
-    def fit_curve(x, y, func, fit_range=None): 
+    def fit_curve(x, y, func, p0=None, method='lm', fit_range=None): 
         """
             just a wrapper 
+            about curve_fit:
+                Curve fitting is not always that straightforward.  
+                p0 may be very useful in sometimes
+            
         """
-        
         if not isinstance(x, np.ndarray): 
             x = np.asarray(x)
         if not isinstance(y, np.ndarray): 
             y = np.asarray(y)
-        
-        param, cov = curve_fit(func, x, y)    
-       
-        return func, param, cov 
+        #param, cov = curve_fit(func, x, y)    
+        #res = func, param, cov 
+        res= None
+        try:
+            param, cov = curve_fit(func, x, y, p0=p0, method=method)    
+            res = func, param, cov 
+        except RuntimeError as err:
+            warnings.warn(str(err))
+        except TypeError as err:
+            warnings.warn(str(err))
+        except Exception as err:
+            warnings.warn(str(err))
+            raise  
+        return res
     
-    def fit_line(self, line, func=None, data=None, x_min=None, x_max=None, x_extra=None, period=None, x1=None):
+    def fit_line(self, line, func=None, data=None, x_min=None, x_max=None, 
+            x_extra=None, period=None, x1=None, p0=None, method='lm'):
         if isinstance(func, str): 
             if func == 'EE_vs_L' : 
                 func = lambda x, c, a: c/6.*np.log(x) + a
@@ -233,7 +261,11 @@ class AnalysisTools(object):
         arg = self.filter_array(x, x_min, x_max, period, x1)
         x = x[arg]
         y = y[arg]
-        func_, param, cov = self.__class__.fit_curve(x, y, func)
+        temp = self.__class__.fit_curve(x, y, func, p0=p0, method=method)
+        if temp is None:
+            return None
+        else:
+            func_, param, cov = temp #self.__class__.fit_curve(x, y, func)
         if x_extra is not None:  # append one point for expolatating 
             inc = True if np.all(np.diff(x)>0) else False
             if x_extra>max(x): 
@@ -247,8 +279,8 @@ class AnalysisTools(object):
                 else:
                     x = np.append(x, x_extra)
             else: 
-                raise ValueError
-            
+                raise ValueError((1./x, min(x), max(x)))
+        
         y_fit = func_(x, *param)
         res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
         return res 
@@ -274,17 +306,25 @@ class AnalysisTools(object):
                 a=eval(l.get_label())#[0]
             except: 
                 a = None 
-            try: 
+            if 0:
+                try: 
+                    res=self.fit_line(l, func, **fit_line_args) 
+                    k = res['param'][0]
+                except Exception as err: 
+                    k = np.nan 
+                    if fault_tol: 
+                        warnings.warn(str(err))
+                    else: 
+                        raise
+                    continue 
+            else:
                 res=self.fit_line(l, func, **fit_line_args) 
-                k = res['param'][0]
-            except Exception as err: 
-                k = np.nan 
-                if fault_tol: 
-                    warnings.warn(str(err))
-                else: 
-                    raise
-                continue 
                 
+                if res is not None:
+                    k = res['param'][0]
+                else:
+                    k = np.nan 
+                    continue 
             if add_text: 
                 if func == 'EE_vs_D' : 
                     k = 12*(1./k - 1)**(-2)  #central charge 
@@ -315,7 +355,7 @@ class AnalysisTools(object):
     
     def fig_layout(self, ncol=1, nrow=1, size=(6, 5), dim=2): 
         if size is None and ncol == 1 and nrow == 1: 
-            size = (4, 3)
+            size = (6, 5)
         #size= size if size is not None else (3.5, 2.5)
         size= size if size is not None else (5, 4)
         size = ncol*size[0], nrow*size[1]
@@ -417,7 +457,17 @@ class AnalysisTools(object):
         args=dict(lw=0, xlabel=xlabel, ylabel=ylabel, marker='x')
         args.update(kwargs)
         self._plot(x, y, **args)
-    
+
+    def plot_derivative(self, line_list, **kwargs):
+        pass
+        ll = line_list
+        for l in ll:
+            x, y = l.get_data()
+            y_diff = np.diff(y)
+            x_diff = np.diff(x)
+            y = y_diff/x_diff 
+            self._plot(x[:-1], y, **kwargs)
+
     def find_lines_extreme(self, ax, which='max', add_text=True, 
             find_range=None, 
             zoom_scale=None, font_dict=None, rounding=3): 
@@ -468,11 +518,22 @@ class AnalysisTools(object):
             ax.set_ylim(y1, y2)            
         return labels, loc, val 
     
-    def find_points_in_line(self, line, ymin, ymax):
+    def find_points_in_line_bac(self, line, ymin, ymax):
         x, y = line.get_data()
         arg = np.bitwise_and(y>=ymin, y<=ymax)
         return x[arg], y[arg]
-        
+    
+    def find_points_in_line(self, line, range=None, close_to=None):
+        x, y = line.get_data()
+        if range is not None: 
+            ymin, ymax = range
+            arg = np.bitwise_and(y>=ymin, y<=ymax)
+            return x[arg], y[arg]
+        if close_to is not None:
+            diff = np.abs(y - close_to)
+            arg = np.nanargmin(diff)  #ignore nan 
+            return x[arg], y[arg]
+       
 
     def plot_sign(self, ax, line_id=0, center=0.0, magnitude=None, **kwargs):
         l = ax.lines[line_id]
@@ -481,7 +542,7 @@ class AnalysisTools(object):
         yy = np.sign(y)*magnitude  + center 
         self._plot.im_func(None, x, yy, ax=ax, **kwargs)
     
-    def compare_two_lines(self, line1, line2, plot_sign=True, **kwargs): 
+    def compare_two_lines(self, line1, line2, plot_sign=False, **kwargs): 
         """
            plot y1-y2 
         """
@@ -489,8 +550,8 @@ class AnalysisTools(object):
         x2, y2 = line2.get_data()
         if 1:   #here asumes no duplicate elements in x1 or x2  
             #ind12 = np.intersect1d(x1, x2, )
-            ind12 = np.in1d(x1, x2)
-            ind21 = np.in1d(x2, x1)
+            ind12 = np.in1d(x1.round(14), x2.round(14))   #arg of ele of x1 that is in x2
+            ind21 = np.in1d(x2.round(14), x1.round(14))
             x_common = x1[ind12]
             y12 = y1[ind12]
             y21 = y2[ind21]
@@ -508,6 +569,9 @@ class AnalysisTools(object):
             kwargs['label'] = label 
         if plot_sign: 
             kwargs.update(yfunc=np.abs, yscale='log')
+        
+        kwargs['yfunc'] = kwargs.get('yfunc', np.abs)
+        kwargs['yscale'] = kwargs.get('yscale', 'log')
         
         fig=self._plot.im_func(None, x_common, y_diff, **kwargs)
         if plot_sign: 
@@ -586,6 +650,18 @@ class AnalysisTools(object):
             tic = ['%s\n%d'%(i, 1./(i)) for i in tic]
             _ = ax.set_xticklabels(tic)    
 
+    def get_contour_line_data(self, cb, i):
+        res= []
+        assert i < len(cb.collections)
+        #for i in range(n):   
+        p = cb.collections[i].get_paths()[0]
+        v = p.vertices
+        #print v.shape
+        x = v[:,0]
+        y = v[:,1]
+        
+        return x, y
+
 class AnalyticFormular(object):
     """
        some formular for comparing with numerics or extracting values
@@ -593,42 +669,90 @@ class AnalyticFormular(object):
     @staticmethod
     def corr_luttinger( which='zz', nu=0.5):
         """  
+            correlation for XXZ (or t-V) model
             ref. 
                 Giamarchi's book p.168
-                Haldane 1981 effectie:  eq.7-9
+                Haldane 1981 effect:  eq.7-9
         """
-        _nu={0.5:0.5, 0.33:1./3}.get(nu, nu)
+        cos = np.cos   # use math.cos may raise due to data type
+        _nu={0.5:0.5, 0.33:1./3, 0.25:0.25}[nu]
         m = 0.5*(2*_nu - 1.0)   #magnetization
+        # kf/pi = nu
+        
         if which == 'zz':
             if nu==0.5:
                 def func(x,  K, C1, C2): #eq.6.38 first line
-                    res= C1/x**2 + C2*(-1.)**x * (1./x)**(2*K)
+                    res = 0
+                    #res += C1/x**2   # C1 can be specified as below
+                    res += 4*(-1.)*K/(2*pi**2)*(1./x**2)  
+                    res += C2*(-1.)**x * (1/x)**(2*K)   #(-1.)**x i.e. cos(2kf)
+                    #res += C2*(-1.)**x * (1./x)**(2*K)* np.log(x)**0.5   #with log correction
                     return res
             else:
-                def func(x, K, C2):
+                def func(x, K, C1, C2):
                     res=0
-                    res += m**2
-                    res += K/(2*pi**2)*(- 1./x**2)   #need this line?
-                    res += C2*cos(pi*(1+2*m)*x)*(1./x)**(2*K)
+                    res += 4*m**2  # note diff with Giamarchi's book which uses m**2, because Sz takes value  +1/-1 here
+                    #res += C1/x**2  
+                    res += 4*(-1.)*K/(2*pi**2)*(1./x**2)  
+                    #res += C2*cos(pi*(1+2*m)*x)*(1./x)**(2*K)  #since one just has (1+2*m)=2*nu, use the following
+                    res += C2*cos(2*pi*_nu*x)*(1./x)**(2*K)
                     return res
+        
         elif which =='pm':
-            if nu==0.5:
-                def func(x,  K, C1, C2):   #eq.6.38 sec line
-                    res= C1*(1/x)**(2*K+1./(2*K)) + C2*(-1.)**x * (1./x)**(1./(2*K))
-                    return res
-            else:
-                def func(x,  K, C1, C2 ):   #attention  may be not right
-                    """
-                        it seems not need (-1.)**x for long range fermion !!
-                    """
-                    #res=( C1*cos(2*pi*m*x)*(1./x)**(2*K+1./(2*K)) + C2*(-1.)**x * (1./x)**(1./(2*K))  )
-                    #res=(  C2*(-1.)**x * (1./x)**(1./(2*K))  )
-                    res=(  C2*(1./x)**(1./(2*K))  )   
-                    #res=( C1*cos(2*pi*m*x)*(1./x)**(2*K+1./(2*K)) + C2* (1./x)**(1./(2*K))  )
-                    return res
+            #if nu==0.5:
+            #    def func(x,  K, C1, C2):   #eq.6.38 sec line  
+            #        """  
+            #            this has been verified thoroughly
+            #        """
+            #        res = 0
+            #        res += C1*(1/x)**(2*K+1./(2*K)) 
+            #        res += C2*(-1.)**x * (1./x)**(1/(2*K))
+            #        return res
+            #else:
+            def func(x,  K, C1, C2 ):   
+                """
+                    
+                """
+                res = 0
+                res += C1*cos(2*pi*m*x)*(1./x)**(2*K+1./(2*K))
+                res += C2*(-1.)**x * (1./x)**(1./(2*K))  
+                return res
                 
-        return func
 
+        return func
+    
+    @staticmethod
+    def exact_corr_cdag_c(r):   #exact_corr_xx_model
+        """
+            the one particle reduced tensity matrix
+            for spinless free fermion ( a.k.a xx model)
+            <c^+_{i} c_j> which can be mapped into spin operator sp sm with JS
+            string in between 
+            
+            ref. 
+                Latorre 2004 eq. C8 C9 C10
+                Evenbly 2011 eq.46
+                
+        """
+       
+        if r != 0: 
+            res=-sin(pi*r/2.)/(pi*r)
+        else:
+            #issue: I dont know here should be 0.5 or -0.5
+            #res= -0.5
+            res= 0.5
+        return res
+    
+    @staticmethod
+    def luttinger_param_theory(Jzz):
+        """
+            theoritical value of K for XXZ model
+            Jzz  =  Delta
+        """
+        #luttinger_param_theory=lambda x: np.pi/(2* np.arccos(-x))
+        
+        res = np.pi/(2* np.arccos(-Jzz))
+        return res
 
 
 class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools): 
@@ -661,13 +785,15 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     VERSION = 1.2 
     ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence', 'concurrence_2']
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
-            use_local_storage=False, create_empty_db=False,  upgrade=0):
+            use_local_storage=False, create_empty_db=False,  upgrade=0, 
+            analysis_hook=None):
         """
             params: 
                 algorithm is necessary, or else it is difficult to determine which alg
         """
         self.use_local_storage = use_local_storage
         self.parpath = parpath
+        self.analysis_hook = analysis_hook
         dbname = dbname if dbname is not None else self.DBNAME
         self.dbname = dbname
         self.path = '/'.join([parpath , dbname])
@@ -678,18 +804,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if not os.path.exists(parpath):  # these lines are useful, when merge remote db
                 self.create_parpath()
        
-        #if not os.path.exists(self.path):  
-        #    if create_empty_db:     
-        #        ResultDB.create_empty_db(self.path, use_local_storage) 
-        #    OrderedDict.__init__(self, {})
-        #else: 
-        #    db = rpyc_load(self.path, use_local_storage)
-        #    OrderedDict.__init__(self, db)
         try: 
             db = rpyc_load(self.path, use_local_storage=use_local_storage)
         except IOError as err: 
             db = {}
-            #print err 
             if create_empty_db: 
                 ResultDB.create_empty_db(self.path, use_local_storage) 
         except Exception as err: 
@@ -712,8 +830,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if not self.has_key('status'):   # means is the data correct。these make init slow, better make it lazy eval 
             self['status'] = 'good'   # default is good 
 
-        if self['version'] >= 1.0:  
-            self.fetch_easy = self.fetch_easy_new
+        #if self['version'] >= 1.0:  
+        #    self.fetch_easy = self.fetch_easy_new
+        if self['version'] < 1.0:  
+            self.fetch_easy = self.fetch_easy_old
+        
+        self._last_modify_time = time.time()   # used for auto refresh db 
 
         if 0: 
             if upgrade:   #this will be deprecated 
@@ -758,6 +880,15 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     def parpath_center(self):
         dir = self.parpath_map(self.parpath)
         return dir
+
+    @property
+    def last_modify_time(self):
+        try:
+            return os.path.getmtime(self.path)
+        except OSError:
+            return 0
+        except Exception:
+            raise  
 
     def __repr__(self): 
         return self.keys()
@@ -814,6 +945,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
             todo: load 时，应该支持 update state 
         """
+        if sh[1] ==  'max':
+            sh = sh[0], self['dim_max'].get(sh[0], 0)
         
         path = self.shape_to_backup_path(sh)
         
@@ -844,23 +977,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             return self.has_key_list(['energy', sh])
             
         if system_class is None:
-            system_class= self.__class__ 
+            system_class = self.__class__ 
         fn = self.shape_to_backup_fn(sh)
         path = '/'.join([self.state_parpath, fn])
         return os.path.exists(path)
-
-    def has_entry_del(self, key_list): 
-        """
-            key_list = [field_name, mera_shape, iter]
-        """
-        
-        rec = self
-        for t in key_list: 
-            if not rec.has_key(t): 
-                return False
-            else: 
-                rec = rec[t]
-        return True
 
     def has_key_list(self, key_list, info=1): 
         temp = self
@@ -869,6 +989,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             #    if info>0: 
             #        print 'not has this key: %s'%(k, )
             #    return False
+            #if not hasattr(temp, 'has_key') or not temp.has_key(k): 
             if not temp.has_key(k): 
                 #if info>0: 
                 #    print 'not has this key: %s'%(k, )
@@ -964,7 +1085,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         return pickle_files
     
     def get_time_serials(self, sh, attr_name=None, info=0, force=0): 
-        #rec = self.fetch_easy('time_serials', sh)
         #if rec is not None: 
         if self.has_key('time_serials'): 
             ts = self['time_serials'].get(sh)
@@ -990,14 +1110,14 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         return N, D 
 
     def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, 
-            from_energy_rec=True, only_return_max=False, only_return_N=False, only_return_D=False, 
+            from_energy_rec=True, field='energy',  only_return_max=False, only_return_N=False, only_return_D=False, 
             ): 
         if socket.gethostname()==LOCAL_HOSTNAME and not from_energy_rec: 
             fn = self.get_fn_list()
             sh = [self.parse_fn(f) for f in fn]
         else:
             #warnings.warn('get_shape_list using energy rec')
-            sh = self.get('energy', {}).keys()
+            sh = self.get(field, {}).keys()
        
         #if N is not None:
         #    sh_min = (N, 0)
@@ -1032,15 +1152,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     get_mera_shape_list = get_shape_list 
     
     def get_dim_max_for_N(self, N, update_db=False, force=False, info=0): 
-        #if self.has_key('dim_max'): 
-        #if self.has_key_list(['dim_max', 'N'])
-        #    return self['dim_max']['N']
         try: 
             if force: 
                 raise KeyError 
             return self['dim_max'][N]
         except KeyError: 
-            temp=self.get_shape_list(N=N)
+            temp=self.get_shape_list(N=N,from_energy_rec=1)
             if len(temp)>0:  
                 D = max(temp)[1] 
             else: 
@@ -1116,8 +1233,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     print msg
                 return None
 
-    def fetch_easy(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
-             auto_meassure=False, info=0, fault_tolerant=1): 
+    def fetch_easy_old(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
+             auto_meassure=False, default=None,  info=0, fault_tolerant=1): 
         """
             interface to make fetch easier
         """
@@ -1151,12 +1268,14 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                         rec = rec[key]
                 except: 
                     if fault_tolerant: 
-                        print 'error in fetch_easy'
+                        print 'error in fetch_easy_old'
                         print 'keys are', rec.keys()
                     else: 
                         raise
         else:
-            rec=self.fetch_from_key_list(key_list, rec=rec, fault_tol=fault_tolerant)
+            rec=self.fetch_from_key_list(key_list, rec=rec, 
+                    default=default, 
+                    fault_tol=fault_tolerant)
         return rec
 
     def fetch_easy_v1p0(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
@@ -1216,12 +1335,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     raise
         return rec
 
-    def fetch_easy_new(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
-             auto_meassure=False, info=0, fault_tolerant=1): 
+    def fetch_easy(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
+             auto_meassure=False, default=None,  info=0, fault_tolerant=1): 
         """
             fetch_easy for version >= 1.2
         """
-        
         try: 
             if mera_shape[1] == 'max' : 
                 mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
@@ -1236,45 +1354,16 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if fault_tolerant: 
                 if info>0: 
                     print 'key not found:', err
-                return None
+                return default
             else:
                 raise err
         except: 
             raise
         
-        if 1: 
-            mapper = {
-                    'EE':  ['central_charge', 'EE'  ], 
-                    'EE1': ['central_charge', 'EE', 1], 
-                    'EE2': ['central_charge', 'EE', 2], 
-                    }
-            if mapper.has_key(field_name): 
-                temp = mapper[field_name]
-                field = temp[0]
-                key_list = temp[1: ]
-            else: 
-                field = field_name
-                key_list = None
-            if sub_key_list is not None: 
-                if key_list is None: 
-                    key_list = sub_key_list
-                else: 
-                    key_list += sub_key_list
-        if key_list is not None and rec is not None: 
-            if 0:
-                try: 
-                    for key in key_list: 
-                        rec = rec[key]
-                except: 
-                    if fault_tolerant: 
-                        if info>0: 
-                            print 'error in fetch_easy'
-                            print 'existent keys are %s; required key_list is %s'%(rec.keys(), key_list)
-                        return None 
-                    else: 
-                        raise
-            else: 
-                rec=self.fetch_from_key_list(key_list, rec=rec, fault_tol=fault_tolerant)
+        if sub_key_list is not None and rec is not None: 
+            rec=self.fetch_from_key_list(sub_key_list, rec=rec, 
+                    default=default, 
+                    fault_tol=fault_tolerant)
             
         return rec
     
@@ -1352,6 +1441,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
             remove param iter
         """
+        
         if not self.has_key(field_name): 
             self[field_name] = OrderedDict()
         if not self[field_name].has_key(sh): 
@@ -1391,6 +1481,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         
         db_parpath_new = '/'.join([db_root, new_name])
         state_parpath_new = '/'.join([state_root, new_name])
+
+        if db_parpath_new[-1] == '-':
+            db_parpath_new = db_parpath_new[:-1]
+
+        if state_parpath_new[-1] == '-':
+            state_parpath_new = state_parpath_new[:-1]
         
         print 'rename ...%s -> ...%s'%(
                 self.parpath[-100:], db_parpath_new[-100: ])
@@ -1407,7 +1503,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 os.rename(self.state_parpath, state_parpath_new)
             except Exception as err:
                 print err
-        
     
     def move_folder(self, local_root): 
         dir = self.parpath 
@@ -1440,7 +1535,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 new_sur = '_'.join([sur, 'bad'])
             print_vars(vars(),  ['new_sur'])
             db.rename_folder(new_surfix=new_sur)
-            
 
     def get_correaltion_exact(self, r, model_name=None, which='shastry'): 
         """
@@ -1574,79 +1668,127 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #raise
         res= 0.5*max(0.0, abs(eng-Jzz*Czz)-Czz-1.0)
         return res 
-
-    def calc_structure_factor(self, sh, x0=0, x1=1.1, clip=0,  num_points=100, 
-            return_Sk = False, fault_tol=1):
+    
+    def _get_corr_conn(self, sh, clip=0, spinfull=False, connected=True, fault_tol=True):
         """
-            for spin models
+            corr_conn(i, j) = <n_i n_j> - <n_i><n_j>
         """
+        
         db = self
         N=sh[0]
-        L=N-2*clip
-        corr=db.fetch_easy('correlation_all', sh, ['zz'])
-        mag=db.fetch_easy('magnetization', sh, ['z'])
-        if corr is None or mag is None:
-            if not fault_tol:
-                raise  
-            return None,None
-        mag=mag.values()
-        if not isinstance(corr, np.ndarray):
-            if self['algorithm'] == 'mps' :
-                corr_m=np.asarray(corr.values()).reshape((N, N))
-                print 'change correlation_all store'
-                self['correlation_all'][sh]['zz'] = corr_m
-                self.commit(info=1)
-            elif self['algorithm'] == 'idmrg':
-                period, L, corr = corr
-                print_vars(vars(),  ['period', 'L'])
-                if 1:
-                    ij = [(i, j) for i in range(L) for j in range(L)]
-                    val=np.ndarray((L, L), dtype=float)
-                    for i, j in ij: 
-                        if i <= j:
-                            val[i, j] = corr[(i%period, j-i)]
-                        else:
-                            val[i, j] = corr[(j%period, abs(j-i))]
-                    corr_m = val
+        if not spinfull:
+            corr = db.fetch_easy('correlation_all', sh, ['zz'])
+            ni = db.fetch_easy('magnetization', sh, ['z'])
         else:
-            corr_m=corr
-            if corr_m.shape[0]<N:
-                L = corr_m.shape[0]
-                start, end = (N - L)//2, (N + L)//2  
-                mag = mag[start:end]
-        if N==0:
-            N=L=corr_m.shape[0]
-            period=len(mag)
-            mag=mag*(L/period)
-        mag=np.asarray(mag)
+            corr = db.fetch_easy('correlation_all', sh, ['nn'])
+            ni = db.fetch_easy('fermion_number', sh)
+            
+        if corr is None or ni is None:
+            if not fault_tol:
+                raise ValueError(
+                "type(corr)=%s, type(ni)=%s"%(type(corr), type(ni))) 
+            if corr is None:
+                warnings.warn('corr is None')
+            if ni is None:
+                warnings.warn('ni is None')
+            return None
+        ni = ni.values()
+        
+        if 0<clip<1:
+            clip = int(clip*N)
+        L=N-2*clip
+        if L<= 0: #clip too much
+            return None
+        corr_mat=corr
+        if corr_mat.shape[0]<N:
+            L = corr_mat.shape[0]
+            start, end = (N - L)//2, (N + L)//2  
+            ni = ni[start:end]
+
+        ni=np.asarray(ni)
         if clip!=0:
             L=N-2*clip
-            corr_m=corr_m[clip:-clip, clip:-clip]
-            mag=mag[clip:-clip]
-        ni=0.5*(mag+1)
-        ni=ni.reshape(L,1)
-        mag=mag.reshape(L, 1)
-        mag_m=mag*mag.T  # it equals with mag.T*mag
-        ninj=ni*ni.T
+            corr_mat=corr_mat[clip:-clip, clip:-clip]
+            ni=ni[clip:-clip]
         
-        nij=0.25*(corr_m + (mag+mag.T) +1 )
+        ni=ni.reshape(L, 1)
+        ni_mat=ni*ni.T  # it equals with ni.T*ni
         
-        #cij= corr_m - mag_m
-        cij= nij - ninj
+        if not spinfull:
+            if connected:
+                corr_conn = 0.25*(corr_mat-ni_mat)
+            else:
+                corr_conn = 0.25*corr_mat
+        else:
+            corr_conn = corr - ni_mat
+        return (corr_conn, L)
+
+    def _get_corr_k(self, sh, k=None, clip=0, spinfull=False,  connected=True, per_site=False, fault_tol=1):
+        """
+            for spin models
+            this formular returns the static structure factor
+            S(k) = 1/N*sum(
+                    exp(ik(i-j))*(<n_i n_j> - <n_i><n_j>))
+        """
+        temp = self._get_corr_conn(sh, clip=clip, spinfull=spinfull, connected=connected)
+            
+        if temp is None:
+            if k is None:
+                return None, None
+            else:
+                return None
+        corr_conn_ij, L = temp 
+        if L is None:
+            raise 
+        expij = lambda k, L: np.fromfunction(
+                lambda i,j:np.exp(-1j*k*(i-j)), (L, L))
         
-        
-        #dk=2*np.pi/L
-        #x = [dk*i for i in range(N)]
-        #x=np.arange(L+1).tolist()
-        #y = [np.sum(cij * expij(dk*i, L))/L for i in x]    
-        if return_Sk:
-            res= lambda k: np.sum(cij * expij(k, L))/L , L
+        func = lambda k: 1./L*np.sum(corr_conn_ij * expij(k, L))
+        if k is None:
+            return func, L 
+        else:
+            res = func(k)
+            if per_site:
+                res = res/L 
+                #res = res/sh[0]
             return res 
-        x=np.linspace(x0, x1, num=num_points)
-        y = [np.sum(cij * expij(np.pi*i, L))/L for i in x]    
-        return x, y
+
+    def _get_Luttinger_param(self, sh, clip=0, q_expr=None, 
+            which=None, 
+            spinfull=0, fault_tol=1):
+        """
+            params:
+                q_expr: 
+                    use this expresion to adjust the smallest momentum. 
+                    I found q = 4*pi/N may be more accurate than 2*pi/N
+                
+            note  the fomular differs for spinfull and spinless models by a
+            factor of 2.  
+        """
+        func, L = self._get_corr_k(sh, clip=clip, spinfull=spinfull, fault_tol=fault_tol) 
+        pi = np.pi 
+        if L is None:
+            if not fault_tol:
+                raise  
+            return None 
+        
+        N = sh[0]
+        assert L == N, (L, N) 
+        q_expr = q_expr if q_expr is not None else '4*pi/N'
+        q = eval(q_expr)  
+        which = which if which is not None else 2
+        if which == 1: # this choice is rather not accurate, I dont know why 
+            res = pi*func(q)/q
+            #print func(0)  #I checked,  this equal 0 quite well
+        elif which == 2: 
+            res = pi*(func(2*q)-func(q))/q
+        if not spinfull :
+            res *= 2
+        return res
     
-    def calc_structure_factor_fermion(self, sh, x0=0, x1=1.1, clip=0,  num_points=100, 
+    #deprecated
+    def _get_corr_k_fermion(self, sh, 
+            x0=0, x1=1.1, clip=0,  num_points=100, 
             return_Sk = False, fault_tol=1, ):
         """
             for e.g. fermion hubbard model
@@ -1677,15 +1819,55 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             ni=ni[clip:-clip]
         ni=ni.reshape(L,1)
         ninj=ni*ni.T # it equals with ni.T*ni
-        cij= corr - ninj
+        corr_conn_ij = corr - ninj
+        expij=  lambda k,  L: np.fromfunction(
+               lambda i,j:np.exp(-1j*k*(i-j)), (L, L))
+        
         if return_Sk:
-            res= lambda k: np.sum(cij * expij(k, L))/L , L
+            res= lambda k: np.sum(corr_conn_ij * expij(k, L))/L , L
             return res 
         x=np.linspace(x0, x1, num=num_points)
-        y = [np.sum(cij * expij(np.pi*i, L))/L for i in x]    
+        y = [np.sum(corr_conn_ij * expij(np.pi*i, L))/L for i in x]    
         return x, y
     
-    def _get_SF_k(self, sh, k=np.pi, per_site=True, fault_tol=1):
+    #deprecated
+    def _get_Luttinger_param_fermion(self, sh, clip=0, fault_tol=1):
+        #raise # deprecated use _get_Luttinger_param instead  
+        pi = np.pi
+        func, L = self._get_corr_k_fermion(sh, clip=clip, return_Sk=1, fault_tol=fault_tol) 
+        if L is None:
+            if not fault_tol:
+                raise  
+            return None 
+        q = 2*pi/L
+        #q = PI/L
+        return pi*func(q)/q
+
+    def _get_Luttinger_param_inf_len(self, sh=None, 
+            x_min=40, x_max=10000, q_expr=None, which=None,  spinfull=0, fault_tol=1):
+        db = self
+        NN=db.get_shape_list(only_return_N=1, sh_min=(0, 1), from_energy_rec=1)
+        data=[]
+        for N in NN:
+            rec=db._get_Luttinger_param((N, 'max'), 
+                    q_expr=q_expr, which=which,  spinfull=spinfull)
+            if rec is not None:
+                data.append((1./N, rec))
+        if not data:
+            return None
+        data.reverse()
+        K=None
+        try:
+            func = lambda x, a0, a1, a2, a3: a0 + a1*x  + a2*x**2 +a3*x**3
+            res=db.fit_line(None, func=func, data=data, 
+                x_min=1./x_max, x_max=1./x_min, )
+            K=res['param'][0] #except RuntimeError as err:
+        except Exception as err: 
+            warnings.warn(str(err))
+        return K
+   
+    
+    def _get_SF_k(self, sh, k=np.pi, per_site=True, fault_tol=1):  #delete this
         """
             
             calc magnetization by S(pi)
@@ -1697,8 +1879,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 model; otherwise it is needed. 
                 
         """
-        func, L = self.calc_structure_factor(sh, clip=0, 
-                return_Sk=1, fault_tol=fault_tol) 
+        raise #deprecated 
+        func, L = self._get_corr_k(sh)
         if L is None:
             if not fault_tol:
                 raise  
@@ -1707,71 +1889,26 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if per_site:
             res= res/sh[0]
         return res
-        
-    def _get_Luttinger_param(self, sh, clip=0, fault_tol=1):
-        func, L = self.calc_structure_factor(sh, clip=clip, return_Sk=1, fault_tol=fault_tol) 
-        if L is None:
-            if not fault_tol:
-                raise  
-            return None 
-        q = 2*PI/L
-        #q = PI/L
-        return PI*func(q)/q
 
-    def _get_Luttinger_param_fermion(self, sh, clip=0, fault_tol=1):
-        func, L = self.calc_structure_factor_fermion(sh, clip=clip, return_Sk=1, fault_tol=fault_tol) 
-        if L is None:
-            if not fault_tol:
-                raise  
-            return None 
-        q = 2*PI/L
-        #q = PI/L
-        return PI*func(q)/q
     
-    def _get_Luttinger_param_fit_corr(self, sh, i0=0, x_min=None, x_max=400, period=2, which='zz', nu=0.5):
-        x_min = x_min if x_min is not None else 60
-        x_max = x_max if x_max is not None else 400
-        db = self
-        rec=db.fetch_easy('correlation', mera_shape=sh, 
-                sub_key_list=[which, i0])
-        if rec is not None:
-            rec=rec.items()
-            x,y=zip(*rec)
-            #x=[i[1] for i in x]
-            data=zip(x,y)
-        else:
-             return None
-       
-        #func=self.corr_luttinger.im_func(which, nu)
-        func=self.corr_luttinger(which, nu)
-        try:
-            res=db.fit_line(None, func=func, data=data, period=period,
-                        x_min=x_min, x_max=x_max, )
-            K=res['param'][0]
-        except RuntimeError as err:
-            warnings.warn(str(err))
-            K=np.nan
-        except TypeError as err:
-            warnings.warn(str(err))
-            K=np.nan
-        #_aa.append(a)
-        #KK.append(K)
-        return K    
-    
-    def _get_charge_gap(self, sh):
-        p = self.__class__(self.parpath + '-Np1')
-        h = self.__class__(self.parpath + '-Nm1')
+    def _get_charge_gap(self, sh, N=1, z=0.0):
+        p = self.__class__(self.parpath + '-Np%d'%N)
+        h = self.__class__(self.parpath + '-Nm%d'%N)
         temp =  [x.fetch_easy('energy', sh) for x in [p, h, self] ]
         if all(temp):
             ep, eh, eg = temp
             #note eng is energy per bond
             N = sh[0]
             gap = (N-1)*(ep + eh - 2*eg)
+    
+            gap *= N**z 
+            
         else:
             gap = None
+        
         return gap 
     
-    def _get_charge_gap_2(self, sh, surfix='Np1'):
+    def _get_charge_gap_2(self, sh, surfix='Np1', z=0.0):
         p = self.__class__(self.parpath + '-' + surfix)
         temp = [x.fetch_easy('energy', sh) for x in [p, self] ]
         if all(temp):
@@ -1783,6 +1920,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             else:
                 gap = (eg - ep)
             gap = 2*(N-1)*gap #note eng is energy per bond
+            
+            gap *= N**z 
         else:
             gap = None
             
@@ -1792,18 +1931,22 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         p = self.__class__(self.parpath + '-' + surfix)
         temp = [x.fetch_easy('energy', sh) for x in [p, self] ]
         if all(temp):
-            ep, eg = temp
+            e1, eg = temp
             #note eng is energy per bond
             N = sh[0]
-            if surfix == 'Np1':  
-                gap = ep - eg
+            if surfix in ['Np1', 'Np2']:  
+                gap = e1 - eg
+            elif surfix in ['Nm1', 'Nm2']:
+                gap = eg - e1
             else:
-                gap = eg - ep
+                raise  
             gap=(N-1)*gap
         else:
             gap = None
             
         return gap 
+    
+    _get_mu = _get_chemical_potential  #def _get_mu
     
     def _get_charge_gap_inf_len(db, sh=None, x_min=None, x_max=None):
         """
@@ -1816,9 +1959,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if rec is not None:
                 data.append((1./N, rec))
         if not data:
-            return np.nan 
+            return None #np.nan 
         data.reverse()
-        K=np.nan 
+        K = None
         try:
             func = lambda x, a0, a1, a2, a3: a0 + a1*x  + a2*x**2 +a3*x**3
             res=db.fit_line(None, func=func, data=data, 
@@ -1828,20 +1971,75 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             warnings.warn(str(err))
         return K
 
-    def delete_rec(self, field_name_list, sh_list, need_comfirm=0): 
+    def _get_field_inf_length(self, sh, field_name, D=None, 
+             x_min=20, x_max=10000, 
+            fault_tol=True, args=None):
         """
-            field_name_list: it can take parameter 'all'
-            sh_list: e.g. 'all', [(20, 'max')]
+            sh is only a place holder
+            fitting by 3 order polynomial
         """
-        print 'delete fields "%s" for sh in %s'%(field_name_list,  sh_list)
+        mapper = {
+                'Ck':self._get_corr_k, 
+                'charge_gap':self._get_charge_gap,  
+                'charge_gap_2':self._get_charge_gap_2,  
+            }
+        db = self 
+        D = D if D is not None else  sh[1]
+        NN=db.get_shape_list(only_return_N=1, sh_min=(0, 0), from_energy_rec=1)
+        data=[]
+        for N in NN:
+            _sh = (N, D)
+            if not mapper.has_key(field_name):
+                rec = db.fetch_easy(field_name, _sh)
+            else:
+                args= args if args is not None else args
+                rec_getter = mapper[field_name].im_func
+                rec = rec_getter(db, _sh, **args)
+            if rec is not None:
+                data.append((1./N, rec))
+        if not data:
+            #return np.nan 
+            return None 
+        data.reverse()
+        try:
+            func = lambda x, a0, a1, a2, a3: a0 + a1*x  + a2*x**2 +a3*x**3
+            res=db.fit_line(None, func=func, data=data, 
+                        x_min=1./x_max, x_max=1./x_min)
+            K=res['param'][0] #except RuntimeError as err:
+        except Exception as err: 
+            if fault_tol:
+                warnings.warn(str(err))
+                #K=np.nan 
+                K = None 
+            else:
+                raise  
+        return K
+    
+    def delete_rec(self, field_name_list, sh_list, dry_run=0, need_comfirm=0): 
+        """
+            params:
+                field_name_list: 
+                    it can take parameter 'all'
+                sh_list: 
+                    e.g. 'all', [(20, 'max')]
+            pitfall:
+                
+        """
+        msg = 'delete fields "%s" for sh in %s'%(field_name_list,  sh_list)
         if need_comfirm:
-            pass
+            i=raw_input(msg + '?')
+            if i.lower()!='y':
+                print 'canceled'
+                return 
+        else:
+            print msg
+        
+        if field_name_list == 'all' : 
+            field_name_list = self.keys()
         if sh_list == 'all' : 
             for i in field_name_list: 
                 self.pop(i)
         else:
-            if field_name_list == 'all' : 
-                field_name_list = self.keys()
             for sh in sh_list: 
                 if sh[1] == 'max' :
                     sh = sh[0], self.get_dim_max_for_N(sh[0]) 
@@ -1849,7 +2047,21 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     temp = self[f]
                     if isinstance(temp, dict) and temp.has_key(sh): 
                         temp.pop(sh)
-        self.commit()
+                    if not temp:  # all sh deleted 
+                        self.pop(f)
+            
+            #the above wont affect dim_max, so change it here
+            NN = [sh[0] for sh in sh_list]        
+            for N in NN:
+                D=self.get_dim_max_for_N(sh[0], force=1) 
+                if D>0:
+                    self['dim_max'][N] = D
+                else:
+                    if self['dim_max'].has_key(N):
+                        self['dim_max'].pop(N)
+        if not dry_run:       
+            self.commit()
+        print 'done'
 
     def delete_db(self, info=1): 
         os.remove(self.path)
@@ -1857,9 +2069,23 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             msg = 'db is removed'
             print(msg)
     
-    def delete_file(self, sh_list, info=1):
+    def delete_file(self, sh_list, delete_rec=True, need_comfirm=1, info=1):
+        """
+            params:
+                sh_list: can be 'all'
+        
+        """
         if sh_list == 'all' : 
-            sh_list = self.get_shape_list() 
+            sh_list = self.get_shape_list(from_energy_rec=False) 
+            
+        msg = 'delete files for sh in %s'%(sh_list)
+        if need_comfirm:
+            i=raw_input(msg + '?')
+            if i.lower()!='y':
+                print 'canceled'
+                return 
+        else:
+            print msg
         
         #dir = self.parpath 
         dir = self.state_parpath
@@ -1875,7 +2101,15 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 msg += '  ... failed. '  +  str(err)
             if info>0: 
                 print msg 
-    
+        
+        if delete_rec:
+            NN = [sh[0] for sh in sh_list]
+            sh_min = (min(NN), 0)
+            sh_max = (max(NN), 10000)
+            sh_list = self.get_shape_list(sh_min=sh_min, sh_max=sh_max, 
+                    from_energy_rec=1)
+            self.delete_rec('all', sh_list, need_comfirm=need_comfirm)
+        
     def dump(self, file=None): 
         print '---'*30
         print 'all records in %s'%self.dbname
@@ -1936,22 +2170,25 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if not ax_found: 
                     raise Exception('ax is not defined; examine the layout of fig')
         if 1:  
-            line_style = {
+            style_dic = {
                     'marker':MARKER_CYCLE.next(), 
                     'ms': 5,    #'markersize': 7, 
                     'mfc': 'None',  #'w',
+                    'linestyle': None, 
+                    #'dashes':(None, None), 
                     #'mec': 'r', 
                     'mew': 1,  
                     'label': '', 
                     #'color': None,   #color默认值不知到应该是什么， 才使其随机变化
                     'lw': 1,  
                     }    
-            dic = line_style.copy()
+            dic = style_dic.copy()
+            
         else: 
-            line_style = {}
+            style_dic = {}
             dic = {}
         
-        temp = line_style.keys()  + ['color']
+        temp = style_dic.keys()  + ['color']
         if kwargs.get('label') and kwargs.get('label_surfix'): 
             kwargs['label'] = '-'.join([str(kwargs['label']), str(kwargs['label_surfix'])])
             
@@ -1984,11 +2221,13 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             ax.set_title(kwargs.get('title')) 
             
         for l in lines:  #line stype   #matploblib 可能有个bug，mfc = 'w', 则 mec总是黑色，和line color 不同，故这里要重新set mec
-            color = l.get_color()
-            l.set_mec(color)
+            mec = kwargs.get('mec', l.get_color())
+            l.set_mec(mec)
         #note the position to invoke .legend maters,  it must be placed after line.set_mec,  or else line.set_mec wont change mec in the legend
         ax.legend(title=kwargs.get('legend_title'), loc=kwargs.get('legend_loc', 0))
-        ax.grid(1)
+        #ax.grid(1)
+        
+        #ax.figure.set_facecolor('white')   # matplotrc not working, so set at here
         
         if kwargs.get('show_fig'): 
            plt.show() 
@@ -1997,8 +2236,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         else: 
             return ax.figure
     
-    def plot_field_vs_dim(self, field_name, sh_list=None, sh_min=None, sh_max=None, 
-            yfunc=None, sub_key_list=None, rec_getter=None, rec_getter_args=None,    **kwargs): 
+    def plot_field_vs_dim(self, field_name, sh_list=None, sub_key_list=None, 
+            inverse_D=False, sh_min=None, sh_max=None, xfunc=None, 
+            yfunc=None, rec_getter=None, rec_getter_args=None,    **kwargs): 
         sub_key_list = sub_key_list if sub_key_list is not None else []
         info = kwargs.get('info', 0)
         sh_list = sh_list if sh_list is not None else self.get_shape_list(sh_max=sh_max, sh_min=sh_min)
@@ -2026,6 +2266,14 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         data_is_empty = False 
         try: 
             x,y=zip(*data)        
+            x = np.asarray(x)
+            y = np.asarray(y)
+            if xfunc is None: 
+                if inverse_D:  #inverse_N takes effects provided xfunc is None
+                    x = 1./x
+            else: 
+                x = xfunc(x)
+        
         except ValueError as err: 
             print err
             #x, y = np.nan, np.nan 
@@ -2037,7 +2285,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         x = np.asarray(x); y=np.asarray(y)
         if yfunc is not None : 
             y = yfunc(y)
-        kwargs.update(xlabel='D', ylabel=field_name)
+        xlabel = '1/D' if inverse_D else 'D'
+        kwargs.update(xlabel=xlabel, ylabel=field_name)
         fig = self._plot(x, y, **kwargs) 
         if kwargs.get('return_fig'): 
             return fig 
@@ -2074,7 +2323,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 x = np.asarray(x)
                 y = np.asarray(y)
                 if xfunc is None: 
-                    #x = 1./x 
                     if inverse_N:  #inverse_N takes effects provided xfunc is None
                         x = 1./x
                 else: 
@@ -2148,32 +2396,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #    x = [a[1] for a in x]
         x = np.array(x); y=np.array(y)
         
-       
-        
-        if 0:
-            if r is None: 
-                if r_min is None: 
-                    r_min = x[0]
-                if r_max is None: 
-                    r_max = x[-1]
-                temp = np.logical_and(x>=r_min, x<=r_max)
-                if period != 1:  
-                    temp = np.logical_and(temp, (x-r_min)%period==0)
-                arg = np.argwhere(temp).ravel()
-            else:
-                arg = []
-                a = 0
-                for _r in r: 
-                    ii = 0
-                    for _x in x[a:]: 
-                        if _r == _x:
-                            arg.append(a + ii)
-                            #print _r, a + ii   
-                            a = ii 
-                            break 
-                        ii += 1  
-        else:
-            arg=self.filter_array(x, r_min, r_max, period)
+        arg=self.filter_array(x, r_min, r_max, period)
         x = x[arg]
         y = y[arg]
         kwargs['return_ax'] = 1
@@ -2215,7 +2438,42 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             return fig 
     
     plot_field_vs_length = plot_field_vs_position
-    
+
+    def plot_field_vs_k(self, field_name, sh,  key_list=None,
+            rec=None, fault_tol=1, rec_getter=None, rec_getter_args=None, 
+            info=0,  **kwargs): 
+        raise NotImplemented
+        rec_getter_args = rec_getter_args if rec_getter_args is not None else {}
+        if rec is None: 
+            if rec_getter is None: 
+                rec = self.fetch_easy(field_name, mera_shape=sh, sub_key_list=key_list, 
+                        fault_tolerant=fault_tol, info=info-1) 
+            else: 
+                if type(rec_getter)==types.MethodType:
+                    rec_getter = rec_getter.im_func
+                rec = rec_getter(self, sh, **rec_getter_args)
+                field_name=rec_getter.__name__.replace('_get_', '').replace('_', ' ')  #for ylabel
+                
+        if rec is None: 
+            return None
+        algorithm = self['algorithm']
+        #if algorithm in ['idmrg', 'mera']: 
+        x, y = zip(*rec)
+        
+        #if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
+        #    x = [a[1] for a in x]
+        x = np.array(x); y=np.array(y)
+        
+        kwargs['return_ax'] = 1
+        if not kwargs.has_key('xlabel'):
+            kwargs['xlabel'] = '$i$'
+        if not kwargs.has_key('ylabel'):
+            kwargs['ylabel'] = field_name
+        fig, ax=self._plot(x, y, **kwargs)
+        
+        if kwargs.get('return_fig'): 
+            return fig 
+   
     def plot_field_vs_iter(self, attr_name, sh, data=None, x_min=None, x_max=None, period=None, sh_min=None, sh_max=None, 
             xfunc=None, yfunc=None,  sub_key_list=None, rec_getter=None, fault_tol=True,  rec_getter_args=None,    **kwargs): 
         db = self
@@ -2313,54 +2571,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             kwargs['lw'] = kwargs.get('lw', 0)
             fig, ax=db._plot(x, y, 
                     **kwargs)    
-        
-    def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
-        if layer=='top':
-            ll= [sh[1]-2 ] 
-        elif layer=='all':
-            ll=  range(sh[1]-1)
-        else: 
-            ll = layer
-        
-        #ll= [sh[1]-2 ] if layer is None else range(sh[1]-1)
-        not_found = []
-        cc=[]
-        for layer in ll:
-            if 1: 
-                #rec = db.fetch_easy('entanglement_entropy', shape, [layer])
-                rec = self.fetch_easy('entanglement_entropy', sh)
-                if rec is not None : 
-                    rec = rec.get(layer)
-                if rec is None: 
-                    #not_found.append((a, layer))
-                    not_found.append( layer)
-                    continue
-                #print 'rrrr', rec
-                e1, e2 = rec[1], rec[2]
-                #print a, e2, e1
-                c= (e2-e1)*3
-                cc.append((layer,c))
-        #if len(cc)==0: 
-        #    fig, ax = None, None
-        #else: 
-        if 1: 
-            x,y=zip(*cc)    
-            kwargs.update(marker='.', return_ax=1)
-            fig, ax = self._plot(x, y, **kwargs)
-            #ax.plot(x,y, '.-')    
-            ax.legend()
-            ax.set_xticks(ll)
-            #ax.invert_xaxis()
-            ax.grid(1)
-        if len(not_found)>0: 
-            print 'rec for central_charge not_found is :%s'%not_found
-        if kwargs.get('return_ax'): 
-            return fig, ax
-        if kwargs.get('return_fig'): 
-            return fig
-        if kwargs.get('show_fig'): 
-            plt.show()
-   
+    
+            
     def plot_entanglement_scaling_old(self, alpha=None, sh_list=None, sh_min=None, sh_max=None, 
             log2=False, num_site=None, aver=False, linear_fit=True,  fit_points= None, 
             **kwargs): 
@@ -2431,7 +2643,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if linear_fit: 
                 c, b = np.polyfit(np.log2(xx.real[1: -1]), yy.real[1: -1], deg=1)
                 c = c*3
-                #print 'central_charge: ', label, c*3
+                
             else: 
                 func = lambda x, c, const: c/3.*np.log2(x) + const
                 param,cov = curve_fit(func, xx.real[1: -1], yy.real[1: -1])
@@ -2443,7 +2655,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
         l=ax.legend(loc='lower right')    
         if rec is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transparent
+            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
             l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
         
         if log2 and rec is not None: 
@@ -2516,7 +2728,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if linear_fit: 
                 c, b = np.polyfit(np.log2(xx.real[1: -1]), yy.real[1: -1], deg=1)
                 c = c*3
-                #print 'central_charge: ', label, c*3
+                
             else: 
                 func = lambda x, c, const: c/3.*np.log2(x) + const
                 param,cov = curve_fit(func, xx.real[1: -1], yy.real[1: -1])
@@ -2534,7 +2746,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if 'ax' in locals():          
             l=ax.legend(loc='lower right')    
             if rec is not None : 
-                l.get_frame().set_alpha(0) # this will make the box totally transparent
+                l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
                 l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
             
             if log2 and rec is not None: 
@@ -2611,55 +2823,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if kwargs.get('return_ax'): 
             return fig, ax
 
-    def plot_all(self, filed_name_list, sh, **kwargs): 
-        fig = kwargs.get('fig')
-        name_list= filed_name_list
-        if fig is None: 
-            fig=plt.figure(figsize=(4*len(name_list),3))
-        i=0
-        for n in name_list:
-            i+=1
-            ax=fig.add_subplot(1,len(name_list), i)
-            #self.plot_common(n, sh=(4,4), fig=fig,direct=direct)
-            self.plot_common(n, sh=(4,4), fig=fig, **kwargs)
-            #if aa.index(a)==0: ax.set_title(n, fontsize=16)
-            #if i==1: ax.set_ylabel('V=%s'%(a[2]), fontsize=16)
-        fig.tight_layout()
-        if kwargs.get('return_fig'): 
-            return fig
-
-    def plot_common(self, field_name, sh, **kwargs): 
-        methname = 'plot_' + field_name
-        if hasattr(self, methname): 
-            self.__getattribute__(methname)(sh, **kwargs)
-    
-    def plot_magnetization(self, sh, shift_y=0, sub_key_list=None, plot_mean=0, **kwargs): 
-        rec=self.fetch_easy('magnetization', sh, sub_key_list=sub_key_list)
-        if rec is None: 
-            return None
-        x, y = zip(*rec.items())
-        if shift_y: 
-            y = np.asarray(y)
-            y = (y + 1.0)/2.0
-        kwargs['return_ax'] = 1
-        fig, ax=self._plot(x, y, **kwargs)
-        if plot_mean: 
-            mean = np.ndarray(len(y))
-            mean[: ] = np.mean(y)
-            fig = self._plot(x, mean, fig=fig, ax=ax)
-        
-        if kwargs.get('return_fig'): 
-            return fig
-    
-    def get_magnetization_mean(self, sh, **kwargs): 
-        rec=self.fetch_easy('magnetization', sh)
-        if rec is None: 
-            return np.nan
-        x, y = zip(*rec.items())
-        y = np.asarray(y)
-        #y = (y + 1.0)/2.0
-        return y.mean()  
-
     def plot_structure_factor(self, sh, direct=None, dist_max=100, show_fig=0,  **kwargs): 
         fft = np.fft.fft
         algorithm = self.get('algorithm')
@@ -2728,7 +2891,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         ax.set_xlabel('t',fontsize=16)
         l=ax.legend(prop={'size':14})  #fontsize
         if l is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transparent
+            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
             l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
        
         
@@ -2843,7 +3006,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         print tabulate(data, headers=['']+[str(i) for i in [0,0,0,0,0,1,1,1,2]], tablefmt='simple')
 
     def upgrade_db(self): 
-        #field_list = ['central_charge', 'scaling_dim', 'correlation', 'correlation_extra', 'entanglement_entropy', 'entanglement_spectrum', 'magnetization', 'entanglement_brute_force_6', 'energy']
         if 0: 
             print self.__version__; exit()
             if not hasattr(self, '__version__'): 
@@ -2890,8 +3052,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         plt.show()
     
     def measure(self, sh_list, which=None, state=None, measure_func=None, 
-            param=None, field_surfix='', 
-            force=0, fault_tolerant=1, num_of_theads=2, job_group_name=None, 
+            param=None, server=None,  field_surfix='', 
+            force=0, fault_tolerant=1, priority=1,  num_of_theads=2, 
+            use_local_storage=1, 
+            job_group_name=None, 
             submit=1, info=1,  **kwargs): 
         """
             params:
@@ -2901,7 +3065,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     e.g. which='energy', which=['energy', 'variance']
         """
         from merapy.measure_and_analysis.measurement import measure_S 
-        from mypy.brokest.task_center import submit_one 
+        from mypy.brokest.task_center import submit_one, LOCAL_IP
         if isinstance(which, list) and len(which)==1:
             which = which[0]
         if param is not None and isinstance(which, str):
@@ -2930,6 +3094,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if Dmax == 0 and not force:                
                     print('\tmax D for %s is zero, skip it'%(sh, ))
                     continue
+                print '\tconverted %s->%s'%((sh[0], 'max'), _sh)
             elif sh[1] == 0:
                 Dmax = self.get_dim_max_for_N(sh[0], force=force)
                 if Dmax == 0 and not force:                
@@ -2962,11 +3127,13 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if not submit: 
                 measure_S(**temp)
             else: 
+                server = server if server is not None else (LOCAL_IP, 90999)
                 temp['rdb'] = None # or else it raises 
                 temp['fault_tolerant'] = 0
-                temp.update(use_local_storage=1)
+                temp.update(use_local_storage=use_local_storage)
                 status = submit_one(measure_S, kwargs=temp,
-                        job_info = {'priority': 1, 
+                        server=server, 
+                        job_info = {'priority': priority, 
                             'job_group_name': job_group_name, 
                             'job_description': (os.path.dirname(path), sh), 
                             'delay_send': 20, 
@@ -3279,7 +3446,7 @@ class ResultDB_mera(ResultDB):
             if fit: ax.set_xlim(x[0], x[-1]*10)
         l=ax.legend()   #l=ax.legend(title='$\\alpha$')
         if l is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transparent
+            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
             l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
            
         ax.grid(1)
@@ -3287,6 +3454,54 @@ class ResultDB_mera(ResultDB):
         if draw: plt.show()
         if len(not_found)>0: print 'not_found is ', not_found
         if return_fig: return fig
+    
+    def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
+        if layer=='top':
+            ll= [sh[1]-2 ] 
+        elif layer=='all':
+            ll=  range(sh[1]-1)
+        else: 
+            ll = layer
+        
+        #ll= [sh[1]-2 ] if layer is None else range(sh[1]-1)
+        not_found = []
+        cc=[]
+        for layer in ll:
+            if 1: 
+                #rec = db.fetch_easy('entanglement_entropy', shape, [layer])
+                rec = self.fetch_easy('entanglement_entropy', sh)
+                if rec is not None : 
+                    rec = rec.get(layer)
+                if rec is None: 
+                    #not_found.append((a, layer))
+                    not_found.append( layer)
+                    continue
+                #print 'rrrr', rec
+                e1, e2 = rec[1], rec[2]
+                #print a, e2, e1
+                c= (e2-e1)*3
+                cc.append((layer,c))
+        #if len(cc)==0: 
+        #    fig, ax = None, None
+        #else: 
+        if 1: 
+            x,y=zip(*cc)    
+            kwargs.update(marker='.', return_ax=1)
+            fig, ax = self._plot(x, y, **kwargs)
+            #ax.plot(x,y, '.-')    
+            ax.legend()
+            ax.set_xticks(ll)
+            #ax.invert_xaxis()
+            ax.grid(1)
+        if len(not_found)>0: 
+            print 'rec for central_charge not_found is :%s'%not_found
+        if kwargs.get('return_ax'): 
+            return fig, ax
+        if kwargs.get('return_fig'): 
+            return fig
+        if kwargs.get('show_fig'): 
+            plt.show()
+
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.2
@@ -3294,7 +3509,9 @@ class ResultDB_vmps(ResultDB):
     def __init__(self, parpath,  **kwargs): 
         #kwargs['version'] = 1.0    #version should det
         kwargs.update(algorithm='mps')
+        
         ResultDB.__init__(self, parpath,  **kwargs)
+        #super(ResultDB_vmps, self).__init__(parpath,  **kwargs)
     
     @staticmethod
     def shape_to_backup_fn(sh): 
@@ -3392,51 +3609,79 @@ class ResultDB_vmps(ResultDB):
             res= None
         return res
      
-    def _get_corr_len(self, sh, k0=np.pi, per_site=1):
+    def _get_corr_len_bac(self, sh, k0=np.pi, z=1.0, connected=1, per_site=1):
         """
             extract correlation length from structure factor
             it can be used to locate QCP by scaling of \\xi 
             ref: Sandvik 2010 p.38 eq.70
         """
-        pi = np.pi
-        N = sh[0]
-        s0 = self._get_SF_k(sh, k=k0, per_site=0) 
+        L = sh[0]
+        
+        s0 = self._get_corr_k(sh, k=k0, connected=connected, per_site=0) 
         if s0 is None:
             return None
-        q1 = k0 + 2*pi/N
-        s1 = self._get_SF_k(sh, k=q1, per_site=0) 
+        q1 = k0 + 2*pi/L
+        s1 = self._get_corr_k(sh, k=q1, connected=connected,  per_site=0) 
         res = 1/q1 * np.sqrt(s0/s1 - 1)  #note this res is already per site
         if not per_site:
-            res *= N
+            res *= L
         return res
     
-    def _get_corr_k(self, sh, i0='aver'):
+    def _get_corr_len(self, sh, k0=np.pi, z=1.0, connected=1, per_site=1):
         """
-            get Ck i.e. the static structure factor
-            applicable to XXZ or spinless fermion like models
-            ref. Karrasch 2012  eq.17
-        
+            intro:
+                extract correlation length from structure factor
+                it can be used to locate QCP by scaling of \\xi 
+                ref: 
+                    Sandvik 2010 p.38 eq.70
+            params:
+                z: an critical exponent
         """
-        
-        db = self
-        corr=db.fetch_easy('correlation', sh, ['zz', i0])
-        mag=db.fetch_easy('magnetization', sh, ['z'])
-        if corr is None or mag is None:
+        L = sh[0]
+        q1 = k0 + 2*pi/L
+        s0 = self._get_corr_k(sh, k=k0, connected=connected, per_site=0) 
+        if s0 is None:
             return None
-        #corr_conn=db._get_corr_conn((0, 320), period=2)
-        data=corr.items()
-        corr[0]=0.5 # this value affects C(k=0)
-        corr_conn=lambda x: 0.5* corr[x]    # ok 
-        #corr_conn=lambda x: 0.25*corr[x]  #+0.25
-        _i0=i0 if i0 != 'aver' else 0
-        #corr_conn=lambda x: corr[x] - mag[_i0%2]*mag[x%2]
-        #corr_conn=lambda x: 0.25* (corr[0, x] + mag[0]*mag[x%2] +1.0)   - 0.25*mag[0]*mag[x%2]
-
-        Ck = lambda k, x_min=0, x_max=len(corr): np.sum( 
-            [ np.exp(-1j*k*x)* corr_conn(x)  for x in range(x_min, x_max)]   )
-        warnings.warn('note the range of x should be from 0 to L')
-        return  Ck
+        s1 = self._get_corr_k(sh, k=q1, connected=connected,  per_site=0) 
+        res = 1/q1 * np.sqrt(s0/s1 - 1)  #note this res is already per site
+        #if not per_site:
+        #    res *= L**z
+        #return res
+        
+        res = res*L**(z-1)
     
+        return res
+        
+    
+    def _get_central_charge(self, sh, fix_N=True, x_min=40, x_max=60, period=2):
+        """
+            
+        """
+        db=self
+        if fix_N:
+            data = self.fetch_easy('entanglement_entropy', sh, ['EE'])
+        else :
+            NN=db.get_shape_list(only_return_N=1)
+            data=[(N, db.fetch_easy('entanglement_entropy', (N,'max'), 
+                        sub_key_list=['EE', N//2, 1])) for N in NN]
+            period=None
+            data = [i for i in data if i[1] is not None ]
+        if not data:
+            return None 
+        
+        func = lambda x, c, b: c/6.*np.log2(x) + b
+        try:
+            res=self.fit_line(None, func=func, data=data, x_min=x_min, 
+                    x_max=x_max, period=period)
+            c=res['param'][0]
+        except RuntimeError as err:
+            warnings.warn(str(err))
+            c=None
+        except TypeError as err:
+            warnings.warn(str(err))
+            c=None
+        return c 
+    _get_c = _get_central_charge     #def _get_c
     
 class ResultDB_idmrg(ResultDB): 
     VERSION = 1.21
@@ -3448,7 +3693,8 @@ class ResultDB_idmrg(ResultDB):
     def __init__(self, parpath,  **kwargs): 
         #kwargs['version'] = 1.0
         kwargs.update(algorithm='idmrg')
-        ResultDB.__init__(self, parpath,  **kwargs)
+        #ResultDB.__init__(self, parpath,  **kwargs)
+        super(ResultDB_idmrg, self).__init__(parpath,  **kwargs)
     
     @staticmethod 
     def shape_to_backup_fn(sh): 
@@ -3460,28 +3706,6 @@ class ResultDB_idmrg(ResultDB):
     
     backup_fn_gen =shape_to_backup_fn 
     
-    
-    def calc_correlation_bond(self, sh,  r_list=None, info=0):
-        """
-            this is a temporary workaround 
-        """
-        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation_bond  as func 
-        from merapy.common_util import set_num_of_threads 
-        set_num_of_threads(4) 
-        r_list = [] if r_list is None else r_list 
-        res_old = self['correlation_bond'][sh][-1]
-        r_old = res_old.keys()
-        r_list = set(r_list)-set(r_old)
-        
-        if len(r_list)>0: 
-            state = self.load_S(sh)
-            temp=func(state, r_list=[r[1] for r in r_list])
-        
-            res_old.update(temp)
-            res_new = OrderedDict(sorted(res_old.items()))
-            self['correlation_bond'][sh][-1] = res_new 
-            self.commit(info=info)
- 
    
     def _measure(self, func, dim):
         res = OrderedDict()
@@ -3615,14 +3839,25 @@ class ResultDB_idmrg(ResultDB):
         if self['version']<1.2:
             ver = 1.2
             print 'update version from %s to %s'%(self['version'], ver)
-            ResultDB.update_db_structure(self, 'remove_iter')
+            try:
+                ResultDB.update_db_structure(self, 'remove_iter')
+                succeed = True
+            except Exception as err:
+                succeed = False
+                msg = 'failed to update, err is {}'.format(str(err))
+                warnings.warn(msg)
+                raise  
+            if succeed:
+                self['version'] = ver 
+                self.commit(info=1)
+            
         
         if self['version']<1.21:
             ver = 1.21
             print 'update version from %s to %s'%(self['version'], ver)
             def update_correlation(db):
                 #ss= db.get_shape_list()
-                ss= db.get('correlation', {}).keys()
+                ss = db.get('correlation', {}).keys()
                 for sh in ss: 
                     rec=db.fetch_easy('correlation', sh)
                     if rec is None: 
@@ -3639,10 +3874,17 @@ class ResultDB_idmrg(ResultDB):
                         rec_new[dir][0] = OrderedDict(temp)
                         #print_vars(vars(),  ['rec_new["zz"][0].keys()'])
                     db.insert('correlation', sh, rec_new)
-            update_correlation(self) 
-            
-            self['version'] = ver 
-            self.commit(info=1)
+            try:
+                update_correlation(self) 
+                succeed = True
+            except Exception as err:
+                succeed = False
+                msg = 'failed to update, err is {}'.format(str(err))
+                warnings.warn(msg)
+                raise  
+            if succeed:
+                self['version'] = ver 
+                self.commit(info=1)
 
     def calc_correlation(self, sh, direct, i0_list=None, r_max=None, r_list=None, force=False, 
             use_local_storage=False, parpath_center=None, test_run=False,  
@@ -3658,7 +3900,7 @@ class ResultDB_idmrg(ResultDB):
             if r_max is None:
                 D = sh[1]
                 r_max = 400 if D<= 160 else (1000 if D<=320 else 4000) 
-            r_max_log10= np.log10(r_max)    
+            r_max_log10 = np.log10(r_max)    
             r_list = np.arange(0, r_max_log10, 0.02)
             r_list = (10**r_list).astype(int)
             r_list = list(set(r_list))
@@ -3688,7 +3930,7 @@ class ResultDB_idmrg(ResultDB):
             
             if len(r_list_calc)>0: 
                 changed = True
-                temp=func(state, [direct], [i0], r_list=r_list_calc, r_max=None)
+                temp=func(state, [direct], [i0], r_list=r_list_calc, r_max=None, info=info)
             
                 res_old.update(temp[direct][i0])
                 res_new = OrderedDict(sorted(res_old.items()))
@@ -3709,25 +3951,107 @@ class ResultDB_idmrg(ResultDB):
                 db.commit(info=1, use_local_storage=use_local_storage)
         else:
             print 'nothing changed'
-     
-    def calc_correlation_submit(self, sh, direct, i0_list=None, r_list=None):
+
+    def calc_rdm_one_fermion(self, sh, i0_list=None, r_max=None, r_list=None, force=False, 
+            use_local_storage=False, parpath_center=None, test_run=False,  
+            info=0):
+        """
+            this is a temporary workaround 
+            params:
+                parpath_center:  needed only in remote compute
+                    
+        """
+        from vmps.measure_and_analysis.measurement_idmrg_mcc import rdm_one_fermion as func 
+        if r_list is None: 
+            if r_max is None:
+                D = sh[1]
+                r_max = 400 if D<= 160 else (1000 if D<=320 else 4000) 
+            r_max_log10 = np.log10(r_max)    
+            r_list = np.arange(0, r_max_log10, 0.02)
+            r_list = (10**r_list).astype(int)
+            r_list = list(set(r_list))
+            r_list = [r for r in r_list if 0<r<10000]
+            r_list.sort()
+        
+        #if use_local_storage:  #this seems strange, but, if without it, when run it distributively, only an empty db is transfered to the remote machine
+        if self is not None:
+            db = self
+        else:
+            db = ResultDB_idmrg(parpath_center, use_local_storage=1)
+            #print_vars(vars(),  ['db'])
+        state = db.load_S(sh, use_local_storage=use_local_storage)
+        period = state['period']
+        i0_list = i0_list if i0_list is not None else range(period)
+        calc_aver = len(i0_list)==period
+        changed = False
+        for i0 in i0_list:
+            #kk = ['correlation', sh, direct, i0]
+            kk = ['rdm_one_fermion', sh, i0]
+            if not db.has_key_list(kk):
+                db.add_key_list(kk) 
+            res_old = db.fetch_from_key_list(kk)
+            r_old = res_old.keys()
+            
+            r_list_calc = set(r_list)-set(r_old) if not force  else r_list
+            print_vars(vars(),  ['len(r_old)', 'len(r_list)', 'len(r_list_calc)'])
+            
+            if len(r_list_calc)>0: 
+                changed = True
+                temp=func(state, [i0], r_list=r_list_calc, r_max=None)
+            
+                res_old.update(temp[i0])
+                res_new = OrderedDict(sorted(res_old.items()))
+                
+                db['rdm_one_fermion'][sh][i0] = res_new 
+        if changed: 
+            if calc_aver:
+                corr = db['rdm_one_fermion'][sh]
+                if not corr.has_key('aver'):
+                    corr['aver'] = OrderedDict()
+                aver = corr['aver']
+                temp = [(r, np.mean([corr[i0][r] for i0 in i0_list]))
+                            for  r in r_list]
+                aver.update(temp)
+                aver = OrderedDict(sorted(aver.items()))
+                corr['aver'] = aver
+            if not test_run:   
+                db.commit(info=1, use_local_storage=use_local_storage)
+        else:
+            print 'nothing changed'
+
+    #def calc_correlation_submit(self, sh, direct, i0_list=None, r_list=None):
+    def calc_correlation_submit(self, sh, which, server=None, param=None):
+    
         """
             this is a convenient function
         """
         
-        from mypy.brokest.task_center import submit_one 
+        from mypy.brokest.task_center import submit_one, LOCAL_IP
         from mypy.brokest.brokest import run_many 
             
-        #db = self
-        #parpath = db.parpath
         #db=db.__class__(parpath, use_local_storage=1)
+        param = param if param is not None else {}
         
-        func = self.__class__.calc_correlation.im_func
-        kwargs = dict(i0_list=i0_list, r_list=r_list, 
-                use_local_storage=1, parpath_center = self.parpath_center)
-        args= (None, sh, direct)
+        kwargs = dict(use_local_storage=False, 
+                parpath_center = self.parpath_center, 
+                )
+        kwargs.update(param)
+        if which == 'correlation':
+            func = self.__class__.calc_correlation.im_func
+            direct = kwargs['direct']
+            kwargs.pop('direct')
+            args= (None, sh, direct)
+        elif which == 'rdm_one_fermion' :
+            func = self.__class__.calc_rdm_one_fermion.im_func
+            args = (None, sh)
+        else:
+            raise  
+            
         if 1:
+            server = server if server is not None else (LOCAL_IP, 90999)
+            #server = server if server is not None else ('localhost', 90999)
             status=submit_one(func, 
+                    server = server, 
                     args=args, kwargs=kwargs, 
                     job_info = {'priority': 1, 'job_group_name': 'calcl-correlation', 'delay_send': 20, })
             print '\tresponse: ', status
@@ -3736,29 +4060,298 @@ class ResultDB_idmrg(ResultDB):
             run_many(tasks, servers=('localhost', None))
             #run_many(tasks, servers=('qtg7501', None))
             #run_many(tasks, servers=('qtg7501', 90901))
-     
-    def _get_corr_conn(self, sh, period, **kwargs):
+
+
+    def calc_correlation_bond(self, sh,  r_list=None, info=0):
         """
+            this is a temporary workaround 
+        """
+        from vmps.measure_and_analysis.measurement_idmrg_mcc import correlation_bond  as func 
+        from merapy.common_util import set_num_of_threads 
+        set_num_of_threads(4) 
+        r_list = [] if r_list is None else r_list 
+        res_old = self['correlation_bond'][sh][-1]
+        r_old = res_old.keys()
+        r_list = set(r_list)-set(r_old)
+        
+        if len(r_list)>0: 
+            state = self.load_S(sh)
+            temp=func(state, r_list=[r[1] for r in r_list])
+        
+            res_old.update(temp)
+            res_new = OrderedDict(sorted(res_old.items()))
+            self['correlation_bond'][sh][-1] = res_new 
+            self.commit(info=info)
+    
+    def calc_corr_conn(self, sh, force=False):
+        if 1:
+            if sh[1] == 'max' : 
+                sh = sh[0], self['dim_max'].get(sh[0], 0)
+            elif sh[1] == 'field_max':  #the max dim for each field may differ, then may use this
+                N = sh[0]
+                ss = self.get('correlation', {}).keys()
+                dd = [s[1] for s in ss if s[0]==N ]
+                D = max(dd) if dd else 0     
+                sh = N, D
+        name = 'corr_conn'
+        rec = self.fetch_easy(name, sh, ['aver'], default={})
+        if 1:
+            corr = self.fetch_easy('correlation', sh, ['zz', 'aver'], default={}) 
+            #print_vars(vars(),  ['len(rec), len(corr)'])
+            if len(rec) < len(corr):
+                print 'updateing corr_conn'
+                force = 1
+                
+        #return np.split(data, np.where(np.diff(data) != 1)[0]+1)
+        if rec is None or force:
+            corr = self.fetch_easy('correlation', sh, ['zz', 0], default={})
+            rr = corr.keys()
+            func = self._get_corr_conn(sh, aver=True)
+            rec = OrderedDict()
+            if func is not None and rr:
+                if 0 not in rr:
+                    rr.insert(0, 0)
+                for r in rr:
+                    try:
+                        rec[r] = func(r)
+                    except KeyError:
+                        pass
+            if len(rec)>1:
+                self.insert(name, sh, rec, ['aver'])
+                self.commit(info=1)
+            else:
+                warnings.warn('failed to calc corr_conn')
+                rec = None
+        
+        return rec
+
+    def _get_corr_conn(self, sh, aver=False, connected=True):
+        """
+            params:
+                connected: if false,  turn off extract magnetization
         """
         corr = self.fetch_easy('correlation', sh, ['zz'])
+        mag = self.fetch_easy('magnetization', sh, ['z'])
         if corr is None:
-            return None 
-        corr = corr.iteritems()
+            warnings.warn('corr is needed')   
+            return None
+        if mag is None:
+            warnings.warn('mag is needed')   
+            return None
+       
+        p = len(mag.keys())
+        if not connected:
+            mag = np.zeros(len(mag))
+        def func(i0, r):
+            if r == 0: #i=j  
+                res = 0.25  #this value affects C(k=0) !!
+            elif r>0:   #i<j 
+                res = 0.25*(
+                    corr[i0][r] - mag[i0]*mag[(i0+r)%p] )
+            elif r<0:  #j<i
+                res = 0.25*(
+                    corr[(i0+r)%p][-r] - mag[(i0+r)%p]*mag[i0] )
+            return res
+        
+        i0_list = range(p)
+        def func_aver(r):
+            res = 1./p*np.sum([func(i0, r) for i0 in i0_list])                
+            return res
+        if not aver:
+            return func
+        else:
+            return func_aver
+    
+    def _get_corr_k(self, sh, k=None, x_min=-100, x_max=100, 
+            connected=True, per_site=False,  use_stored=True, i0='aver'):
+        """
+            ref. Karrasch 2012  eq.17
+            
+            get Ck i.e. the static structure factor
+            applicable to XXZ or spinless fermion like models
+            
+            mapping
+            ni = (zi - 1)/2    #here minus sign, |0> corresponding to spin up 
+            < ni nj > - <ni><nj>  = 0.25 * (<zi zj> -<zi><zj>)
+            where zi is the pauli mat sigma^z_i
+            
+            note1:
+                if the summation is from 0 to L, the result will be half valued
+        """
+        db = self
         if 1:
-            p = period
-            mag = {}
-            mag2 = {}
-            for i in range(p):
-                mag[i] = self.fetch_easy('magnetization', sh, ['z', i])
-            for i in range(p):
-                mag2[i] = mag[0]*mag[i]
-            #print_vars(vars(),  ['mag2'])
-        res= [((i, j), c-mag2[j%p]) for ((i, j), c) in corr]
-        return OrderedDict(res)
+            aver = True if i0 == 'aver' else False
+            if i0 == 'aver': 
+                if not use_stored:  # this is somewhat slow, so I store it in db
+                    corr_conn_func = db._get_corr_conn(sh, aver=True, connected=connected)
+                    if corr_conn_func is None:
+                        warnings.warn('failed to get corr_conn')
+                        return None
+                else:
+                    corr_conn = db.calc_corr_conn(sh)
+                    #note that for aver of corr: corr[r] = corr[-r] exactly!
+                    corr_conn_func = lambda r: corr_conn[abs(r)]
+                    if corr_conn is None:
+                        warnings.warn('corr_conn is failed to calc')
+                        return None
+            else:
+                temp = db._get_corr_conn(sh, aver=False, connected=connected)
+                corr_conn_func = lambda r: temp(i0, r)
+        #note1
+        #Ck = lambda k, x_min=0, x_max=100: np.sum( 
+        #    [ np.exp(-1j*k*x)* corr_conn_func(x)  for x in range(x_min+1, x_max)]   )
+        N = x_max - x_min
+        if per_site:
+            Ck = lambda k: 1./N*np.sum( [ np.exp(-1j*k*x)* corr_conn_func(x)  for x in range(x_min+1, x_max)]   )
+        else:
+            Ck = lambda k: np.sum( [ np.exp(-1j*k*x)* corr_conn_func(x)  for x in range(x_min+1, x_max)]   )
+            
+        if k is None:
+            return  Ck
+        else:
+            try:
+                return Ck(k) 
+            except KeyError as err:
+                warnings.warn(str(err))
+                return None
+
+    def _get_Luttinger_param_fit_corr(self, sh, which, nu, 
+            i0='aver', f=None, x_min=20, x_max=40, period=1, 
+            strict=True, fault_tol=True):
+        """
+            params:
+                strict: only for check data
+        """
+        db = self
+        #if which == 'zz' :
+        #    rec = db.calc_corr_conn(sh, force=0)
+        #else:
+        rec=db.fetch_easy('correlation', mera_shape=sh, 
+                sub_key_list=[which, i0])
+        if rec is not None:
+            rec=rec.items()
+            x,y=zip(*rec)
+            data=zip(x,y)
+        else:
+             return None
+        if strict:
+            temp = [i for i in x if x_min<=i<=x_max ]
+            if len(temp)-1 != x_max-x_min: 
+                msg= 'data not complete: %s %d'%(self.parpath, len(temp))
+                if fault_tol:
+                    warnings.warn(msg)
+                else:
+                    raise  
+            
+        func= f if f is not None else self.corr_luttinger(which, nu)
+        res=db.fit_line(None, func=func, data=data, period=period,
+                        x_min=x_min, x_max=x_max, )
+        if res is not None:
+            K=res['param'][0]
+        else:
+            K = np.nan
+       
+        return K    
+
+    def _get_K_by_corr_k(self, sh, L=100, i0='aver', 
+            k_min=0.02*pi, k_max=0.08*pi):
+        """
+            get luttinger parameter form fitting of C(k) near k~0
+            ref. Karrasch 2012  eq.19
+        
+        """
+        db = self
+        Ck=db._get_corr_k(sh, x_min=-L, x_max=L, i0=i0)
+        if Ck is None: 
+            return None
+        kk=np.linspace(k_min, k_max, 100)
+        #kk=np.linspace(0.0, 0.08*pi, 201)
+        try:
+            y=[Ck(k) for k in kk]
+        except KeyError as err:
+            warnings.warn(str(err))
+            return np.nan
+            
+        data = zip(kk, y)
+        func = lambda x,K, b: K/(2*pi)*x+b
+        #func = lambda x,K, b: K/2*x+b
+        try:
+            res=db.fit_line(None, func=func, data=data, 
+                        x_min=k_min, x_max=k_max, )
+            K=res['param'][0]
+        except RuntimeError as err:
+            warnings.warn(str(err))
+            K=np.nan
+        except TypeError as err:
+            warnings.warn(str(err))
+            K=np.nan
+        return K
     
-    def _get_corr_aver(self, sh, direct,  period=None):
-       pass 
-    
+    def _get_K_by_nk(self, sh, nu, x_min=20, x_max=48, period=None):
+        """
+            ref. Karrasch 2012  eq.8 and 9
+            attention: 
+                acctually not by nk, but by G(x) whose Fourier trans is nk. 
+                I use the name nk just because it is easier to remember
+        
+        """
+        db = self
+        rec = self.fetch_easy('rdm_one_fermion', sh, ['aver']) 
+        if rec is None:
+            return None
+        rec=rec.items()
+        x,y=zip(*rec)
+        x = np.asarray(x)
+        y = np.asarray(y)
+        p = period if period is not None else {0.5:2, 0.33:3}[nu]
+      
+        sin, pi = np.sin, np.pi
+        if 1:
+            
+            func = lambda x, K_, C: C*x**(-K_)        
+            arg=self.filter_array(x, x_min=1, x_max=None, period=p)
+            x = x[arg]
+            y = y[arg]
+            y = np.abs(y)  # note abs at here !
+            
+            res=db.fit_line(None, func=func, data=zip(x, y), period=1,
+                            x_min=x_min, x_max=x_max, )
+            K = res['param'][0] if res is not None else np.nan
+            yfunc=lambda x:x - np.sqrt(x**2-1)   # this operation sqares error around K=1.0  !
+            K = yfunc(K)
+        else:
+            #func = lambda x, K, C:   -C*x**(-K/2.-1./(2.*K))
+            #func = lambda x, K, C:  -C*sin(pi*x/p)/pi*x**(-K/2.-1./(2.*K))
+            func = lambda x, K, C:  -C*(-1)**(x+1)*sin(pi*x/p)/pi*x**(-K/2.-1./(2.*K))
+            #func = lambda x, K:  -sin(pi*x/2.)/pi*x**(-K/2.-1./(2.*K))
+            #p0 is must, as there seems exists local minima!
+            res=db.fit_line(None, func=func, data=zip(x, y), period=1,
+                    method = 'lm', 
+                    p0 = (0.8, 1.0), 
+                    x_min=x_min, x_max=x_max, )
+            K = res['param'][0] if res is not None else np.nan
+        #print_vars(vars(),  ['res["param"]', 'res["cov"][0, 0]'])
+        
+       
+        return K    
+
+    def reload_class(self): 
+        module_name =self.__class__.__module__
+        #print module_name
+        module=importlib.import_module(module_name)
+        reload(module)
+        name = self.__class__.__name__
+        self.__class__=getattr(module, name)
+        print('class %s is reloaded'%(name, ))
+
+    def _get_N(db, sh):
+        try:
+            s=db.load_S(sh)
+        except Exception as err:
+            warnings.warn(str(err))
+            s={}
+        N=s.get('N', None)
+        return N
 
 class ResultDB_ed(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -3807,6 +4400,59 @@ class ResultDB_proj_qmc(ResultDB):
             res= None
         return res 
 
+class ResultDB_bethe_ansatz(ResultDB):
+    """
+        for bethe ansatz
+    """
+    def calc_energy(self, L, tol, k0=0):
+        from bethe_ansatz_xxz.luttinger_parameter_xxz import calc_energy as calc_energy_func
+        sh = L, tol
+        energy = self.fetch_easy('energy', sh)
+        if energy is None:
+            parpath = self.parpath
+            fn = os.path.basename(parpath)
+            Jzz = fn.split('-')[0].split('=')[1]
+            Jzz = eval(Jzz)
+            n = fn.split('-')[1].split('=')[1]
+            n = eval(n)
+            n = {0.5:0.5, 0.33:1./3}[n]
+            N = int(L*n)
+            assert L%N == 0, (L, N)
+            
+            try:
+                energy=calc_energy_func(L, N, Jzz, k0=k0, tol=tol)
+                self.insert('energy', sh, energy)
+                self.commit(info=1)
+            except Exception as err:
+                print 'calc energy failed'
+                print err
+        return energy 
+
+    def calc_K(self, L, tol, k0=0, force=False):
+        #from bethe_ansatz.xxz.luttinger_parameter_xxz import calc_energy as energy_func
+        from bethe_ansatz_xxz.luttinger_parameter_xxz import calc_K  as calc_K_func
+        
+        sh = L, tol
+        K = self.fetch_easy('K', sh)
+        if K is None or force:
+            parpath = self.parpath
+            fn = os.path.basename(parpath)
+            Jzz = fn.split('-')[0].split('=')[1]
+            Jzz = eval(Jzz)
+            n = fn.split('-')[1].split('=')[1]
+            n = eval(n)
+            n = {0.5:0.5, 0.33:1./3}[n]
+            N = int(L*n)
+            assert L%N == 0, (L, N)
+            try:
+                K=calc_K_func(L, N, Jzz, k0=k0, tol=tol)
+                self.insert('K', sh, K)
+                self.commit(info=1)
+            except Exception as err:
+                print 'calc K failed'
+                K = None
+                print err
+        return K 
         
 class TestResultDB(unittest.TestCase): 
     def setUp(self):
@@ -3826,53 +4472,25 @@ class TestResultDB(unittest.TestCase):
         if 0: 
             self.db = ResultDB(parpath)
         
-    
     def test_temp(self): 
         a = dict()
         
         print '*'*80
-        from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi
-        #from vmps.run_hubbard.analysis import an_vmps
-        #xx = an_idmrg_psi.an_main_alt
-        xx=an_idmrg_psi.an_main_alt
+        #from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
+        #
+        #
+        xx = an_vmps.an_main_symm
+        #xx.outline()
+        db = xx[1.35]
+        #print_vars(vars(),  ['db.get_shape_list()'])
+        ss= db.get_shape_list()
+        db.delete_rec('all', ss,  dry_run=1)
+        print_vars(vars(),  ['db'])
+        print db['dim_max']
+        print_vars(vars(),  ['db["magnetization"]'])
         
-        #db = xx[0.5, 2.0, 0.4]
-        #db.calc_correlation_submit((0, 320), 'zz', None, r_list=range(41, 47))
-        
-        
-        xx=an_idmrg_psi.an_main_ham3
-        sh=(0, 'field_max')
-        sh=(0, 320)
-        sh=(0, 160)
-        xx.set_parpath_dict()
-        aa=xx.filter_alpha(nu=0.33, alpha=1.0, )
-
-        xx.set_rdb_dict(aa)
-        direct='pm'
-        fig, ax=xx.fig_layout(size=(5, 4))
-        for a in aa[-5:]:
-            db=xx[a]
-            db.plot_field_vs_length('correlation', sh, key_list=[direct, 0],  
-                   label=a[2],
-                xscale='log', yscale='log',  
-                lw=1,
-                r_min=0, r_max=1000, 
-                period=1, ax=ax)
-        ax.set_ylim(1e-6, 0.5)
-        if 1:
-            #ax.set_xlim(40, 400)
-            func=ResultDB.corr_luttinger(direct, nu=0.33)
-            res = xx.fit_lines_many(ax, func=func, lw=1, color='r', 
-                    add_text=1, period=1,
-                    x_min=20, x_max=2000, return_all_params=0)          
-            print res
-            if 1:
-                ax=xx.add_ax(fig)
-                x,y=zip(*res)
-                xx._plot(x, y, ax=ax)        
         xx.show_fig()
-        
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -3888,12 +4506,12 @@ class TestResultDB(unittest.TestCase):
         db.insert( 'xxx', (0, 4), 'love', [1])
         db.insert( 'xxx', (0, 4), 'hate', [2])
         print db['xxx'] 
-        rec = db.fetch_easy_new('xxx', (0, 4), [1])
+        rec = db.fetch_easy('xxx', (0, 4), [1])
         self.assertTrue( rec=='love')
-        rec = db.fetch_easy_new('xxx', (0, 4), [2])
+        rec = db.fetch_easy('xxx', (0, 4), [2])
         self.assertTrue( rec=='hate')
         print ' ========================'
-        rec = db.fetch_easy_new('xxx', (0, 4), [1000])  # 1000 is a wrong key 
+        rec = db.fetch_easy('xxx', (0, 4), [1000])  # 1000 is a wrong key 
         self.assertTrue(rec is None)
         
     
@@ -4015,8 +4633,6 @@ if __name__ == '__main__':
                 suite.addTest(TestResultDB(a))
             unittest.TextTestRunner().run(suite)
            
-          
-                
         
         
     
