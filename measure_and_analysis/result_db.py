@@ -353,7 +353,7 @@ class AnalysisTools(object):
                 
         return temp 
     
-    def fig_layout(self, ncol=1, nrow=1, size=(6, 5), dim=2): 
+    def fig_layout(self, ncol=1, nrow=1, size=(5, 4), dim=2): 
         if size is None and ncol == 1 and nrow == 1: 
             size = (6, 5)
         #size= size if size is not None else (3.5, 2.5)
@@ -1891,18 +1891,16 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         return res
 
     
-    def _get_charge_gap(self, sh, N=1, z=0.0):
+    def _get_charge_gap(self, sh, N=1, z=0.0, fault_tol=True):
         p = self.__class__(self.parpath + '-Np%d'%N)
         h = self.__class__(self.parpath + '-Nm%d'%N)
-        temp =  [x.fetch_easy('energy', sh) for x in [p, h, self] ]
+        temp =  [x.fetch_easy('energy', sh, fault_tolerant=fault_tol) for x in [p, h, self] ]
         if all(temp):
             ep, eh, eg = temp
             #note eng is energy per bond
             N = sh[0]
             gap = (N-1)*(ep + eh - 2*eg)
-    
             gap *= N**z 
-            
         else:
             gap = None
         
@@ -1992,7 +1990,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if not mapper.has_key(field_name):
                 rec = db.fetch_easy(field_name, _sh)
             else:
-                args= args if args is not None else args
+                args= args if args is not None else {}
                 rec_getter = mapper[field_name].im_func
                 rec = rec_getter(db, _sh, **args)
             if rec is not None:
@@ -2129,6 +2127,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             print msg
         
     def merge_remote(self, parpath, remote_host=None): 
+        raise  # deprecated 
         remote_host = 'zhihuali@211.86.151.102:'
         #remote_root = 'current/run-long-better/'
         remote_path = remote_host + parpath   + '/RESULT.pickle.db'
@@ -2194,6 +2193,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
         dic_temp = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
         dic.update(dic_temp)
+        
+        linestyle = dic.get('linestyle')
+        if linestyle and not isinstance(linestyle, str): # linestyle can be dashes tuple 
+            dic.update(linestyle=None, dashes=linestyle)
         
         if kwargs.get('yfunc'): 
             #y = kwargs['yfunc'](y)
@@ -2293,6 +2296,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, 
             data=None, inverse_N=True, xfunc=None, yfunc=None, 
+            exponent=0, 
             rec_getter=None, rec_getter_args=None, **kwargs): 
         
         sub_key_list = sub_key_list if sub_key_list is not None else []
@@ -2322,6 +2326,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 x,y=zip(*data)        
                 x = np.asarray(x)
                 y = np.asarray(y)
+                y = y*x**exponent 
                 if xfunc is None: 
                     if inverse_N:  #inverse_N takes effects provided xfunc is None
                         x = 1./x
@@ -4476,19 +4481,33 @@ class TestResultDB(unittest.TestCase):
         a = dict()
         
         print '*'*80
-        #from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
-        #
-        #
-        xx = an_vmps.an_main_symm
-        #xx.outline()
-        db = xx[1.35]
-        #print_vars(vars(),  ['db.get_shape_list()'])
-        ss= db.get_shape_list()
-        db.delete_rec('all', ss,  dry_run=1)
-        print_vars(vars(),  ['db'])
+        from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
+        
+        xx=an_vmps.an_main_ham3
+        #xx.reset()
+        aa=xx.filter_alpha(nu=0.5, v=4.0, alpha='alpha<8.0')
+        aa=[(0.5, alpha, 1.0) for alpha in [3.0,  0.5, 0.0]]
+        
+        db = xx[0.33, 0.5, 32.0]
+        res= db._get_charge_gap((24, 'max'), fault_tol=1) 
+        print_vars(vars(),  ['res'])
+        db = xx[0.33, 0.5, 32.0]
+        print_vars(vars(),  ['db["energy"]'])
         print db['dim_max']
-        print_vars(vars(),  ['db["magnetization"]'])
+        raise  
+        fig, ax=xx.fig_layout(size=(6,4))
+        for a in aa:
+            db=xx[a]
+            ss=db.get_shape_list(only_return_max=1)
+            db.plot_field_vs_size('energy', ss, inverse_N=0, 
+                                  #xscale='log', 
+                                exponent = 1, 
+                                linestyle = (10, 2), 
+                                yfunc=np.abs,
+                                  #yscale='log',
+                                  label=a[1], ax=ax, 
+                                 )        
         
         xx.show_fig()
         

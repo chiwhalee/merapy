@@ -125,16 +125,16 @@ class AlphaList(list):
 class Analysis(AnalysisTools, AnalyticFormular):
     """
     """
-    REMOTE_HOST = 'zhihuali@211.86.151.102:'
+    #REMOTE_HOST = 'zhihuali@211.86.151.102:'
     ALL_FIELD_NAMES = ['energy', 'entanglement_entropy', 'magnetization', 
             'correlation', 'concurrence', 'concurrence_2', 'concurrence_neighbour']
     
     #DISTANCE_LIST = [3**i for i in range(1, 9)]
-    def __init__(self,  backup_tensor_root='./', 
-            remote_root=None, local_root=None, param_list=None,
+    def __init__(self,  local_root=None, param_list=None,
+            param_name_list=None, 
+            param_value_list=None, 
             default_resolution=None, 
             result_db_class=None, result_db_args=None, algorithm='all'):
-        self.remote_root = remote_root
         self.local_root = local_root
         if local_root is not None and not os.path.exists(self.local_root): 
             msg="local_root '%s' not exists, create one? yes(y) "%(self.local_root, )
@@ -146,7 +146,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 raise  
         self.param_list= param_list
         self.default_resolution = default_resolution 
-        self.result_db_class= result_db_class if result_db_class is not None else ResultDB
+        self.result_db_class = result_db_class if result_db_class is not None else ResultDB
         self.result_db_args = {'analysis_hook':self}
         if result_db_args is not None:
             self.result_db_args.update(result_db_args)
@@ -315,6 +315,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 else: 
                     func = lambda x: eval(v.replace(k, '(x, )[%d]'%i))
             aa = filter(func, aa)
+            if len(aa)<1:
+                return []
         if resolution == 'default' : 
             resolution = getattr(self, 'default_resolution', None)
         
@@ -436,11 +438,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 if signiture in name: 
                     
                     split = name.split('-')
-                    #if len(split)>1: #more than one param 
-                    #    alpha = tuple([parse(a) for a in split])
-                    #else: 
-                    #    alpha = parse(split[0])
-                    
                     #no mater one or many param,  use tuple as key uniformly 
                     alpha = tuple([parse(a) for a in split])
                     
@@ -448,7 +445,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         alpha = str(alpha) + '-' +  surfix
                     alpha_parpath_dict[alpha] =  '/'.join([root, name])
             
-            res= alpha_parpath_dict
+            res = alpha_parpath_dict
         
         return res
     
@@ -840,6 +837,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         return res
              
     def merge_remote_db(self, aa, remote_root=None): 
+        raise  #deprecated 
         remote_root = remote_root if remote_root is not None else self.remote_root
         for a in aa:
             db=self.alpha_rdb_dict[a]
@@ -867,6 +865,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         return dir
     
     def transfer_pickle_file(self, alpha_list, sh, overwrite=1): # remote_root, local_root): 
+        raise  #deprecated 
         #remote_root = 'zhihuali@211.86.151.102:mera_backup_tensor/run-long-better/'
         #locale_root = '~/Documents/mera_backup_tensor/run-long-better/'
         
@@ -1068,8 +1067,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 msg += '\n\trm dir %s ...'%(db.state_parpath, )
                 db.delete_file('all', delete_rec=0, need_comfirm=0, info=0)
                 os.rmdir(db.state_parpath)
-                
                 msg += '\n\trm dir %s ...'%(db.parpath, )
+                
                 db.delete_db(info=0)
                 os.rmdir(db.parpath)
                 msg += '\n\tdone' 
@@ -2850,21 +2849,13 @@ class TestAnalsysis(unittest.TestCase):
     def test_temp(self): 
         #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
         #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
-        from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        #from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
         #from vmps.run_hubbard.analysis import an_vmps
-        #from merapy.run_heisbg.analysis import an_idmrg_psi
+        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
         
         #
-        xx=an_vmps.an_main_ham3
-        print_vars(vars(),  ['xx.last_modify_time'])
-        aa = xx.filter_alpha(alpha=3.0)
-        print_vars(vars(),  ['aa'])
-         
-        #xx.plot_field_vs_alpha('None', aa, ss,  label=(alpha, 'pm'), empty_to_nan=0, 
-        #                rec_getter=xx.result_db_class._get_K_by_nk, 
-        #                rec_getter_args = {'nu':0.33, 'x_min':32, 'x_max':60},
-        #                ax=ax)
-        #ax.invert_xaxis()   
+        xx = an_vmps.an_main_symm
+        print xx.scan_alpha()
         
         xx.show_fig()
     
