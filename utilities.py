@@ -275,7 +275,7 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
         print msg 
     def get_val(x): 
         #if not '.' in str(x): 
-        if not isinstance(x, str): 
+        if not isinstance(x, unicode) and not isinstance(x, str): 
             res = dic[x]
         else: 
             #a, b = x.split('.')

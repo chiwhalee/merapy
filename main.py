@@ -516,8 +516,8 @@ class Main(object):
         
             if job_info.has_key('job_group_name'):
                 job_group_name = job_info['job_group_name']
-                i=raw_input('add_notify for %s ? yes(y)\n'%(job_group_name))
-                if i.lower()=='y':
+                i=raw_input('add_notify for %s ? (press Enter if yes, otherwise no)\n'%(job_group_name))
+                if i.lower() in ['y', '']:
                     host = task_center_server[0]
                     tc = TaskCenter(host=host)
                     print tc.add_notify(job_group_name)

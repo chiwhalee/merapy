@@ -2761,8 +2761,6 @@ class TestSystem(unittest.TestCase):
                 measurement_args= {'fault_tolerant':0}, 
                 measure_only = ['correlation'], 
                 info=1)
-        print_vars(vars(),  ['m.mera'])
-        
         m.minimize('prod_state')
         print_vars(vars(),  ['m.energy'])
         #some times the following fails, so diable it

@@ -429,8 +429,8 @@ class iTensorFactory(object):
             #note this is not standard sigma_y, rather 
             sigma_y.data[0:2] = [-1.0,1.0]
             
-            s0, sx, sy, sz = sigma_0, sigma_x, sigma_y, sigma_z    
-            I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
+            I, sx, sy, sz = sigma_0.copy(), sigma_x.copy(), sigma_y.copy(), sigma_z.copy()    
+            I, X, Y, Z = sigma_0.copy(), sigma_x.copy(), sigma_y.copy(), sigma_z.copy()    
 
             if 1:
             #following are not fully verified
@@ -481,7 +481,7 @@ class iTensorFactory(object):
             sigma_m.data[:] = [0.0, 0.0, 1.0, 0.0]
             i, z, x, y, p, m = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
             I, Z, X, Y, P, M = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
-            s0, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
+            I, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
             
             if 1:
                 #due to Fortran order,  modified to this
@@ -538,11 +538,11 @@ class iTensorFactory(object):
             spm = sigma_p.tensor_prod(sigma_m)
             smp = sigma_m.tensor_prod(sigma_p)
             
-            s0, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
+            I, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
             #I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
             
             I, Z = sigma_0, sigma_z 
-           
+        F = -sigma_z   # this used in jordan-wigner trans
         temp = vars()
         res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
         for i in res: 
@@ -1038,8 +1038,8 @@ class TestIt(unittest.TestCase):
         
     def test_temp(self):
         
-        for symm in ['Travial', 'U1']:
-            
+        #for symm in ['Travial', 'U1']:
+        for symm in ['Travial']:
             
             nmax = 4
             res = iTensorFactory.boson_op(symm, nmax, 
