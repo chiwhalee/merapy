@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 #coding=utf8
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 import pprint 
 from merapy.diagrams.diagram import Diagram
 
@@ -186,7 +194,7 @@ if __name__ == "__main__":
     if 0:
         res = make_template(num_of_V=3, plot=True)
         #res= eval(res)
-        print res
+        print(res)
     if 1:
         G = Diagram(G5)
         G.plot(path="G5_2block_template.png", remove_O=False)

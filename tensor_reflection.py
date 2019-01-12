@@ -30,15 +30,25 @@ Spin_Reflection是处理自旋反演
 
 state space  marked by two qns, spin parity p and reflection r, i.e.  |p,r>
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
 
 
 
-from quantum_number import *
-from tensor import *
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from builtins import object
+from past.utils import old_div
+from .quantum_number import *
+from .tensor import *
 import numpy as np
-from graphics  import Graphics
+from .graphics  import Graphics
 #import hamiltonian 
-from tensor_network import TensorNetwork
+from .tensor_network import TensorNetwork
 
 class TensorReflect(object):
     @staticmethod
@@ -188,7 +198,7 @@ class TensorReflect(object):
     
     def Check_Hem(T):
         rank = T.rank
-        div = rank/2
+        div = old_div(rank,2)
         #forall[i=0:div] P[i] = div+i
         #forall[i=div+0:rank] P[i] = i-div
         
@@ -196,7 +206,7 @@ class TensorReflect(object):
         for i  in range(T.totDim):
             X = T.data[i]-Tp.data[i]
             if abs[X] >= 1.0-10:  
-                print "['i=',I0,'  X=', 200[1x,E15.8]]", i, T.data[i], Tp.data[i], X
+                print("['i=',I0,'  X=', 200[1x,E15.8]]", i, T.data[i], Tp.data[i], X)
         delete_Tensor(Tp)
     
     def spin_reflect(T, Tp):
@@ -245,7 +255,7 @@ class TensorReflect(object):
             d2 = Tp.Block_idx[1, idx2]
             #新的p2, d2
             if d1 != d2:  
-                print 'Error, size not match', idx1, idx2, d1, d2
+                print('Error, size not match', idx1, idx2, d1, d2)
             #新的数据, over
             Tp.data[p2:p2+d2-1] = T.data[p1+d1-1:p1:-1]
     
@@ -255,7 +265,7 @@ class TensorReflect(object):
         for i  in range(T.totDim):
             X = T.data[i]-Tp.data[i]
             if abs[X] >= 1.0-10:  
-                print 'i,X=', i, T.data[i], X
+                print('i,X=', i, T.data[i], X)
         delete_Tensor(Tp)
     
     def spin_reflect_symmetrize(T):
@@ -294,10 +304,10 @@ class TensorReflect(object):
         print_iTensor2(T,T1, True )
 
 
-class test_reflect():
+class test_reflect(object):
     @staticmethod
     def test1():
-        from tensor import test_iTensor 
+        from .tensor import test_iTensor 
         u= test_iTensor.instance("u")
         #print u
         tr=TensorReflect
@@ -305,41 +315,41 @@ class test_reflect():
         #print ur
         #us=tr.reflect_sign1(QSp_base)
         u.data[:] = np.arange(u.totDim)
-        print u.data
+        print(u.data)
         tr.reflect_symmetrize(u, ndiv=1)
-        print u.data
+        print(u.data)
     @staticmethod
     def test2():
         TR=TensorReflect
-        from mera import test_Mera
-        from hamiltonian import test_System
-        from tensor_svd import Tensor_svd_new
+        from .mera import test_Mera
+        from .hamiltonian import test_System
+        from .tensor_svd import Tensor_svd_new
 
         M=test_Mera.instance(trunc_dim=2)
         sys= test_System.instance(M)
 
         #print M
-        print sys
+        print(sys)
         
         u0=M.U[0].tensor[0]
         h0 = sys.H_2[0].O[0]
         v0 = M.V[0].tensor[0] 
         L = locals()
         for i in ["u0", "h0", "v0"]:
-            print i
-            print L[i].data
+            print(i)
+            print(L[i].data)
             ndiv = 2
             if i == "v0": ndiv = 3 
             TR.reflect_symmetrize(L[i], ndiv=ndiv)
             Tensor_svd_new.svd(L[i], ndiv=ndiv)
-            print L[i].data
+            print(L[i].data)
 
     @staticmethod
     def test3():
         TR=TensorReflect
-        from mera import test_Mera
-        from hamiltonian import test_System
-        from tensor_svd import Tensor_svd_new
+        from .mera import test_Mera
+        from .hamiltonian import test_System
+        from .tensor_svd import Tensor_svd_new
 
         M=test_Mera.instance(trunc_dim=2)
         sys= test_System.instance(M)
@@ -355,29 +365,29 @@ class test_reflect():
 
         q=v0.QSp[0]
         
-        print "#"*100
-        print q
+        print("#"*100)
+        print(q)
         qs=q.add(q) #.add(q)
         #问题处在refqn 不应故等于0
-        print qs
+        print(qs)
         qs.update(QSp_max=M.QSp_max)
-        print qs
+        print(qs)
         if 0:    
             for i in range(4):
-                print v0.QSp[i].__repr__(exclude=["QNs","Dims","nQN"])
-            print "\n\n"
+                print(v0.QSp[i].__repr__(exclude=["QNs","Dims","nQN"]))
+            print("\n\n")
             for i in range(4):
-                print v2.QSp[i].__repr__(exclude=["QNs","Dims","nQN"])
+                print(v2.QSp[i].__repr__(exclude=["QNs","Dims","nQN"]))
 
         if 0:
             for i in ["v0", "v1"]:
-                print i, 
-                print "before\n", L[i].data
+                print(i, end=' ') 
+                print("before\n", L[i].data)
                 ndiv = 3
                 TR.reflect_symmetrize(L[i], ndiv=ndiv)
                 #Tensor_svd_new.svd(L[i], ndiv=ndiv)
-                print i, "after\n", L[i].data
-                print "\n"
+                print(i, "after\n", L[i].data)
+                print("\n")
 
 
 
@@ -388,9 +398,9 @@ if __name__ == "__main__":
     tr.test3()
     if 0:
         a = QSp_base.add(QSp_base).add(QSp_base)
-        print a
+        print(a)
         a.update(QSp_max=QSp_base)
-        print a
+        print(a)
 
 
     """

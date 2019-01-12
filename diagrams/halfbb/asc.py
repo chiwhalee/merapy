@@ -1,6 +1,14 @@
 #!/usr/bin/python
-from FourToOne import *
-from template_halfbb import G_HBB
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from .FourToOne import *
+from .template_halfbb import G_HBB
 from merapy.diagrams.graph import *
 import sys
 
@@ -17,7 +25,7 @@ G=G_HBB
 OO = {"OO":[("I_8", 1), ("I_8", 2)],
       "I_8":[("OO", 1), ("OO", 2)]}
 
-for i in xrange(7,12):
+for i in range(7,12):
     oo = eval(oo2_tmpl % {"1":i, "2":i+1})
     gg = Simplify_Graph_HBB(Add_Graph(oo, G))
     check_graph(gg)
@@ -31,7 +39,7 @@ for i in xrange(7,12):
     check_graph(gg)
 #    print_graph(gg)
     ii = i-7
-    print weight % (ii)
+    print(weight % (ii))
     Output_Fortran(ii, "G2", "order2", gg)
 
 

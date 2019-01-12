@@ -1,11 +1,18 @@
 #!/usr/bin/env python
 #coding=utf8
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 import numpy as np
 from tempfile import mkdtemp
 from merapy.main import Main
 from merapy.context_util import make_temp_dir
 
-from config import make_config
+from .config import make_config
 
 
 hh = np.arange(0.8, 1.2, 0.02).round(3).tolist()
@@ -23,7 +30,7 @@ for i in grid:
     c['schedule']['dim_diff_remap'] = {4:1e-9, 8:3e-8, 12:8e-8, 14:9e-8, 17:1e-7}   
     c.update(register_job=1, job_group_name='mera1')
     config_group.append(c)
-    print c['backup_parpath']
+    print(c['backup_parpath'])
 
 for c in config_group: 
     c['NUM_OF_THREADS'] = 1

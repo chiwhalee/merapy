@@ -1,5 +1,13 @@
 #coding=utf8
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 from merapy.tensor_svd import *
 
 __all__ = ["iterative_optimize_all"]
@@ -16,7 +24,7 @@ def iterative_optimize_all(M, S, layer, j=0, tau=None, info=0):
     G_2_2 = S.G_2_2
     
     if info>0:
-        print "START iterative_optimize"
+        print("START iterative_optimize")
     # Translational invariant         
 
     ilayer = layer
@@ -83,13 +91,13 @@ def iterative_optimize_all(M, S, layer, j=0, tau=None, info=0):
 
 
     if info>0:
-        print "U at layer", ilayer, M.U[layer][j].data[range(5) + range(-5, 0)]
-        print "END all_in_once"
+        print("U at layer", ilayer, M.U[layer][j].data[list(range(5)) + list(range(-5, 0))])
+        print("END all_in_once")
 
 if __name__  == "__main__":
     pass
-    from mera import test_Mera
-    from hamiltonian import test_System
+    from .mera import test_Mera
+    from .hamiltonian import test_System
     M = test_Mera.instance(trunc_dim=4, symmetry="U1")
     sys= test_System.instance(M, "U1", model="Heisenberg")
 
@@ -97,7 +105,7 @@ if __name__  == "__main__":
     iterative_optimize_all(M, sys,layer=0, info=2)
     
     #print "\nafter all_in_once"
-    print M.__repr__(layers=[0], which=["U","V","U_dag","V_dag"])
+    print(M.__repr__(layers=[0], which=["U","V","U_dag","V_dag"]))
     #print sys.__repr__(layers=[0,1], which=["H_2","rho_2"])
 
 

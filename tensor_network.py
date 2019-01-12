@@ -5,17 +5,27 @@
     todo: 
         support for contract by devide graph to several groups
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
 import unittest 
 import numpy as np 
 
 from merapy.utilities import print_vars
-from tensor import iTensor 
-from graphics import Graphics 
-from set1 import OrderSet
+from merapy.tensor import iTensor 
+from merapy.graphics import Graphics 
+from merapy.set1 import OrderSet
 
 __all__ = ["TensorLink", "TensorNetwork"]
 
-class TensorLink():
+class TensorLink(object):
     """
     tlink is basically pointers or references to a set of tensors
     this class was orginally defined in tensors.f90, I moved it here
@@ -193,9 +203,9 @@ class TensorNetwork(object):
             ord1=order
             ord2 = []
         if info>0:
-            print "ord", order
-            print "ord1, ord2", ord1, ord2
-            print [G.names[i] for i in ord1], [G.names[i] for i in ord2]
+            print("ord", order)
+            print("ord1, ord2", ord1, ord2)
+            print([G.names[i] for i in ord1], [G.names[i] for i in ord2])
 
 
         nLeft = 0
@@ -223,7 +233,7 @@ class TensorNetwork(object):
             ord1.pop(0)
             ord1.insert(0, G.size-1)
         if info-1>0:
-            print "left side is completed contracted\n"
+            print("left side is completed contracted\n")
 
         nRight = 0
         if ord2 != []:  
@@ -250,7 +260,7 @@ class TensorNetwork(object):
 
         
         if info-1>0:
-            print "right side is completed contracted\n"
+            print("right side is completed contracted\n")
             
       
         #把左右两边点收缩掉
@@ -269,10 +279,13 @@ class TensorNetwork(object):
         need_rearrange =  False 
         P = None 
         if final_order is not None:              
+            final_order = np.asarray(final_order)
             rank = G.nodes[G.size-1] #number of legs  of final tensor
             P=np.ndarray(rank, np.int)
+            #print_vars(vars(),  ['repr(legs)', 'repr(final_order)', 'P', 'rank'])
             for i in range(rank): #TNet.graph.nodes[TNet.graph.size]):
                 #j=final_order.index(legs[i])
+                #print_vars(vars(),  ['i, j'])
                 j = np.where(final_order==legs[i])
                 P[j] = i
             need_rearrange =  True 
@@ -289,15 +302,16 @@ class TensorNetwork(object):
                 need_rearrange =  True 
 
         if need_rearrange:  
+            #print_vars(vars(),  ['repr(P)'])
             Tout=TNet.tlink[G.size-1].permutation(P, use_buf=use_buf)
         else:
             Tout = TNet.tlink[G.size-1]
         if info>0:
-            print "\nentire tensor net is contracted, yielding:"
+            print("\nentire tensor net is contracted, yielding:")
             #print "type_name: ", Tout.type_name, "\trank: ", Tout.rank, "\tleg label:", P[:Tout.rank] #G.edges[:Tout.rank, G.size-1]
-            print "type_name:{0.type_name}\trank:{0.rank}\tlebel{label}\tdims:{0.Dims}".format(
-                    Tout, label=P)
-            print Tout.data[:4].round(5),"...", Tout.data[-4:].round(5)
+            print("type_name:{0.type_name}\trank:{0.rank}\tlebel{label}\tdims:{0.Dims}".format(
+                    Tout, label=P))
+            print(Tout.data[:4].round(5),"...", Tout.data[-4:].round(5))
         
         return Tout
 
@@ -362,7 +376,7 @@ class TensorNetwork(object):
             ll = []
             for oo in nested_order_list: 
                 if info>0: 
-                    print 'contracting tensor_list {} ... '.format(oo)
+                    print('contracting tensor_list {} ... '.format(oo))
                 tlist = [self.tlink[i] for i in oo]
                 llist = [G.edges[:self.tlink[i].rank, i] for i in oo]
                 t, l = TensorNetwork.contract_tensor_list(tlist, llist, use_buf=use_buf, info=info)
@@ -404,11 +418,11 @@ class TensorNetwork(object):
             else:
                 res = head 
             if info>0:
-                print "\nentire tensor net is contracted, yielding:"
+                print("\nentire tensor net is contracted, yielding:")
                 #print "type_name: ", res.type_name, "\trank: ", res.rank, "\tleg label:", P[:res.rank] #G.edges[:res.rank, G.size-1]
-                print "type_name:{0.type_name}\trank:{0.rank}\tlebel{label}\tdims:{0.Dims}".format(
-                        res, label=p)
-                print res.data[:4].round(5),"...", res.data[-4:].round(5)
+                print("type_name:{0.type_name}\trank:{0.rank}\tlebel{label}\tdims:{0.Dims}".format(
+                        res, label=p))
+                print(res.data[:4].round(5),"...", res.data[-4:].round(5))
         
         return res 
 
@@ -452,9 +466,9 @@ class TensorNetwork(object):
                 ord1=order
                 ord2 = []
             if info>0:
-                print "ord", order
-                print "ord1, ord2", ord1, ord2
-                print [G.names[i] for i in ord1], [G.names[i] for i in ord2]
+                print("ord", order)
+                print("ord1, ord2", ord1, ord2)
+                print([G.names[i] for i in ord1], [G.names[i] for i in ord2])
         
         if len(exception)>0: 
             start = 0
@@ -511,7 +525,7 @@ class TensorNetwork(object):
                 ord1.pop(0)
                 ord1.insert(0, G.size-1)
             if info-1>0:
-                print "left side is completed contracted\n"
+                print("left side is completed contracted\n")
 
             nRight = 0
             if ord2 != []:  
@@ -540,7 +554,7 @@ class TensorNetwork(object):
                 #print "ggg2", G
             
             if info-1>0:
-                print "right side is completed contracted\n"
+                print("right side is completed contracted\n")
         
         #if 1:
         
@@ -575,7 +589,7 @@ class TensorNetwork(object):
             
                  
             if info-1>0:
-                print "left side is completed contracted\n"
+                print("left side is completed contracted\n")
             print_vars(vars(),  ['ii', 'aaaaaaaaaaaaaaaaa', 'sub_list']) 
         #把左右两边点收缩掉
         raise 
@@ -618,11 +632,11 @@ class TensorNetwork(object):
         else:
             Tout = TNet.tlink[G.size-1]
         if info>0:
-            print "\nentire tensor net is contracted, yielding:"
+            print("\nentire tensor net is contracted, yielding:")
             #print "type_name: ", Tout.type_name, "\trank: ", Tout.rank, "\tleg label:", P[:Tout.rank] #G.edges[:Tout.rank, G.size-1]
-            print "type_name:{0.type_name}\trank:{0.rank}\tlebel{label}\tdims:{0.Dims}".format(
-                    Tout, label=P)
-            print Tout.data[:4].round(5),"...", Tout.data[-4:].round(5)
+            print("type_name:{0.type_name}\trank:{0.rank}\tlebel{label}\tdims:{0.Dims}".format(
+                    Tout, label=P))
+            print(Tout.data[:4].round(5),"...", Tout.data[-4:].round(5))
         
         return Tout
 
@@ -720,7 +734,7 @@ class TestIt(unittest.TestCase):
             ford=[5,6,7]
             
             to, label = TensorNetwork.contract_tensor_list(T, V,ford)
-            print 
+            print() 
             self.assertAlmostEqual(to.data[0], 0.84861864605708592, 10)
             
     def test_contract_except(self):
@@ -770,7 +784,7 @@ class TestIt(unittest.TestCase):
             n=g10.size
             #order=[0,2,4,5,1]
             #order=[0, 1, 2, 3, 4]
-            order = range(10)
+            order = list(range(10))
             exception= 2
             t22=[]
             for i in range(n):

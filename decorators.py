@@ -1,7 +1,17 @@
 #coding=utf8
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from builtins import object
+from past.utils import old_div
 import os, sys
 import unittest 
-import cPickle as pickle
+import pickle as pickle
 import cProfile 
 import numpy as np
 import pstats 
@@ -84,7 +94,7 @@ def tensor_player(which):
             "contract_core":"contract", 
             "copy":"Qsp_copy"
             }
-    if mapper.has_key(which):
+    if which in mapper:
         which = mapper[which]
     #default not using player
     tensor_player.STATE = "stop"
@@ -151,7 +161,7 @@ def tensor_player(which):
                 #self.Dims = np.array([QSp[i].totDim for  i in xrange(rank_1)])
                     
                 temp = 1   
-                for i in xrange(rank_1):
+                for i in range(rank_1):
                     temp *= QSp[i].nQN
                 self.idx_dim = temp   # 量子数组合 总数目 
 
@@ -172,18 +182,18 @@ def tensor_player(which):
                 tQN_r= self.totQN.copy()  # here must copy
                 #tQN_r.reverse()
 
-                for p in xrange(self.idx_dim):
+                for p in range(self.idx_dim):
                     tQN = QSp[0].QNs[iQN[0]]
                     #这里计算了总量子数 tQN, 然后
                     #判断量子数组合是否满足指定的对称性要求
-                    for i in xrange(1,rank):
+                    for i in range(1,rank):
                         tQN = tQN+QSp[i].QNs[iQN[i]]
                     if tQN==tQN_r:
                         #q895  why not tQN == totQN?  因为operater- state duality, 从而在操作下变换正好相反？
                         #其中包含协变/反变的意味
                         
                         d = 1
-                        for i in xrange(rank):
+                        for i in range(rank):
                             d = d*QSp[i].Dims[iQN[i]]
                             #print "ddddd d", i, p, d,iQN[i], len(QSp[i].Dims)
                         #计算某一block的总数据量
@@ -240,10 +250,10 @@ def tensor_player(which):
                 #permute QSp, QNs
                 #first is more efficient; second is more robust
                 if 0:
-                    QSp=[self.QSp[P[i]] for i in xrange(rank)]
+                    QSp=[self.QSp[P[i]] for i in range(rank)]
                     totQN = self.totQN
                 else:
-                    QSp=[self.QSp[P[i]].copy() for i in xrange(rank)]
+                    QSp=[self.QSp[P[i]].copy() for i in range(rank)]
                     totQN = self.totQN.copy()
 
                 #Tp=iTensor(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
@@ -255,13 +265,13 @@ def tensor_player(which):
                 tape_dim = np.ndarray((self.nidx, 32), np.int32)
                 tape_ord = np.ndarray((self.nidx, 32), np.int32)
                 
-                for n  in xrange(self.nidx):
+                for n  in range(self.nidx):
                     pidx = self.Block_idx[0,n]
                     totDim = self.Block_idx[1,n]
                     pos[0] = 0  # for rank=0
                     pos[0:rank] = self.Addr_idx[0:rank,n]
                     np1 = 0
-                    for i  in xrange(rank-1, 0, -1):
+                    for i  in range(rank-1, 0, -1):
                         np1 = (pos[P[i]]+np1)*Tp.QSp[i-1].nQN
                         Dims[i] = self.QSp[i].Dims[pos[i]]
                     i = 0
@@ -281,11 +291,11 @@ def tensor_player(which):
                     tape_ord[n][:rank] = P[:rank]
                 if 0:
                     #I may implement this later, sort the tape according to totDim
-                    print "ssssort"
-                    print self.nidx
+                    print("ssssort")
+                    print(self.nidx)
                     tape_sort = tape_ind[:, 2].argsort()
                     #tape_sort.sort()
-                    print tape_ind[tape_sort[-1::-1]]
+                    print(tape_ind[tape_sort[-1::-1]])
                     inner.tape[inner.calls] = (self.nidx, tape_ind[tape_sort], tape_dim[tape_sort], tape_ord[tape_sort])
                     #inner.tape[inner.calls] = (self.nidx, tape_ind[tape_sort[-1::-1]],tape_dim[tape_sort[-1::-1]], tape_ord[tape_sort[-1::-1]])
                 else:
@@ -297,10 +307,10 @@ def tensor_player(which):
                 rank = self.rank
                 #permute QSp, QNs
                 if 0:
-                    QSp=[self.QSp[P[i]].copy() for i in xrange(rank)]
+                    QSp=[self.QSp[P[i]].copy() for i in range(rank)]
                     totQN = self.totQN.copy()
                 else:
-                    QSp=[self.QSp[P[i]] for i in xrange(rank)]
+                    QSp=[self.QSp[P[i]] for i in range(rank)]
                     totQN = self.totQN
                 
                 #Tp=self.__class__(rank, QSp, totQN,  buffer=buffer, use_buf=use_buf)
@@ -346,8 +356,8 @@ def tensor_player(which):
                 tQN = self.totQN+T2.totQN
                 shift = rank1-div
                 if 1:
-                    QSp = [self.QSp[i].copy() for i in xrange(shift)]
-                    QSp.extend([T2.QSp[i].copy() for i in xrange(div, rank2)])
+                    QSp = [self.QSp[i].copy() for i in range(shift)]
+                    QSp.extend([T2.QSp[i].copy() for i in range(div, rank2)])
                 else:
                     QSp = self.QSp[:shift]
                     QSp.extend(T2.QSp[div:rank2])
@@ -369,15 +379,15 @@ def tensor_player(which):
                 iQN2=np.empty(T2.rank + 1, np.int)        
                 iQN3=np.empty(T3.rank + 1, np.int) # +1 to avoid T3.rank=0
 
-                for idx2 in xrange(T2.nidx):
+                for idx2 in range(T2.nidx):
                     iQN2[0] = 0  #!for rank=0
                     iQN2[0:rank2]=T2.Addr_idx[0:rank2,idx2]
                     p2 = T2.Block_idx[0,idx2]
                     
-                    Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div, rank2)], dtype=np.int)
-                    Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in xrange(div)], dtype=np.int)
+                    Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
+                    Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=np.int)
                     
-                    for idx1 in xrange(self.nidx):
+                    for idx1 in range(self.nidx):
                         iQN1[0] = 1 #!for rank=0
                         iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
                         p1 = self.Block_idx[0, idx1]
@@ -385,7 +395,7 @@ def tensor_player(which):
                         if not iseq:
                             #如果量子数组合相等则收缩
                             continue
-                        Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in xrange(shift)], dtype=np.int)
+                        Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)], dtype=np.int)
                         
                         iQN3[0] = 1 #!for rank=1
                         iQN3[0:shift] = iQN1[0:shift]
@@ -465,7 +475,7 @@ def tensor_player(which):
                     buffer: use buffer to save data of T3
                 """
                 if 0:
-                    import tensor_py
+                    from . import tensor_py
                     iTensor = tensor_py.iTensor
                 
                 rank1 = self.rank
@@ -500,14 +510,14 @@ def tensor_player(which):
                         #data3=iTensor.mul_temp(data1, data2, alpha, beta)
                         data3=self.__class__.mul_temp(data1, data2, alpha, beta)
                         T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
-                        print ind, self.num_of_contract,  T3.data[p3:p3+Dim1*Dim2], data3
+                        print(ind, self.num_of_contract,  T3.data[p3:p3+Dim1*Dim2], data3)
 
                 if 1:
                     for ind in inner.tape[inner.calls]:
                         calc(ind)
                 limit = 20
                 #pprocess.pmap(calc, inner.tape[inner.calls].keys(), limit=limit)
-                print T3.data
+                print(T3.data)
                 return T3
 
             def contract_core_player_parallel_2(self, T2, div, data=None, use_buf=False):
@@ -520,7 +530,7 @@ def tensor_player(which):
                     buffer: use buffer to save data of T3
                 """
                 if 0:
-                    import tensor_py
+                    from . import tensor_py
                     iTensor = tensor_py.iTensor
                 
                 rank1 = self.rank
@@ -556,7 +566,7 @@ def tensor_player(which):
                 # Wrap the calculate function and manage it.
                 calc = results.manage(pprocess.MakeReusable(calculate))
                 #calc = results.manage(pprocess.MakeParallel(calculate))
-                ind_list = inner.tape[inner.calls].keys()
+                ind_list = list(inner.tape[inner.calls].keys())
                 for ind in ind_list:
                     calc(ind)
                 
@@ -577,7 +587,7 @@ def tensor_player(which):
                     buffer: use buffer to save data of T3
                 """
                 if 0:
-                    import tensor_py
+                    from . import tensor_py
                     iTensor = tensor_py.iTensor
                 
                 rank1 = self.rank
@@ -607,7 +617,7 @@ def tensor_player(which):
                     data3=self.__class__.mul_temp(data1, data2, alpha, beta) 
                     return data3
 
-                ind_list = inner.tape[inner.calls].keys()
+                ind_list = list(inner.tape[inner.calls].keys())
                 limit = 5
                 results = pprocess.pmap(calculate, ind_list, limit=limit)
                 
@@ -636,9 +646,9 @@ def tensor_player(which):
                 div = itensor.ndiv
                 if ndiv is not None:  
                     div = ndiv
-                if div not in range(1, itensor.rank):
-                    print "error, div exceeds range"
-                    print "div, rank", div, itensor.rank, itensor.ndiv
+                if div not in list(range(1, itensor.rank)):
+                    print("error, div exceeds range")
+                    print("div, rank", div, itensor.rank, itensor.ndiv)
                     exit()
                 rank = itensor.rank        
 
@@ -793,25 +803,25 @@ def tensor_player(which):
                 if inner.calls == 0:
                     if tensor_player.load_tape:
                         if not inner.tape_loaded:
-                            fn = tensor_player.tape_prefix + "__" +  func.func_name + ".tape"
+                            fn = tensor_player.tape_prefix + "__" +  func.__name__ + ".tape"
                             inn = open(fn, "rb")
                             tape = pickle.load(inn)
                             inn.close()
                             inner.tape = tape
                             inner.calls_tot = max(tape.keys())
                             inner.tape_full = True
-                            print "%s loaded successfully. directly play afterwards."%fn
+                            print("%s loaded successfully. directly play afterwards."%fn)
                             
                             inner.tape_loaded = True  #only need to load once
 
                 if inner.calls == inner.calls_tot: 
                     if tensor_player.save_tape:  #this is when just after record
                         if not inner.tape_saved:
-                            fn = tensor_player.tape_prefix + "__" +  func.func_name + ".tape"
+                            fn = tensor_player.tape_prefix + "__" +  func.__name__ + ".tape"
                             out = open(fn, "wb")
                             pickle.dump(inner.tape, out)
                             out.close()
-                            print "%s saved successfully."%fn
+                            print("%s saved successfully."%fn)
                             inner.tape_saved = True
                     inner.calls = 0
                     inner.tape_full = True
@@ -876,11 +886,11 @@ def set_STATE_end_simple(iter, q_iter=None, iter0=0, resume=False, power_on=True
         #    tensor_player.STATE = "stop"
         else:
             tensor_player.STATE = "play"
-        print  "\nset player to %s"%tensor_player.STATE
+        print("\nset player to %s"%tensor_player.STATE)
         #print "iter = %d"%iter, "set player to STATE= %s"%tensor_player.STATE
     else:
         tensor_player.STATE = "stop"
-        print "tensor_player is stopped"
+        print("tensor_player is stopped")
 
 #issue: todo:  其实，这应该弄成context manager 
 def set_player_state_auto(iter, record_at, stop_at=10000000, verbose=False, info=0,  power_on=True):
@@ -905,7 +915,7 @@ def set_player_state_auto(iter, record_at, stop_at=10000000, verbose=False, info
                 else: 
                     msg  += ' but not found. set tensor_player.load_tape=False'
                     tensor_player.load_tape = False
-                print msg 
+                print(msg) 
             
         elif iter < record_at : #or iter>= stop_at:
             tensor_player.STATE = "stop"
@@ -913,15 +923,15 @@ def set_player_state_auto(iter, record_at, stop_at=10000000, verbose=False, info
             tensor_player.STATE = "play"
         if info>-1:  #default display this msg 
             if tensor_player.PREV_STATE != tensor_player.STATE: 
-                print "STATE of tensor_player is changed from '%s' to '%s'"%(
-                        tensor_player.PREV_STATE, tensor_player.STATE)
+                print("STATE of tensor_player is changed from '%s' to '%s'"%(
+                        tensor_player.PREV_STATE, tensor_player.STATE))
             if tensor_player.PREV_STATE == 'record' and tensor_player.STATE == 'record':   # in very rare curcumstances, this may happen; add this line for robustness
-                print 'attention, PREV_STATE and current STATE of tensor_player are both "record"'
+                print('attention, PREV_STATE and current STATE of tensor_player are both "record"')
         
     else:
         tensor_player.STATE = "stop"
         if info>0:
-            print "tensor_player is stopped"
+            print("tensor_player is stopped")
 
 set_STATE_end_1 = set_player_state_auto 
 
@@ -961,7 +971,7 @@ if 1:
             t2=time.clock()
             tb = time.time()
             q_iter = 1
-            print "cpu time", (t2-t1)/q_iter,  "\t wall time", (tb-ta)/q_iter, "\t", func_name
+            print("cpu time", old_div((t2-t1),q_iter),  "\t wall time", old_div((tb-ta),q_iter), "\t", func_name)
             return res 
         return wraper
 
@@ -969,7 +979,7 @@ if 1:
         def wrapper(*args, **kargs):
             global num_of_instance
             num_of_instance  += 1
-            print "num_of_instance", num_of_instance
+            print("num_of_instance", num_of_instance)
             #print "aaaaaaa"*100, args
             return func(*args, **kargs)
         return wrapper
@@ -979,7 +989,7 @@ if 1:
         def wrapper(*args, **kargs):
             global num_of_instance
             num_of_instance += 1
-            print "num_of_instance", num_of_instance
+            print("num_of_instance", num_of_instance)
             return func(*args, **kargs)
         return wrapper
 
@@ -989,7 +999,7 @@ if 1:
         def __init__(self, aClass):
             self.num_of_instance += 1 
             self.aClass= aClass
-            print "num is: ",  self.num_of_instance
+            print("num is: ",  self.num_of_instance)
         def __call__(self,  rank,  QSp, totQN, order="F",  buffer=None, use_buf=False, shallow=False):
             return self.aClass(rank=rank,  QSp=QSp, totQN=totQN, order=order,  buffer=buffer, use_buf=use_buf, shallow=shallow)
 
@@ -1008,7 +1018,7 @@ if 1:  #profilers
         # This extra layer of indirection is so the decorator can accept arguments
         # When the user doesn't provide arguments, the first arg is the function,
         # so detect that and show an error.
-        if not isinstance(path, (str, unicode)):
+        if not isinstance(path, str):
             raise Exception("This decorator takes a path argument")
         d = os.path.dirname(path)
         assert os.path.exists(d)
@@ -1063,7 +1073,7 @@ if 1:  #profilers
                     inn.close()
                     sys.stdout = bac
                 
-                print '\n\nprofiling result is saved in %s'%(path, )
+                print('\n\nprofiling result is saved in %s'%(path, ))
                 return retval
             return wrapper
         return inner
@@ -1088,40 +1098,40 @@ class TestIt(unittest.TestCase):
         def func(x, y):
             return x**2+ y
         
-        class A:
+        class A(object):
             @timer
             @count
             def __init__(self, x,z,  y=3):
                 self.x = x + z
-                print "x", x*y
+                print("x", x*y)
 
         for i in range(4):
             func(i, i)
-            print num_of_instance
+            print(num_of_instance)
 
         A(5, 22);A(6, 2)
 
         #print tensor_player.STATE
 
     def test_tensor_player(self): 
-        from tensor_py import iTensor 
+        from .tensor_py import iTensor 
         t = iTensor.example(dtype=complex)
-        print t.transpose([0, 2, 1, 3])
+        print(t.transpose([0, 2, 1, 3]))
         tensor_player.STATE = 'stop'
         tensor_player.PREV_STATE = 'stop'
-        print iTensor.permutation 
+        print(iTensor.permutation) 
         #it seems not able to test tensor_player within THIS modeule itself !!!
         for i in range(10): 
             #set_player_state_auto(iter=i, record_at=0, info=-1)    
             #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
             pass 
-        for i in xrange(50):
+        for i in range(50):
             #print_vars(vars(),  ['i'], '', ' ')
             rank = 4
             #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
       
             u = iTensor.example()
-            u.data[:] = xrange(u.data.size)
+            u.data[:] = range(u.data.size)
             v=u.contract_core(u, 2)
            
             
@@ -1134,16 +1144,16 @@ if __name__ == "__main__":
         def func(x, y):
             return x**2+ y
         
-        class A:
+        class A(object):
             @timer
             @count
             def __init__(self, x,z,  y=3):
                 self.x = x + z
-                print "x", x*y
+                print("x", x*y)
 
         for i in range(4):
             func(i, i)
-            print num_of_instance
+            print(num_of_instance)
 
         A(5, 22);A(6, 2)
 

@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from merapy.graphics import Graphics
 
 """
@@ -204,6 +211,6 @@ G_22_3 = None
 
 
 if __name__ == "__main__":
-    print G_2_2
-    print G_22_2
-    print G_22_3
+    print(G_2_2)
+    print(G_22_2)
+    print(G_22_3)

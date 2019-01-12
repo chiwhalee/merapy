@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 #coding=UTF8
 #from __future__ import absolute_import
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 import numpy as np 
 
 from merapy.main import Main 
@@ -24,8 +31,8 @@ for i in grid:
     c = make_config(J2, root1=r, surfix=sur) 
     c['schedule']['dim_diff_remap'] = {4:5e-9, 8:5e-8, 12:8e-8, 14:9e-8, 17:1e-7}   
     config_group.append(c)
-    print c['backup_parpath']
-    print c['schedule']['dim_diff_remap']
+    print(c['backup_parpath'])
+    print(c['schedule']['dim_diff_remap'])
     
 num_threads = 1
 for c in config_group: 
@@ -36,7 +43,7 @@ for c in config_group:
         c['only_NN'] = 1
         c['backup_parpath'] = mkdtemp()
         c['schedule'].update(q_iter_max=5, mera_shape_max=(4, 4), do_measure=0)
-        print  c['backup_parpath']
+        print(c['backup_parpath'])
 
 #Main.run_many(config_group, nproc=12, parallel=1)
 

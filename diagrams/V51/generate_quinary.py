@@ -1,6 +1,14 @@
 #!/usr/bin/env python
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 from merapy.diagrams.diagram import Diagram
-from  template_quinary import G5, G5_2block
+from  .template_quinary import G5, G5_2block
 from merapy.diagrams.template_common import oo1_tmpl, oo2_tmpl, oo3_tmpl
 
 from merapy.diagrams.graph import Combine_OO
@@ -68,7 +76,7 @@ def G_2_2_gen(G):
     G.check()
 
     #ng = {}
-    for i in xrange(2, 7):
+    for i in range(2, 7):
     #for i in [2]:
         oo = eval(oo2_tmpl % {"1":i, "2":i+1})
         oo = Diagram(oo)
@@ -89,7 +97,7 @@ def G_2_2_gen(G):
         name = 'G_2_2'
         #ng.plot(path=name + "-%d"%i + '.png', remove_O=False, layout='neato', len=2.5) 
         ng.toGraphics(name, "order2", i-2, weight=1./5)    
-    print "there is an issue in simplify_O. one needs to manualy modify 'O' to 'OO' in the generated graph"
+    print("there is an issue in simplify_O. one needs to manualy modify 'O' to 'OO' in the generated graph")
 
 def G_3_2_gen(G):
     """
@@ -98,7 +106,7 @@ def G_3_2_gen(G):
     G = Diagram(G)
     G.check()
     #ng = {}
-    for i in xrange(2, 6):
+    for i in range(2, 6):
         ooo = eval(oo3_tmpl % {"1":i, "2":i+1, "3":i+2})
         ooo = Diagram(ooo)
 
@@ -192,7 +200,7 @@ def generate_graph(G, inn, out, start, period):
     
     G = Diagram(G)
     G.check()
-    for i in xrange(start, start + period):
+    for i in range(start, start + period):
         g_o = eval(o_tmpl % {"1":i, "2":i+1, "3":i+2})
         g_o = Diagram(g_o)
 
@@ -206,7 +214,7 @@ def generate_graph(G, inn, out, start, period):
         ng.toGraphics("G_2_2", "order2", i, calc_order=False)    
 
 def G_2_2_gen_old():
-    for i in xrange(2,7):
+    for i in range(2,7):
         oo = eval(oo2_tmpl % {"1":i, "2":i+1})
         oo = Diagram(oo)
         gg = G+oo
@@ -217,14 +225,14 @@ def G_2_2_gen_old():
         if i==6:
             ng = OO.Combine_Node(ng, 'O', 1, 1)
             
-        print ""
+        print("")
         ng.toFortran("G2", "order2", i)
     if 0:        
-        print ng.connections
+        print(ng.connections)
         ng.check()
         max_leg, max_comp, optimal_path, max_cost = ng.find_optimal_path()
-        print max_leg, max_comp, max_cost
-        print optimal_path
+        print(max_leg, max_comp, max_cost)
+        print(optimal_path)
 
 
 if __name__ == "__main__":

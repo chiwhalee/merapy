@@ -1,5 +1,13 @@
 #!/usr/bin/env python
-from Five2OneVW import G5, oo2_tmpl, oo3_tmpl, ooN_tmpl
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from .Five2OneVW import G5, oo2_tmpl, oo3_tmpl, ooN_tmpl
 from Diagram import Diagram, graphs_info
 import sys
 
@@ -28,45 +36,45 @@ OO = {"O":[("I_8", 1), ("I_8", 2)],
       "I_8":[("O", 1), ("O", 2)]}
 OO = Diagram(OO)
 
-print '''subroutine init_mera_graph()
+print('''subroutine init_mera_graph()
    use mGraphics
    use mMera
    implicit none
-'''
+''')
 
-for i in xrange(8, 13):
+for i in range(8, 13):
     oo = eval(oo2_tmpl % {"1":i, "2":i+1})
     oo = Diagram(oo)
     gg = G+oo
     ng = gg.Simplify()
     ii = i-7
 
-    if ng.has_key('O'):
+    if 'O' in ng:
         ng = ng.Combine_Node(OO, 'O', 1, 1)
         ng = ng.Node_Rename('O', 'OO')
         ng.show()
-        print 
+        print() 
 #    print "   weight_2(%d)=1.d0/5.d0" % (ii)
 #    ng.toFortran("G_2", "order_2", ii)
 #    print 
 
 sys.exit(0)
 
-for i in xrange(8, 13):
+for i in range(8, 13):
     oo = eval(oo3_tmpl % {"1":i, "2":i+1,"3":i+3})
     oo = Diagram(oo)
     gg = G+oo
     ng = gg.Simplify()
     ii = i-7
-    if ng.has_key('O'):
+    if 'O' in ng:
         ng.show()
-    print "   weight_3(%d)=1.d0/5.d0" % (ii)
+    print("   weight_3(%d)=1.d0/5.d0" % (ii))
     ng.toFortran("G_3", "order_2", ii)
-    print 
+    print() 
     
 GP_2_2 = graphs_info()
-for i in xrange(8, 13):
-    for j in xrange(i+2, 13):
+for i in range(8, 13):
+    for j in range(i+2, 13):
         oo1 = eval(ooN_tmpl % {"name":"oo1", "1":i, "2":i+1, "3":i+2})
         oo2 = eval(ooN_tmpl % {"name":"oo2", "1":j, "2":j+1, "3":j+2})
         oo1 = Diagram(oo1)
@@ -78,15 +86,15 @@ for i in xrange(8, 13):
         gg = G+oo1
         gg = gg+oo2
         ng = gg.Simplify()
-        print "   weight_2_2(%d,%d)=1.d0/5.d0" % (ii,jj)
+        print("   weight_2_2(%d,%d)=1.d0/5.d0" % (ii,jj))
         ng.toFortran("G_2_2", "order_2_2", ii,jj)
-        print 
+        print() 
     
 GP_2_2.Show("GP_2_2")
 
 GP_2_3 = graphs_info()
-for i in xrange(8, 13):
-    for j in xrange(max(i+2,13), 18):
+for i in range(8, 13):
+    for j in range(max(i+2,13), 18):
         oo1 = eval(ooN_tmpl % {"name":"oo1", "1":i, "2":i+1, "3":i+2})
         oo2 = eval(ooN_tmpl % {"name":"oo2", "1":j, "2":j+1, "3":j+2})
         oo1 = Diagram(oo1)
@@ -98,10 +106,10 @@ for i in xrange(8, 13):
         gg = G+oo1
         gg = gg+oo2
         ng = gg.Simplify()
-        print "   weight_2_3(%d,%d)=1.d0/5.d0" % (ii,jj)
+        print("   weight_2_3(%d,%d)=1.d0/5.d0" % (ii,jj))
         ng.toFortran("G_2_3", "order_2_3", ii,jj)
-        print 
+        print() 
     
 GP_2_3.Show("GP_2_3")
 
-print 'end subroutine init_mera_graph'
+print('end subroutine init_mera_graph')

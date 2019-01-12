@@ -9,6 +9,14 @@ this file is a copy of Ternary.py
 note that the values are ordered.
 I_n are just  place holders, they are to be replaced by hamiltonian ops. 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 if 1:
     U_tmpl = """ 
          "U_%(U)s":[("I_%(I1)s", 2), ("I_%(I2)s", 2), ("V_%(V1)s", 3), ("V_%(V2)s",1)], 
@@ -84,16 +92,16 @@ G_3_top = {
 
 def make_template():
     k = 4
-    for i in xrange(1,k):
+    for i in range(1,k):
         j=i*3
         #算子的相对位置
         D={"U":i, "V1":i-1, "V2":i, "I1":j-1, "I2":j}
-        print U_tmpl % D
+        print(U_tmpl % D)
         
-    for i in xrange(0,k):
+    for i in range(0,k):
         j=i*3+1
         D={"V":i, "I":j, "U1":i, "U2":i+1, "O":i}
-        print V_tmpl % D
+        print(V_tmpl % D)
 
 
 if __name__ == "__main__":

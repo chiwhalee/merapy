@@ -4,7 +4,15 @@
 """
 make compatable with binary graph
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 from merapy.tensor_svd import Tensor_svd
 
 
@@ -30,7 +38,7 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
         tau = ilayer
     
     if info>0:
-        print "START ascending_ham"
+        print("START ascending_ham")
     
     i=0
     j = 0
@@ -49,9 +57,9 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
 
 
     if info>0:
-        print "H_2 at iLayer+1,",ilayer_p1
-        print S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3) 
-        print "END ascending_ham"
+        print("H_2 at iLayer+1,",ilayer_p1)
+        print(S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3)) 
+        print("END ascending_ham")
 
 def descending_ham(M,S,ilayer,tau=None, info=0):
     """
@@ -66,7 +74,7 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
     G_3_3 = S.G_3_3
 
     if info>0:
-        print "START desending_ham"
+        print("START desending_ham")
     
     if tau is None:  
         tau = ilayer-1
@@ -94,7 +102,7 @@ def iterative_optimize_all(M, S, layer, j=0, tau=None, info=0):
     
     
     if info>0:
-        print "START all_in_once"
+        print("START all_in_once")
     # Translational invariant         
     
     Names= ["V", "U"]
@@ -141,6 +149,6 @@ def iterative_optimize_all(M, S, layer, j=0, tau=None, info=0):
         t_dag[ilayer][j] = t[layer][j].conjugate(ndiv, buffer=data)
 
         if info>0:
-            print "U at layer", ilayer, M.U[layer][j].data[range(5) + range(-5, 0)]
-            print "END all_in_once"
+            print("U at layer", ilayer, M.U[layer][j].data[list(range(5)) + list(range(-5, 0))])
+            print("END all_in_once")
 

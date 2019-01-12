@@ -4,8 +4,18 @@
 q:
     q131, svd results could be different each time running?
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from past.utils import old_div
+from builtins import object
 import os, unittest
-import cPickle as pickle
+import pickle as pickle
 import numpy as np
 from scipy import linalg
 import platform
@@ -18,7 +28,9 @@ hostname = socket.gethostname()
 os1 = platform.system()
 
 if os1 == 'Linux':
+    #import merapy.lib
     from merapy.lib.common_64_ifort import *
+    #from .lib.common_64_ifort import *
 elif os1 == 'Windows':
     from merapy.lib.win.common_gfort import *
 
@@ -27,9 +39,6 @@ elif os1 == 'Windows':
 #else:
 #    from merapy.lib.common_64_ifort import *
 
-del arch
-del platform
-
 
 """
 sometimes fort func don't require passing in "F" ordered arrays, such as matrix_direct_product; while someitmes it do  why?
@@ -37,7 +46,7 @@ sometimes fort func don't require passing in "F" ordered arrays, such as matrix_
 """
 
 #dont delete this,  there is still some usefull things in it, rescure them first 
-class PickleDb:
+class PickleDb(object):
     """
         not implemented
     """
@@ -49,7 +58,7 @@ class PickleDb:
             self.fn_only = path[:n]
         elif path is not None:
             x = self.find_max_dim_file(path)
-            print "file with max layer and trunx_dim is %s"%x
+            print("file with max layer and trunx_dim is %s"%x)
             #fn=path + x
             self.fn_only = x
             fn = "%s%s"%(path, x) if path[-1]=="/" else "%s/%s"%(path, x)
@@ -64,7 +73,7 @@ class PickleDb:
         nlist = os.listdir(path)
         #print nlist
         pickle_files = [i for i in nlist if "pickle" in i]
-        print "all pickle files under specified path are %s"%pickle_files
+        print("all pickle files under specified path are %s"%pickle_files)
         
         def _parse_name(fn):
             if "transition" in fn: #'12-transition.pickle'
@@ -152,9 +161,9 @@ class PickleDb:
         
         if calc_err:
             exact_val = self._scaling_dim_exact()
-            print exact_val
+            print(exact_val)
 
-        x = rec.keys()
+        x = list(rec.keys())
         x.sort()
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -170,7 +179,7 @@ class PickleDb:
         
         if qns is None:
             if self.obj.symmetry == "U1":
-                qns = range(3)
+                qns = list(range(3))
             elif self.obj.symmetry == "Z2":
                 qns= [1, -1]
             else:
@@ -194,7 +203,7 @@ class PickleDb:
                         y1 = y1-exact_val[qn][i]
                         y1 = np.log10(np.abs(y1))
                     except IndexError:
-                        print "index qn=%d, i=%d not found in exact_val, omit it "%(qn, i)
+                        print("index qn=%d, i=%d not found in exact_val, omit it "%(qn, i))
                         continue
                 ax.plot(x, y1, "o", linewidth=linewidth,  
                         color=color_map[qn_], linestyle="solid", marker=None)
@@ -215,9 +224,9 @@ class PickleDb:
         #plt.legend(legend, loc=3)
         plt.grid(True)
         
-        print "ssss\n", rec[x[-1]]
+        print("ssss\n", rec[x[-1]])
         if hasattr(self.obj, "log"):
-            print "llll\n", self.obj.log
+            print("llll\n", self.obj.log)
         x = "_err" if calc_err else ""
         y = self.fn_only.split(".")[0]
         fn=self.path + "scaling_dim-%s--%s.png"%(x, y)
@@ -231,7 +240,7 @@ class PickleDb:
         """
         recs = self.obj.energy_record
         ee = self.obj.energy_exact
-        x = recs.keys()
+        x = list(recs.keys())
         x.sort()
         y = [recs[i][0] for i in x]
         y = np.array(y)
@@ -246,7 +255,7 @@ class PickleDb:
         """
         recs = self.obj.energy_record
         ee = self.obj.energy_exact
-        x = recs.keys()
+        x = list(recs.keys())
         x.sort()
         y = [recs[i][0] for i in x]
         y = np.array(y)
@@ -262,7 +271,7 @@ class PickleDb:
         
         """
         recs= self.obj.energy_record
-        x = recs.keys()
+        x = list(recs.keys())
         x.sort()
         dy = np.array([recs[i+1][0] - recs[i][0] for i in x[:-2]])
         dy = np.log10(-dy)
@@ -276,7 +285,7 @@ class PickleDb:
         
         """
         recs= self.obj.energy_record
-        x = recs.keys()
+        x = list(recs.keys())
         x.sort()
         #dy = np.array([recs[i+1][0] - recs[i][0] for i in x[:-2]])
         dy = np.array([recs[x[i+1]][0] - recs[x[i]][0] for i in range(len(x)-2)])
@@ -304,16 +313,17 @@ def timer_del(func):
         t2=time.clock()
         tb = time.time()
         q_iter = 1
-        print "cpu time", (t2-t1)/q_iter,  "\t wall time", (tb-ta)/q_iter, "\t", func.func_name
+        print("cpu time", old_div((t2-t1),q_iter),  "\t wall time", old_div((tb-ta),q_iter), "\t", func.__name__)
         return res 
     return wraper
 
 
-class test_common():
+
+class test_common(object):
     def __init__(self):
         pass
     def test_add_inplace(self):
-        print test_add_inplace.__doc__
+        print(test_add_inplace.__doc__)
         data1 = np.ndarray(10)
         data = np.ndarray((2, 5))
 
@@ -322,11 +332,11 @@ class test_common():
         #data3[:] = 5.0
         #data2 = data[10:]
         data2 = data.reshape((1, 10), order="F")
-        print data2.base is data
+        print(data2.base is data)
         
         test_add_inplace(data1, data2)
-        print data2
-        print data
+        print(data2)
+        print(data)
     #@timer
     def contract_core_player_fort(self):
         #print contract_core_player_fort.__doc__
@@ -350,12 +360,12 @@ class test_common():
         if 1:
             for i in range(1):
                 contract_core_player_fort(data1, data2, data3, rec)
-                print data3
+                print(data3)
         else:
             for i in range(10000):
                 #c64.contract_core_player_fort_paralell_test(data1, data2, data3, rec)
                 c64.contract_core_player_fort_paralell_reduction_1(data1, data2, data3, rec)
-                print data3
+                print(data3)
     
     def set_num_of_threads(self, n):
         import common_64_ifort as c64
@@ -369,18 +379,18 @@ class test_common():
         """
         import numpy as np
         from scipy.linalg import svd
-        print matrix_svd_unitilize.__doc__
+        print(matrix_svd_unitilize.__doc__)
         a = np.arange(30).reshape(6, 5)
 
         a1, s= matrix_svd_unitilize(a)
-        print 'a1', a1
-        print 's', s
+        print('a1', a1)
+        print('s', s)
 
-        print "compare results with numpy svd"
-        print "--"*20
+        print("compare results with numpy svd")
+        print("--"*20)
         u, s, v=svd(a, full_matrices=False)
-        print "uv", u.dot(v)
-        print 's', s
+        print("uv", u.dot(v))
+        print('s', s)
 
     @staticmethod
     def matrix_svd_unitilize_large_mat():
@@ -390,17 +400,17 @@ class test_common():
         """
         import numpy as np
         from scipy.linalg import svd
-        print matrix_svd_unitilize.__doc__
+        print(matrix_svd_unitilize.__doc__)
         n = 16; m = 4
         a = np.arange(n*m).reshape(n, m)
 
         if 1:
             a1, s= matrix_svd_unitilize(a)
-            print 'a1', a1
-            print 's', s
+            print('a1', a1)
+            print('s', s)
 
-        print "compare results with numpy svd"
-        print "--"*20
+        print("compare results with numpy svd")
+        print("--"*20)
         #u, s, v=svd(a, full_matrices=False)
         #print "uv", u.dot(v)
         #print 's', s
@@ -413,26 +423,26 @@ class test_common():
         """
         from scipy.linalg import svd
         import numpy as np
-        print matrix_svd_unitilize.__doc__
+        print(matrix_svd_unitilize.__doc__)
         a = np.arange(4).reshape(2, 2)
         #a = np.arange(4).reshape(4, 1)
         a[:] = 0.0
         for i in range(5):
             a1, s= matrix_svd_unitilize(a)
-            print 'a1', a1
-            print 's', s
+            print('a1', a1)
+            print('s', s)
 
-        print "compare results with numpy svd"
-        print "--"*20
+        print("compare results with numpy svd")
+        print("--"*20)
         u, s, v=svd(a, full_matrices=False)
-        print "uv", u.dot(v)
-        print 's', s
+        print("uv", u.dot(v))
+        print('s', s)
 
     @staticmethod
     def matrix_multiply():
         import numpy as np
-        print matrix_multiply.__doc__
-        print "test matrix_multiply  --- pass"
+        print(matrix_multiply.__doc__)
+        print("test matrix_multiply  --- pass")
         #a=np.arange(3*4,dtype='d').reshape((3,4))
         #b=np.arange(4*5,dtype='d').reshape((4,5))
         #c=np.empty((3,5),dtype='d')
@@ -447,18 +457,18 @@ class test_common():
             #c_out=matrix_multiply(a,b,c,1.0,0.0)
             c_out=matrix_multiply(a,b,1.0,0.0)
             c_np=a.dot(b)
-        print c_out.round(10), "\n"
-        print c_np, "\n"
-        print c.round(10)
+        print(c_out.round(10), "\n")
+        print(c_np, "\n")
+        print(c.round(10))
 
-        print np.all(c_out==c_np)
+        print(np.all(c_out==c_np))
     
 
     @staticmethod
     def matrix_multiply_inplace_1():
         import numpy as np
-        print matrix_multiply_inplace.__doc__
-        print "test matrix_multiply  --- pass"
+        print(matrix_multiply_inplace.__doc__)
+        print("test matrix_multiply  --- pass")
         #a=np.arange(3*4,dtype='d').reshape((3,4))
         #b=np.arange(4*5,dtype='d').reshape((4,5))
         #c=np.empty((3,5),dtype='d')
@@ -476,60 +486,61 @@ class test_common():
         #print c_np, "\n"
         #print c.round(10)
 
-        print np.all(Cin==c_np)
+        print(np.all(Cin==c_np))
     
     
     def test_set_matrix(self):
         """----pass """
-        print set_matrix.__doc__
+        print(set_matrix.__doc__)
         a = np.zeros((5, 5), order='F')
         b = np.ones((3, 3), order='F')
         x, y = 1, 1
         #set_matrix(a, b, 1, 1, forward=False)
         set_matrix(a, b, x, y, forward=False)
-        print a
-        print b
-        print "compare with np  ================="
+        print(a)
+        print(b)
+        print("compare with np  =================")
         a1 = np.zeros((5, 5), order='F')
         b1 = np.ones((3, 3), order='F')
         #x1, y1 = b.shape
         #a1[x:x+x1, y:y+y1] = b
         set_matrix_np(a1, b1, x, y, forward=False)
-        print a1
-        print b1
+        print(a1)
+        print(b1)
+
 
 class TestCommon(unittest.TestCase):
     def setUp(self): 
         pass
     def test_temp(self) : 
         #print array_permutation_fort_parallel.__doc__ 
-        print matrix_multiply_complex.__doc__ 
+        print(matrix_multiply_complex.__doc__) 
 
     
     def test_matrix_svd_1by1(self) : 
-        print matrix_svd.__doc__ 
+        print(matrix_svd.__doc__) 
         a = np.random.random((1, 1)) 
         a_orig = a 
         a_copy = a.copy()
-        print a, id(a)
+        print(a, id(a))
         u, s, v=matrix_svd(min(a.shape), a) 
-        print a, id(a)
-        print  a_orig, a_copy
-        print "下面结果会是false，为了提醒 maxtrix_svd 对于1by1 矩阵有问题"
+        print(a, id(a))
+        print(a_orig, a_copy)
+        print("下面结果会是false，为了提醒 maxtrix_svd 对于1by1 矩阵有问题")
         #self.assertTrue(a_orig[0, 0]==a_copy[0, 0])
         self.assertFalse(a_orig[0, 0]==a_copy[0, 0])
        
     def test_get_num_of_threads(self): 
         set_num_of_threads(5)
-        print get_num_of_threads.__doc__
-        print get_max_threads.__doc__
-        print 'num_of_threads', get_num_of_threads()
-        print 'max_threads', get_max_threads()
-        print 'num_procs', get_num_of_procs()
+        print(get_num_of_threads.__doc__)
+        print(get_max_threads.__doc__)
+        print('num_of_threads', get_num_of_threads())
+        print('max_threads', get_max_threads())
+        print('num_procs', get_num_of_procs())
         import multiprocessing 
-        print multiprocessing.cpu_count()
+        print(multiprocessing.cpu_count())
         import threading
-        print  threading.active_count()
+        print(threading.active_count())
 
     def test_get_position_and_rev(self):
         """test both position and position_rev"""
@@ -544,23 +555,23 @@ class TestCommon(unittest.TestCase):
         pos=[0,0,1]
 
         posr=np.ndarray(rank)
-        print mpgr.__doc__
+        print(mpgr.__doc__)
         for i in range(8):
             posrrr=mpgr(i, dims)
-            print  'iii', i, posrrr, mgp(posrrr,dims)
+            print('iii', i, posrrr, mgp(posrrr,dims))
     
     def test_matrix_svd(self): 
-        print matrix_svd.__doc__ 
+        print(matrix_svd.__doc__) 
         #n, m = 200, 80
         n, m = 100, 80
         a = np.random.random((n, m))
         u, s, v=matrix_svd(m, a)
-        print  s 
-        print u.shape, s.shape, v.shape
-        print (u*s).dot(v) - a
+        print(s) 
+        print(u.shape, s.shape, v.shape)
+        print((u*s).dot(v) - a)
         
         U, S, V=np.linalg.svd(a, full_matrices=0)
-        print  S 
+        print(S) 
         val, vec = np.linalg.eigh(a.T.dot(a)) 
         #print S**2-val[::-1]
         self.assertTrue(np.allclose(s, S, atol=1e-15))
@@ -568,7 +579,7 @@ class TestCommon(unittest.TestCase):
     def test_matrix_eigen_vector(self):
         import numpy as np
         from scipy.linalg import eig
-        print matrix_eigen_vector.__doc__
+        print(matrix_eigen_vector.__doc__)
         n =  5
         vec = np.ndarray(5, order="F")
         #vec = np.asfortranarray(vec)
@@ -580,16 +591,16 @@ class TestCommon(unittest.TestCase):
         
         matrix_eigen_vector(a, vec)
 
-        print "a", a, vec[:n]
+        print("a", a, vec[:n])
 
-        print "compare with np =========="
+        print("compare with np ==========")
         val, vec=eig(b)
-        print val
-        print vec
+        print(val)
+        print(vec)
         
     def test_matrix_multiply(self):
         if 1: 
-            print matrix_multiply.__doc__
+            print(matrix_multiply.__doc__)
             #attention must reshape it to 2D
             m=15;  n= 20 
             a=np.arange(m,dtype='d').reshape((3,5))
@@ -598,12 +609,12 @@ class TestCommon(unittest.TestCase):
             #c_out=matrix_multiply(a,b,c,1.0,0.0)
             c_out=matrix_multiply(a,b,1.0,0.0)
             c_np=a.dot(b)
-            print c_out.round(10), "\n"
-            print c_np, "\n"
+            print(c_out.round(10), "\n")
+            print(c_np, "\n")
             self.assertTrue(np.all(c_out==c_np))
         
         if 1:  #dtype = complex 
-            print matrix_multiply_complex.__doc__
+            print(matrix_multiply_complex.__doc__)
             #attention must reshape it to 2D
             m=15; n= 20 
             a=np.arange(m,dtype=complex).reshape((3,5))   +  1j
@@ -614,13 +625,13 @@ class TestCommon(unittest.TestCase):
             #c_out=matrix_multiply(a,b,c,1.0,0.0)
             c_out=matrix_multiply_complex(a,b,1.0,0.0)
             c_np=a.dot(b)
-            print c_out.round(10), "\n"
-            print c_np, "\n"
-            print c.round(10)
+            print(c_out.round(10), "\n")
+            print(c_np, "\n")
+            print(c.round(10))
             self.assertTrue(np.all(c_out==c_np))
         
     def test_matrix_multiply_inplace(self):
-        print matrix_multiply_inplace.__doc__
+        print(matrix_multiply_inplace.__doc__)
         if 1:  
             #attention must reshape it to 2D
             m=3
@@ -634,12 +645,12 @@ class TestCommon(unittest.TestCase):
             
             matrix_multiply_inplace(a, b,Cin,1.0,0.0  )  #,3,3,1)
             c_np=a.dot(b)
-            print Cin[:]
+            print(Cin[:])
             self.assertTrue(np.all(Cin==c_np))
         
         if 1:  #inplace version   
             #attention must reshape it to 2D
-            print matrix_multiply_inplace_complex.__doc__
+            print(matrix_multiply_inplace_complex.__doc__)
             m=7
             k=5
             n=3
@@ -652,45 +663,45 @@ class TestCommon(unittest.TestCase):
             
             matrix_multiply_inplace_complex(a, b,Cin,1.0 + 0j, 0.0  )  #,3,3,1)
             c_np=a.dot(b)
-            print Cin[:]
+            print(Cin[:])
 
             self.assertTrue(np.all(Cin==c_np))
 
 
 if __name__=="__main__":
-
+    
     def test_common_func():
         import numpy as np
 
         def test_unit_matrix():
             from common_32 import unit_matrix
             #print c32.__doc__
-            print "test on unit_matrix: ---pass"
-            print unit_matrix.__doc__
+            print("test on unit_matrix: ---pass")
+            print(unit_matrix.__doc__)
             a=np.zeros((4,4),"d",order="FORTRAN")
             #a=np.zeros((4,4),"d")
             unit_matrix(a)
-            print a
+            print(a)
         #test_unit_matrix()
 
         def test_transpose():
             from common_32 import transpose4py
-            print transpose4py.__doc__
+            print(transpose4py.__doc__)
             
             a=np.arange(16).reshape((4,4))
             b=np.zeros((4,4),'d')
             b=transpose4py(a,b)
-            print a,"\n",b
+            print(a,"\n",b)
         #test_transpose()
 
         def test_matrix_direct_product():
             from common_32 import matrix_direct_product 
-            print matrix_direct_product.__doc__
-            print "test matrix_direct_product: ---pass"
+            print(matrix_direct_product.__doc__)
+            print("test matrix_direct_product: ---pass")
             a=np.arange(3).reshape((3,1))
             b=np.arange(5).reshape((1,5))
             c=matrix_direct_product(a,b)
-            print c
+            print(c)
 
             a = np.arange(15)
             b = np.arange(8)
@@ -702,20 +713,20 @@ if __name__=="__main__":
 
         def test_matrix_trace():
             """ ---pass """
-            print matrix_trace.__doc__
+            print(matrix_trace.__doc__)
             a=np.arange(100).reshape(10,10)
             b=matrix_trace(a)
-            print b, a.trace()
+            print(b, a.trace())
         #test_matrix_trace()
         def test_svd():
             """  ---pass """
-            print matrix_svd.__doc__
+            print(matrix_svd.__doc__)
             m=8; n=70  ; mn=min(m,n)
             a=np.random.rand(m*n).reshape(m,n)
             b=matrix_svd(mn,a)
             c= np.linalg.svd(a, full_matrices=True)
-            print b[1].round(10)
-            print c[1].round(10)
+            print(b[1].round(10))
+            print(c[1].round(10))
         #test_svd()
         def test_matrix_svd_unitilize():
             """   
@@ -723,18 +734,18 @@ if __name__=="__main__":
             q131
             """
             from scipy.linalg import svd
-            print matrix_svd_unitilize.__doc__
+            print(matrix_svd_unitilize.__doc__)
             a = np.arange(30).reshape(6, 5)
 
             a1, s= matrix_svd_unitilize(a)
-            print 'a1', a1
-            print 's', s
+            print('a1', a1)
+            print('s', s)
 
-            print "compare results with numpy svd"
-            print "--"*20
+            print("compare results with numpy svd")
+            print("--"*20)
             u, s, v=svd(a, full_matrices=False)
-            print "uv", u.dot(v)
-            print 's', s
+            print("uv", u.dot(v))
+            print('s', s)
         #test_matrix_svd_unitilize()
 
         def test_iShift():
@@ -742,11 +753,11 @@ if __name__=="__main__":
             a=np.arange(10,dtype="int")
             #print ishift.__doc__
             ishift(a,4,8)
-            print a
+            print(a)
         #test_iShift()
 
 
-    if 0: #examine
+    if 1: #examine
         suite = unittest.TestLoader().loadTestsFromTestCase(TestCommon)
         unittest.TextTestRunner(verbosity=0).run(suite)    
         
@@ -758,7 +769,7 @@ if __name__=="__main__":
             #'test_matrix_multiply_inplace', 
             #'test_get_num_of_threads', 
             #'test_matrix_svd_1by1', 
-            'test_matrix_svd', 
+            #'test_matrix_svd', 
             #'test_matrix_eigen_vector', 
         ]
         for a in add_list: 

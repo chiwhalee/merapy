@@ -1,5 +1,13 @@
 #encoding=utf8
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 import warnings
 
 #from merapy.tensor import *
@@ -25,7 +33,7 @@ def descending_ham(M,S,ilayer,tau=None, info=0):
     G_2_2 = S.G_2_2
 
     if info>0:
-        print "START desending_ham"
+        print("START desending_ham")
     
     if tau is None:  
         tau = ilayer-1
@@ -64,9 +72,9 @@ if __name__ == "__main__":
 
     from merapy.top_level import top_level_product_state_u1 
     top_level_product_state_u1(M, sys)
-    print sys
+    print(sys)
     for i in range(M.num_of_layer-1, 0, -1):
-        print "iii", i
+        print("iii", i)
         descending_ham(M, sys, ilayer=i, info=5)
         exit()
         #print sys.H_2[i+1][0].data.round(5)

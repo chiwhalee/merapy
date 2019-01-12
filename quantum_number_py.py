@@ -36,6 +36,17 @@
     as for Z2 (parity) symmetry, there is no difference between a vector and its dual, 
     that is to say need not distinguish upper and lower legs
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from past.utils import old_div
+from builtins import object
 import unittest 
 import numpy as np
 import warnings
@@ -43,7 +54,6 @@ import warnings
 from merapy.utilities import print_vars
 from merapy.decorators import decorate_methods, tensor_player 
 from merapy.utilities import print_vars 
-
 #__all__=["QuantumNum", "QuantSpace", "QN_idendity", "QSp_null", "QSp_base", "init_System_QSp", "QspU1", "QspZ2", "reset_System_QSp"]
 __all__=["QuantumNum", "QuantSpace", "QuantSpaceBase",  "init_System_QSp", 
     "QnU1", "QnZ2", "QnZ3", "QnTravial", 
@@ -59,7 +69,7 @@ __all__=["QuantumNum", "QuantSpace", "QuantSpaceBase",  "init_System_QSp",
 GROUP_NAMES = ["Travial", "Z2", "Z3", "U1"]
 
 
-class QnBase():
+class QnBase(object):
     """
     abstract base class, not meant for direct use
     """
@@ -111,8 +121,8 @@ class QnBase():
         if type(val)==int:
             self.val=np.array([val])  #(val,)
             return
-        print "vvv", type(val), self.__class__
-        print "self", type(self.val), "other", type(val)
+        print("vvv", type(val), self.__class__)
+        print("self", type(self.val), "other", type(val))
         self.val[:]=val[:]
     
     def __eq__(self, other):
@@ -247,7 +257,7 @@ class QnZ2(QnBase):
         """
         return QnZ2(self._val*other._val)
     
-    def __reduce__(self,other):
+    def __reduce__del(self,other):
         return QnZ2(self.val*other.val)
 
 class QnZ3(QnBase):
@@ -285,7 +295,7 @@ class QnZ3(QnBase):
         """
         return QnZ3((self._val + other._val)%3)
     
-    def __reduce__(self, other):
+    def __reduce__del(self, other):
         return QnZ3(self.val*other.val)
 
 class QnU1(QnBase):
@@ -331,7 +341,7 @@ class QnU1(QnBase):
         #return QnU1(self.val+other.val)
         return QnU1(self._val + other._val)
     
-    def __reduce__(self,other):
+    def __reduce__del(self,other):
         """
         see QN_Minus in f90
         status_1
@@ -411,13 +421,13 @@ class QuantSpaceBase(object):
         
     def __le__(self, other, info=0):
         if self.QnClass != other.QnClass: 
-            if info>0: print '__le__ reason: ', 1
+            if info>0: print('__le__ reason: ', 1)
             return False
         if not self.nQN <= other.nQN:
-            if info>0: print '__le__ reason: ', 2
+            if info>0: print('__le__ reason: ', 2)
             return False
         if not np.all(self._dims[:self.nQN]<=other._dims[:self.nQN]):
-            if info>0: print '__le__ reason: ', 3, self._dims[:self.nQN], other._dims[:self.nQN]
+            if info>0: print('__le__ reason: ', 3, self._dims[:self.nQN], other._dims[:self.nQN])
             
             return False
         return True
@@ -627,7 +637,7 @@ class QuantSpaceBase(object):
             self._totDim =totDim
 
     def copy_many(self, n, reverse=None):
-        res=[self.copy() for i in xrange(n)]
+        res=[self.copy() for i in range(n)]
         if reverse is not None:
             for i in reverse:
                 res[i].reverse()
@@ -653,15 +663,15 @@ class QuantSpaceBase(object):
             #if type(a) !=np.ndarray:
             if not isinstance(a, np.ndarray):
                 if res != True:
-                    print k+" not equal " , a, b
+                    print(k+" not equal " , a, b)
                     return res
             else:
                 res=res.all()
                 if res != True:
-                    print k+" not equal, their difference is "
+                    print(k+" not equal, their difference is ")
                     #ind = np.where(res1==False)
                     #print ind
-                    print a-b
+                    print(a-b)
                     return res
         return True
 
@@ -691,8 +701,8 @@ class QuantSpaceBase(object):
                 if pidx>= self.MaxQNNum:
                     continue 
                 if i==j:
-                    RefQN[0,pidx] = RefQN[0,pidx]+n*(n+1)/2
-                    RefQN[1,pidx] = RefQN[1,pidx]+n*(n-1)/2
+                    RefQN[0,pidx] = RefQN[0,pidx]+old_div(n*(n+1),2)
+                    RefQN[1,pidx] = RefQN[1,pidx]+old_div(n*(n-1),2)
                 else:
                     RefQN[0,pidx] = RefQN[0,pidx]+d
                     RefQN[1,pidx] = RefQN[1,pidx]+d
@@ -715,8 +725,8 @@ class QuantSpaceBase(object):
                 if pidx>= self.MaxQNNum:
                     continue 
                 if i==j:
-                    RefQN[0,pidx] = RefQN[0,pidx]+n*(n+1)/2
-                    RefQN[1,pidx] = RefQN[1,pidx]+n*(n-1)/2
+                    RefQN[0,pidx] = RefQN[0,pidx]+old_div(n*(n+1),2)
+                    RefQN[1,pidx] = RefQN[1,pidx]+old_div(n*(n-1),2)
                 else:
                     RefQN[0,pidx] = RefQN[0,pidx]+d
                     RefQN[1,pidx] = RefQN[1,pidx]+d
@@ -734,7 +744,7 @@ class QuantSpaceBase(object):
             res = -1    # -1 indicates self.nQN=0
             return res
         
-        for i in xrange(self.nQN):
+        for i in range(self.nQN):
             if qn == self.QNs[i]:
                 return i 
         res = -1
@@ -786,8 +796,8 @@ class QuantSpaceBase(object):
         res = self.__class__(n=0, qns=[], dims=[])
         res._totDim = 0
 
-        for i in xrange(self.nQN):
-            for j in xrange(other.nQN):
+        for i in range(self.nQN):
+            for j in range(other.nQN):
                 qn =self.QNs[i] + other.QNs[j]
                 d= self._dims[i]*other._dims[j]
                 res.add_to_quant_space(qn, d)
@@ -827,26 +837,26 @@ class QuantSpaceBase(object):
         qns = [q.val for q in qns]
         dims = self.Dims[:self.nQN].copy() 
         if 0: 
-            n = totdim/self.totDim
+            n = old_div(totdim,self.totDim)
             residual = totdim%self.totDim 
             print_vars(vars(),  ['qns', 'dims', 'self.totDim', 'n'])
             dims *= n 
             #residual = totdim-()
             if residual>0: 
                 #for i, j in enumerate(xrange(totdim-dim.size)): 
-                for i in xrange(residual):
+                for i in range(residual):
                     print_vars(vars(),  ['residual', 'i'])
                     dims[i] += 1
         
         ratial = dims/float(self.totDim)
         #print_vars(vars(),  ['ratial'])
         dims = totdim * ratial
-        dims= dims.astype(int)
+        dims = dims.astype(np.int)
         diff = np.sum(dims)-totdim
         if diff >0 or diff >self.nQN: 
             raise
         else: 
-            for i in xrange(-diff): 
+            for i in range(-diff): 
                 dims[i] += 1 
         
         res= self.__class__.easy_init(qns, dims)
@@ -1110,9 +1120,9 @@ class QspU1(QuantSpaceBase):
         try:
             return qsp_max[(nqn, trunc_dim)]
         except KeyError as err:
-            keys= qsp_max.keys()
-            key3 = filter(lambda x:x[0]==3, keys); key3.sort()
-            key5 = filter(lambda x:x[0]==5, keys); key5.sort()
+            keys= list(qsp_max.keys())
+            key3 = [x for x in keys if x[0]==3]; key3.sort()
+            key5 = [x for x in keys if x[0]==5]; key5.sort()
             raise Exception("key (%d, %d) is not found. \n allowed keys are \n\t%s\n\t%s"%(trunc_dim, nqn, key3, key5))
     
 class QspU1_half(QuantSpaceBase):
@@ -1237,7 +1247,7 @@ if 0:
 
         _dims=[]
 
-        iQN =[1L for i in range(n)]
+        iQN =[1 for i in range(n)]
 
         for p in range(pTot):
             d=1
@@ -1271,61 +1281,61 @@ class test_qn(object):
         qb= self.qsp_base.copy()
         qn = self.qn_identity.copy()
         qb.add_to_quant_space(qn, 3)
-        print qb
+        print(qb)
     
     def reverse(self):
         qn = self.qn_identity.copy()
         QSp_base = self.qsp_base
         qn.val = -1
         qn.reverse()
-        print qn
+        print(qn)
 
         qs= QSp_base.copy()
         qs.reverse()
-        print qs
+        print(qs)
     
     def has_quant_num(self):
         QSp_base = self.qsp_base.copy()
-        print "\ntest of has_quant_num: ", QSp_base.has_quant_num(QSp_base.QNs[0]) #QSp_null.QNs[0])
+        print("\ntest of has_quant_num: ", QSp_base.has_quant_num(QSp_base.QNs[0])) #QSp_null.QNs[0])
         
     def add(self):
-        print "\ntest of self.add(): "
+        print("\ntest of self.add(): ")
         
         QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=self.symmetry) 
         #print QSp_base
         temp= QSp_base.add(QSp_base) #.add(QSp_base)
         #print QSp_base
-        print temp
+        print(temp)
     
     def update(self):
-        print "uuuuu"*10
+        print("uuuuu"*10)
         #QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=self.symmetry, combine_2site=False) 
         
         if self.symmetry == "U1" :
             QSp_base = QspU1.easy_init((1, -1), (1, 1))
-            print QSp_base
+            print(QSp_base)
             temp= QSp_base.add(QSp_base).add(QSp_base)
-            print temp
+            print(temp)
             ##print QSp_base.__class__.max(4)
             qsp_max = QspU1.easy_init((1, -1, 3, -3), (2, 2, 1, 1))
-            print "max", qsp_max
+            print("max", qsp_max)
             temp.update(qsp_max)
-            print temp
+            print(temp)
     
     def update_2(self):
-        print "uuuuu"*10
+        print("uuuuu"*10)
         #QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=self.symmetry, combine_2site=False) 
         
         if self.symmetry == "U1" :
             QSp_base = QspU1.easy_init((1, -1, 3, -3), (2, 2, 1, 1)) 
-            print QSp_base
+            print(QSp_base)
             temp= QSp_base.add(QSp_base).add(QSp_base)
-            print temp
+            print(temp)
             ##print QSp_base.__class__.max(4)
             qsp_max = QspU1.easy_init((1, -1, 3, -3), (2, 2, 1, 1))
-            print "max", qsp_max
+            print("max", qsp_max)
             temp.update(qsp_max)
-            print temp
+            print(temp)
 
     @staticmethod
     def add_u1():
@@ -1341,13 +1351,13 @@ class test_qn(object):
         qsp_max2=qsp_max.copy()  # not used
         
         a=QSp_base.add(QSp_base).add(QSp_base)
-        print QSp_base
-        print a
+        print(QSp_base)
+        print(a)
         a.update(qsp_max=qsp_max)
-        print a
+        print(a)
     
     def property(self):
-        print "property not work at present"
+        print("property not work at present")
         #qsp_base = self.qsp_base.copy()
         qn = QnU1(1)
         qn._val = -2
@@ -1355,30 +1365,30 @@ class test_qn(object):
         if 0:
             qn = QnU1(0)
             qn.val = -2
-            print qn._val
+            print(qn._val)
             assert qn._val == -2, "qn._val = %d"%qn._val
             #assert qn._val == -2 
 
     def pickle(self):
         #import pickle as cPickle
-        import cPickle
+        import pickle
         QN_idendity = QnU1(0)
         out = open("/tmp/test", "wb")
-        cPickle.dump(QN_idendity, out)
+        pickle.dump(QN_idendity, out)
         out.close()
         #exit()
 
         qq = QspU1()
 
         out = open("/tmp/test", "wb")
-        cPickle.dump(qq, out)
+        pickle.dump(qq, out)
         out.close()
         #exit()
 
     def le(self):
         a = QspU1.max_1((3, 4))
         b = QspU1.max_1((5, 14))
-        print a <= b
+        print(a <= b)
         exit()
 
     def eq(self):
@@ -1386,7 +1396,7 @@ class test_qn(object):
         a = QspU1.max(12, 3)
         b = QspU1.max(12, 3)
         c = a.copy()
-        print a == b
+        print(a == b)
         
 class _performence(object):
     @classmethod
@@ -1399,8 +1409,8 @@ class _performence(object):
         for i in range(20000):
             a=QN_idendity.copy1()
         t3=time.clock()
-        print t2-t1
-        print t3-t2
+        print(t2-t1)
+        print(t3-t2)
     @classmethod      
     def copy_qsp(cls):
         import time
@@ -1411,8 +1421,8 @@ class _performence(object):
         for i in range(100):
             QSp_base.copy_old()
         t3=time.clock()
-        print "copy",t2-t1
-        print "copy1",t3-t2
+        print("copy",t2-t1)
+        print("copy1",t3-t2)
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 
@@ -1427,15 +1437,15 @@ class TestIt(unittest.TestCase):
         for symm in GROUP_NAMES:
         #for symm in ["U1"]:
         #for symm in []:
-            print symm*10
+            print(symm*10)
             tq=test_qn(symmetry=symm)
-            print tq.qsp_base
-            print tq.qsp_base.key_property()
+            print(tq.qsp_base)
+            print(tq.qsp_base.key_property())
             pf=_performence
             #reset_System_QSp(symmetry="Trav")
             tq.has_quant_num()
             tq.add()
-            print "1"*100
+            print("1"*100)
             tq.update()
             tq.reverse()
             #tq.add_to_quant_space()
@@ -1449,22 +1459,22 @@ class TestIt(unittest.TestCase):
             q2 = QspU1.max(17, 5)
             
             assert (not q1<q2)  or (not q1==q2) or (not q1<q2)
-            print q2
-            print q2 >= q1 
+            print(q2)
+            print(q2 >= q1) 
             
         if 1: 
             q1=QspU1.easy_init( qns=(0, 1, -1), dims=(2, 2, 2) )
             q2=QspU1.easy_init( qns=(1, 2, 0), dims=(2, 2, 2) )
-            print q1,  q2
-            print q1.tensor_prod(q2)
+            print(q1,  q2)
+            print(q1.tensor_prod(q2))
     
     def test_compare(self): 
         q1 = QspU1.max(8)
         q2 = QspU1.max(14, 5)
         
         #assert (not q1<q2)  or (not q1==q2) or (not q1<q2)
-        print q2
-        print q1 
+        print(q2)
+        print(q1) 
         #print q2  ==   q1 
         self.assertTrue(q1 < q2)
         self.assertTrue(q2 >=  q1)
@@ -1472,17 +1482,17 @@ class TestIt(unittest.TestCase):
     def test_power(self):
         pass 
         q = QspZ2.easy_init( [1, -1], [2, 2])
-        print  q
-        print q**2
-        print q*q 
+        print(q)
+        print(q**2)
+        print(q*q) 
         self.assertTrue(q**3 == q*q*q) 
 
         q = QspU1.easy_init( [0, 1, -1], [2, 1, 1])
-        print  q
-        print q**2
-        print q*q 
+        print(q)
+        print(q**2)
+        print(q*q) 
         self.assertTrue(q**3 == q*q*q) 
-        print  q**0 
+        print(q**0) 
 
     def test_tensor_prod(self): 
         if 0:
@@ -1501,7 +1511,7 @@ class TestIt(unittest.TestCase):
         if 0:
             a = QspU1.easy_init([0, 1, 2], [1, 1, 1])
             print_vars(vars(), ['a', 'a**2', 'a**3'])
-            print a.QNs , type(a.QNs), a.QNs.index(QnU1(2))
+            print(a.QNs , type(a.QNs), a.QNs.index(QnU1(2)))
         if 1:
             a = QspU1.easy_init([1, -1], [2, 4])
             b = QspU1.easy_init([1, -1], [4, 2])

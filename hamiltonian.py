@@ -4,11 +4,22 @@ see Hamiltonian.f90
 
     
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from past.utils import old_div
+from builtins import object
 import unittest
 import numpy as np
 import os 
 import time
-import cPickle as pickle
+import pickle as pickle
 #import collections
 import types 
 from collections import OrderedDict
@@ -195,10 +206,10 @@ class System(IterativeOptimize):
             }
         if 1: 
             for k in default_args: 
-                if kwargs.has_key(k): 
+                if k in kwargs: 
                     default_args[k] = kwargs[k]
             
-            for k, v in default_args.iteritems(): 
+            for k, v in default_args.items(): 
                 setattr(self, k, v)
         
         #computated attr
@@ -309,7 +320,7 @@ class System(IterativeOptimize):
             if self.qsp_max is not None:
                 qsp_max = self.qsp_max.copy()
                 qsp_max2 = None #self.qsp_max.copy()
-                print "trunc_dim is updated to %d"%qsp_max.totDim
+                print("trunc_dim is updated to %d"%qsp_max.totDim)
                 self.trunc_dim = qsp_max.totDim
             
             self.mera = self.mera_class(self.tot_layer, self.nTop, 
@@ -354,7 +365,7 @@ class System(IterativeOptimize):
                 msg += '... done, then set it to None\n' 
             else: 
                 msg += ' ...self.mera != m, not allowed, discard it \n' 
-            print msg 
+            print(msg) 
         
         if self.auto_resume: 
             self.resume_func()
@@ -420,7 +431,7 @@ class System(IterativeOptimize):
             temp = ["model", "symmetry", "only_NN", "only_NNN"]
             for i in temp:
                 if self.__getattribute__(i) != other.__getattribute__(i):
-                    print i
+                    print(i)
                     res = False
                     break
             return res
@@ -436,7 +447,7 @@ class System(IterativeOptimize):
             #only_NN=True, combine_2site=False, only_NNN=False):
             
         test_Mera = Mera 
-        if not kwargs.has_key('do_measure'): 
+        if 'do_measure' not in kwargs: 
             kwargs['do_measure'] = 0 
         
         #M = test_Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); sys= ts.instance(M, symmetry="U1", model="Heisenberg")
@@ -490,10 +501,10 @@ class System(IterativeOptimize):
                 
                 warnings.warn(str(err))
                 not_found.append(i)
-                print i, err  
+                print(i, err)  
         if self.info>0: 
-            print "loading graphs in file %s, \n\tfound these %s, \n\tnot found and omit these%s"%(module.__file__, 
-                    found, not_found)
+            print("loading graphs in file %s, \n\tfound these %s, \n\tnot found and omit these%s"%(module.__file__, 
+                    found, not_found))
         #self.graph_module_name = module.__name__.split('.')[-1]
         self.graph_module_name = module#.__name__.split('.')[-1]
 
@@ -513,7 +524,7 @@ class System(IterativeOptimize):
         #res = [i for i in ops if ops[i]["type"] in type and (ops[i]["range"] in range)]
         #res = {i[0]:i[1] for i in ops.iteritems() if i[1]["type"] in type and (i[1]["range"] in range)}
         model = ["all"] + [self.model]
-        res = {key:val for key, val in ops.iteritems() 
+        res = {key:val for key, val in ops.items() 
                 if val["type"] in type 
                 and (val["range"] in range)
                 and (val["model"] in model)
@@ -574,7 +585,7 @@ class System(IterativeOptimize):
         """ 
         if duplicate: 
             dic = self.fetch_op_names(type=["H", "rho", "I"])
-            for name in dic.keys():
+            for name in list(dic.keys()):
                 self.__getattribute__(name)[ilayer][0] = self.__getattribute__(name)[ilayer-1][0].copy()  #resident in memory no need buffer
             return
 
@@ -622,15 +633,15 @@ class System(IterativeOptimize):
             totQN = self.qn_identity.copy()
             #copy is needless, without copy, it is conceptially more correct
             if dic["type"] == "rho":
-                reverse = range(rank_half)
+                reverse = list(range(rank_half))
             else:
-                reverse = range(rank_half, rank)
+                reverse = list(range(rank_half, rank))
             QSp = qsp_ilayer.copy_many(rank, reverse=reverse)
             return iTensor(rank, QSp, totQN)
     
         for i in range(1):
             dic = self.fetch_op_names(type=["H", "rho"], range=[2])
-            for name, propt in dic.iteritems():
+            for name, propt in dic.items():
                 op = dic_to_op(propt)
                 op.data[:] = 0.0
                 self.__getattribute__(name)[ilayer][0] = op
@@ -642,7 +653,7 @@ class System(IterativeOptimize):
             if not self.only_NN:
                 
                 dic = self.fetch_op_names(type=["H", "rho"], range=[3])
-                for name, propt in dic.iteritems():
+                for name, propt in dic.items():
                     op = dic_to_op(propt)
                     op.data[:] = 0.0
                     self.__getattribute__(name)[ilayer][0] = op
@@ -684,7 +695,7 @@ class System(IterativeOptimize):
             an iterator
         """ 
         res= []
-        op_names = self.fetch_op_names(type=["H", "rho"]).keys()
+        op_names = list(self.fetch_op_names(type=["H", "rho"]).keys())
         for name in op_names:
             res.append(self.__getattribute__(name)[ilayer][0])
         return res
@@ -725,7 +736,7 @@ class System(IterativeOptimize):
             #self.pinning_term = pinning_term 
             if self.use_pinning_term: 
                 if self.pinning_term_def['op'] is None: 
-                    assert pinning_term.has_key(self.pinning_term_def['name'] )
+                    assert self.pinning_term_def['name'] in pinning_term
                     self.pinning_term_def['op'] = pinning_term[self.pinning_term_def['name']]
                     
             self.H_2[0][0] = h0[2]
@@ -830,7 +841,7 @@ class System(IterativeOptimize):
         res +=  str(temp1) + "\n"
             
         if layers == []:
-            layers= range(self.mera.num_of_layer)
+            layers= list(range(self.mera.num_of_layer))
             #layers= range(self.layer)
         if which is None:
             which = ["H_2",  "rho_2"]
@@ -881,7 +892,7 @@ class System(IterativeOptimize):
         Sx[2] = si.direct_product(sigma_x)
         
         if 0:  
-            print "for testing, make this change"
+            print("for testing, make this change")
             #when set J_NN = J_NNN = 0, dont need change h0[2 and 3]
             Sx[1] = sigma_z.direct_product( si )
             Sx[2] = si.direct_product(sigma_z)
@@ -1085,7 +1096,7 @@ class System(IterativeOptimize):
                     + (-1.0)* sigma_y2.direct_product(sigma_y1)  
                     +  Jzz*sigma_z2.direct_product(sigma_z1))
             if 0: 
-                print 'replaced szz  '*100
+                print('replaced szz  '*100)
                 ss = szz
                 ssii = ss.direct_product(ii)
                 iiss = ii.direct_product(ss)
@@ -1274,13 +1285,13 @@ class System(IterativeOptimize):
                     
         
         if not only_NN and not only_NNN and symmetry in ['U1', 'Travial']:  #some check
-            print h0[2].is_hermite()
-            print h0[3].is_hermite()
-            print Sz[2].is_hermite()
-            print not Sp[1].is_hermite(out_more=False)
-            print not Sm[1].is_hermite(out_more=False)
-            print Sp[1].is_adjoint_to(Sm[1])
-            print Sp[2].is_adjoint_to(Sm[2])
+            print(h0[2].is_hermite())
+            print(h0[3].is_hermite())
+            print(Sz[2].is_hermite())
+            print(not Sp[1].is_hermite(out_more=False))
+            print(not Sm[1].is_hermite(out_more=False))
+            print(Sp[1].is_adjoint_to(Sm[1]))
+            print(Sp[2].is_adjoint_to(Sm[2]))
             #exit()
 
         if symmetry in ["Z2"]:
@@ -1368,7 +1379,7 @@ class System(IterativeOptimize):
                 h0[3] += s0s2 
 
                 
-            print "J_NNN is set to %1.5f"%J_NNN        
+            print("J_NNN is set to %1.5f"%J_NNN)        
             #this is a temporary workaround for meta stable state for J1J2 model 
         
             pinning_term = h0[3].copy()
@@ -1403,7 +1414,7 @@ class System(IterativeOptimize):
                     ]
             for i in exam:      
                 passed = eval(i)
-                print passed
+                print(passed)
                 if not passed:
                     msg = "check hermite failed with %r"%i
                     #raise Exception(msg)
@@ -1480,11 +1491,11 @@ class System(IterativeOptimize):
         """
             this is a wraper 
         """
-        if kwargs.has_key('energy_diff_min'): 
+        if 'energy_diff_min' in kwargs: 
             self.energy_diff_min = kwargs['energy_diff_min']
             
         if self.info>0: 
-            print 'start minimize'
+            print('start minimize')
         which_minimize = which_minimize if which_minimize is not None else self.which_minimize     
         if which_minimize in ['prod_state', 'eigen_state']: 
             self._minimize_finite_size(**kwargs)
@@ -1503,7 +1514,7 @@ class System(IterativeOptimize):
         if dir is not None : 
             if not os.path.exists(dir): 
                 os.makedirs(dir)
-                print 'dir not found, mkdir %s'%dir
+                print('dir not found, mkdir %s'%dir)
         
         if dir_local is not None: 
             with rpyc_conn_local_zerodeploy() as conn: 
@@ -1512,7 +1523,7 @@ class System(IterativeOptimize):
                     msg = 'dir %s not found'%(dir_local[-30: ])
                     cmd = 'mkdir %s'%dir_local
                     os_local.makedirs(dir_local)
-                    print '\n'.join([msg, cmd])
+                    print('\n'.join([msg, cmd]))
     
     #@staticmethod   
     @classmethod 
@@ -1551,7 +1562,7 @@ class System(IterativeOptimize):
                 
                 })
             
-            if System.temp.has_key(l):
+            if l in System.temp:
                 return System.temp[l]
             else:
                 return 0.0
@@ -1591,7 +1602,7 @@ class System(IterativeOptimize):
         assert l>2, "l should be larger than 2.(i.e. not NN or NNN ops)" 
 
         #if self.Jleg_tau_0l_dic.has_key(l):   # a really bad bad mistake 
-        if self.Jleg_tau_0l_dic.has_key((tau, l)):
+        if (tau, l) in self.Jleg_tau_0l_dic:
             return  self.Jleg_tau_0l_dic[(tau, l)]
         else:
             if tau == 0:
@@ -1669,7 +1680,7 @@ class System(IterativeOptimize):
         if extra is not None:
             mapper.update(extra)
         if info>0:
-            print "graph name", G.graph_name #, "weight", G.weight
+            print("graph name", G.graph_name) #, "weight", G.weight
         try:
             for n in range(G.size):
                 node_name = G.names[n]
@@ -1698,9 +1709,9 @@ class System(IterativeOptimize):
         
         if 1:
             if info>0:
-                print "tensors to be contracted:"
+                print("tensors to be contracted:")
                 names= [TNet_sys.tlink[i].type_name for i in order[:G.size]]
-                print names
+                print(names)
             n = G.size#TNet_sys.TG.nNode
             try: 
                 output = TNet_sys.contract_except(n, order, exception=exception, info=info-1)#, memory_save= True )
@@ -1742,12 +1753,12 @@ class System(IterativeOptimize):
         if extra is not None:
             mapper.update(extra)
         if info>0:
-            print "graph name", G.graph_name #, "weight", G.weight
+            print("graph name", G.graph_name) #, "weight", G.weight
         
         if 1:
             for n in range(G.size): 
                 node_name = G.names[n]
-                if extra_extra.has_key(node_name): 
+                if node_name in extra_extra: 
                     op = extra_extra[node_name]
                     TNet_sys.tlink[n] = op
                     extra_extra.pop(node_name)
@@ -1763,7 +1774,7 @@ class System(IterativeOptimize):
                         raise ValueError('tensor for node_name %s not found'%node_name)
                     TNet_sys.tlink[n].type_name = op_name
            
-        for op_name, op in extra_extra.items(): 
+        for op_name, op in list(extra_extra.items()): 
             n = G.names.index(op_name)
             TNet_sys.tlink[n] = op.shallow_copy()
             TNet_sys.tlink[n].type_name = op_name
@@ -1771,9 +1782,9 @@ class System(IterativeOptimize):
 
         if 1:
             if info>0:
-                print "tensors to be contracted:"
+                print("tensors to be contracted:")
                 names= [TNet_sys.tlink[i].type_name for i in order[:G.size] if TNet_sys.tlink[i] is not None ]
-                print names
+                print(names)
             n = G.size#TNet_sys.TG.nNode
             output = TNet_sys.contract_except(n, order, exception=exception, info=info-1)#, memory_save= True )
             return output
@@ -1842,7 +1853,7 @@ class System(IterativeOptimize):
         for ne  in range(nlist):
             exception = elist[ne] 
             if info>0:
-                print 'eee exception=', exception
+                print('eee exception=', exception)
             T_tmp = self.contract(M, layer, G, 0, Names=[], Ops=[], order=G.order, exception=exception, restart=restart, branch=branch, info=info-1)
 
             if first:
@@ -1877,7 +1888,7 @@ class System(IterativeOptimize):
                     warnings.warn("not all graphs are used, lack these: " + str(k2-k1))
             keys = key_list
         else:
-            keys= G_dic.keys()
+            keys= list(G_dic.keys())
         
         if len(keys)==0:
             # it happens I pass in an empty G_dic, just for compatibility of the code, but this may also
@@ -1893,7 +1904,7 @@ class System(IterativeOptimize):
         if info>0:
             #temp = {G_dic[g].graph_name:round(weight_dic[g], 3) for g in G_dic}
             temp = {G_dic[g].graph_name:round(weight_dic[g], 4) for g in keys}
-            print "add_env_many graphs with weights:\n",  temp# weight_dic
+            print("add_env_many graphs with weights:\n",  temp)# weight_dic
         
         if isinstance(add_tensor, iTensor):
             for i in range(len(keys)):
@@ -1965,7 +1976,7 @@ class System(IterativeOptimize):
     
     @staticmethod
     def contract_ooo_rho_3(ooo, rho_3): 
-        V1 = range(6)
+        V1 = list(range(6))
         V2 = [3, 4, 5, 0, 1, 2]
         H_3, legs = ooo.contract(rho_3, V1, V2, use_buf=True)
         res = H_3.data[0]
@@ -1996,9 +2007,9 @@ class System(IterativeOptimize):
         return self.energy
 
     def prompt_save(self):
-        print "save mera to file?"
+        print("save mera to file?")
         for i in range(60):
-            print i, 
+            print(i, end=' ') 
             time.sleep(1)
 
     
@@ -2088,7 +2099,7 @@ class System(IterativeOptimize):
         if allow_save: 
             System._save(self, fn, use_local_storage=use_local_storage)
             msg += ' ... S is successfully saved.'  
-            print msg
+            print(msg)
         else: 
             msg += ' ... save denied. raise' 
             raise Exception(msg)
@@ -2203,17 +2214,17 @@ class System(IterativeOptimize):
         if not hasattr(res.mera, 'qsp_0'):
             res.mera.qsp_0 = res.mera.QSp_0
         if not hasattr(res, 'energy_diff'):
-            eng_rec1, eng_rec0 = res.energy_record.values()[-1:-3:-1]
-            a, b = res.energy_record.keys()[-1:-3:-1]
+            eng_rec1, eng_rec0 = list(res.energy_record.values())[-1:-3:-1]
+            a, b = list(res.energy_record.keys())[-1:-3:-1]
             pace = a-b
-            res.energy_diff = (eng_rec1[0] - eng_rec0[0])/pace
+            res.energy_diff = old_div((eng_rec1[0] - eng_rec0[0]),pace)
             res.energy_err = (res.energy - res.energy_exact)
         if not hasattr(res, 'record'):
             res.record = OrderedDict()
-            for a, b in res.energy_record.iteritems():
+            for a, b in res.energy_record.items():
                 res.record[a] = {'energy':b[0], 'time':b[1] }
-            for a, b in res.scaling_dim_record.iteritems():
-                if not res.record.has_key(a):  res.record[a]={}
+            for a, b in res.scaling_dim_record.items():
+                if a not in res.record:  res.record[a]={}
                 res.record[a].update({'scaling_dim':b})
         #if not hasattr(res, 'graph_module_name'):
         if not hasattr(res, 'iter1'):
@@ -2238,7 +2249,7 @@ class System(IterativeOptimize):
         if not isinstance(res.energy_record, OrderedDict):
             res.energy_record = OrderedDict(sorted(res.energy_record.items()))
             res.scaling_dim_record = OrderedDict(sorted(res.scaling_dim_record.items()))
-        for i, v in res.scaling_dim_record.iteritems():
+        for i, v in res.scaling_dim_record.items():
             if isinstance(v, dict):
                 break
             res.scaling_dim_record[i] = dict(v)
@@ -2275,7 +2286,7 @@ class System(IterativeOptimize):
                     kk = ['updaters', 'backup_parpath', 
                             'is_initialized', 'measurement_args']
                     for k in kk: 
-                        if temp.has_key(k): 
+                        if k in temp: 
                             temp.pop(k)
                     self.__dict__.update(temp)
                 else: 
@@ -2291,7 +2302,7 @@ class System(IterativeOptimize):
                                 
                                 msg = 'self.energy_diff_std %1.2e less than energy_diff_min %1.2e, set q_iter=0'%(
                                         self.energy_diff_std, energy_diff_min)
-                                print msg
+                                print(msg)
                 
                 #self.M = self.S.mera
                 #iter = self.S.iter1
@@ -2338,7 +2349,7 @@ class System(IterativeOptimize):
         if self.model == "Heisenberg":
             if self.only_NN:
                 energy_exact = -1.772588722236
-                if self.symmetry == "U1" and temp.has_key("J_NNN"):
+                if self.symmetry == "U1" and "J_NNN" in temp:
                     energy_exact = temp[0.241186]
             elif self.only_NNN:
                 energy_exact = temp[0.241186]
@@ -2346,7 +2357,7 @@ class System(IterativeOptimize):
                 energy_exact = -1.644934
         elif self.model == "Ising":
             from math import pi
-            energy_exact = -4./pi  #1.27323954474
+            energy_exact = old_div(-4.,pi)  #1.27323954474
         elif self.model == 'Potts':
             energy_exact = -2.4359911239
         else: 
@@ -2357,31 +2368,31 @@ class System(IterativeOptimize):
     
     def display(self, iter, filename, pace=1, interval=100):
         #iter_last = iter-pace
-        eng_rec1, eng_rec0 = self.energy_record.values()[-1:-3:-1]
-        a, b = self.energy_record.keys()[-1:-3:-1]
+        eng_rec1, eng_rec0 = list(self.energy_record.values())[-1:-3:-1]
+        a, b = list(self.energy_record.keys())[-1:-3:-1]
         pace = a-b
         
         #temp = np.array([v[0] for v in self.energy_record.values()[-1: -10: -1]])
-        temp = np.array([v[0] for v in self.energy_record.values()[-1: -interval//pace-1: -1]])
+        temp = np.array([v[0] for v in list(self.energy_record.values())[-1: -interval//pace-1: -1]])
         temp1 = np.roll(temp, -1)
         temp = temp1 - temp
         #self.energy_diff_std = np.mean(np.abs(temp[:-1]))/pace
-        self.energy_diff_std = np.max(np.abs(temp[:-1]))/pace
+        self.energy_diff_std = old_div(np.max(np.abs(temp[:-1])),pace)
         
-        self.energy_diff = (eng_rec1[0] - eng_rec0[0])/pace
+        self.energy_diff = old_div((eng_rec1[0] - eng_rec0[0]),pace)
         
         self.energy_err = (self.energy - self.energy_exact)
-        steps = -self.energy_err/self.energy_diff#*pace
+        steps = old_div(-self.energy_err,self.energy_diff)#*pace
         
-        print '\n%s %dth iter, energy=%2.11f,  eng_err=%1.1e, eng_diff=%1.1e, eng_diff_std=%1.1e, steps~%1.2e'%(
+        print('\n%s %dth iter, energy=%2.11f,  eng_err=%1.1e, eng_diff=%1.1e, eng_diff_std=%1.1e, steps~%1.2e'%(
                 self.backup_parpath_name, iter, self.energy, 
-                self.energy_err, self.energy_diff, self.energy_diff_std, steps),  
+                self.energy_err, self.energy_diff, self.energy_diff_std, steps), end=' ')  
         
         dt_real = eng_rec1[1] - eng_rec0[1]
         dt_cpu = eng_rec1[2] - eng_rec0[2]
-        dt_real = dt_real/pace;     dt_cpu = dt_cpu/pace
+        dt_real = old_div(dt_real,pace);     dt_cpu = old_div(dt_cpu,pace)
         
-        print "\t", dt_cpu,"\t",  round(dt_real, 3)
+        print("\t", dt_cpu,"\t",  round(dt_real, 3))
         #if iter%100 == 0 or iter<= 5: 
         #    if filename is not None:
         #        out = open(filename, 'a')
@@ -2397,25 +2408,25 @@ class System(IterativeOptimize):
         """
         passed = True
         if res is None:
-            print "result is "
-            print {i:self.energy_record[i][0] for i in self.energy_record}
+            print("result is ")
+            print({i:self.energy_record[i][0] for i in self.energy_record})
             return
         for i in res:
-            if self.energy_record.has_key(i):
+            if i in self.energy_record:
                 diff = abs(res[i] - self.energy_record[i][0])
-                print "%(i)d, \t%(diff)s"%vars()
+                print("%(i)d, \t%(diff)s"%vars())
                 #if diff <1e-14:
                 #    print i, "\t", abs(res[i] - self.energy_record[i][0])
                 #else:
                 if diff > delta: 
                     passed = False
-                    print "\ti=%d, stored res=%1.18f, current res=%1.18f"%(i, 
-                        res[i], self.energy_record[i][0])
+                    print("\ti=%d, stored res=%1.18f, current res=%1.18f"%(i, 
+                        res[i], self.energy_record[i][0]))
         if not passed:
             msg = "EXAMINE FAILED\n%s"%{i:self.energy_record[i][0] for i in self.energy_record}
             raise Exception(msg)
 
-        print "\nEXAMINE PASSED\n"
+        print("\nEXAMINE PASSED\n")
     
     def examine_eng(self, res=None):
         raise
@@ -2423,10 +2434,10 @@ class System(IterativeOptimize):
     def _expand_dim(self, qsp_max, out=None):
         #old_key_property = self.key_property()
         if qsp_max <= self.mera.qsp_max:
-            print "qsp_max is not larger than original one, system not expaned"
-            print "qsp_max is %s, self.mera.qsp_max is %s"%(qsp_max, self.mera.qsp_max)
+            print("qsp_max is not larger than original one, system not expaned")
+            print("qsp_max is %s, self.mera.qsp_max is %s"%(qsp_max, self.mera.qsp_max))
             return
-        from decorators import tensor_player, set_STATE_end_1
+        from .decorators import tensor_player, set_STATE_end_1
         state_bac = tensor_player.STATE
         tensor_player.STATE = "stop"
         M = self.mera
@@ -2443,21 +2454,21 @@ class System(IterativeOptimize):
                 return
             
             if propt["type"] == "rho":
-                reverse = range(rank_half)
+                reverse = list(range(rank_half))
             elif propt["type"] == "H":
-                reverse = range(rank_half, rank)
+                reverse = list(range(rank_half, rank))
             qsp = qsp_v.copy_many(rank, reverse=reverse)
             try:
                 self.__getattribute__(name)[ilayer][0] = self.__getattribute__(name)[ilayer][0].expand(qsp) 
             except AttributeError:
-                print "in System.expand_dim ilayer = %(ilayer)d, name = %(name)s failed to beexpanded"%vars()
+                print("in System.expand_dim ilayer = %(ilayer)d, name = %(name)s failed to beexpanded"%vars())
         
         dic = self.fetch_op_names(type=["H", "rho", "I"])
-        print "\texpand following System ops:  ", dic.keys()
+        print("\texpand following System ops:  ", list(dic.keys()))
         
         #need not expand layer 0
         for ilayer in range(1, M.num_of_layer):
-            for name, propt in dic.iteritems():
+            for name, propt in dic.items():
                 expand_func(ilayer, name, propt)
         
         new_key_property = self.key_property()
@@ -2466,7 +2477,7 @@ class System(IterativeOptimize):
         self.iter0 = 0 
         
         msg = "\tqsp_max has been expanded to %s \n"%qsp_max
-        print msg 
+        print(msg) 
         #tensor_player.NEXT_STATE = "record"
         if out is not None:
             out.write("msg")
@@ -2476,7 +2487,7 @@ class System(IterativeOptimize):
        
         #if self.energy is not None:
         if 0:  #discard examine temporarily, due to self.energy may be not calced
-            print "after expansion, set player to record"
+            print("after expansion, set player to record")
             tensor_player.NEXT_STATE = "record"
             e0 = self.energy
             self.eng_ham(M.num_of_layer-1)
@@ -2484,14 +2495,14 @@ class System(IterativeOptimize):
             e_diff = abs(e0 - self.energy)
             if e_diff <=   1e-13:
                 iter = self.iter
-                print "energy test passed, at iter=%(iter)d both equal to %(e0)2.14f, e_diff = %(e_diff)e\n\n"%vars()
+                print("energy test passed, at iter=%(iter)d both equal to %(e0)2.14f, e_diff = %(e_diff)e\n\n"%vars())
             else:
                 self.energy = e0
                 err_msg = "energy test failed, e0 = %2.15f, e1 = %2.15f"%(e0, e1)
                 raise Exception(err_msg)
     
     def expand_dim(self, trunc_dim, nqn=None):
-        print '\ntry to expand dim'
+        print('\ntry to expand dim')
         qspclass = symmetry_to_Qsp(self.symmetry)
         qsp = qspclass.max(trunc_dim, nqn)
         self._expand_dim(qsp_max=qsp)
@@ -2505,9 +2516,9 @@ class System(IterativeOptimize):
         msg  = 'issue: when using expand_layer together with main.run() error will occor, caused by tensor_palyer'
         msg += 'a work around is to set main.S.iter1 = 1 (instead of 0) after main.expand_layer()' 
         warnings.warn(msg)
-        print "\ntry to expand num_of_layer to %d..."%num_of_layer
+        print("\ntry to expand num_of_layer to %d..."%num_of_layer)
         if self.mera.num_of_layer >= num_of_layer:
-            print "not expanded: self.mera.num_of_layer >= num_of_layer"
+            print("not expanded: self.mera.num_of_layer >= num_of_layer")
         else:
             for i in range(num_of_layer-self.mera.num_of_layer):
                 self._expand_layer()
@@ -2518,7 +2529,7 @@ class System(IterativeOptimize):
         
         
     def _expand_layer(self, out=None):
-        from decorators import tensor_player, set_STATE_end_1
+        from .decorators import tensor_player, set_STATE_end_1
         #print_vars(vars(),  ['tensor_player'])
         #raise 
         if not hasattr(tensor_player, 'STATE'):   # this could happen 
@@ -2544,11 +2555,11 @@ class System(IterativeOptimize):
         self.iter1 = 0  #reset counting
         self.iter0 = 0 
         msg = "\nEXPAND ONE LAYER, NOW NUM_OF_LAYER IS %d\n"%self.mera.num_of_layer
-        print msg
+        print(msg)
         if out is not None:
             out.write(msg)
         if state_bac == "play": 
-            print "after expansion, tensor_player is switched from 'play' to 'record'"
+            print("after expansion, tensor_player is switched from 'play' to 'record'")
             tensor_player.NEXT_STATE = "record" 
     
     def use_pinning_term_func_bac(self): 
@@ -2565,11 +2576,11 @@ class System(IterativeOptimize):
                 self.H_3[0][0] = self.H_3_bac 
                 
             self.use_pinning_term = False
-            print  'self.use_pinning_term is set to False'
+            print('self.use_pinning_term is set to False')
     
     def use_pinning_term_func(self): 
         pin_def = self.pinning_term_def
-        if not self.pinning_term_def.has_key('h_backup'): 
+        if 'h_backup' not in self.pinning_term_def: 
             h_name = self.pinning_term_def['h_name']
             self.pinning_term_def['h_backup'] = getattr(self, h_name)[0][0].copy()
         
@@ -2577,7 +2588,7 @@ class System(IterativeOptimize):
             h_name = pin_def['h_name']
             if self.combine_2site: 
                 xi = pin_def['xi']
-                coeff = pin_def['lam']*np.exp(-float(self.iter)/xi)
+                coeff = pin_def['lam']*np.exp(old_div(-float(self.iter),xi))
                 print_vars(vars(),  ['coeff'])
                 getattr(self, h_name)[0][0].data = (
                 pin_def['h_backup'].data  + coeff*pin_def['op'].data)
@@ -2596,32 +2607,32 @@ class System(IterativeOptimize):
                 raise NotImplemented 
                 
             self.use_pinning_term = False
-            print  'self.use_pinning_term is set to False'
+            print('self.use_pinning_term is set to False')
 
     @staticmethod
     def check_hermite(M, S, precision=None):
-        print "\ncheck hermite"
+        print("\ncheck hermite")
         state = tensor_player.STATE
         tensor_player.STATE = "stop"
         for lay in range(M.num_of_layer-0):
         #if 1:
             #lay = M.num_of_layer-1
-            print lay
-            print "H_2", S.H_2[lay][0].is_hermite(precision=precision, out_more=True)
+            print(lay)
+            print("H_2", S.H_2[lay][0].is_hermite(precision=precision, out_more=True))
             if not S.only_NN:
-                print "H_3", S.H_3[lay][0].is_hermite(precision=precision, out_more=True)
+                print("H_3", S.H_3[lay][0].is_hermite(precision=precision, out_more=True))
                 if not S.only_NNN:
                     if S.model == "Ising":
-                        print "SxA", S.SxA[lay][0].is_hermite(precision)
-                        print "SxB", S.SxB[lay][0].is_hermite(precision)
+                        print("SxA", S.SxA[lay][0].is_hermite(precision))
+                        print("SxB", S.SxB[lay][0].is_hermite(precision))
                     else:
-                        print "SpA", S.SpA[lay][0].is_hermite(precision)
-                        print "SpB", S.SpB[lay][0].is_hermite(precision)
-                        print "SmA", S.SmA[lay][0].is_hermite(precision)
-                        print "SmB", S.SmB[lay][0].is_hermite(precision)
+                        print("SpA", S.SpA[lay][0].is_hermite(precision))
+                        print("SpB", S.SpB[lay][0].is_hermite(precision))
+                        print("SmA", S.SmA[lay][0].is_hermite(precision))
+                        print("SmB", S.SmB[lay][0].is_hermite(precision))
                         
-                        print "SpA adjoint to SmA", S.SpA[lay][0].is_adjoint_to(S.SmA[lay][0], precision=precision, out_more=True)
-                        print "SpB adjoint to SmB", S.SpB[lay][0].is_adjoint_to(S.SmB[lay][0], precision=precision, out_more=True)
+                        print("SpA adjoint to SmA", S.SpA[lay][0].is_adjoint_to(S.SmA[lay][0], precision=precision, out_more=True))
+                        print("SpB adjoint to SmB", S.SpB[lay][0].is_adjoint_to(S.SmB[lay][0], precision=precision, out_more=True))
         tensor_player.STATE = state
 
     def measure_S(self, S, parpath, exclude_which=None):
@@ -2638,7 +2649,7 @@ class System(IterativeOptimize):
         """
         for debugging 
         """
-        print "hamiltonian set to identity  "*10
+        print("hamiltonian set to identity  "*10)
         SYMMETRY = sys.symmetry
         
         sys.H_2[0][0] = iTensorFactory(SYMMETRY).unit_tensor(4)
@@ -2678,7 +2689,7 @@ class System(IterativeOptimize):
                     ME = abs[X-Y]
                     mp = p
             Get_Position(T2,mp,pos)
-            print "[4[1x,I4],2x,E15.8]", pos[0:4], ME
+            print("[4[1x,I4],2x,E15.8]", pos[0:4], ME)
             #endif
 
         def check_symm3(T3):
@@ -2697,13 +2708,13 @@ class System(IterativeOptimize):
                     ME = abs[X-Y]
                     mp = p
             Get_Position(T3,mp, pos)
-            print "[6[1x,I4], E15.8]", pos[0:6], ME
+            print("[6[1x,I4], E15.8]", pos[0:6], ME)
             #endif        
   
 class TestSystem(unittest.TestCase):
     def setUp(self): 
         if 0: 
-            import mera
+            from . import mera
             
             test_Mera = mera.test_Mera
              
@@ -2719,21 +2730,21 @@ class TestSystem(unittest.TestCase):
             self.M = M
     
     def tearDown(self): 
-        print 'set tensor_player.STATE = "stop" in tearDown'
+        print('set tensor_player.STATE = "stop" in tearDown')
         tensor_player.STATE = 'stop'
     
     def xtest_example(self): 
         if 1: 
             M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="U1"); 
             S= System.example(M, 'U1', 'Heisenberg')
-            print S 
+            print(S) 
             H=np.array([-2. ,  0.5,  0.5,  0. ,  0.5, -1. ,  0. ,  0.5,  0.5,  0. , -1. , 0.5,  0. ,  0.5,  0.5, -2. ,  1. ,  0. ,  0. ,  0. ,  0. ,  0. , 0. ,  1. , -1.5,  0.5,  0.5, -0.5,  0. ,  1. ,  0. ,  0. , -0.5, 0.5,  0.5, -1.5,  0. ,  0. ,  1. ,  0. ,  0. ,  0. ,  1. ,  0. , -0.5,  0.5,  0.5, -1.5,  0. ,  1. ,  0. ,  0. ,  0. , -1. ,  0. , 0. ,  1. ,  0. ,  0. , -1.5,  0.5,  0.5, -0.5,  0. ,  0. ,  0. , 1. ,  0. , -1. ,  0. ])
             self.assertTrue(np.all(S.H_2[0][0].data==H))
 
         if 1: 
             M = Mera.example(trunc_dim=4, tot_layer=4, symmetry="Z2"); 
             S= System.example(M, 'Z2', 'Ising')
-            print S 
+            print(S) 
             H=np.array([-2., -1., -1., -1., -1., -1., -1.,  0.])
             self.assertTrue(np.all(S.H_2[0][0].data==H))
             print_vars(vars(),  ['S.__dict__.keys()'])
@@ -2773,7 +2784,7 @@ class TestSystem(unittest.TestCase):
             from merapy.measure_and_analysis.result_db import ResultDB_mera
             db = ResultDB_mera(dir)
             print_vars(vars(),  ['db'])
-            self.assertTrue(db.has_key('correlation') and not db.has_key('magnetization'))
+            self.assertTrue('correlation' in db and 'magnetization' not in db)
         
     
     def test_resume(self):
@@ -2844,12 +2855,12 @@ class TestSystem(unittest.TestCase):
         m._minimize_finite_size()
         #print_vars(vars(),  ['m.energy'])
         #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
-        print m.mera 
+        print(m.mera) 
         from merapy.decorators import tensor_player 
         tensor_player.STATE = 'stop'
         m.expand_dim(6)
         m._minimize_finite_size()
-        print m.mera 
+        print(m.mera) 
 
     def xtest_save(self): 
         from merapy.utilities import random_str
@@ -2858,27 +2869,27 @@ class TestSystem(unittest.TestCase):
         if 1: 
             fn = random_str(size=8)
             fn = '/'.join(['/tmp', fn])
-            print fn
+            print(fn)
             S.save(fn)
             S = System.load(fn)
             S.save(fn)
-            print S
+            print(S)
             with self.assertRaises(Exception) as ee:
                 S.iter1 = -10
                 S.save(fn)   # deney save
             os.remove(fn)
-            print 'test save check pass'
+            print('test save check pass')
             
         if 1:
-            print '---'*10
+            print('---'*10)
             fn = random_str(size=8) 
             fn = '/'.join(['/tmp', fn +  'llllllll'])
-            print fn
+            print(fn)
             System._save(S, fn, use_local_storage=1)
             with rpyc_conn_local() as conn: 
                 os_local = conn.modules.os  
                 self.assertTrue(os_local.path.exists(fn))
-                print 'test save use_local_storage pass'
+                print('test save use_local_storage pass')
                 os_local.remove(fn)
     
     def test_load(self): 
@@ -2936,12 +2947,12 @@ class TestSystem(unittest.TestCase):
             #print 
             exception=G.find_node(name)[0]
             
-            print "exception", exception
+            print("exception", exception)
 
             info = 5
             T_tmp = S.contract(M, ilayer, G, 0, Names=[], Ops=[], order=order, 
                     exception=exception, info=info-1)
-            print "ddd", T_tmp.data.round(5)
+            print("ddd", T_tmp.data.round(5))
 
         def contract_except_V(self, info=0):
             """
@@ -2963,15 +2974,15 @@ class TestSystem(unittest.TestCase):
             exception=G.find_node(name)[1]
 
             
-            print "exception", exception
+            print("exception", exception)
 
-            print "rho_2 is set to be 1"
+            print("rho_2 is set to be 1")
             S.rho_2[0][0].data[:] = 1.
 
             info = 1
             T_tmp = S.contract(M, ilayer, G, 0, Names=[], Ops=[], order=order, 
                     exception=exception, info=info-1)
-            print "ddd", T_tmp.data.round(5)
+            print("ddd", T_tmp.data.round(5))
 
         def contract_V_Vdag(self):
             T1 = self.M.V[0][0]
@@ -2984,12 +2995,12 @@ class TestSystem(unittest.TestCase):
 
             ord1 = [1, 2, 3, 9]
             ord2 = [6, 1, 2, 3]
-            print ord1, ord2
-            print T1.data.round(3)
-            print T2.data.round(3)        
+            print(ord1, ord2)
+            print(T1.data.round(3))
+            print(T2.data.round(3))        
             res, leg= T1.contract(T2, ord1, ord2)
-            print res.data.round(3 )
-            print T1
+            print(res.data.round(3 ))
+            print(T1)
 
         def contract_two(self):
             """  ---pass """
@@ -3003,14 +3014,14 @@ class TestSystem(unittest.TestCase):
 
             #ord1 = [1, 2, 3, 9]
             #ord2 = [6, 1, 2, 3]
-            print ord1, ord2
-            print T1.data.round(3)
-            print T2.data.round(3)        
+            print(ord1, ord2)
+            print(T1.data.round(3))
+            print(T2.data.round(3))        
             
             info = 1
             res, leg= T1.contract(T2, ord1, ord2, info=info-1)
-            print res.data.round(3 )
-            print leg
+            print(res.data.round(3 ))
+            print(leg)
 
 
         def contract_two_UV(self):
@@ -3029,13 +3040,13 @@ class TestSystem(unittest.TestCase):
 
             #ord1 = [1, 2, 3, 9]
             #ord2 = [6, 1, 2, 3]
-            print ord1, ord2
-            print T1.data[:8].round(5), T1.data[-5:].round(5)
-            print T2.data[:8].round(5), T2.data[-5:].round(5)        
+            print(ord1, ord2)
+            print(T1.data[:8].round(5), T1.data[-5:].round(5))
+            print(T2.data[:8].round(5), T2.data[-5:].round(5))        
             
             info = 1
             res, leg= T1.contract(T2, ord1, ord2, info=info-1)
-            print res.data[:8].round(5), "\t", res.data[-8:].round(5)
+            print(res.data[:8].round(5), "\t", res.data[-8:].round(5))
             #print res
             #print leg
 
@@ -3045,12 +3056,12 @@ class TestSystem(unittest.TestCase):
             T2 = self.M.U[1][0]
 
             
-            print T1.data[:8].round(5), T1.data[-5:].round(5)
-            print T2.data[:8].round(5), T2.data[-5:].round(5)        
+            print(T1.data[:8].round(5), T1.data[-5:].round(5))
+            print(T2.data[:8].round(5), T2.data[-5:].round(5))        
             
             info = 1
             res= T1.contract_core(T2, 2 )
-            print res.data[:8].round(5), "\t", res.data[-8:].round(5)
+            print(res.data[:8].round(5), "\t", res.data[-8:].round(5))
             #print res
 
         def add_env(self, info=0):
@@ -3069,7 +3080,7 @@ class TestSystem(unittest.TestCase):
             S.H_2[jlayer][0]=S.add_env(M, ilayer, G, 
                     order, name, weight,  info=info-1)
             
-            print S.H_2[jlayer][0].data.round(3)
+            print(S.H_2[jlayer][0].data.round(3))
             #print S
 
         def add_env_V(self, info=0):
@@ -3086,7 +3097,7 @@ class TestSystem(unittest.TestCase):
             name="V"   #hamiltonian operator
             info = 2
 
-            print "rho_2 is set to 1.0"
+            print("rho_2 is set to 1.0")
             S.rho_2[0][0].data[:] = 1.
             
             #weight = -weight
@@ -3095,7 +3106,7 @@ class TestSystem(unittest.TestCase):
             t=S.add_env(M, ilayer, G, 
                     order, name, weight,  info=info-1)
             
-            print t.data.round(3)
+            print(t.data.round(3))
 
 
         def ascending(self,info=0):
@@ -3111,10 +3122,10 @@ class TestSystem(unittest.TestCase):
             info = 1
 
             if info:
-                print "START ascending_ham"
+                print("START ascending_ham")
             for g in [-1, 0, 1]:
                 if info:
-                    print "iLayer,g=",ilayer, g
+                    print("iLayer,g=",ilayer, g)
                 #print S.H_2[ilayer][j]
                 
                 #q29
@@ -3125,10 +3136,10 @@ class TestSystem(unittest.TestCase):
                 
                 temp=S.add_env(M, ilayer, G, order, name, weight, S.H_2[jlayer][j], info=info-1)
                 S.H_2[jlayer][j].data += temp.data 
-                print S.H_2[jlayer][0].data.round(5)
-            print S.H_2[jlayer][0].data.round(5)
+                print(S.H_2[jlayer][0].data.round(5))
+            print(S.H_2[jlayer][0].data.round(5))
             if info:
-                print "END ascending_ham"
+                print("END ascending_ham")
 
         def eng_ham(self):
             S= self.instance()
@@ -3139,11 +3150,11 @@ class TestSystem(unittest.TestCase):
         @staticmethod
         def op_heisenberg():
             """ ---- pass """
-            from quantum_number import init_System_QSp
+            from .quantum_number import init_System_QSp
             QN_idendity, QSp_base, QSp_null= init_System_QSp("U1")
 
             h0 = System.op_heisenberg()
-            print h0[2]
+            print(h0[2])
             #print h0[2]  #.data.round(5)
             #results
             """
@@ -3800,7 +3811,7 @@ class TestSystem(unittest.TestCase):
         @staticmethod
         def op_heisenberg_h3():
             """ ---- pass """
-            from quantum_number import init_System_QSp
+            from .quantum_number import init_System_QSp
             symmetry = "U1"
 
             QN_idendity, QSp_base, QSp_null= init_System_QSp(symmetry)
@@ -3821,58 +3832,58 @@ class TestSystem(unittest.TestCase):
             """
             S= self.instance()
             h2 = S.H_2[0][0]
-            print h2.data
+            print(h2.data)
 
 
 
         def H2_all(self):
            for l in range(self.sys.layer):
-                print "H_2 at layer ", l
+                print("H_2 at layer ", l)
                 h2 = self.sys.H_2[l][0]
-                print h2
+                print(h2)
 
 
         def rho2(self):
-            print "\n"*5                  
+            print("\n"*5)                  
             for l in range(sys.layer):
-                print "layer=", l
+                print("layer=", l)
                 r2 = self.sys.rho_2[l][0]
                 #print r2.data.round(5)
-                print r2.QSp
+                print(r2.QSp)
 
         def rho2_all(self):
-           import top_level
+           from . import top_level
            top_level.top_level_product_state(self.mera,self.sys)
            for l in range(self.sys.layer):
-                print "rho_2 at layer ", l
+                print("rho_2 at layer ", l)
                 r2 = self.sys.rho_2[l][0]
-                print r2
+                print(r2)
 
         def apply_to_layer(self, layer, func=None, w1=["U", "V"], w2=["H_2", "rho_2"]):
-            print " =========================================="
+            print(" ==========================================")
             if func:
-                print "apply "+func.__name__," to layer ", layer
+                print("apply "+func.__name__," to layer ", layer)
 
 
             M = self.M
             sys=self.sys
             #w1 = ["U", "V"]
-            r1 = range(4)
+            r1 = list(range(4))
             #w2 = ["H_2", "rho_2"]
             
-            r2 = range(4)
+            r2 = list(range(4))
 
-            print "before"
-            print M.__repr__(layers=r1, which=w1)
-            print sys.__repr__(layers=r2, which=w2)
+            print("before")
+            print(M.__repr__(layers=r1, which=w1))
+            print(sys.__repr__(layers=r2, which=w2))
             
             if func == None:
                 func = lambda a,b,c:None
             func(M, sys, layer)
             
-            print "\nafter"
-            print M.__repr__(layers=r1, which=w1)
-            print sys.__repr__(layers=r2, which=w2)
+            print("\nafter")
+            print(M.__repr__(layers=r1, which=w1))
+            print(sys.__repr__(layers=r2, which=w2))
         
         
         #from merapy.decorators import timer
@@ -3905,7 +3916,7 @@ class TestSystem(unittest.TestCase):
 
 if __name__=='__main__':
     if 0: 
-        import mera
+        from . import mera
         test_Mera = mera.test_Mera
         ts= test_System
         
@@ -3918,12 +3929,12 @@ if __name__=='__main__':
         #print M
         #print sys  #.H_3[0]
         #print sys.H_3[0][0]
-        print sys.H_2[0][0].data
+        print(sys.H_2[0][0].data)
         #sys.add_one_layer(M.num_of_layer-1, duplicate=True)
         sys.expand_layer(5)
-        print sys
-        print sys.mera
-        print sys.key_property()
+        print(sys)
+        print(sys.mera)
+        print(sys.key_property())
 
         
         #print ts.sys.__repr__(which=["H_2"])

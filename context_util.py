@@ -1,7 +1,15 @@
 #coding=utf8
 #
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import hex
+from builtins import *
 import unittest
-import cPickle as pickle
+import pickle as pickle
 from contextlib import contextmanager
 import nose
 import sys
@@ -10,12 +18,11 @@ import os
 import tempfile
 import unittest
 import shutil
-import rpyc
 from plumbum import SshMachine, PuttyMachine  #SshMachine means you can operate the remote machine via ssh
 import paramiko
 import rpyc
-#from rpyc.utils.zerodeploy import DeployedServer
 from rpyc.utils.server import ThreadedServer
+#from rpyc.utils.zerodeploy import DeployedServer
 import socket 
 import warnings 
 import zlib
@@ -64,7 +71,7 @@ def redirect(**kwds):
                 setattr(sys, sname, stream)
         yield
     finally:
-        for sname, stream in old_streams.iteritems():
+        for sname, stream in old_streams.items():
             setattr(sys, sname, stream)
 
 @contextmanager
@@ -106,7 +113,7 @@ def get_ip_address():
             ip = s.getsockname()[0] 
             s.close()
         except: 
-            print 'get ip address using gmail failed'
+            print('get ip address using gmail failed')
         
     return ip
 
@@ -135,8 +142,8 @@ def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None):
         
         mapping = {'host':'hostname', 'user':'username', 
                 'connect_timeout':'timeout'}
-        for k, v in mapping.items():
-            if args.has_key(k):
+        for k, v in list(mapping.items()):
+            if k in args:
                 args[v] = args[k]
                 args.pop(k)
         ssh = paramiko.SSHClient()
@@ -217,12 +224,12 @@ def rpyc_conn_local(timeout=60*30):
             conn.close()
         except : 
             #raise Exception('connection failed')
-            print 'rpyc connection failed'
+            print('rpyc connection failed')
             pass
         try: 
             ssh.close() 
         except: 
-            print 'ssh connection failed'
+            print('ssh connection failed')
             pass
 
 @contextmanager
@@ -240,18 +247,18 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
             raise 
         yield conn
     except Exception as err: 
-        print err 
+        print(err) 
     finally:
         try: 
             conn.close()
         except : 
             #raise Exception('connection failed')
-            print 'rpyc connection failed'
+            print('rpyc connection failed')
             pass
         try: 
             ssh.close() 
         except: 
-            print 'ssh connection failed'
+            print('ssh connection failed')
             pass
 
 def rpyc_conn_easy(hostname, conn_type='classic',  port=17013): 
@@ -280,7 +287,7 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
                 if 0: # cannot load,  reason is that inn and load are not in the same namespace    
                     with rpyc_conn_local() as conn: 
                         pass
-                        print conn
+                        print(conn)
                         inn = conn.builtin.open(path, "rb")
                         res = None
                         res = cPickle.load(inn)
@@ -296,7 +303,7 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
                         res = conn.modules.cPickle.load(inn) 
                         #res = pickle.load(inn) 
                         res = conn.modules['merapy.hamiltonian'].System.update_S(res) 
-                        print res
+                        print(res)
                         inn.close()
                 if 0:  #this worked , but below is better 
                     with rpyc_conn_local() as conn: 
@@ -334,7 +341,7 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
             s= zlib.decompress(s)
             msg += 'done' 
             if info>0: 
-                print msg
+                print(msg)
             
         res= pickle.loads(s)
             
@@ -371,7 +378,7 @@ def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=Fals
              #rpyc_save(temp_path, obj, compress=compress)
              save(obj, temp_path, compress=compress)
              cmd = 'scp %s %s@%s:%s'%(temp_path, LOCAL_USERNAME, LOCAL_IP, path)
-             print cmd 
+             print(cmd) 
              a = os.system(cmd)
              if a != 0: 
                  raise 
@@ -415,7 +422,7 @@ class TestIt(unittest.TestCase):
             rpyc_save(p, 'bbbbbbbbb', 'sftp', 
                     use_local_storage = 1)
             
-            print rpyc_load(p) 
+            print(rpyc_load(p)) 
     
     def xtest_save_and_load(self): 
         with make_temp_dir() as dd: 
@@ -435,9 +442,9 @@ class TestIt(unittest.TestCase):
 
     def test_redirect(self):
         with redirect(stdout=open("log.txt", "a")): # these print statements will go to /tmp/log.txt 
-            print "Test entry 1"
-            print "Test entry 2"
-        print "Back to normal stdout again"
+            print("Test entry 1")
+            print("Test entry 2")
+        print("Back to normal stdout again")
      
     def xtest_ssh_connect(self):  #disable this, becuase fails on other machines
         #with rpyc_conn_local() as conn: 
@@ -451,15 +458,15 @@ class TestIt(unittest.TestCase):
    
     def xtest_rpyc_conn_local(self):  #disable this, becuase fails on other machines
         with rpyc_conn_local() as conn: 
-            print conn.modules['os']  
-            print conn.modules.merapy
+            print(conn.modules['os'])  
+            print(conn.modules.merapy)
     
     def xtest_rpyc_conn_local_zero(self):  #disable this, becuase fails on other machines
         with rpyc_conn_local_zerodeploy(info=1) as conn: 
-            print conn.modules['os']
+            print(conn.modules['os'])
 
         with rpyc_conn_zerodeploy(hostname='local') as conn: 
-            print conn.modules['os']
+            print(conn.modules['os'])
         
         #with rpyc_conn_zerodeploy(hostname='sugon') as conn: 
         #    print conn.modules['os']

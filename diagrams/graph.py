@@ -1,14 +1,24 @@
 #!/usr/bin/env python
 #from sets import Set
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from past.utils import old_div
 import sys, math
 
 def find_all_path_pool(g, start, end, pool=set([]), path=[]):
     path = path+[start]
     if start==end:
-        if len(path) == len(g.keys()):
+        if len(path) == len(list(g.keys())):
             return [path]
         return []
-    if not g.has_key(start):
+    if start not in g:
         return []
     paths = []
     path_nodes = set(path)
@@ -26,10 +36,10 @@ def find_all_path_pool(g, start, end, pool=set([]), path=[]):
 def find_all_path(g, start, end, path=[]):
     path = path+[start]
     if (start==end):
-        if len(path) == len(g.keys()):
+        if len(path) == len(list(g.keys())):
             return [path]
         return []
-    if not g.has_key(start):
+    if start not in g:
         return []
     paths = []
     for node in g[start]:        
@@ -41,11 +51,11 @@ def find_all_path(g, start, end, path=[]):
 
 def gnode(gmera):
     g = {}
-    for k in gmera.keys():
-        if not g.has_key(k): 
+    for k in list(gmera.keys()):
+        if k not in g: 
             g[k] = []
         for leg in gmera[k]:
-            for kp in gmera.keys():
+            for kp in list(gmera.keys()):
                 if kp != k:
                     if (leg in gmera[kp]) and (not kp in g[k]):
                         g[k].append(kp)
@@ -53,7 +63,7 @@ def gnode(gmera):
 
 def contract_gmera(gmera, path, pr= False):
     if pr:
-        print path
+        print(path)
     S1 = set(gmera[path[0]])
     S2 = set(gmera[path[1]])
     SS = S1&S2
@@ -63,8 +73,8 @@ def contract_gmera(gmera, path, pr= False):
     base = 100.
     cost = 0.
     if pr:
-        print S1, S2
-        print str(path[1])+',', len(St), len(St)+len(SS), St
+        print(S1, S2)
+        print(str(path[1])+',', len(St), len(St)+len(SS), St)
         
     for p in path[2:]:
         S1 = St
@@ -76,9 +86,9 @@ def contract_gmera(gmera, path, pr= False):
         max_comp = max(max_comp, comp)
         cost = cost + math.pow(base, comp)
         if pr:
-            print str(p)+',', len(St), len(St)+len(SS), St
+            print(str(p)+',', len(St), len(St)+len(SS), St)
     if len(St) != 0:
-        print St
+        print(St)
         return -1,-1
     return max_leg, max_comp, cost
 
@@ -86,14 +96,14 @@ def GC2GE(gc):
     ge = {}
     gm = {}
     ne = 0
-    for node in gc.keys():
+    for node in list(gc.keys()):
         i = 0
         gm[node] = []
         for edge in gc[node]:
             i+=1
-            if ge.has_key((node,i)):
-                print "error"
-            if not ge.has_key(edge):
+            if (node,i) in ge:
+                print("error")
+            if edge not in ge:
                 ne += 1                
                 ge[(node,i)] = [edge, ne]
                 gm[node].append(ne)
@@ -105,14 +115,14 @@ def GC2GE(gc):
 
 def check_graph(g):
     res = True
-    for k in g.keys():
+    for k in list(g.keys()):
         e = 0
         for v in g[k]:
             e += 1
             nk,ne = g[v[0]][v[1]-1]
             if k != nk :
                 res = False
-                print 'graph not consistent', k, e, nk, ne
+                print('graph not consistent', k, e, nk, ne)
     return res
 
 def Add_Graph(gx1, gx2):
@@ -158,28 +168,28 @@ def Combine_OO(g1,g2):
 
     leg1 = [0]*100
     leg2 = [0]*100
-    len1 = len(o1)/2
-    len2 = len(o2)/2    
-    for i in xrange(1, len1+1):
+    len1 = old_div(len(o1),2)
+    len2 = old_div(len(o2),2)    
+    for i in range(1, len1+1):
         leg1[i] = i
         leg1[i+len1] = i+len1+len2
 
-    for i in xrange(1, len2+1):
+    for i in range(1, len2+1):
         leg2[i] = i+len1
         leg2[i+len2] = i+len1*2+len2
 
     noo = []
-    for i in xrange(0, len1):
+    for i in range(0, len1):
         noo.append(o1[i])
-    for i in xrange(0, len2):
+    for i in range(0, len2):
         noo.append(o2[i])
-    for i in xrange(len1, len1+len1):
+    for i in range(len1, len1+len1):
         noo.append(o1[i])
-    for i in xrange(len2, len2+len2):
+    for i in range(len2, len2+len2):
         noo.append(o2[i])
         
     ng['OO'] = noo
-    for k in g1.keys():
+    for k in list(g1.keys()):
         if k == "OO": continue
         noo = []
         oo = g1[k]
@@ -191,7 +201,7 @@ def Combine_OO(g1,g2):
                 noo.append(kk)                
         ng[k] = noo
         
-    for k in g2.keys():
+    for k in list(g2.keys()):
         if k == "OO": continue
         noo = []
         oo = g2[k]
@@ -253,7 +263,7 @@ def Simplify_Graph_O(g):
     ng = g
     I_V = set([])
     nng = {}
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_", 1)
         if (ks == "O"):
             s = True
@@ -266,7 +276,7 @@ def Simplify_Graph_O(g):
         else:
             nng[k] = ng[k]
     nk = []
-    for k in nng.keys():
+    for k in list(nng.keys()):
         ks,e = k.split("_",1)
         if ks == "O":
             nk.append(k)
@@ -297,7 +307,7 @@ def Simplify_Graph_W3(g):
     ng = g
     I_V = set([])
     
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "W"):
             kp = "Wp_"+s
@@ -326,7 +336,7 @@ def Simplify_Graph_W4(g):
     ng = g
     I_V = set([])
     
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "W"):
             kp = "Wp_"+s
@@ -356,7 +366,7 @@ def Simplify_Graph_W1(g):
     ng = g
     I_V = set([])
     
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "W1"):
             kp = "W1p_"+s
@@ -382,7 +392,7 @@ def Simplify_Graph_W2(g):
     ng = g
     I_V = set([])
     
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "W2"):
             kp = "W2p_"+s
@@ -409,7 +419,7 @@ def Simplify_Graph_W(g):
     ng = g
     I_V = set([])
     
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "W"):
             kp = "Wp_"+s
@@ -436,7 +446,7 @@ def Simplify_Graph_U(g):
     ng = g
     
     I_V = set([])
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "U"):
             kp = "Up_"+s
@@ -466,7 +476,7 @@ def Simplify_Graph_V(g):
     ng = g
     
     I_V = set([])
-    for k in ng.keys():
+    for k in list(ng.keys()):
         ks,s = k.split("_",1)
         if (ks == "V"):
             kp = "Vp_"+s
@@ -489,10 +499,10 @@ def Simplify_Graph_V(g):
     return ng
 
 def print_graph(g, prefix=""):
-    keys = g.keys()
+    keys = list(g.keys())
     keys.sort()
     for k in keys:
-        print prefix, k, g[k]
+        print(prefix, k, g[k])
         
 def Simplify_Graph_I(g):
     keys = set(g.keys())
@@ -550,8 +560,8 @@ def Break_Graph(g):
 
 def ChangeNodeName(g):
     ng = {}
-    if g.has_key('OO') and len(g['OO']) == 6:
-        for k in g.keys():
+    if 'OO' in g and len(g['OO']) == 6:
+        for k in list(g.keys()):
             nvs = []
             for v in g[k]:                
                 if v[0] == "OO":
@@ -559,18 +569,18 @@ def ChangeNodeName(g):
             
     
 def add_graph(gx1, gx2):
-    k1s = gx1.keys()
+    k1s = list(gx1.keys())
     k1s.sort()
 
     gx3 = {}
-    k2s = gx2.keys()
+    k2s = list(gx2.keys())
     k2s.sort()
     for k2 in k2s:
         gx3[k2+100] = []
         for v in gx2[k2]:
             gx3[k2+100].append((v[0]+100, v[1]))
             
-    k3s = gx3.keys()
+    k3s = list(gx3.keys())
     k3s.sort()
         
     k1_link = k1s[-1]
@@ -606,33 +616,33 @@ def get_path_cost(gx, pr=False):
     ge,gm=GC2GE(gx)
     graph = gnode(gm)
     
-    ks = graph.keys()
+    ks = list(graph.keys())
     ks.sort()
     for k in ks:
         graph[k].sort()    
         
     max_leg = 1000; max_comp = 10000
     max_cost = 1e200
-    for i in xrange(0,len(ks)):
-        for j in xrange(i+1, len(ks)):
+    for i in range(0,len(ks)):
+        for j in range(i+1, len(ks)):
             start = ks[i]; end = ks[j]
             paths=find_all_path_pool(graph,start,end)
             for p in paths:
                 leg,comp,cost=contract_gmera(gm, p)#, True)
                 if leg < 0:
-                    print 'error contracting'
+                    print('error contracting')
                     sys.exit(-1)
                 if (cost < max_cost):
                     max_leg = leg
                     max_comp = comp
                     path = p
                     max_cost = cost
-                    if pr: print leg, comp, p, cost
+                    if pr: print(leg, comp, p, cost)
                 if (cost == max_cost):
                     if (leg < max_leg):
                         max_leg = leg
                         path = p
-                        if pr: print leg, comp, p, cost
+                        if pr: print(leg, comp, p, cost)
                         
 #                 if (comp == max_comp):
 #                     if (leg < max_leg):
@@ -653,7 +663,7 @@ def Output_Fortran(ii, Gname, Oname, gg, jj=-1):
     gm_nodes = {}
     
     j = 0    
-    ks = gm.keys()
+    ks = list(gm.keys())
     for k in ks:
         j += 1
         name=k.split("_",1)[0]
@@ -665,13 +675,13 @@ def Output_Fortran(ii, Gname, Oname, gg, jj=-1):
     
     print_graph(gg, "!!$ ")
     if jj < 0:
-        print "   %s(%d)%%nNode=%d" % (Gname, ii,len(ks))
-        print "   %s(%d)%%Nodes=-1" % (Gname, ii)
-        print "   %s(%d)%%Edges=-1" % (Gname, ii)
+        print("   %s(%d)%%nNode=%d" % (Gname, ii,len(ks)))
+        print("   %s(%d)%%Nodes=-1" % (Gname, ii))
+        print("   %s(%d)%%Edges=-1" % (Gname, ii))
     else:
-        print "   %s(%d,%d)%%nNode=%d" % (Gname, ii,jj,len(ks))
-        print "   %s(%d,%d)%%Nodes=-1" % (Gname, ii,jj)
-        print "   %s(%d,%d)%%Edges=-1" % (Gname, ii,jj)
+        print("   %s(%d,%d)%%nNode=%d" % (Gname, ii,jj,len(ks)))
+        print("   %s(%d,%d)%%Nodes=-1" % (Gname, ii,jj))
+        print("   %s(%d,%d)%%Edges=-1" % (Gname, ii,jj))
         
     j = 0
     for k in ks:
@@ -683,22 +693,22 @@ def Output_Fortran(ii, Gname, Oname, gg, jj=-1):
         if (name == "OO" and leng == 2): name = "O"
         if (name == "oo" and leng == 6): name = "ooo"
         if jj < 0:
-            print '''   %s(%d)%%Names(%d)="%s" !%s''' % (Gname, ii,j, name, k) 
-            print "   %s(%d)%%Nodes(%d)=%d" % (Gname, ii,j,leng)
-            print "   %s(%d)%%Edges(1:%d,%d)=(/%s/)" % (Gname, ii,leng,j,edges)
+            print('''   %s(%d)%%Names(%d)="%s" !%s''' % (Gname, ii,j, name, k)) 
+            print("   %s(%d)%%Nodes(%d)=%d" % (Gname, ii,j,leng))
+            print("   %s(%d)%%Edges(1:%d,%d)=(/%s/)" % (Gname, ii,leng,j,edges))
         else:
-            print '''   %s(%d,%d)%%Names(%d)="%s" !%s''' % (Gname, ii,jj,j, name, k) 
-            print "   %s(%d,%d)%%Nodes(%d)=%d" % (Gname, ii,jj,j,leng)
-            print "   %s(%d,%d)%%Edges(1:%d,%d)=(/%s/)" % (Gname, ii,jj,leng,j,edges) 
-    print "!$$ %d/%d %20.14G" % (leg,comp, cost)
+            print('''   %s(%d,%d)%%Names(%d)="%s" !%s''' % (Gname, ii,jj,j, name, k)) 
+            print("   %s(%d,%d)%%Nodes(%d)=%d" % (Gname, ii,jj,j,leng))
+            print("   %s(%d,%d)%%Edges(1:%d,%d)=(/%s/)" % (Gname, ii,jj,leng,j,edges)) 
+    print("!$$ %d/%d %20.14G" % (leg,comp, cost))
     if jj<0:
-        print "   %s(1:%d, %d)=(/%s/)" % (Oname, len(ks), ii, 
-                                          ",".join([str(x) for x in order]))
+        print("   %s(1:%d, %d)=(/%s/)" % (Oname, len(ks), ii, 
+                                          ",".join([str(x) for x in order])))
     else:
-        print "   %s(1:%d, %d,%d)=(/%s/)" % (Oname, len(ks), ii, jj,
-                                          ",".join([str(x) for x in order]))
+        print("   %s(1:%d, %d,%d)=(/%s/)" % (Oname, len(ks), ii, jj,
+                                          ",".join([str(x) for x in order])))
         
-    print
+    print()
 
 
 oo1_tmpl = """{

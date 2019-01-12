@@ -1,5 +1,15 @@
 #! /usr/bin/env python
 #coding=UTF8
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
 import unittest
 
 from collections import OrderedDict
@@ -12,7 +22,7 @@ import numpy as np
 
 GRAPH_MODULE_NAME_ALL = ['binary', 'modified_binary', 'ternary', 'quaternary', 'quinary', 'septenary']
 
-class Graphics():
+class Graphics(object):
     MaxEdge = 64
     MaxNode = 64
 
@@ -71,7 +81,7 @@ class Graphics():
             n1 = k
             if k not in all_node: 
                 all_node.append(k)
-            for pos1, v in val.items(): 
+            for pos1, v in list(val.items()): 
                 n2 = v[0]
                 pos2 = v[1]
                 if v[0] not in all_node: 
@@ -103,8 +113,8 @@ class Graphics():
                         res.nodes[node_id] += 1 
                     if 0: 
                         if node == 'V_1_1':  
-                            print n1, pos1, n2, pos2, '\t','node_id', node_id, 'edge_id', edge_id, 
-                            print 'num nodes', res.nodes[node_id]
+                            print(n1, pos1, n2, pos2, '\t','node_id', node_id, 'edge_id', edge_id, end=' ') 
+                            print('num nodes', res.nodes[node_id])
                     res.edges[pos-pos_offset][node_id] = edge_id
                     #res.edges[pos][node_id] = edge_id
         return res
@@ -168,7 +178,7 @@ class Graphics():
         """
         status_1_verified
         """
-        from utilities import repr_format
+        from .utilities import repr_format
         dic = self.__dict__
         keys= ["size", "nodes", "edges"]
         res= ""
@@ -288,7 +298,7 @@ class Graphics():
                 temp=np.where(self.edges==leg_id)
                 if 0: 
                     if node_name == 'U_0_1':  
-                        print  l,leg_id, temp
+                        print(l,leg_id, temp)
                         if l == 3: exit() 
                     
                 if len(temp[0])==1: 
@@ -321,7 +331,7 @@ class Graphics():
     
 
 if 0:
-    class TensorGraph():
+    class TensorGraph(object):
         pass
 
 
@@ -384,14 +394,14 @@ if __name__ == '__main__':
         set_value1()
 
         def test_find_common_leg():
-            print g.find_common_leg(0, 1)
-            print g.find_common_leg(0, 2)        
+            print(g.find_common_leg(0, 1))
+            print(g.find_common_leg(0, 2))        
         #test_find_common_leg()
 
         def test_node_contract():
-            print g
+            print(g)
             g.contract_nodes(0, 1)
-            print g
+            print(g)
         #test_node_contract()
 
 
@@ -400,8 +410,8 @@ if __name__ == '__main__':
         g1.size = 4
         g2 = Graphics()
         g2.size = 2
-        print g1.size
-        print g    
+        print(g1.size)
+        print(g)    
     
     if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)

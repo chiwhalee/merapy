@@ -1,5 +1,14 @@
 #!/usr/bin/env python
 
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from past.utils import old_div
 U_tmpl = """ "U_%(U)s":[("I_%(I1)s", 2), ("I_%(I2)s", 2), ("W_%(W1)s", 2), ("W_%(W2)s",1)], 
 "Up_%(U)s":[("Wp_%(W1)s", 3), ("Wp_%(W2)s",2), ("I_%(I1)s", 1), ("I_%(I2)s", 1)], 
 "I_%(I1)s":[("Up_%(U)s", 3), ("U_%(U)s", 1)],
@@ -120,31 +129,31 @@ G_BB={"U_0":[("I_0", 2), ("I_1", 2), ("W_0", 2), ("W_1",1)],
 }
 
 def main():
-    for i in xrange(0, 20, 2): 
-        D={"U":i/2, "I1":i, "I2":i+1, "W1":i/2, "W2":i/2+1}
-        print U_tmpl%D
+    for i in range(0, 20, 2): 
+        D={"U":old_div(i,2), "I1":i, "I2":i+1, "W1":old_div(i,2), "W2":old_div(i,2)+1}
+        print(U_tmpl%D)
 
-    print
-    for i in xrange(0, 10): 
+    print()
+    for i in range(0, 10): 
         l,j=divmod(i,2)
-        D={"W":i, "U1":i-1, "U2":i, "V":i/2, "leg1":j+1,"leg2":j+2}    
-        print W_tmpl%D
+        D={"W":i, "U1":i-1, "U2":i, "V":old_div(i,2), "leg1":j+1,"leg2":j+2}    
+        print(W_tmpl%D)
     
-    print
-    for i in xrange(0, 10, 2): 
+    print()
+    for i in range(0, 10, 2): 
         l,j=divmod(i,2)
-        D={"V":i/2, "W1":i, "W2":i+1, "O":i/2}
-        print V_tmpl%D
+        D={"V":old_div(i,2), "W1":i, "W2":i+1, "O":old_div(i,2)}
+        print(V_tmpl%D)
 
 def Four2One():
-    for i in xrange(0, 5): 
+    for i in range(0, 5): 
         D={"U":i, "I1":4*i+1, "I2":4*i+2, "W1":2*i, "W2":2*i+1}
-        print U_tmpl%D
+        print(U_tmpl%D)
 
-    print
-    for i in xrange(0, 10, 2): 
-        D={"W":i, "U":i/2, "I":2*i, "V":i/2}
-        print W1_tmpl%D
+    print()
+    for i in range(0, 10, 2): 
+        D={"W":i, "U":old_div(i,2), "I":2*i, "V":old_div(i,2)}
+        print(W1_tmpl%D)
 #        l,j=divmod(i,2)
 #         D={"W":i, "U1":i-1, "U2":i, "V":i/2, "leg1":j+1,"leg2":j+2}    
 #         print W_tmpl%D

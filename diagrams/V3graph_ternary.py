@@ -5,8 +5,16 @@
     e.g. G_123_01 means map from site 123 to a upper layer at 01
     this notation already contains info about num of sites and type of ops
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import *
 from merapy.graphics import Graphics
 import numpy as np
 
@@ -26,7 +34,7 @@ def init_mera_graph():
     order_top = np.ndarray(Graphics.MaxNode, "int")
     
     weight3 = {}
-    for k in G3.keys():
+    for k in list(G3.keys()):
         weight3[k] = 1/3.0    
 
     #  OO [['Vp_0', 1], ['Vp_1', 1], ['V_0', 4], ['V_1', 4]]
@@ -227,7 +235,7 @@ def init_g3():
     order_top = np.ndarray(Graphics.MaxNode, "int")
     
     weight3 = {}
-    for k in G3.keys():
+    for k in list(G3.keys()):
         weight3[k] = 1/3.0    
 
     #  OO [['Vp_0', 1], ['Vp_1', 1], ['V_0', 4], ['V_1', 4]]
@@ -431,7 +439,7 @@ def init_g2():
 
     
     weight2 = {}
-    for k in G2.keys():
+    for k in list(G2.keys()):
         weight2[k] = 1/3.0    
     #OO [('Vp_0', 1), ('Vp_1', 1), ('V_0', 4), ('V_1', 4)]
     #U_1 [('oo_2_3', 3), ('oo_2_3', 4), ('V_0', 3), ('V_1', 1)]
@@ -1308,7 +1316,7 @@ if __name__ == "__main__":
 
     #print G2
     #print G_22_2.keys()
-    print G_3_3
+    print(G_3_3)
 
 
 

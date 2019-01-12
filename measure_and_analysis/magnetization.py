@@ -9,7 +9,15 @@
         highly coincide results?
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 import os
 import math
 import numpy as np
@@ -77,7 +85,7 @@ def magnetization_bac(S, direction, info=0, tau=None):
 
         H_2, legs = S.H_2[ilayer_p1][0].contract(S.rho_2[ilayer_p1][0], V1, V2, use_buf=True)  #rho and H_2 fully contracted to a scalar
         res = H_2.data[0]
-        print res
+        print(res)
 
     S.H_2[ilayer][0] = h2_bac
     S.H_2[ilayer_p1][0] = H2_bac
@@ -178,7 +186,7 @@ def magnetization_bac(S, direction='z', r_mod2=0,  info=0, tau=None):
     if 0:     
         fluc = xx - xx.mean()
         fluc=fluc.tolist()
-        print 'fluctuation of <sigma> at different site %1.5e %1.5e %1.5e'%(tuple(fluc))
+        print('fluctuation of <sigma> at different site %1.5e %1.5e %1.5e'%(tuple(fluc)))
         res = np.sum(xx)
         
     S.H_2[ilayer][0] = h2_bac
@@ -224,9 +232,9 @@ def magnetization(S, direction='z', r_list=None, info=0, **kwargs):
         #if S.symmetry == 'U1' : 
         if  S.combine_2site  and S.model != 'Ising' :   #issue:  这里有个问题，算ising模型时，combine_2site = True, 这样，但实际上为False !
             #print 'sss', S.combine_2site, S.symmetry
-            r_list = range(6)
+            r_list = list(range(6))
         else: 
-            r_list = range(3)
+            r_list = list(range(3))
         
     for r in r_list: 
         res[r] = __magnetization(S, direction, r)
@@ -255,7 +263,7 @@ if __name__ == '__main__':
         if len(args['path'])>0:  
             args['path']=args['path'][0]
             S= System.load(args['path'])
-            print magnetization(S, 'z')
+            print(magnetization(S, 'z'))
            
         else: 
             #p1 = '/home/zhli/Documents/mera_backup_tensor/run-ising/ternary/z2-symm/scale-invar/h=1.0/4.pickle'
@@ -264,7 +272,7 @@ if __name__ == '__main__':
             args['path']=p1
             S= System.load(args['path'])
             res=magnetization(S, 'z')
-            print res
+            print(res)
             assert res[0] == 0.63641726101318663 
 
    

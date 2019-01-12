@@ -10,18 +10,28 @@ q:
     
 
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from past.utils import old_div
+from builtins import object
 import unittest
 import numpy as np
 import warnings
 from math import log
 
-from quantum_number import  * #QN_idendity, QSp_base, QuantSpace, QSp_null
-from graphics import Graphics
-from tensor import *
-from tensor_svd import *
+from .quantum_number import  * #QN_idendity, QSp_base, QuantSpace, QSp_null
+from .graphics import Graphics
+from .tensor import *
+from .tensor_svd import *
 #from random_64 import mrandom
-import crandom
-from tensor_reflection import TensorReflect
+from . import crandom
+from .tensor_reflection import TensorReflect
 
 
 __all__ = ["Mera"]
@@ -81,7 +91,7 @@ def calc_ascending_site(n, n_min=1, lay=None):
     tube = [(n-1, n)]  #auto complete to two-site ops
     
     while 0: 
-        print 'hhhhh'
+        print('hhhhh')
         n_mod3 = n%3
         n_div3 = n//3
        
@@ -138,7 +148,7 @@ def coarse_grain_map(X, tau=0, n=1, T=None, return_full_list=0):
             break 
         for x in X:
             if x%base ==  0 : 
-                x1 = [x/3]
+                x1 = [old_div(x,3)]
             else: 
                 x1 = [x//3, x//3  + 1]
             for a in x1: 
@@ -160,7 +170,7 @@ def fine_grain_map(X, tau, n):
     temp = [(i, i+1) for i in range(1000)]
     res= [i for i in temp if coarse_grain_map(i, 0, n)==X]
     #res = calc_ascending_site(27, n_min=1, lay=1 )
-    print res
+    print(res)
     #res= []  
 
 def calc_ascending_site_binary(n, n_min=1, lay=None): 
@@ -222,14 +232,14 @@ def mera_full_graph():
     site = OrderedDict()
     #site at each layer, number
     num_of_layer = 6
-    N0 = 2*3**(num_of_layer/2)
+    N0 = 2*3**(old_div(num_of_layer,2))
     Nlay = OrderedDict()
     node_U = OrderedDict()
     node_V = OrderedDict()
     
     Nlay[0] = N0
-    for l in range(1, num_of_layer/2): 
-        Nlay[l] = Nlay[l-1]/3
+    for l in range(1, old_div(num_of_layer,2)): 
+        Nlay[l] = old_div(Nlay[l-1],3)
         for n in range(Nlay[l]): 
             #site[l, n] = {'in':     , 'out': {'arrow': ' ', 'pos':    }}
             n_mod3 = n%3 
@@ -237,10 +247,10 @@ def mera_full_graph():
             out_arrow_name = 'V' if n_mod3 == 0 else 'U'
             in_arrow_name  = 'V' if n_mod3 == 0 else 'U' 
             site[l, n] = {
-                    'in_arrow':  {'name':  in_arrow_name, 'lay': l-1, 'pos': (n-n_mod3)/3}, 
-                    'out_arrow': {'name': out_arrow_name, 'lay': l+1, 'pos': (n-n_mod3)/3}
+                    'in_arrow':  {'name':  in_arrow_name, 'lay': l-1, 'pos': old_div((n-n_mod3),3)}, 
+                    'out_arrow': {'name': out_arrow_name, 'lay': l+1, 'pos': old_div((n-n_mod3),3)}
                     }
-    print site   
+    print(site)   
 
 class SupportSet(object): 
     """  
@@ -307,7 +317,7 @@ class SupportPaternEff(object):
                 s += 'l={} \t{}\n'.format(i, p)
             else: 
                 s += 'l={} \t{} \n\t... {}\n'.format(i, p[:4], p[-4: ])
-        print s 
+        print(s) 
         
 SPE = SupportPaternEff 
     
@@ -356,8 +366,8 @@ class Mera(object):
                 }
         
         if tensor_defs is not None:
-            for k, v in tensor_defs.iteritems():
-                if self.tensor_defs.has_key(k):
+            for k, v in tensor_defs.items():
+                if k in self.tensor_defs:
                     self.tensor_defs[k].update(v)
                 else:
                     self.tensor_defs[k] = v
@@ -396,7 +406,7 @@ class Mera(object):
             a = self.__getattribute__(i)
             b = other.__getattribute__(i)
             if  a != b :
-                print i, a, b
+                print(i, a, b)
                 res = False
                 break
         return res
@@ -410,10 +420,10 @@ class Mera(object):
         """
         
         """
-        from quantum_number import init_System_QSp
+        from .quantum_number import init_System_QSp
 
         #from quantum_number import QSp_base, QN_idendity
-        from tensor_network import TensorNetwork
+        from .tensor_network import TensorNetwork
 
         QN_idendity, QSp_base , QSp_null = init_System_QSp(symmetry=symmetry)
 
@@ -426,7 +436,7 @@ class Mera(object):
             trunc_dim = trunc_dim if trunc_dim is not None else 2  
             qsp_max = qsp_0.copy()
             print_vars(vars(),  ['trunc_dim'])
-            qsp_max.Dims[0:2] = trunc_dim/2
+            qsp_max.Dims[0:2] = old_div(trunc_dim,2)
             qsp_max.RefQN[0,0:2] = [1,1]
             qsp_max.RefQN[1,0:2] = [0,0]
             qsp_max.update()
@@ -532,7 +542,7 @@ class Mera(object):
         #assign init value for legs of U and V tensors
         #U的2，3两条腿朝上
         down, up = self.tensor_defs["U"]["type"]
-        QSp_U = qsp.copy_many(down) + qsp.copy_many(up, reverse=range(up))
+        QSp_U = qsp.copy_many(down) + qsp.copy_many(up, reverse=list(range(up)))
         down = self.tensor_defs["V"]["type"][0]
         QSp_V = qsp.copy_many(down)
         
@@ -779,7 +789,7 @@ class Mera(object):
         status_1_uncheck
         """
         if U.rank  !=  4:  
-            print 'Not a disentanger'
+            print('Not a disentanger')
             exit()
         return iTensor.unit_tensor(U)
 
@@ -860,7 +870,7 @@ class Mera(object):
         """  which  = ["U", "V", "U_dag", "V_dag"]"""
         
         if layers==[] :
-            layers=range(self.num_of_layer)
+            layers=list(range(self.num_of_layer))
         res= ""
         name = ["U", "V"]
         if which != None :
@@ -932,10 +942,10 @@ class xtest_Mera(object):
         """
         borrowed from main.py for debuging
         """
-        from quantum_number import init_System_QSp
+        from .quantum_number import init_System_QSp
 
         #from quantum_number import QSp_base, QN_idendity
-        from tensor_network import TensorNetwork
+        from .tensor_network import TensorNetwork
 
         QN_idendity, QSp_base , QSp_null = init_System_QSp(symmetry=symmetry)
 
@@ -948,7 +958,7 @@ class xtest_Mera(object):
         
         if symmetry == "Z2" :
             qsp_max = qsp_0.copy()
-            qsp_max.Dims[0:2] = trunc_dim/2
+            qsp_max.Dims[0:2] = old_div(trunc_dim,2)
             qsp_max.RefQN[0,0:2] = [1,1]
             qsp_max.RefQN[1,0:2] = [0,0]
             qsp_max.update()
@@ -1000,9 +1010,9 @@ class TestIt(unittest.TestCase):
         if 1: 
             X = [1, 2, 3]; tau = 0; n = 1
             for i in range(6): 
-                X = range(i, i + 3)
+                X = list(range(i, i + 3))
                 res = coarse_grain_map(X, tau, n) 
-                print X, res 
+                print(X, res) 
         
         res = SupportSet.split_disconnect(((1, 2, 3,  5, 6, 7, 10, 11)))
         self.assertEqual(res, ((1, 2, 3), (5, 6, 7), (10, 11)))
@@ -1193,8 +1203,8 @@ if __name__=='__main__':
         #M = tm.instance(trunc_dim=4, tot_layer=4, symmetry="Travial")
         M = tm.instance(trunc_dim=6, tot_layer=4, symmetry="Z3")
         #M = tm.instance(trunc_dim=11, tot_layer=4, symmetry="Travial")
-        print M
-        print type(M.topQN.val)
+        print(M)
+        print(type(M.topQN.val))
         #M.show_param()
 
         

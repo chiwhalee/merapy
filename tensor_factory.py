@@ -2,6 +2,14 @@
 #coding=utf8
 
 from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from builtins import object
 import unittest
 import nose
 import warnings
@@ -92,7 +100,7 @@ class iTensorFactory(object):
             while  q = QspU1.easy_init([0, 1, -1], [2, 3, 5]) will raise 
         """
         res= iTensor(QSp=qsp.copy_many(2))
-        for i in xrange(res.nidx): 
+        for i in range(res.nidx): 
             sh=res.get_block_shape(i) 
             d = sh[0]
             temp = np.identity(d, dtype=res.dtype).ravel()            
@@ -255,7 +263,7 @@ class iTensorFactory(object):
                     sigma_y2.set_element(qDims=[1, 0], iDims=[1, 1], X= 1.0) 
             
             else :   #both work
-                    print 'in tensor_py.py changeed '*30
+                    print('in tensor_py.py changeed '*30)
                     pau1 = iTensorFactory.pauli_mat_1site(symmetry=symmetry)
                     s0, sx, sy, sz = pau1['s0'], pau1['sx'], pau1['sy'], pau1['sz']
                     
@@ -544,7 +552,7 @@ class iTensorFactory(object):
             I, Z = sigma_0, sigma_z 
         F = -sigma_z   # this used in jordan-wigner trans
         temp = vars()
-        res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
+        res= {k: v for k, v in temp.items() if isinstance(v, iTensor)}
         for i in res: 
             res[i].type_name = i 
         zero = res['I'].copy()
@@ -655,9 +663,9 @@ class iTensorFactory(object):
             sm = sp.conjugate(1)
 
             if 0:
-                print sz #.matrix_view()
-                print sp.matrix_view()
-                print sm.matrix_view()
+                print(sz) #.matrix_view()
+                print(sp.matrix_view())
+                print(sm.matrix_view())
             
             szz = sz.tensor_prod(sz)
             spm = sp.tensor_prod(sm)
@@ -670,7 +678,7 @@ class iTensorFactory(object):
             raise 
         
         temp = vars()
-        res= {k: v for k, v in temp.iteritems() if isinstance(v, iTensor)}
+        res= {k: v for k, v in temp.items() if isinstance(v, iTensor)}
         for i in res: 
             res[i].type_name = i 
             
@@ -699,14 +707,14 @@ class iTensorFactory(object):
 
             z, p, m = sigma_z, sigma_p, sigma_m
             i = I_2
-            print "check using two methods to define h2 and h3"
+            print("check using two methods to define h2 and h3")
             h2a = xx  + (-1.0)*yy
             h2b = 2.0*(pm + mp)
-            print np.all(h2a.data==h2b.data)
+            print(np.all(h2a.data==h2b.data))
 
             h3a = (-1.0)*y.direct_product(i).direct_product(y) + x.direct_product(i).direct_product(x)
             h3b = 2.0*(p.direct_product(i).direct_product(m) + m.direct_product(i).direct_product(p))
-            print np.all(h3a.data==h3b.data)
+            print(np.all(h3a.data==h3b.data))
         if self.symmetry == "Z2":
             pauli = self.pauli_mat()
             I_2, szz, spm, smp= pauli["sigma_0"], pauli["szz"], pauli["spm"], pauli["smp"]
@@ -718,15 +726,15 @@ class iTensorFactory(object):
             z, p, m = sigma_z, sigma_p, sigma_m
             i = I_2
             
-            print "check using two methods to define h2 and h3"
+            print("check using two methods to define h2 and h3")
             h2a = xx  + (-1.0)*yy
             h2b = 2.0*(pm + mp)
-            print h2a.data
-            print h2b.data
+            print(h2a.data)
+            print(h2b.data)
 
             h3a = (-1.0)*y.direct_product(i).direct_product(y) + x.direct_product(i).direct_product(x)
             h3b = 2.0*(p.direct_product(i).direct_product(m) + m.direct_product(i).direct_product(p))
-            print np.all(h3a.data==h3b.data)
+            print(np.all(h3a.data==h3b.data))
 
     @staticmethod
     def fermion_op(symmetry, shift_qn=True):
@@ -838,7 +846,7 @@ class iTensorFactory(object):
                 'n_i', 'n_up', 'n_dn', 'n_up_prod_n_dn'] 
         
         dic = locals()
-        res= {a:dic[a] for a in temp if dic.has_key(a)}
+        res= {a:dic[a] for a in temp if a in dic}
         for i in res:
             res[i].type_name = i
         
@@ -931,7 +939,7 @@ class iTensorFactory(object):
                     if not shift_qn:
                         totqn =  QnU1(n) 
                         q = make_qsp(symmetry, 
-                            range(nmax + 1), 
+                            list(range(nmax + 1)), 
                             [1]*(nmax + 1), 
                             )
                     else:
@@ -939,7 +947,7 @@ class iTensorFactory(object):
                         nmax_half = (nmax )//2
                         totqn =  QnU1(n-nmax_half) 
                         q = make_qsp(symmetry, 
-                            range(-nmax_half, nmax_half + 1), 
+                            list(range(-nmax_half, nmax_half + 1)), 
                             [1]*(nmax + 1), 
                             )
                         
@@ -976,7 +984,7 @@ class iTensorFactory(object):
             scalar 1 with dummy indices 
         """
         qsp_class= symmetry_to_QspClass(symmetry)
-        qsp = [qsp_class.null() for i in xrange(rank)]
+        qsp = [qsp_class.null() for i in range(rank)]
         res= iTensor(QSp=qsp, dtype=dtype)
         if dtype == float:  
             res.data[0] = 1.0
@@ -989,7 +997,7 @@ class TestIt(unittest.TestCase):
         qsp = QspU1.easy_init([0, 1, -1], [4, 2, 2])
         t = iTensorFactory.diagonal_tensor_rank2(qsp )
         t.show_data()
-        print t.to_ndarray()
+        print(t.to_ndarray())
             
     def test_spin_one_mat(self): 
         #t = iTensorFactory.spin_one_mat('U1')
@@ -1064,7 +1072,7 @@ class TestIt(unittest.TestCase):
 
 if __name__ == "__main__":
     
-    if 0:
+    if 1:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main(verbosity=-10)
        

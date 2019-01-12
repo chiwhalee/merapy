@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 #coding=utf8
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
 import unittest
 import time
 from math import log10
@@ -52,7 +62,7 @@ if 0:
         
         for iter  in range(iter0, q_iter+iter0):
             if info>0:  
-                print str(iter) + "th iteratiion"
+                print(str(iter) + "th iteratiion")
             
             #update rho_2[M.num_of_layer-1]        
             if rho_top_func.__name__ == "top_level_eigenstate": 
@@ -116,7 +126,7 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
     
 
     if info>0:
-        print "START finite_site"
+        print("START finite_site")
 
     err_tol = 1.E-7
     
@@ -136,7 +146,7 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
     for iter  in range(iter0 + 1, q_iter+iter0 + 1):   #for iter  in range(q_iter):
         
         if info>0:
-            print str(iter) + "th iteratiion"
+            print(str(iter) + "th iteratiion")
         if use_player:
             if iter0 == 0:
                 set_STATE_end_1(iter, record_at=iter0 + 2, power_on=True)
@@ -150,7 +160,7 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
         for ilayer in range(lstart, M.num_of_layer-1):
             #注意对于finite range，在fortran的算法里，最上层的V张量是个摆设，不是实际的最上层!, 它的值没有被更新过
             if info>1:
-                print "\nupdating layer", ilayer
+                print("\nupdating layer", ilayer)
                 
             if start:   
                 ascending(M,S,ilayer,info=info-1)
@@ -162,7 +172,7 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
 
         for ilayer  in range(M.num_of_layer-2, lstart-1, -1):
             if info>1:
-                print "updating layer", ilayer
+                print("updating layer", ilayer)
             for iter_lay in range(q_lay):
                 update_mera(M,S,ilayer,j=0,  info=info-1)
 
@@ -175,7 +185,7 @@ def finite_site(M, S, ascending, descending, update_mera,  rho_top_func,
         S.display(S.iter, filename)
         
     if info>0:
-        print "END finite_site"
+        print("END finite_site")
 
 def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func, 
         q_one, q_lay, q_iter, q_iter_relative=False, use_player=False, 
@@ -222,9 +232,9 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
     q_iter = q_iter + iter0 + 1 if q_iter_relative else  q_iter + 1
     is_resumed = False
 
-    for iter  in xrange(iter0 + 1, q_iter):
+    for iter  in range(iter0 + 1, q_iter):
         if info>0:
-            print str(iter) + "th iteratiion"
+            print(str(iter) + "th iteratiion")
         if 1: 
         #if iter-iter0>10:
             #if run_time_max is not None: 
@@ -232,7 +242,7 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
             #        print "\nENERGY_DIFF IS TOO SMALL, BREAK AT HERE. steps= %(steps)d\n"%vars()
             #        break
             if abs(S.energy_diff_std) < energy_diff_min:
-                print "energy_diff lower than energy_diff_min = %1.2e. BREAK AT HERE."%energy_diff_min
+                print("energy_diff lower than energy_diff_min = %1.2e. BREAK AT HERE."%energy_diff_min)
                 #self.is_break = True
                 break
             
@@ -296,15 +306,15 @@ def finite_site_u1(M, S, ascending, descending, update_mera, rho_top_func,
                     S.save(fn=temp, use_local_storage=S.use_local_storage)
             
     iter_tot = S.iter1-iter0
-    if info>-1: msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
+    if info>-1: msg = '\ttotal number of iteration is %d'%(iter_tot); print(msg)
     if iter_tot>0 : 
         temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
         if temp is not None: 
-            print "\nS has been changed, save at final iter"
+            print("\nS has been changed, save at final iter")
             S.save(fn=temp, use_local_storage=S.use_local_storage)
 
 
-class ScaleInvar():
+class ScaleInvar(object):
     """
         tested by compareing  with Heisenberg/scaleinvariant.f90, the results coincide for all digits
     """
@@ -362,7 +372,7 @@ class ScaleInvar():
 
         
         aa = "\nSTART SCALE_INVARIANT ITERATION\n"
-        print aa 
+        print(aa) 
        
         iter0 = S.iter1
         
@@ -382,7 +392,7 @@ class ScaleInvar():
                         
                 #if abs(S.energy_diff) < self.energy_diff_min:
                 if abs(S.energy_diff_std) < self.energy_diff_min:
-                    print "energy_diff lower than energy_diff_min = %1.2e. BREAK at here."%self.energy_diff_min
+                    print("energy_diff lower than energy_diff_min = %1.2e. BREAK at here."%self.energy_diff_min)
                     #self.is_break = True
                     break 
             
@@ -420,12 +430,12 @@ class ScaleInvar():
                         S.save(fn=temp, use_local_storage=self.use_local_storage)
         
         iter_tot = S.iter1-iter0
-        msg = '\ttotal number of iteration is %d'%(iter_tot); print msg
+        msg = '\ttotal number of iteration is %d'%(iter_tot); print(msg)
         if iter_tot>0 : 
             #temp = self.backup_fn if not self.use_local_storage else self.backup_fn_local
             temp = S.backup_path if not S.use_local_storage else S.backup_path_local 
             if temp is not None: 
-                print "\nS has been changed, save at final iter"
+                print("\nS has been changed, save at final iter")
                 S.save(fn=temp, use_local_storage=self.use_local_storage)
             
 
@@ -704,11 +714,11 @@ class ScaleInvar():
             #res = calc_scaling_dim_2site(ascending_func=self.ascending_ham, S=S, k=10, tol=1e-6)
             try:
                 res = calc_scaling_dim_2site(ascending_func=self.ascending_ham, S=S, k=10, tol=1e-6)
-                for i in res: print i, res[i];  
-                print '\n'
+                for i in res: print(i, res[i]);  
+                print('\n')
                 S.scaling_dim_record[S.iter] = res
             except Exception as err:
-                print err
+                print(err)
             
     
 
@@ -716,14 +726,14 @@ class TestScaleInvar(unittest.TestCase):
     def setUp(self): 
         pass
     def test_it(self): 
-        from ascending import ascending_ham
-        from descending import descending_ham
-        from iteration import iterative_optimize_all
+        from .ascending import ascending_ham
+        from .descending import descending_ham
+        from .iteration import iterative_optimize_all
         #from all_in_once import 
-        from finite_site import finite_site_u1
-        from top_level import top_level_product_state_u1
+        from .finite_site import finite_site_u1
+        from .top_level import top_level_product_state_u1
 
-        from main import  Main
+        from .main import  Main
 
         import warnings
         warnings.filterwarnings('ignore') 
@@ -732,7 +742,7 @@ class TestScaleInvar(unittest.TestCase):
         updaters_u1 = {"ascending_func":ascending_ham, "descending_func":descending_ham, "update_mera_func":iterative_optimize_all, 
             "finite_range_func":finite_site_u1, "rho_top_func":top_level_product_state_u1}
 
-        from decorators import profileit
+        from .decorators import profileit
 
         #main=profileit(fn="profile.tmp")(main)
         ising_model_param = {"h":-1.0, "J_NN":-1.0, "J_NNN":0.0}
@@ -759,7 +769,7 @@ class TestScaleInvar(unittest.TestCase):
             res= {0: 0, 1: -0.14306831775876239, 2: -0.28302724810836422, 3: -0.37443146281546302, 4: -0.4519070431176464, 5: -0.52841563236836264, 6: -0.60836365005944959, 7: -0.69261165207729269, 8: -0.77380310057594426, 9: -0.84634118594060803, 10: -0.91177543745081024}
             S.examine_energy(res, delta=2e-12)
             
-            print  'see if resumed successfully'
+            print('see if resumed successfully')
             S=main.run_scale_invar(q_iter=10,  do_measure=0)
             
 

@@ -1,11 +1,19 @@
 #coding=utf8
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 import numpy as np
 import unittest 
 
-from mera import *
-from hamiltonian import *
-from tensor_svd import Tensor_svd
+from .mera import *
+from .hamiltonian import *
+from .tensor_svd import Tensor_svd
 #from init_mera_graph import init_gtop
 from merapy.diagrams.V31.graph_ternary import GTop, order_top
 import warnings
@@ -43,7 +51,7 @@ if 0:
         
     #    print 'E1,E2=', E1,E2
         if E2 <= E0:  
-            print 'E2=', E2
+            print('E2=', E2)
             M.V[iLayer+1][j] = V2
     #        print_iTensor(M.V[iLayer+1][j], True )
             topQN = tQN
@@ -266,7 +274,7 @@ def top_level_product_state_u1_1site(M,S):
     temp = M.V[iLayer-1][j]
     if 0:
         t = iTensor(0, [QspU1.easy_init([1], [2])], QnU1(1))
-        print t
+        print(t)
         exit()
     
     
@@ -286,7 +294,7 @@ def top_level_product_state_u1_1site(M,S):
     qDims[:] = 2 #[1, 0, 0, 1]#[1, 0, 1, 0]
     iDims[:] = 0
     S.rho_2[iLayer][0].set_element(qDims, iDims, 0.5)
-    print S.rho_2[iLayer][0]
+    print(S.rho_2[iLayer][0])
     #exit()
     
     
@@ -307,7 +315,7 @@ class TestIt(unittest.TestCase):
         S= System.example(M, symm, 'Heisenberg')
         #top_level_eigenstate(M, S)
         print_vars(vars(),  ['M', 'S'])
-        import decorators
+        from . import decorators
         from merapy.ascending import ascending_ham 
         #np.set_printoptions(precision=3)
         decorators.tensor_player.STATE = 'stop'
@@ -332,7 +340,7 @@ class TestIt(unittest.TestCase):
         S= System.example(M, symm, 'Heisenberg', info=2)
         #top_level_eigenstate(M, S)
         #print_vars(vars(),  ['M', 'S'])
-        import decorators
+        from . import decorators
         from merapy.ascending import ascending_ham 
         #np.set_printoptions(precision=3)
         decorators.tensor_player.STATE = 'stop'
@@ -355,17 +363,17 @@ class TestIt(unittest.TestCase):
 
 if __name__ == "__main__":
     if 0: 
-        from mera import test_Mera
+        from .mera import test_Mera
         if 0:
             M = test_Mera.instance(trunc_dim=2, tot_layer=4, symmetry="Z2")
             sys= test_System.instance(M, model="Ising", symmetry="Z2", only_NN=False)
             
             #top_level_ham2(M, sys, M.topQN)
-            print M.V[3][0]
+            print(M.V[3][0])
             top_level_eigenstate(M, sys)
             #top_level_product_state(M, sys)
-            print sys.rho_2[3].O[0]
-            print sys.rho_3[3].O[0]
+            print(sys.rho_2[3].O[0])
+            print(sys.rho_3[3].O[0])
         if 1:
             M = test_Mera.instance(trunc_dim=3, tot_layer=4, symmetry="Z3")
             sys = test_System.instance(M, model="Potts", symmetry="Z3", only_NN=False)
@@ -374,8 +382,8 @@ if __name__ == "__main__":
             #print M.V[3][0]
             #top_level_eigenstate(M, sys)
             top_level_product_state_u1(M, sys)
-            print sys.rho_2[3][0]
-            print sys.rho_3[3][0]
+            print(sys.rho_2[3][0])
+            print(sys.rho_3[3][0])
 
         if 0:
             M = test_Mera.instance(trunc_dim=4, tot_layer=4, symmetry="U1")

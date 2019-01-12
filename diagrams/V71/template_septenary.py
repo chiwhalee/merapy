@@ -3,7 +3,14 @@
     this is just renamed from Seven2One.py 
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 U_tmpl = """ "U_%(U)s":[("I_%(I1)s", 2), ("I_%(I2)s", 2), ("V_%(V1)s", 7), ("V_%(V2)s",1)], 
 "Up_%(U)s":[("Vp_%(V1)s", 8), ("Vp_%(V2)s",2), ("I_%(I1)s", 1), ("I_%(I2)s", 1)], 
 "I_%(I1)s":[("Up_%(U)s", 3), ("U_%(U)s", 1)],
@@ -57,17 +64,17 @@ def main():
     i = 2
     j = 7*(i-1)+1
     D={"U":i, "V1":i-1, "V2":i, "I1":j-1, "I2":j}
-    print U_tmpl % D
+    print(U_tmpl % D)
     
     i = 1
     j = 7*(i-1)+1
     D={"V":i, "U1":i, "U2":i+1, "O":i, "I1":j+1, "I2":j+2,"I3":j+3,"I4":j+4,"I5":j+5}
-    print V_tmpl % D
+    print(V_tmpl % D)
 
     i = 2
     j = 7*(i-1)+1
     D={"V":i, "U1":i, "U2":i+1, "O":i, "I1":j+1, "I2":j+2,"I3":j+3,"I4":j+4,"I5":j+5}
-    print V_tmpl % D
+    print(V_tmpl % D)
     
     
 if __name__ == "__main__":

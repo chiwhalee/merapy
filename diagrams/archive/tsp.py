@@ -1,4 +1,13 @@
 #!/usr/bin/env python
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
 from sets import Set
 import sys
 
@@ -104,10 +113,10 @@ import sys
 def find_all_path(g, start, end, path=[]):
     path = path+[start]
     if (start==end):
-        if len(path) == len(g.keys()):
+        if len(path) == len(list(g.keys())):
             return [path]
         return []
-    if not g.has_key(start):
+    if start not in g:
         return []
     paths = []
     for node in g[start]:
@@ -119,11 +128,11 @@ def find_all_path(g, start, end, path=[]):
 
 def gnode(gmera):
     g = {}
-    for k in gmera.keys():
-        if not g.has_key(k): 
+    for k in list(gmera.keys()):
+        if k not in g: 
             g[k] = []
         for leg in gmera[k]:
-            for kp in gmera.keys():
+            for kp in list(gmera.keys()):
                 if kp != k:
                     if (leg in gmera[kp]) and (not kp in g[k]):
                         g[k].append(kp)
@@ -131,7 +140,7 @@ def gnode(gmera):
 
 def contract_gmera(gmera, path, pr= False):
     if pr:
-        print path
+        print(path)
     S1 = Set(gmera[path[0]])
     S2 = Set(gmera[path[1]])
     SS = S1&S2
@@ -139,8 +148,8 @@ def contract_gmera(gmera, path, pr= False):
     max_leg = len(St)
     max_comp = len(St)+len(SS) 
     if pr:
-        print S1, S2
-        print str(path[1])+',', len(St), len(St)+len(SS), St
+        print(S1, S2)
+        print(str(path[1])+',', len(St), len(St)+len(SS), St)
         
     for p in path[2:]:
         S1 = St
@@ -150,9 +159,9 @@ def contract_gmera(gmera, path, pr= False):
         max_leg = max(max_leg, len(St))
         max_comp = max(max_comp, len(St)+len(SS))
         if pr:
-            print str(p)+',', len(St), len(St)+len(SS), St
+            print(str(p)+',', len(St), len(St)+len(SS), St)
     if len(St) != 0:
-        print St
+        print(St)
         return -1,-1
     return max_leg, max_comp
 
@@ -160,14 +169,14 @@ def GC2GE(gc):
     ge = {}
     gm = {}
     ne = 0
-    for node in gc.keys():
+    for node in list(gc.keys()):
         i = 0
         gm[node] = []
         for edge in gc[node]:
             i+=1
-            if ge.has_key((node,i)):
-                print "error"
-            if not ge.has_key(edge):
+            if (node,i) in ge:
+                print("error")
+            if edge not in ge:
                 ne += 1                
                 ge[(node,i)] = [edge, ne]
                 gm[node].append(ne)
@@ -193,11 +202,11 @@ def GC2GE(gc):
 #     }
 
 def add_graph(gx1, gx2):
-    k1s = gx1.keys()
+    k1s = list(gx1.keys())
     k1s.sort()
 
     gx3 = {}
-    k2s = gx2.keys()
+    k2s = list(gx2.keys())
     k2s.sort()
     for k2 in k2s:
         gx3[k2+100] = []
@@ -206,7 +215,7 @@ def add_graph(gx1, gx2):
 #        print k2+100, gx3[k2+100]
 
 #    print
-    k3s = gx3.keys()
+    k3s = list(gx3.keys())
     k3s.sort()
         
     k1_link = k1s[-1]
@@ -243,38 +252,38 @@ def add_graph(gx1, gx2):
 
 def get_path_cost(gx):
     ge,gm=GC2GE(gx)
-    for k in gm.keys():
-        print k, gm[k]
+    for k in list(gm.keys()):
+        print(k, gm[k])
     graph = gnode(gm)
 
-    ks = graph.keys()
+    ks = list(graph.keys())
     ks.sort()
     for k in ks:
         graph[k].sort()    
 
-    print    
+    print()    
     max_leg = 1000; max_comp = 1000    
-    for i in xrange(0,len(ks)):
-        for j in xrange(i+1, len(ks)):
+    for i in range(0,len(ks)):
+        for j in range(i+1, len(ks)):
             start = ks[i]; end = ks[j]
             paths=find_all_path(graph,start,end)
             for p in paths:
                 leg,comp=contract_gmera(gm, p)#, True)
                 if leg < 0:
-                    print 'error contracting'
+                    print('error contracting')
                     sys.exit(-1)
                 if ((comp<=max_comp)):# or (leg<=max_leg)):
                     max_comp = comp
                     if (leg<=max_leg):
                         max_leg = leg
-                    print leg,comp, p
+                    print(leg,comp, p)
 
                         
 from Four2One_graph import *
 
 gx = gx1_3[4]
 
-for i in xrange(-3,5):
+for i in range(-3,5):
     gx = gx1_2[i]
     get_path_cost(gx)    
     gx = gx1_3[i]
@@ -285,16 +294,16 @@ for i in xrange(-3,5):
 sys.exit(0)
                        
 ge,gm=GC2GE(gx)
-for k in gm.keys():
-    print k, gm[k]
+for k in list(gm.keys()):
+    print(k, gm[k])
 graph = gnode(gm)
 
-ks = graph.keys()
+ks = list(graph.keys())
 ks.sort()
 for k in ks:
     graph[k].sort()    
 
-print    
+print()    
 #path = [8, 3, 102, 2, 9, 4, 5, 7, 104, 106, 101, 1, 6, 103]
 #contract_gmera(gm, path, pr=True)
 
@@ -311,17 +320,17 @@ print
 # print
 
 max_leg = 1000; max_comp = 1000    
-for i in xrange(0,len(ks)):
-    for j in xrange(i+1, len(ks)):
+for i in range(0,len(ks)):
+    for j in range(i+1, len(ks)):
         start = ks[i]; end = ks[j]
         paths=find_all_path(graph,start,end)
         for p in paths:
             leg,comp=contract_gmera(gm, p)#, True)
             if leg < 0:
-                print 'error contracting'
+                print('error contracting')
                 sys.exit(-1)
             if ((comp<=max_comp)):# or (leg<=max_leg)):
                 max_comp = comp
                 if (leg<=max_leg):
                     max_leg = leg
-                print leg,comp, p
+                print(leg,comp, p)

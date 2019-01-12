@@ -1,3 +1,11 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
+from builtins import object
 import numpy as np
 
 from merapy.tensor_py import iTensor
@@ -81,7 +89,7 @@ if __name__ == '__main__':
     qsp_base=QspZ3.easy_init(qns=[0, 1, 2], dims=[1, 1, 1])
 
     h0=potts(symmetry='Z3', qsp_base=qsp_base, h=1.0, J_NNN=0.0)
-    print h0[2].data
+    print(h0[2].data)
 
 
 

@@ -4,6 +4,13 @@
 
 from __future__ import print_function
 from __future__ import unicode_literals
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import zip
+from builtins import map
+from builtins import *
 from collections import namedtuple
 from platform import python_version_tuple
 
@@ -12,7 +19,7 @@ if python_version_tuple()[0] < "3":
     _none_type = type(None)
     _int_type = int
     _float_type = float
-    _text_type = unicode
+    _text_type = str
     _binary_type = str
 else:
     from functools import reduce
@@ -249,7 +256,7 @@ def _align_column(strings, alignment, minwidth=0):
     else:
         strings = [s.strip() for s in strings]
         padfn = _padright
-    maxwidth = max(max(map(len, strings)), minwidth)
+    maxwidth = max(max(list(map(len, strings))), minwidth)
     return [padfn(maxwidth, s) for s in strings]
 
 
@@ -277,7 +284,7 @@ def _column_type(strings):
     True
 
     """
-    types = map(_type, strings)
+    types = list(map(_type, strings))
     return reduce(_more_generic, types, int)
 
 

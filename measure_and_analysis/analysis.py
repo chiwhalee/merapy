@@ -9,12 +9,26 @@
     the art of data analysys:
         1. data mongling is invenitable
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import input
+from builtins import filter
+from builtins import zip
+from builtins import map
+from builtins import str
+from builtins import range
+from builtins import *
+from past.utils import old_div
 import unittest
 import argparse, argcomplete
 import os,  sys
 import copy 
 import pprint
-import cPickle as pickle
+import pickle as pickle
 import numpy as np
 import pandas as pd
 from collections import OrderedDict
@@ -32,7 +46,7 @@ import types
 
 from merapy.utilities import print_vars, OrderedSet 
 from merapy.hamiltonian import System
-from tabulate import tabulate
+from .tabulate import tabulate
 from merapy.measure_and_analysis.measurement import mera_backup_dir_finder,  measure_all as measure_all_orig
 from merapy.context_util import rpyc_conn 
 import merapy.measure_and_analysis.result_db as result_db_module 
@@ -41,7 +55,7 @@ from merapy.measure_and_analysis.result_db import (ResultDB,
         ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
         ResultDB_proj_qmc, ResultDB_bethe_ansatz, 
         BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT, LOCAL_HOSTNAME)
-from result_db import (  MARKER_CYCLE, 
+from .result_db import (  MARKER_CYCLE, 
         AnalysisTools, AnalyticFormular
         )
 
@@ -69,7 +83,7 @@ class OrderedDictLazy(OrderedDict):
             a = (a, )
         if a[-1] == '' : 
             a = a[: -1]
-        if not self.has_key(a): 
+        if a not in self: 
             try: 
                 p = self.alpha_parpath_dict[a]
                 db =self.result_db_class(parpath=p,  
@@ -105,13 +119,13 @@ class AlphaList(list):
         if len(self.param_list)==1: 
             return self.param_list[0], 0 
             
-        temp = zip(*aa)
+        temp = list(zip(*aa))
         if len(aa) == 1: #then cant identify, just return empty str
             return 'NaN', 0
             
         # 这么做需要保证aa只有一个轴是不同的
         i = None   # some times aa is empty 
-        for i in xrange(len(temp)): 
+        for i in range(len(temp)): 
             if len(set(temp[i]))>1: 
                 break 
         if i is not None : 
@@ -138,7 +152,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         self.local_root = local_root
         if local_root is not None and not os.path.exists(self.local_root): 
             msg="local_root '%s' not exists, create one? yes(y) "%(self.local_root, )
-            i=raw_input(msg)
+            i=input(msg)
             if i.lower()=='y':
                 os.makedirs(self.local_root)
                 msg = 'path created'
@@ -220,7 +234,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     res= getattr(self, i)
                     break 
         if res is None: 
-            print '%s not found'%(name, )
+            print('%s not found'%(name, ))
         return res 
     
     def get_param_range(self, param, aa=None, param_list=None): 
@@ -267,7 +281,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if auto_refrese:
             if self.last_modify_time >  self._last_modify_time:
                 self._last_modify_time = self.last_modify_time
-                print 'set_parpath_dict called in filter_alpha'
+                print('set_parpath_dict called in filter_alpha')
                 self.set_parpath_dict()
         
         aa = aa if aa is not None else list(self.alpha_list) 
@@ -276,7 +290,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             return []
         num_param = len(param_list)
         #make each a into a tuple  if it is not 
-        aa = map(lambda a:  a if hasattr(a, '__iter__') else (a, ), aa)
+        aa = [a if hasattr(a, '__iter__') else (a, ) for a in aa]
         #if no_surfix: 
         #    #exclude such as (1.0, 'sufix') from aa 
         #    aa = filter(lambda x: not isinstance(x[-1], str),  aa)
@@ -284,9 +298,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if surfix is not None : 
             #surfix = None means all surfix; surfix = '' means empty surfix 
             if surfix == '' : 
-                aa = filter(lambda x: not isinstance(x[-1], str),  aa)
+                aa = [x for x in aa if not isinstance(x[-1], str)]
             else:
-                aa = filter(lambda x: x[-1]==surfix,  aa)
+                aa = [x for x in aa if x[-1]==surfix]
             
             if len(aa)==0: 
                 msg='in filter_alpha arg surfix "{}" may not correct,  return aa=[]'.format(surfix)
@@ -294,7 +308,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 return []
 
         
-        for k, v in kwargs.items(): 
+        for k, v in list(kwargs.items()): 
             if v is None:  # None means no constraint 
                 continue 
             if k not in param_list:
@@ -314,7 +328,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     func = lambda x: eval(v.replace(k, 'x[%d]'%i))
                 else: 
                     func = lambda x: eval(v.replace(k, '(x, )[%d]'%i))
-            aa = filter(func, aa)
+            aa = list(filter(func, aa))
             if len(aa)<1:
                 return []
         if resolution == 'default' : 
@@ -324,13 +338,13 @@ class Analysis(AnalysisTools, AnalyticFormular):
             if not hasattr(resolution, '__iter__'): 
                 resolution = float(resolution)
                 #use a[: num_param] is because there may be surfix a = (1.0, 'a') then 'a' is excluded
-                func=lambda a:   all(map(lambda x:  round(x/resolution, 8).is_integer(), a[: num_param]))
+                func=lambda a:   all([round(old_div(x,resolution), 8).is_integer() for x in a[: num_param]])
             else: 
-                ran = xrange(num_param)
+                ran = range(num_param)
                 #round is needed, because for example 0.3/0.1 = 02999999999996 
-                func=lambda a:   all(map(lambda i:  round((a[i]/resolution[i]), 8).is_integer(), ran))
+                func=lambda a:   all([round((old_div(a[i],resolution[i])), 8).is_integer() for i in ran])
             
-            aa = filter(func, aa)
+            aa = list(filter(func, aa))
             
         #aa = map(lambda a:  a if len(a)>1 else a[0], aa)
         
@@ -340,25 +354,25 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     dir = self.alpha_parpath_dict.get(a, 'nowhere')
                     fn = self.result_db_class.shape_to_backup_fn(sh)
                     path  = '/'.join([dir, fn])
-                    print 'ppp', path 
+                    print('ppp', path) 
                     return os.path.exists(path)
             else: 
                 if sh[1] != 'max': 
                     func = lambda a:  self[a].has_key_list(['energy', sh])
                 else:
                     func = lambda a:  self[a].has_key_list(['dim_max', sh[0]])
-            aa = filter(func, aa)
+            aa = list(filter(func, aa))
 
         if field is not None: 
             if sh is None: 
-                func = lambda a: self[a].has_key(field)
+                func = lambda a: field in self[a]
             else: 
                 func = lambda a: self[a].fetch_easy(field, sh)
-            aa = filter(func, aa) 
+            aa = list(filter(func, aa)) 
             
         
         if no_bad: 
-            aa = filter(lambda a: self[a]['status'] == 'good' , aa)
+            aa = [a for a in aa if self[a]['status'] == 'good']
         
         if no_field is not None: 
             assert field is None, 'field and no_field cant be given together'
@@ -374,7 +388,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if auto_refrese:
             temp = [a for a in aa if self[a].last_modify_time>self[a]._last_modify_time]
             if temp:
-                print 'set_rdb_dict called in filter_alpha'
+                print('set_rdb_dict called in filter_alpha')
                 self.set_rdb_dict(temp)
             
         return aa
@@ -415,7 +429,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 root = './'
         dir_list = os.listdir(root)
         if info>1: 
-            print 'dir_list is', dir_list
+            print('dir_list is', dir_list)
         signiture = signiture if signiture is not None else '='
         
         if 1: 
@@ -451,8 +465,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
     
     def scan_sub_analysis_top(self): 
         temp = os.listdir(self.local_root)
-        temp = filter(lambda x: '=' not in x, temp)
-        temp = filter(lambda x: os.path.isdir('/'.join([self.local_root, x])), temp)
+        temp = [x for x in temp if '=' not in x]
+        temp = [x for x in temp if os.path.isdir('/'.join([self.local_root, x]))]
         #print_vars(vars(),  ['temp']) 
         temp = [{'sub_dir': i} for i in temp]
         return temp 
@@ -461,8 +475,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         param_name = self.param_list
         assert param_name is not None 
         assert len(param_val_tuple)==len(param_name)
-        param_val_tuple = map(str, param_val_tuple)
-        fn = zip(param_name, param_val_tuple)
+        param_val_tuple = list(map(str, param_val_tuple))
+        fn = list(zip(param_name, param_val_tuple))
         fn = ['='.join(x) for x in fn]
         fn = '-'.join(fn)
         db_parpath = '/'.join([self.local_root, fn])
@@ -473,7 +487,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             msg = 'create parpath ... done'
         else:
             msg = 'parpath exists, denied'
-        print msg
+        print(msg)
         return db_parpath
             
     def get_db(self, param):
@@ -493,7 +507,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             #sub_dir = h if isinstance(h, str) else h['sub_dir']   #h may be a dir name or in the old format {'sub_dir': dir_name_str}
             sub_dir = h['sub_dir']
             sub_root = '/'.join([self.local_root, sub_dir])
-            if h.has_key('name'): 
+            if 'name' in h: 
                 name = 'an_' +  h['name']
             else: 
                 name = 'an_%s'%(sub_dir.replace('/', '_'), )
@@ -519,7 +533,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         for sub in self.sub_analysis: 
             if s in sub: 
                 return getattr(self, sub)
-        print  '%s not found in self.sub_analysis %s'%(s, self.sub_analysis)
+        print('%s not found in self.sub_analysis %s'%(s, self.sub_analysis))
     
     def set_rdb_dict(self, alpha_list=None, create_empty_db=1, 
             db_version=None, algorithm=None, reload_db_class=0, info=0):        
@@ -548,7 +562,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         else: 
             msg += '  for all alpha' 
         if info>0: 
-            print msg
+            print(msg)
         
         if len(error)>1: 
             msg = 'error in set_rdb_dict\n'
@@ -569,7 +583,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             msg = 'alpha_parpath_dict has been reset'
             print(msg)
         
-        alpha_list = dic.keys()
+        alpha_list = list(dic.keys())
         alpha_list.sort()
         self.alpha_list = list(alpha_list)
     
@@ -584,7 +598,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if not isinstance(alpha_str, str): 
             alpha_str = str(alpha_str)
         if alpha_list is None: 
-            all_key = self.alpha_parpath_dict.keys()
+            all_key = list(self.alpha_parpath_dict.keys())
         else: 
             all_key = alpha_list
         
@@ -600,8 +614,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
     
     def search_field(self, field_name): 
         res = []
-        for a in self.alpha_parpath_dict.keys(): 
-            if self[a].has_key(field_name): 
+        for a in list(self.alpha_parpath_dict.keys()): 
+            if field_name in self[a]: 
                 res.append(a)
         return res
             
@@ -614,11 +628,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if aa is None: 
             aa = self.alpha_list
         else: 
-            aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
+            aa = [a if not isinstance(a, float) else (a, ) for a in aa]
         aa = list(aa)
         dir_list = [self.alpha_parpath_dict[a] for a in aa]
         if 'C:' in dir_list[0] and use_dist_comp:
-            func = ResultDB.parpath_map.im_func
+            func = ResultDB.parpath_map.__func__
             dir_list = [func(a).replace('dropbox', '') for a in dir_list]
         dir_list = [d.replace(RESULTDB_DIR, BACKUP_STATE_DIR) for d in dir_list]
         if use_dist_comp: 
@@ -637,7 +651,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             take use of db.measure and use distributive compute 
         """
         if 1:
-            aa = map(lambda a: a if not isinstance(a, float) else (a, ), aa)
+            aa = [a if not isinstance(a, float) else (a, ) for a in aa]
             aa = list(aa)
             if isinstance(sh_list, tuple):
                 sh_list = [sh_list]
@@ -680,10 +694,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     temp.append((a, sh, ww))    
         #print msg
         for t in temp:
-            print t
-        i=raw_input('submit %s jobs? yes(y)\n'%(len(temp)))
+            print(t)
+        i=input('submit %s jobs? yes(y)\n'%(len(temp)))
         if i.lower()!='y':
-            print  'canceled'
+            print('canceled')
             return 
         for a, sh, w in temp:
             db = self[a]
@@ -707,7 +721,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             show_eng_diff=False,  grid_view=False, info=0): 
         if info>-1: 
             dir_name = '' if self.local_root is None else '...'+self.local_root[-30:]
-            print 'outline %s at %s'%(dir_name, str(datetime.datetime.now()), )
+            print('outline %s at %s'%(dir_name, str(datetime.datetime.now()), ))
         data=[]
         if mera_shape_list is None: 
             mera_shape_list=[(4, 4)] + [(8, i) for i in [4,5]] + [(12, i) for i in [4,5]]
@@ -729,7 +743,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         diff = S.energy_diff
                         diff_list.append('%1.2e'%diff)
                         
-                    sh_list = zip(sh_list, diff_list)
+                    sh_list = list(zip(sh_list, diff_list))
             
             elif which == 'db': 
                 db=self.alpha_rdb_dict[a]
@@ -738,20 +752,20 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     keys= db.get('energy')
                     if keys is None: 
                         pass
-                    keys= keys.keys()
+                    keys= list(keys.keys())
                     keys.sort()
                     sh_list = keys
                     
                 else: 
-                    keys= db.keys()
+                    keys= list(db.keys())
                     keys= [k[: 2] for k in keys]
                     keys= list(set(keys))
                     keys.sort()
                     sh_list = keys
                     
             if not grid_view: 
-                print a
-                print '\t', sh_list, '\n'
+                print(a)
+                print('\t', sh_list, '\n')
                 
             d= [str(a)]
             for sh in mera_shape_list:
@@ -762,7 +776,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             data.append(d)
         
         if grid_view:     
-            print tabulate(data, headers= ['a']+map(str,mera_shape_list), tablefmt='grid', stralign='center') 
+            print(tabulate(data, headers= ['a']+list(map(str,mera_shape_list)), tablefmt='grid', stralign='center')) 
     
     def outline_db(self, alpha_list=None, mera_shape_list=None, show_eng_diff=False, info=0):
         self._outline('db', alpha_list=alpha_list, mera_shape_list=mera_shape_list, info=info)
@@ -804,11 +818,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
             msg += ''.join([tab, 'sub an: \n']) 
             msg += ''.join([tab, '\t', str(self.sub_analysis), '\n'])
             
-        print msg 
+        print(msg) 
         if recursive: 
             for a in self.sub_analysis: 
                 an = getattr(self, a)
-                print ''.join([tab, a])
+                print(''.join([tab, a]))
                 an.outline(recursive=1, indent=indent+1)
     
     def preprocess_alpha_list(self, alpha_list, alpha_remap=None): 
@@ -817,13 +831,13 @@ class Analysis(AnalysisTools, AnalyticFormular):
             aa = OrderedDict()
             aa_bad = []
             for a in sorted(alpha_list):
-                if self.alpha_parpath_dict.has_key(a):
+                if a in self.alpha_parpath_dict:
                     aa[parser(a)] = self.alpha_rdb_dict[a]
                 else: 
                     aa_bad.append(a)
         
         if len(aa_bad)>0: 
-            print 'keys %s are not in self.alpha_parpath_dict'%aa_bad
+            print('keys %s are not in self.alpha_parpath_dict'%aa_bad)
             #warnings.warn('keys %s are not in self.alpha_parpath_dict'%aa_bad)
         return aa
             
@@ -898,7 +912,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             B_path = B_dir + '/'  +  fn
             if not os.path.exists(B_dir): 
                 os.mkdir(B_dir)
-                print 'local dir not found, mkdir %s'%B_dir
+                print('local dir not found, mkdir %s'%B_dir)
             
             #if not only_measure: 
             if 1: 
@@ -915,7 +929,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 else: 
                     msg+= '     --- FAILED status= %d'%(status, )
                     #print 'A_path, %s\nB_path, %s'%(A_path, B_path)
-                print msg
+                print(msg)
             
            
             #if measure: 
@@ -941,14 +955,14 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     #db = self[a]             
                     #sh_list = db.get_shape_list()  
                     dir = self.alpha_parpath_dict[a]
-                    fn = rdb_cls.get_fn_list.im_func(self, dir)
-                    sh_list = [rdb_cls.parse_fn.im_func(self, f) for f in fn]
+                    fn = rdb_cls.get_fn_list.__func__(self, dir)
+                    sh_list = [rdb_cls.parse_fn.__func__(self, f) for f in fn]
                     sh_list_max = sh_list_max.union(sh_list)
             else:
                 warnings.warn('get_shape_list_all using energy rec')
                 for a in aa: 
                     db = self[a]
-                    sh_list = db.get('energy', {}).keys()
+                    sh_list = list(db.get('energy', {}).keys())
                     sh_list_max = sh_list_max.union(sh_list)
             
             sh_list_max = list(sh_list_max)
@@ -961,9 +975,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
             sh_max = (np.inf, D) if sh_max is None else (sh_max[0], D)
             
         if sh_max is not None : 
-            sh_list_max=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh_list_max)
+            sh_list_max=[x for x in sh_list_max if x[0]<=sh_max[0] and x[1] <= sh_max[1]]
         if sh_min is not None : 
-            sh_list_max=filter(lambda x: x[0]>= sh_min[0] and x[1]>= sh_min[1] , sh_list_max)
+            sh_list_max=[x for x in sh_list_max if x[0]>= sh_min[0] and x[1]>= sh_min[1]]
         if only_return_N:
             sh_list_max = [i[0] for i in sh_list_max]
             sh_list_max = list(set(sh_list_max))
@@ -975,7 +989,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             return self.surfix_list 
         else: 
             aa = aa if aa is not None else self.alpha_list 
-            temp = map(lambda x: x[-1] if isinstance(x[-1], str) else '', aa)
+            temp = [x[-1] if isinstance(x[-1], str) else '' for x in aa]
             surfix_list = list(set(temp))
             #if '' in surfix_list: 
             #    surfix_list.remove('')
@@ -988,7 +1002,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         nlist = os.listdir(self.parpath)
         #print nlist
         pickle_files = [i for i in nlist if "pickle" in i]
-        print "all pickle files under specified path are %s"%pickle_files
+        print("all pickle files under specified path are %s"%pickle_files)
         
         def parse_fn(fn):
             if "transition" in fn: #'12-transition.pickle'
@@ -1009,7 +1023,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
 
         temp = []
         for i in pickle_files:
-            print i, parse_fn(i)
+            print(i, parse_fn(i))
             try:
                 dim, layer = parse_fn(i)
             except:
@@ -1025,13 +1039,13 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 #self[a].delete_db()
                 db_parpath = self.alpha_parpath_dict[a]
                 path = '/'.join([db_parpath, 'RESULT.pickle.db'])
-                print 'removing db %s and its parpath'%(path[-30: ]), 
+                print('removing db %s and its parpath'%(path[-30: ]), end=' ') 
                 os.remove(path) 
                 os.rmdir(db_parpath)
-                print '  ... done'
+                print('  ... done')
             except Exception as err:
-                print '  ..failed'
-                print err 
+                print('  ..failed')
+                print(err) 
     
     def delete_attr_in_file(self, name, aa,  sh): 
         #aa=self.filter_alpha(sh=(1000, 20))
@@ -1041,12 +1055,12 @@ class Analysis(AnalysisTools, AnalyticFormular):
             try:
                 name= db.backup_fn_gen(sh)
                 path='/'.join([dir,name])
-                print path
+                print(path)
                 s=vmps.load(path)
                 s.pop(name)
                 vmps.save(s,path)
             except Exception as err:
-                print err
+                print(err)
 
     def delete_file(self, aa, info=1): 
         """
@@ -1074,7 +1088,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 msg += '\n\tdone' 
             except Exception as err: 
                 msg += str(err)
-            print msg 
+            print(msg) 
             
     
     def rename_folder_surfix(self, aa, new_sur, dry_run=1): 
@@ -1082,7 +1096,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         for a in aa: 
             db = self[a]
             db.rename_folder_surfix(new_sur, dry_run=dry_run)
-            print '\n'
+            print('\n')
         self.set_parpath_dict(info=1)
     
     def move_folder(self, aa, local_root): 
@@ -1095,7 +1109,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         nlist = os.listdir(self.parpath)
         #print nlist
         pickle_files = [i for i in nlist if "pickle" == i.split('.')[-1]]
-        print "all pickle files under specified path are %s"%pickle_files
+        print("all pickle files under specified path are %s"%pickle_files)
         return pickle_files
     
     def data_mangle(self, force=False):
@@ -1108,7 +1122,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             for i in self.fn_list:
                 res[i] = {}
                 path = self.parpath + '/'  + i
-                print i, path
+                print(i, path)
                 if 0:
                     inn = open(path, 'rb')
                     S= pickle.load(inn)
@@ -1118,7 +1132,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 res[i]['energy_record'] = S.energy_record
             #print res
             out = open(self.parpath +'/' +  'record.pickle.db', 'wb')
-            print 'file record.pickle.db is generated'
+            print('file record.pickle.db is generated')
             pickle.dump(res, out)
             out.close()
     
@@ -1129,7 +1143,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         nlist = os.listdir(path)
         
         pickle_files = [i for i in nlist if "pickle" in i]
-        print "all pickle files under specified path are %s"%pickle_files
+        print("all pickle files under specified path are %s"%pickle_files)
         
         def parse_fn(fn):
             if "transition" in fn: #'12-transition.pickle'
@@ -1165,7 +1179,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
     def find_max_dim_file(path):
         temp = Analysis.get_fn_list(path)
         res= temp[0][2]
-        print 'head is %s'%res
+        print('head is %s'%res)
         return res
     
     def monitor(self): 
@@ -1177,7 +1191,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         pass
         
     def _plot(self, x, y, **kwargs):
-        fig=ResultDB._plot.im_func(None, x, y, **kwargs)  
+        fig=ResultDB._plot.__func__(None, x, y, **kwargs)  
         return fig
     
     def _plot3d(self, xx, yy, data, which_plot=None, zfunc=None,   **kwargs):
@@ -1217,7 +1231,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 'aspect':'auto',
                 }
         for t in style_dic: 
-            if kwargs.has_key(t): 
+            if t in kwargs: 
                 style_dic[t]=kwargs[t]
      
         not_found = []
@@ -1229,7 +1243,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             m, n = data.shape 
             #print np.where(np.isnan(data))
             aaa, bbb = np.where(np.isnan(data))
-            ab = zip(aaa.tolist(), bbb.tolist())
+            ab = list(zip(aaa.tolist(), bbb.tolist()))
             if make_up == 'v' : 
                 for a, b in ab: 
                     if a>0 and a <m-1: 
@@ -1287,7 +1301,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 cb.set_clim(clim)
         elif which_plot == 'imshow' : 
             if style_dic.get('extent') is None and (len(xx)>1) and (len(yy)>1): #extent = [min(xx)-0.05, max(xx) + 0.05, min(yy), max(yy)]
-                dx, dy = (max(xx)-min(xx))*1.0/(len(xx)-1), (max(yy)-min(yy))*1.0/(len(yy)-1)
+                dx, dy = old_div((max(xx)-min(xx))*1.0,(len(xx)-1)), old_div((max(yy)-min(yy))*1.0,(len(yy)-1))
                 #dx2, dy2 = dx/2.,  dy/2.
                 #style_dic['extent'] = [min(xx)-dx2, max(xx)+dx2, min(yy)-dy2, max(yy)+dy2]
                 style_dic['extent'] = [min(xx), max(xx)+dx, min(yy), max(yy)+dy]
@@ -1305,7 +1319,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         else: 
             raise ValueError("alowed which_plot=%s"%(['contourf', 'imshow', 'surface']))
        
-        if kwargs.has_key('title') and ax.is_first_row(): 
+        if 'title' in kwargs and ax.is_first_row(): 
             ax.set_title(kwargs.get('title')) 
         
         temp = ['xlabel', 'ylabel', 'xlim', 'ylim', 'xscale', 'yscale']
@@ -1336,8 +1350,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
     def get_rec_1d(self, field_name, aa, sh, sub_key_list=None, rec_getter=None, rec_getter_args=None, **kwargs): 
         info = kwargs.get('info', 0)
         
-        aa = map(lambda a:  a if hasattr(a, '__iter__') else (a, ), aa)
-        param_name, param_name_id = AlphaList.identify_param.im_func(self, aa)    
+        aa = [a if hasattr(a, '__iter__') else (a, ) for a in aa]
+        param_name, param_name_id = AlphaList.identify_param.__func__(self, aa)    
         data=[]
         not_found = []
         for a in aa:
@@ -1356,11 +1370,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 not_found.append(a)
                 
         if not_found and info>0: 
-            print 'not_found is ', not_found
+            print('not_found is ', not_found)
         try: 
-            x,y=zip(*data)        
+            x,y=list(zip(*data))        
         except ValueError as err: 
-            print err
+            print(err)
             x, y = np.nan, np.nan 
         x = np.asarray(x); y=np.asarray(y)
         return x,  y
@@ -1398,7 +1412,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 field_name += '_entropy' 
         
         if param_name is None: 
-            param_name, param_name_id = AlphaList.identify_param.im_func(self, aa)
+            param_name, param_name_id = AlphaList.identify_param.__func__(self, aa)
         else: 
             param_name_id = self.param_list.index(param_name)
         if param_name in ['alpha', 'beta']: 
@@ -1417,7 +1431,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 
             data=[]
             for a in aa:
-                if alpha_db_map.has_key(a): 
+                if a in alpha_db_map: 
                     db = alpha_db_map[a]
                 else: 
                     db=self[a]
@@ -1425,7 +1439,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     rec=db.fetch_easy(field_name, sh, sub_key_list=skl, fault_tolerant=fault_tol)
                 else: 
                     if type(rec_getter)==types.MethodType:
-                        rec_getter = rec_getter.im_func
+                        rec_getter = rec_getter.__func__
                     rec = rec_getter(db, sh, **rec_getter_args)
                 
                 a1 = a[param_name_id]
@@ -1436,12 +1450,12 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         data.append((a1, np.nan))
                     not_found.append(a)
             if not_found and info>0: 
-                print 'not_found is ', not_found
+                print('not_found is ', not_found)
             if not data:
                 warnings.warn('empty data for sh=%s'%(sh, ))
                 continue
             try: 
-                x,y=zip(*data)        
+                x,y=list(zip(*data))        
             except ValueError as err: 
                 warnings.warn(str(err))
                 x, y = np.nan, np.nan 
@@ -1487,17 +1501,17 @@ class Analysis(AnalysisTools, AnalyticFormular):
         y_to_j = {y:yy.index(y) for y in yy}
         if info>0: 
             grid = itertools.product(xx, yy)
-            grid1 = map(lambda a:(a[p1], a[p2]),   aa)
+            grid1 = [(a[p1], a[p2]) for a in aa]
             temp=set(grid)-set(grid1)
             temp = list(temp)
             temp.sort()
             if temp: 
-                print 'points not in alpha_parpath_dict is', temp
+                print('points not in alpha_parpath_dict is', temp)
         
         for a in aa: 
             x = a[p1]; y = a[p2]
             i = x_to_i[x]; j = y_to_j[y]
-            if alpha_db_map.has_key(a): 
+            if a in alpha_db_map: 
                 db = alpha_db_map[a]
             else: 
                 db=self[a]
@@ -1519,7 +1533,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             m, n = data.shape 
             #print np.where(np.isnan(data))
             aaa, bbb = np.where(np.isnan(data))
-            ab = zip(aaa.tolist(), bbb.tolist())
+            ab = list(zip(aaa.tolist(), bbb.tolist()))
             for a, b in ab: 
                 if a>0 and a <m: 
                     data[a, b] = (data[a-1, b]  +  data[a+1, b])/2. 
@@ -1532,7 +1546,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         kwargs['zmin'] = zmin
         kwargs['zmax'] = zmax
         if not_found and info>0: 
-            print  'not_found is ', not_found 
+            print('not_found is ', not_found) 
         kwargs.update(xlabel=xparam, ylabel=yparam)
         
         #if len(xx)>0 and len(yy)>0: 
@@ -1567,17 +1581,17 @@ class Analysis(AnalysisTools, AnalyticFormular):
         y_to_j = {y:yy.index(y) for y in yy}
         if info>0: 
             grid = itertools.product(xx, yy)
-            grid1 = map(lambda a:(a[p1], a[p2]),   aa)
+            grid1 = [(a[p1], a[p2]) for a in aa]
             temp=set(grid)-set(grid1)
             temp = list(temp)
             temp.sort()
             if temp: 
-                print 'points not in alpha_parpath_dict is', temp
+                print('points not in alpha_parpath_dict is', temp)
         
         for a in aa: 
             x = a[p1]; y = a[p2]
             i = x_to_i[x]; j = y_to_j[y]
-            if alpha_db_map.has_key(a): 
+            if a in alpha_db_map: 
                 db = alpha_db_map[a]
             else: 
                 db=self[a]
@@ -1595,7 +1609,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 not_found.append((x, y))
         
         if not_found and info>0: 
-            print  'not_found is ', not_found 
+            print('not_found is ', not_found) 
         
         return xx, yy, data
 
@@ -1665,7 +1679,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             #args['fig'] = fig
             #print 'aaa', args.keys()
             #db_meth.im_func.__call__(self=db, **args, kwargs={'fig': fig})
-            db_meth.im_func.__call__(db, **args)
+            db_meth.__func__.__call__(db, **args)
        
     def plot_row(self, aa, db_meth, args):
         n = len(aa)
@@ -1677,7 +1691,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             db = self.alpha_rdb_dict[a]
             fig.add_subplot(1, n, i)
             args['fig'] = fig
-            db_meth.im_func.__call__(db, **args)
+            db_meth.__func__.__call__(db, **args)
         
             if show_title: 
                 ax = fig.axes[-1]
@@ -1709,9 +1723,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         
         if calc_err:
             exact_val = self._scaling_dim_exact()
-            print exact_val
+            print(exact_val)
 
-        x = rec.keys()
+        x = list(rec.keys())
         x.sort()
         fig = plt.figure()
         ax = fig.add_subplot(111)
@@ -1727,7 +1741,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         
         if qns is None:
             if self.obj.symmetry == "U1":
-                qns = range(3)
+                qns = list(range(3))
             elif self.obj.symmetry == "Z2":
                 qns= [1, -1]
             else:
@@ -1750,7 +1764,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         y1 = y1-exact_val[qn][i]
                         y1 = np.log10(np.abs(y1))
                     except IndexError:
-                        print "index qn=%d, i=%d not found in exact_val, omit it "%(qn, i)
+                        print("index qn=%d, i=%d not found in exact_val, omit it "%(qn, i))
                         continue
                 ax.plot(x, y1, "o", linewidth=linewidth,  
                         color=color_map[qn_], linestyle="solid", marker=None)
@@ -1771,9 +1785,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         #plt.legend(legend, loc=3)
         plt.grid(True)
         
-        print "ssss\n", rec[x[-1]]
+        print("ssss\n", rec[x[-1]])
         if hasattr(self.obj, "log"):
-            print "llll\n", self.obj.log
+            print("llll\n", self.obj.log)
         x = "_err" if calc_err else ""
         y = self.fn_only.split(".")[0]
         fn=self.path + "scaling_dim-%s--%s.png"%(x, y)
@@ -1791,7 +1805,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             not_found = []
             #for a in aa:
             #print 'aaa', aa_dic
-            for a , db in aa_dic.iteritems(): 
+            for a , db in aa_dic.items(): 
                 
                 #e= an.alpha_rdb_dict[a].fetch('energy',dim=12)
                 #db = self.alpha_rdb_dict[a] 
@@ -1805,7 +1819,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 else: 
                     not_found.append((a, sh))
             if len(not_found)>0: 
-                print 'not_found is', not_found
+                print('not_found is', not_found)
             #print a,  x, y
             #ax.plot(x, y, '.-')
             fig=self._plot(x, y, **kwargs)
@@ -1819,7 +1833,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         """
         recs = self.obj.energy_record
         ee = self.obj.energy_exact
-        x = recs.keys()
+        x = list(recs.keys())
         x.sort()
         y = [recs[i][0] for i in x]
         y = np.array(y)
@@ -1838,13 +1852,13 @@ class Analysis(AnalysisTools, AnalyticFormular):
         res = System.load(self.path)
         recs = res.energy_record
         if 1:
-            t_eng = [(t, v[0])  for t, v in recs.iteritems()]
+            t_eng = [(t, v[0])  for t, v in recs.items()]
             #Et_diff = [(i[0], i[]) for i in t_eng]
 
-            t, eng = zip(*t_eng)
-            t_diff = [(t_eng[i+1][0], (t_eng[i+1][1]-t_eng[i][1])/(t_eng[i+1][0]-t_eng[i][0])) 
+            t, eng = list(zip(*t_eng))
+            t_diff = [(t_eng[i+1][0], old_div((t_eng[i+1][1]-t_eng[i][1]),(t_eng[i+1][0]-t_eng[i][0]))) 
                     for i in range(len(t_eng)-1)]
-            t, diff = zip(*t_diff)
+            t, diff = list(zip(*t_diff))
             diff = np.array(diff)
             diff = np.log10(abs(diff))
         if 0:
@@ -1943,7 +1957,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         
         """
         recs= self.obj.energy_record
-        x = recs.keys()
+        x = list(recs.keys())
         x.sort()
         dy = np.array([recs[i+1][0] - recs[i][0] for i in x[:-2]])
         dy = np.log10(-dy)
@@ -1957,7 +1971,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
     def plotax_dist_del(self, ax, data, x=None, transpose=1,  label_list=None, info=0): 
         if x is None: 
             x = [i for i in self.DISTANCE_LIST]
-        if info>0: print 'X=', x
+        if info>0: print('X=', x)
 
         data = np.array(data)
         if transpose: 
@@ -1976,9 +1990,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         db=self.alpha_rdb_dict[a]
         rec=db.fetch_easy('correlation_extra', mera_shape,[direct])
         if rec is None: 
-            print 'rec not found for a=%s'%a
+            print('rec not found for a=%s'%a)
             return
-        x,y=zip(*rec[0: -1: 2])        
+        x,y=list(zip(*rec[0: -1: 2]))        
         y = np.array(y) #y=abs(y)
         if direct == 'pm':  y *= 2 
         ax.loglog(x, y, '.-', label=str(a))
@@ -1990,11 +2004,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if layer=='top':
             ll= [sh[1]-2 ] 
         elif layer=='all':
-            ll=  range(sh[1]-1)
+            ll=  list(range(sh[1]-1))
         else: 
             ll = layer
       
-        param_name, param_name_id = AlphaList.identify_param.im_func(self, aa)
+        param_name, param_name_id = AlphaList.identify_param.__func__(self, aa)
         #if fig is None: 
         #    fig=plt.figure(figsize=(5, 3))
         #ax=fig.add_subplot(111)
@@ -2022,23 +2036,23 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 try: 
                     e1, e2= rec[1], rec[2]
                 except: 
-                    print  db.path
+                    print(db.path)
                     raise
                 c= (e2-e1)*3
                 #cc.append((a_orig,c))
                 cc.append((a_orig[param_name_id],c))
             if len(cc)>0:     
-                x,y=zip(*cc)    
+                x,y=list(zip(*cc))    
                 x = np.array(x)
                 y = np.array(y)
-                label = str(layer) if not kwargs_orig.has_key('label') else kwargs_orig['label']
-                marker = '.' if not kwargs_orig.has_key('marker') else kwargs_orig['marker']
+                label = str(layer) if 'label' not in kwargs_orig else kwargs_orig['label']
+                marker = '.' if 'marker' not in kwargs_orig else kwargs_orig['marker']
                 kwargs.update(marker=marker, label=label, return_ax=1)
                 fig, ax=self._plot(x, y, **kwargs)
                 #fig, ax=self._plot(x, y, **kwargs)
                 kwargs['ax'] = ax
                 kwargs['fig'] = fig
-        if 'ax' in locals().keys(): 
+        if 'ax' in list(locals().keys()): 
             if ax.is_first_col(): 
                 ax.set_ylabel('central change')
             if ax.is_last_row(): 
@@ -2065,7 +2079,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     kwargs['fig'] = fig
             except Exception as e: 
                 msg = 'error: %s %s '%( a, e )
-                print  msg, 
+                print(msg, end=' ') 
                 #raise(e)
             
         if kwargs.get('return_fig', False): 
@@ -2101,9 +2115,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     continue
                 
                 if which  == 'correlation_extra' and log_scale:  
-                    x,y=zip(*rec[0:-1:2])
+                    x,y=list(zip(*rec[0:-1:2]))
                 else: 
-                    x, y = zip(*rec[: ])
+                    x, y = list(zip(*rec[: ]))
                 if direct == 'pm':   
                     y=np.array(y);  y=y*2;  
                 
@@ -2128,7 +2142,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if draw: 
             plt.show()
         if len(not_found)>0:
-            print 'not_found is ', not_found
+            print('not_found is ', not_found)
         if return_fig:
             return fig
 
@@ -2170,7 +2184,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 label = str(param)
             else: 
                 label = str(a)
-            if not kwargs.has_key('marker'):
+            if 'marker' not in kwargs:
                 kwargs['marker'] = mark_list[count]
             db.plot_correlation(sh, direct=direct, r_min=r_min, r_max=r_max, which=which, fig=fig, log_scale=log_scale, 
                     label=label, **kwargs)    
@@ -2186,7 +2200,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if draw: 
             plt.show()
         if len(not_found)>0:
-            print 'not_found is ', not_found
+            print('not_found is ', not_found)
         if return_fig:
             return fig
 
@@ -2254,7 +2268,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     name = 'entanglement_' + switch
                
                 
-                shape = sh_remap[a] if sh_remap.has_key(a) else sh
+                shape = sh_remap[a] if a in sh_remap else sh
                 e=db.fetch_easy(name, shape, sub_key_list=sub_key_list_1, 
                         info=info, fault_tolerant=fault_tol)
                 
@@ -2277,7 +2291,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             kwargs['ax'] = ax
             
         if len(not_found)>0 and info>0: 
-            print 'not_found is %s'%(not_found, )
+            print('not_found is %s'%(not_found, ))
         
         if self.invert_xaxis: 
             ax.invert_xaxis()
@@ -2288,7 +2302,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             ax.set_xlabel('$\\alpha$')
             if param_name is not None : 
                 xlabel = '$%s$'%param_name 
-            if kwargs.has_key('xlabel'): 
+            if 'xlabel' in kwargs: 
                 xlabel = kwargs['xlabel']
                 ax.set_xlabel(xlabel, fontsize=18)
         #ax.set_title('at layer=%d'%layer)
@@ -2310,8 +2324,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
             db=self.alpha_rdb_dict[a]
             rec=db.fetch_easy('entanglement_entropy', mera_shape=sh, info=0)
             if rec is None: continue
-            data = [i[1] for i in rec.values()]
-            ll=rec.keys()
+            data = [i[1] for i in list(rec.values())]
+            ll=list(rec.keys())
                 
             ax.plot(ll, data, '.-', label=str(a))
         ax.legend()    
@@ -2334,7 +2348,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     #if num_site >= 9: 
                     #name += '_9' 
                     name += '_%d'%num_site 
-            label = args['label'] if kwargs.has_key('label') else str(a) 
+            label = args['label'] if 'label' in kwargs else str(a) 
             args.update(return_ax=1, label=label)
             res = db.plot_entanglement_scaling(alpha=a, sh_list=[sh], aver=aver, 
                     log2=log2, site_start=site_start, site_period=site_period, 
@@ -2359,7 +2373,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         args= kwargs.copy()
         for a in aa:
             db=self[a]
-            label = args['label'] if kwargs.has_key('label') else str(a)
+            label = args['label'] if 'label' in kwargs else str(a)
             args.update(return_ax=1, label=label)
             fig, ax =db.plot_entanglement_vs_chi(  **args)
             if ax is not None :  #plot succecss
@@ -2397,7 +2411,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             else:
                 ES[j,:]=np.nan
         
-        param_name, param_id = AlphaList.identify_param.im_func(self, aa) 
+        param_name, param_id = AlphaList.identify_param.__func__(self, aa) 
         x=[_[param_id] for _ in aa]
         kwargs.update(return_ax=1)
         fig, ax=self._plot(x, -np.log10(ES), **kwargs)
@@ -2428,7 +2442,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             #print 'rrrrr', db.keys(), db['magnetization']
             #raise 
         if not_found: 
-            print  'not_found is ', not_found
+            print('not_found is ', not_found)
         
         fig = self._plot(x, y, marker='.', **kwargs)
         if kwargs.get('return_fig') : 
@@ -2461,7 +2475,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         headers = [getattr(self, 'name', '')[-12: ]]+[str(i) for i in [0,0,0,0,0,1,1,1,2]]
                     else: 
                         headers= None
-        print tabulate(data, headers=headers, tablefmt='simple')
+        print(tabulate(data, headers=headers, tablefmt='simple'))
 
     def plot_eta_old(self, aa, eta, fig=None, return_fig=0):    
         y=eta
@@ -2535,7 +2549,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             xx=db.fit_correlation(sh, direct=direct, func_type=func_type, plot=0)
             if xx is not None : 
                 eta.append((a[2], xx[1]))
-        x, y = zip(*eta)   
+        x, y = list(zip(*eta))   
         self._plot(x, y, marker='.', **kwargs)
         #ax.plot(x, y, '.-')  
     
@@ -2574,10 +2588,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
         self.result_db_class = new_class 
         if 0:  # below has no use 
             #setattr(result_db_module, class_name, new_class)
-            print 'old 2', id(result_db_module)
-            print 'new', id(module)
+            print('old 2', id(result_db_module))
+            print('new', id(module))
         if info>0: 
-            print '%s is reloaded'%(self.result_db_class.__name__, )
+            print('%s is reloaded'%(self.result_db_class.__name__, ))
         return module 
         
     
@@ -2594,7 +2608,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         sh_list = sh_list if sh_list is not None  else self.get_shape_list_all()
         
         kwargs_orig = kwargs.copy()
-        param_name, param_id = AlphaList.identify_param.im_func(self, aa) 
+        param_name, param_id = AlphaList.identify_param.__func__(self, aa) 
         for sh in sh_list:
             data=self.calc_fidelity(aa[: -1], sh, delta=delta, force=kwargs_orig.get('force', False), use_dist_comp=use_dist_comp) #aa[: -1] means not calc fidelity for the last point 
             if data:
@@ -2602,7 +2616,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 kwargs.update(return_ax=1, label=label, 
                          xlabel='$%s$'%param_name)
                 
-                x,y=zip(*data);  y=np.abs(np.asarray(y))
+                x,y=list(zip(*data));  y=np.abs(np.asarray(y))
                 _=self._plot(x,y, **kwargs) 
             
         if 0:
@@ -2615,7 +2629,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     x, y= l.get_data()
                     m=y.argmin()
                     temp.append((l.get_label(), round(x[m],2)))
-                u, v= zip(*temp)
+                u, v= list(zip(*temp))
                 bx.plot(u, v, 'o-')
                 bx.set_xscale('log')
                 bx.set_ylim(1.35, 1.72)
@@ -2628,7 +2642,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 try:
                     conn.root.disregister_job(job_id)
                 except Exception as err:
-                    print err, 'param=', a 
+                    print(err, 'param=', a) 
 
     def calc_fidelity(self, aa, sh, delta=0.1, force=0, use_dist_comp=False, fault_tolerant=1, **kwargs):
         xx = self 
@@ -2643,7 +2657,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         dbs={}
         ss={}
         #aa=xx.filter_alpha(g=1.0, sh=sh)
-        param_name, param_name_id = AlphaList.identify_param.im_func(xx, aa)
+        param_name, param_name_id = AlphaList.identify_param.__func__(xx, aa)
         data=[]
         
         which = 'fidelity'
@@ -2683,7 +2697,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         data.append((ai, ff))
                     except Exception as err:
                         if kwargs.get('info', 0)>0: 
-                            print a1, a2,  err 
+                            print(a1, a2,  err) 
                         if not fault_tolerant: 
                             raise 
             if db_change_list: 
@@ -2745,7 +2759,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         try:
                             s1 = db1.load_S(sh);  s2=db2.load_S(sh)
                             if info>0: 
-                                print 'aaa', a1, a2
+                                print('aaa', a1, a2)
                             ff = fidelity_func(s1, s2, eigs_tol=eigs_tol, info=info)
                             db1.insert(which, sh, iter=-1, sub_key_list=[a2], val=ff)
                             db2.insert(which, sh, iter=-1, sub_key_list=[a1], val=ff)
@@ -2754,7 +2768,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                         except Exception as err:
                         
                             if not fault_tolerant: 
-                                print 'error occured for', a1, a2
+                                print('error occured for', a1, a2)
                                 raise 
                             else: 
                                 faild_list.append((a1, a2, repr(err)))
@@ -2768,7 +2782,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
            self.set_rdb_dict(aa, reload_db_class=0)  
         
         if faild_list: 
-            print 'faild_list', faild_list 
+            print('faild_list', faild_list) 
         res={'aa':aa,'data':data, 'faild_list': faild_list}      
         if save_to is not None : 
             from vmps import save
@@ -2827,14 +2841,14 @@ class Analysis_idmrg(Analysis):
             try: 
                 state = db.load_S(sh)
             except IOError as err:
-                print err 
+                print(err) 
                 continue 
             new_state = updater(state)
             fn = db.__class__.shape_to_backup_fn(sh)
             dir = db.parpath 
             path = '/'.join([dir, fn])
             save(new_state, path)
-            print 'update file ... %s succeeded'%(path[-30: ])
+            print('update file ... %s succeeded'%(path[-30: ]))
   
 class Analysis_proj_qmc(Analysis): 
      def __init__(self, **kwargs): 
@@ -2855,20 +2869,20 @@ class TestAnalsysis(unittest.TestCase):
         
         #
         xx = an_vmps.an_main_symm
-        print xx.scan_alpha()
+        print(xx.scan_alpha())
         
         xx.show_fig()
     
     def test_preprocess_alpha_list(self): 
         an = self.an
         aa = [0.5, 0.3, 1.0, ]
-        print an.alpha_parpath_dict.keys()
-        print an.preprocess_alpha_list(aa).keys()
+        print(list(an.alpha_parpath_dict.keys()))
+        print(list(an.preprocess_alpha_list(aa).keys()))
     
     def test_alpha_list_operations(self): 
         an = self.an 
-        print  an.result_db_class 
-        print an.alpha_filter(param_list=['a'], a='a>1.0', sh=(3, 4))
+        print(an.result_db_class) 
+        print(an.alpha_filter(param_list=['a'], a='a>1.0', sh=(3, 4)))
         aa = [1, 2, 3, 1.1, 1.01]
         res=an.alpha_filter(aa, param_list=['a'], resolution=0.1) 
         self.assertEqual(res, [1, 2, 3, 1.1])
@@ -2906,11 +2920,11 @@ if __name__ == '__main__':
         #an.set_rdb_dict()
         db = an.alpha_rdb_dict[1.0]
         #an.outline_db()
-        print args
+        print(args)
         which = args['which']
         if which in ['correlation_extra', 'correlation']: 
             sh = db.get_mera_shape_list()
-            print sh
+            print(sh)
             an.plot_correlation(aa, sh, which=which, draw=1)
         #an = Analysis(path=None, parpath=args['dir'])
 
@@ -2922,7 +2936,7 @@ if __name__ == '__main__':
     else: 
         
         if 0: 
-            from result_db import ResultDB 
+            from .result_db import ResultDB 
             for a in aaa: 
                 db = ResultDB(parpath=a)
                 db.upgrade()

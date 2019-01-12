@@ -11,6 +11,15 @@ performance:
         out_buff if not good choice
 
 """
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from past.utils import old_div
 import numpy as np
 import platform
 import warnings
@@ -216,9 +225,9 @@ def array_permutation_1(rank, Dims,order, totDim,A, B):
         ntotDim = ntotDim*Dims[i]
         nDims[i] = Dims[order[i]]
         rorder[order[i]] = i
-    if ntotDim != totDim:  print  'error in ArrayPermutation, size not match'
+    if ntotDim != totDim:  print('error in ArrayPermutation, size not match')
     
-    print "nDims",type(nDims),nDims.shape,  nDims[:rank], "\n", "Dims", Dims[:rank]
+    print("nDims",type(nDims),nDims.shape,  nDims[:rank], "\n", "Dims", Dims[:rank])
 
     step = np.ones(32, "int")
     rstep = np.ones(32, "int")
@@ -228,7 +237,7 @@ def array_permutation_1(rank, Dims,order, totDim,A, B):
             step[i] = step[i]*nDims[j]
         rstep[i] = (Dims[i]-1)*step[i]
     
-    print "step", step[:rank], "rstep", rstep[:rank]
+    print("step", step[:rank], "rstep", rstep[:rank])
 
     ##$    write[fmt,*] "[2[I5,1x,'| '],", rank, "[1x,I5], ' | ',", &
     ##$          rank, "[1x,I5], ' | ', 200[1x,I5]]"
@@ -239,14 +248,14 @@ def array_permutation_1(rank, Dims,order, totDim,A, B):
         nths = OMP_GET_NUM_THREADS()
         nth = OMP_GET_THREAD_NUM()
         
-        npp = totDim/nths
+        npp = old_div(totDim,nths)
         p1 = nth*npp+1
         p2 = [nth+1]*npp
         if nth == nths-1:  p2 = totDim
         
         pp = p1-1
         for i  in range(rank-1):
-            res = pp/Dims[i]
+            res = old_div(pp,Dims[i])
             idx[i] = pp-res*Dims[i]+1        
             pp = res
         idx[rank] = pp+1    
@@ -264,7 +273,7 @@ def array_permutation_1(rank, Dims,order, totDim,A, B):
     idx = np.zeros(32, "int")
     #endif    
     for p  in range(totDim):
-        print 'p, q, i', p, q, i
+        print('p, q, i', p, q, i)
         B[q] = A[p]
         
         inc = True
@@ -291,8 +300,8 @@ class Test_array_permute(unittest.TestCase):
         pass 
     
     def test_array_permutation_inplace(self): 
-        print array_permutation_fort_parallel.__doc__ 
-        print array_permutation_fort_parallel_complex.__doc__ 
+        print(array_permutation_fort_parallel.__doc__) 
+        print(array_permutation_fort_parallel_complex.__doc__) 
         a = np.random.random((3, 4, 2, 3))
         b = 1j*np.random.random((3, 4, 2, 3))
         out = np.ndarray((3, 4, 2, 3), dtype=float, order='F').ravel()
@@ -316,8 +325,8 @@ class Test_array_permute(unittest.TestCase):
         order=[1,0]
         totDim  = np.prod(Dims[:rank])
         a = np.ndarray(totDim, np.float64);    
-        a[:]=range(totDim)        
-        print a.size, a.shape
+        a[:]=list(range(totDim))        
+        print(a.size, a.shape)
     
     def test_1(self):
         """
@@ -340,9 +349,9 @@ class Test_array_permute(unittest.TestCase):
         totDim  = np.prod(Dims[:rank])
         #a = np.ndarray((1,totDim),'d');    
         a = np.ndarray(totDim,'d');    
-        a[:]=range(totDim)        
+        a[:]=list(range(totDim))        
         af= np.ndarray(totDim,'d',order="F")
-        af[:]=range(totDim)
+        af[:]=list(range(totDim))
         #b=np.ndarray((1,totDim),'d',order="FORTRAN")
         #b=np.ndarray(totDim,'d',order="FORTRAN")
         b=np.ndarray(totDim,'d',order="F")
@@ -350,62 +359,62 @@ class Test_array_permute(unittest.TestCase):
         
         b=array_permutation(a,rank, Dims, order)
         
-        print "let me start an array a:\n",a
-        print "af:\n", af
-        print "there seems no apearing difference with the two defs"
-        print "shape of a:\n",a.shape
-        print "I want to reshape it into a matrix with dims", Dims_
-        print "and compare between C and F order"
+        print("let me start an array a:\n",a)
+        print("af:\n", af)
+        print("there seems no apearing difference with the two defs")
+        print("shape of a:\n",a.shape)
+        print("I want to reshape it into a matrix with dims", Dims_)
+        print("and compare between C and F order")
         a_24c= a.reshape(Dims_)
         #a_24f=a.reshape(Dims_,'F')
         a_24f=a.reshape((2,4),order='F')
         a_42f=a.reshape(Dims_[::-1])
         af_24c=af.reshape(Dims_, order='F')
         af_24f=af.reshape(Dims_, order='F')
-        print "reshape of a in C order a_24c:\n" ,a_24c
-        print "reshape of af in F order af_24c:\n" ,af_24f        
-        print "reshape of af in F order af_24f:\n" ,af_24f                
-        print "reshape of a in F order a_24f:\n" ,a_24f
-        print "reshape of a in F order a_42f:\n" ,a_42f
-        print u"So, the truth is  reshape 与定义a的order无关，而与reshape(,order)有关"
+        print("reshape of a in C order a_24c:\n" ,a_24c)
+        print("reshape of af in F order af_24c:\n" ,af_24f)        
+        print("reshape of af in F order af_24f:\n" ,af_24f)                
+        print("reshape of a in F order a_24f:\n" ,a_24f)
+        print("reshape of a in F order a_42f:\n" ,a_42f)
+        print(u"So, the truth is  reshape 与定义a的order无关，而与reshape(,order)有关")
 
-        print "----------------------------------"
-        print "array_permutation a--> b in this order: " , order[:rank]        
-        print "b\n",b
-        print "now I reshape b"        
+        print("----------------------------------")
+        print("array_permutation a--> b in this order: " , order[:rank])        
+        print("b\n",b)
+        print("now I reshape b")        
         b_24c=b.reshape(Dims_,order='C')
         b_24f=b.reshape(Dims_,order='F')
-        print "b_24c:\n",b_24c
-        print "b_24f:\n",b_24f
+        print("b_24c:\n",b_24c)
+        print("b_24f:\n",b_24f)
         #print "b1:\n",b1.reshape((2,4))
         #print "b1:\n",b1.reshape((4,2))
 
-        print "-----------------------------------"
-        print "now use numpy.swapaxes do the samething"
+        print("-----------------------------------")
+        print("now use numpy.swapaxes do the samething")
         a_24c_swap= a_24c.swapaxes(0,1)
-        print "a_24c_swap:\n", a_24c_swap
-        print "which is just transpose of a_24c"
-        print "a_24c.T:\n", a_24c.T
-        print "now convert a_24c_swap to 1-D, yield a_24c_swap_linear:"
+        print("a_24c_swap:\n", a_24c_swap)
+        print("which is just transpose of a_24c")
+        print("a_24c.T:\n", a_24c.T)
+        print("now convert a_24c_swap to 1-D, yield a_24c_swap_linear:")
         a_24c_swap_linear= a_24c_swap.reshape(totDim)
-        print a_24c_swap_linear
-        print "so it not eqal b, next see what if I a_24c_swap is reshaped in F order?"
+        print(a_24c_swap_linear)
+        print("so it not eqal b, next see what if I a_24c_swap is reshaped in F order?")
         a_24c_swap_linear_f= a_24c_swap.reshape(totDim,order="F")
-        print "a_24c_swap_linear_f:\n",  a_24c_swap_linear_f
-        print "it's totally not what I want, So I faild, but next try:"
+        print("a_24c_swap_linear_f:\n",  a_24c_swap_linear_f)
+        print("it's totally not what I want, So I faild, but next try:")
 
 
-        print "--------------------------------------------"
+        print("--------------------------------------------")
         a_24f_swap= a_24f.swapaxes(0,1)
-        print "a_24f_swap:\n", a_24f_swap
+        print("a_24f_swap:\n", a_24f_swap)
         a_24f_swap_linear= a_24f_swap.reshape(totDim)
-        print a_24f_swap_linear
-        print "so it not eqal b, next see what if I a_24f_swap is reshaped in F order?"
+        print(a_24f_swap_linear)
+        print("so it not eqal b, next see what if I a_24f_swap is reshaped in F order?")
         a_24f_swap_linear_f= a_24f_swap.reshape(totDim,order="F")
-        print "a_24f_swap_linear_f:\n",  a_24f_swap_linear_f
-        print "is just b.  So I GET IT!  "
-        print "-==================================="
-        print r""" 用np.swapaxes得到和array_permutation 相同结果点方法是：
+        print("a_24f_swap_linear_f:\n",  a_24f_swap_linear_f)
+        print("is just b.  So I GET IT!  ")
+        print("-===================================")
+        print(r""" 用np.swapaxes得到和array_permutation 相同结果点方法是：
         a_1d= np.ndarray(totDim,order=)
         b_1d= array_permutation(a_1d,norder=[ i<-->j ])
         
@@ -430,8 +439,8 @@ class Test_array_permute(unittest.TestCase):
             a_swap_1d_f= np.ravel(a_swap_nd_f,order="F")
             return a_swap_1d_f    
         in the following I test this function
-        """
-        print swapaxis_F(a,Dims_,0,1)
+        """)
+        print(swapaxis_F(a,Dims_,0,1))
 
     def test_2(self):
         """
@@ -452,19 +461,19 @@ class Test_array_permute(unittest.TestCase):
         order[:rank]=order_[:rank]
         totDim  = np.prod(Dims[:rank])
         a = np.ndarray(totDim,'d');    
-        a[:]=range(totDim)
+        a[:]=list(range(totDim))
         b=np.ndarray(totDim,'d',order="F")
         #b=array_permutation(a,rank, Dims, order,   index_start=1)
         b=array_permutation(a,rank, Dims, order)
-        print "a:\n",a.shape 
-        print "a_2342\n",a.reshape(Dims[:rank])
-        print "order", order[:rank]        
-        print "b:\n",b
+        print("a:\n",a.shape) 
+        print("a_2342\n",a.reshape(Dims[:rank]))
+        print("order", order[:rank])        
+        print("b:\n",b)
         dim1=[3,2,4,2]
         b1= swapaxis_F(a,Dims_,0,1)
         b1=swapaxis_F(b1,dim1,1,2)
-        print "b1:\n", b1
-        print np.all(b==b1)
+        print("b1:\n", b1)
+        print(np.all(b==b1))
     
     @unittest.skip('this func is very old, there is some problem in it,  I have no time to figure out')
     def test_3(self):
@@ -474,44 +483,44 @@ class Test_array_permute(unittest.TestCase):
         """
         shape = (2,5)
         a = np.arange(np.prod(shape))
-        print "a", a
+        print("a", a)
         norder = [1,0]
         a25 = a.reshape(shape)
         b = a25.swapaxes(0,1)
-        print "after swapaxes of a:\n", b.ravel()
-        print "next to see which of the following array_permutation yields b"
+        print("after swapaxes of a:\n", b.ravel())
+        print("next to see which of the following array_permutation yields b")
         
-        print '=='*20
-        print "start from a"
+        print('=='*20)
+        print("start from a")
         a_ap=array_permutation(a, 2, shape,norder)
-        print "after array_permutation, a_ap:\n", a_ap
+        print("after array_permutation, a_ap:\n", a_ap)
         nshape=(5,2)
-        print "a_ap in new shape", a_ap.reshape(nshape)
-        print "a_ap in new shape and F order:", a_ap.reshape(nshape,order='F')
-        print a_ap.reshape(nshape,order='F').ravel("F")
+        print("a_ap in new shape", a_ap.reshape(nshape))
+        print("a_ap in new shape and F order:", a_ap.reshape(nshape,order='F'))
+        print(a_ap.reshape(nshape,order='F').ravel("F"))
         
-        print "--"*20
-        print "start from a25fc"
+        print("--"*20)
+        print("start from a25fc")
         a25f=a.reshape(shape,order="F")
         xx=a25f.ravel("C")
         yy=array_permutation(xx,2,shape,norder)
         yyF=yy.reshape(nshape,order="F")
         yyC=yy.reshape(nshape,order="C")
-        print xx,"\n", yy,"\n", yyF,"\n", yyC
-        print yyF.ravel("C")
-        print yyC.ravel("F")
+        print(xx,"\n", yy,"\n", yyF,"\n", yyC)
+        print(yyF.ravel("C"))
+        print(yyC.ravel("F"))
 
-        print "--"*20
-        print "start from a25cf"
+        print("--"*20)
+        print("start from a25cf")
         a25c=a.reshape(shape)
         xx=a25c.ravel("F")
         yy=array_permutation(xx,2,shape,norder)
         yyF=yy.reshape(nshape,order="F")
         yyC=yy.reshape(nshape,order="C")
-        print xx,"\n", yy,"\n", yyF,"\n", yyC
-        print yyF.ravel("C")
+        print(xx,"\n", yy,"\n", yyF,"\n", yyC)
+        print(yyF.ravel("C"))
 
-        print "So, I get it!, it is yyF, yyF=b"
+        print("So, I get it!, it is yyF, yyF=b")
 
 
         """
@@ -522,34 +531,34 @@ class Test_array_permute(unittest.TestCase):
         """
     
     def test_4(self):
-        print "test of function array_permutation_C  ---pass"
+        print("test of function array_permutation_C  ---pass")
         def sub_test1():
             shape=(4,5)
             a=np.arange(np.prod(shape),dtype="d")
             norder=[1,0]
             a25=a.reshape(shape)
             b=a25.swapaxes(0,1)
-            print "after swapaxes of a:\n", b.ravel()
+            print("after swapaxes of a:\n", b.ravel())
 
             c=array_permutation_C(a,2,shape,norder)
-            print c
+            print(c)
         def sub_test2():
             shape=(4,5,2)
             a=np.arange(np.prod(shape),dtype="d")
             norder=[1,0,2]
             a25=a.reshape(shape)
             b=a25.swapaxes(0,1)
-            print "after swapaxes of a:\n", b.ravel()
+            print("after swapaxes of a:\n", b.ravel())
 
             c=array_permutation_C(a,len(shape),shape,norder)
-            print c
+            print(c)
    
     def test_np(self):
         """
         np.transpose is equivalent to array_permutation !!----pass
         """
         from merapy.lib.array_permutation_64_ifort import array_permutation_fort
-        print array_permutation_fort.__doc__
+        print(array_permutation_fort.__doc__)
         #print array_permutation_player_fort.__doc__
         dims= [5, 3, 4, 1]
         rank = len(dims)
@@ -557,12 +566,12 @@ class Test_array_permute(unittest.TestCase):
         a = np.ndarray(np.prod(dims), order="F")
         a[:] = np.arange(np.prod(dims))
         a1 = a.copy()
-        print "original array"
-        print a
+        print("original array")
+        print(a)
         b=array_permutation(a,rank, dims, order)
         c = array_permutation_np(a1.reshape(dims, order="F"),rank, dims, order,  index_start=0)
-        print b
-        print c
+        print(b)
+        print(c)
     
 
 if __name__ == "__main__":

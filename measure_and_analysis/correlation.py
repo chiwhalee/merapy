@@ -10,7 +10,17 @@
         3. the way calc correlation has not average translation of 3 site, this not good?
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import zip
+from builtins import range
+from builtins import *
 import os, sys
 import math
 import numpy as np
@@ -21,7 +31,7 @@ from collections import OrderedDict
 import argparse
 from scipy.optimize import curve_fit
 
-from result_db import ResultDB
+from .result_db import ResultDB
 
 from merapy.hamiltonian import System
 from merapy.tensor_factory import iTensorFactory
@@ -31,8 +41,8 @@ from merapy.mera import calc_ascending_site
 from merapy.diagrams.V31 import graph_ternary
 from merapy.descending import descending_ham
   
-from magnetization import __magnetization  
-from central_charge import initialize_S 
+from .magnetization import __magnetization  
+from .central_charge import initialize_S 
 
 
 def ascending_middle_site(S, o1, ilayer):
@@ -69,7 +79,7 @@ def fetch_correlation(S, direction, info=0):
             msg  += 'record found'  
             is_found = True
         
-        if info>0: print msg
+        if info>0: print(msg)
     if is_found: 
         res= {direction: res}
     else: 
@@ -177,7 +187,7 @@ def __correlation(distance_max, direction, S=None, path=None, force_update=False
         x = np.log10(x)
         y = np.array([i[1] for i in val])
         y = np.log10(y)
-        print x,  y
+        print(x,  y)
         k, b = np.polyfit(x, y, 1)
         nn = SIlayer
         k_first, b_first = np.polyfit(x[:nn], y[:nn], 1)   #only use transitiaon-layer tensors
@@ -342,8 +352,8 @@ def correlation(S, distance_max=10000, direction=None, dim_list=None,
             dim_list = [d for d in dim_list if  not d in dim_list_not_exist]
             
             
-        if rdb.has_key((0, 0, 0)): 
-            print rdb[0, 0, 0]
+        if (0, 0, 0) in rdb: 
+            print(rdb[0, 0, 0])
             record['exact'] = rdb[0, 0, 0]['correlation']
         else: 
             record['exact'] = None
@@ -369,7 +379,7 @@ def __correlation_extra(S, r, direct, info=0):
         r_mod2 = None
     site_list = calc_ascending_site(r, n_min=1)
     if info>0: 
-        print 'o1-o2 at each coarsed layer %s'%(site_list, )
+        print('o1-o2 at each coarsed layer %s'%(site_list, ))
     temp = [(s[0]%3, s[1]%3) for s in site_list]
     #print temp
     
@@ -388,7 +398,7 @@ def __correlation_extra(S, r, direct, info=0):
     #o1, o2分别独立ascending to higher layer finally becomes either (0, (2, 3)) or (0, (1, 2))
     for site in site_list[:-2]: 
         l = site_list.index(site)
-        if info>0 : print 'oo at layer=%d,  site=%s'%(l, site_list[l], )
+        if info>0 : print('oo at layer=%d,  site=%s'%(l, site_list[l], ))
         
         site = site_list[l][1]
         site_mod3 = site%3
@@ -403,7 +413,7 @@ def __correlation_extra(S, r, direct, info=0):
     for site in site_list[-2: -1]: 
         l = site_list.index(site)
         #print 'ssss', site, site_list
-        if info>0:  print 'site is %s'%(site, )
+        if info>0:  print('site is %s'%(site, ))
         if  site == (1, 2): 
             G = graph_ternary.G_3_2[(0, 1, 2)]; ee=G.find_node('OO')[0]
             ooo = o1.direct_product(o2)
@@ -444,7 +454,7 @@ def correlation_extra(S, r_list=None, direct_list=None, fail_skip=1, **kwargs):
         r_max *=  2
         
     if r_list is None: 
-        r_list = range(r_min, r_max)
+        r_list = list(range(r_min, r_max))
         
     if direct_list is None: 
         if S.symmetry in ["Z2", 'Travial']: 
@@ -468,7 +478,7 @@ def correlation_extra(S, r_list=None, direct_list=None, fail_skip=1, **kwargs):
                     raise
                 r_failed.append((r, err))
         if len(r_failed)>0: 
-            print dir, 'r_failed is %s'%(r_failed, ) 
+            print(dir, 'r_failed is %s'%(r_failed, )) 
                 
         res[dir] = val
     return res
@@ -477,7 +487,7 @@ def plot_correlation(record, direct_list=None, dim_list=None, save_parpath=None)
     pass
     #rec = S.rec[S.iter]['correlation']
     rec = record[dim_list[0]]
-    direct_list = direct_list if direct_list is not None else rec.keys()
+    direct_list = direct_list if direct_list is not None else list(rec.keys())
     #print direct_list; exit()
     
     
@@ -493,7 +503,7 @@ def plot_correlation(record, direct_list=None, dim_list=None, save_parpath=None)
             pass
             val = record['exact'][direct]
             k = record['exact'][direct]['exponent']
-            x, y = zip(*val['val'])
+            x, y = list(zip(*val['val']))
             #plt.loglog(x, y, '--')
             ax[dir].loglog(x, y, '--')
             _direct = direct if direct != 'pm' else 'xx' 
@@ -506,7 +516,7 @@ def plot_correlation(record, direct_list=None, dim_list=None, save_parpath=None)
             #direct_list = direct_list if direct_list is not None else rec.keys()
         
             val = rec[direct]
-            x, y = zip(*val['val'])
+            x, y = list(zip(*val['val']))
             x = np.array(x);  y=np.array(y)
             if direct == 'pm': 
                 #direct = 'xx'
@@ -576,7 +586,7 @@ if __name__ == '__main__':
             S= System.load(args['path'])
             
             res=correlation(S=S, distance=10000,  plot=True, **args)
-            print res
+            print(res)
     else: 
         args= {}
         
@@ -587,7 +597,7 @@ if __name__ == '__main__':
         S = System.load(args['path'])
         #res=correlation(S=S, distance=10000, plot=True, **args); print res
         #S = System.load(p1)
-        res=correlation_extra(S, r_list=[27], fail_skip=0 ); print res
+        res=correlation_extra(S, r_list=[27], fail_skip=0 ); print(res)
         
             
 

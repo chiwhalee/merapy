@@ -6,11 +6,20 @@
     the name of nTensor  can be interpreted as normal ternsor or tensor that inhereitated
     from np.ndarray 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from builtins import object
 import unittest 
 import numpy as np 
 import numbers 
 from numbers import Number
-import cPickle as pickle 
+import pickle as pickle 
 
 from merapy import crandom
 from merapy.utilities import print_vars
@@ -30,12 +39,12 @@ class TensorBase(object):
         type_name: may be "U", "V", "V2" etc
         """
         self.rank=rank
-        self.ind_labels= {i:None for i in xrange(rank)}
+        self.ind_labels= {i:None for i in range(rank)}
         if ind_labels is not None:
             #print 'iii', ind_labels
             
-            for i in xrange(rank):
-                print 'iii', i, ind_labels
+            for i in range(rank):
+                print('iii', i, ind_labels)
                 self.ind_labels[i] = ind_labels[i]
         self.data = None
         self.type_name = ""
@@ -47,7 +56,7 @@ class TensorBase(object):
         self.ind_labels.update(ind_labels)
     
     def get_label_list(self):
-        res= [self.ind_labels[i] for i in xrange(self.rank)]
+        res= [self.ind_labels[i] for i in range(self.rank)]
         return res
     def _dims(self):
         return self.Dims[:self.rank]
@@ -86,7 +95,7 @@ class TensorBase(object):
             #attention_this_may_be_wrong  rand does not support dtype
             #self.data[:self.totDim] = np.random.random(self.totDim)
 
-        self.data[:self.totDim] = [crandom.rand()-0.5 for i in xrange(self.totDim)]
+        self.data[:self.totDim] = [crandom.rand()-0.5 for i in range(self.totDim)]
 
         #except: print "error, self.data is not materialized"
 
@@ -112,7 +121,7 @@ class TensorBase(object):
         """
         reason= self.is_same_shape(T2)
         if  reason<0:  
-            print 'Error in Tensor_Add_WithScale, self,other different shape:', reason
+            print('Error in Tensor_Add_WithScale, self,other different shape:', reason)
             #print 'self.' + reason + ":", 
             #print self.__getattribute__(reason)
             #print 'other.' + reason + ":", 
@@ -184,11 +193,11 @@ class TensorBase(object):
         """
         same, reason= self.is_same_shape(T2)
         if  not same:  
-            print 'Error in Tensor_Add_WithScale, self,other different shape:', reason
-            print 'self.' + reason + ":", 
-            print self.__getattribute__(reason)
-            print 'other.' + reason + ":", 
-            print T2.__getattribute__(reason)
+            print('Error in Tensor_Add_WithScale, self,other different shape:', reason)
+            print('self.' + reason + ":", end=' ') 
+            print(self.__getattribute__(reason))
+            print('other.' + reason + ":", end=' ') 
+            print(T2.__getattribute__(reason))
             exit()
         T3 = Tensor()
         T3.init_Tensor(self.rank, self.QSp, self.totQN)
@@ -208,14 +217,14 @@ class TensorBase(object):
 
         #Is=2*[None]
         Is=[]
-        for i in xrange(len(S)):
+        for i in range(len(S)):
             #if InSet[iLeg, S[i]]>0:  
             if iLeg in S[i]:
                 #Is[k] = i
                 Is.append(i)
                 #k = k+1
         if len(Is)>2:
-            print "error, see find_leg"
+            print("error, see find_leg")
         return Is
 
     def save(self, fn):
@@ -1004,10 +1013,10 @@ def generalized_matrix_multiply(A, B, mul, A_nzb=None, B_nzb=None):
     N = B.shape[1]
     res = np.ndarray((M, N), dtype=np.object)
     if A_nzb is None: 
-        for i in xrange(M): 
-            for j in xrange(N): 
+        for i in range(M): 
+            for j in range(N): 
                 t = 0.0
-                for k in xrange(K): 
+                for k in range(K): 
                     a = A[i, k]; b = B[k, j]
                     if isinstance(a, float) or isinstance(b, float): 
                         pass
@@ -1034,8 +1043,8 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
     Xsize = X.shape
     Ysize = Y.shape
     
-    indXl = range(numindX)
-    indYr = range(numindY)
+    indXl = list(range(numindX))
+    indYr = list(range(numindY))
     #print_vars(vars(),  ['indX'])
     for i in indX:
         indXl.remove(i)
@@ -1058,7 +1067,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
         sizeX=%(sizeX)s, sizeY=%(sizeY)s
         indX=%(indX)s, indY=%(indY)s
         """%varables
-        print msg
+        print(msg)
 
     #if np.prod(sizeX) != np.prod(sizeY): 
     if not np.all(sizeX==sizeY): 
@@ -1094,7 +1103,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
             X=X.transpose(indXl+indX)
             X=X.reshape((np.prod(sizeXl), np.prod(sizeX)))
             Y=Y.transpose(indY )
-            Y=Y.reshape(np.prod(sizeY, dtype=int), np.prod(sizeYr, dtype=int))
+            Y=Y.reshape(np.prod(sizeY, dtype=np.int), np.prod(sizeYr, dtype=np.int))
             Zsize =  sizeXl
             if out is None: 
                 Z = X.dot(Y)
@@ -1109,7 +1118,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
     
     #print X.shape, indXl, indX,  indXl + indX
     X=X.transpose(indXl+indX)
-    X=X.reshape((np.prod(sizeXl, dtype=int), np.prod(sizeX, dtype=int)))
+    X=X.reshape((np.prod(sizeXl, dtype=np.int), np.prod(sizeX, dtype=np.int)))
     Y=Y.transpose(indY+indYr)
     Y=Y.reshape((np.prod(sizeY),np.prod(sizeYr)))
     #print X.shape,Y.shape
@@ -1203,13 +1212,13 @@ class Test_nTensor(unittest.TestCase):
     def test_temp(self): 
         a = nTensor((3, 3, 3), int)
         print(a)
-        print  super(a.__class__) 
+        print(super(a.__class__)) 
     
     def test_contract(self): 
         a = nTensor((2, 2, 2))
         b = nTensor((2, 2, 2))
         c=a.contract(b, [0, 1, 2], [0, 1, 2])
-        print  type(c)
+        print(type(c))
         
         
 
@@ -1222,7 +1231,7 @@ def test_TensorBase():
         t.totDim = 10
         t.data = np.arange(t.totDim, dtype=t.dtype)
         t.randomize_data()
-        print t.data
+        print(t.data)
     #test_randomize_data()
 
         

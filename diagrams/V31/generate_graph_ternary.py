@@ -4,7 +4,15 @@
 define graphs for long range heisenberg model
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 from merapy.diagrams.template_ternary import G3, G3_new, oo2_tmpl, oo3_tmpl, ooN_tmpl
 from merapy.diagrams.Diagram import Diagram, graphs_info
 import pprint
@@ -103,8 +111,8 @@ def G_22_3_gen():
     (si, is)->H3
     """
     ng = {}
-    for i in xrange(4,7):
-        for j in xrange(max(i+2,7), 10):
+    for i in range(4,7):
+        for j in range(max(i+2,7), 10):
             oo1 = eval(ooN_tmpl % {"name":"oo1", "1":i, "2":i+1, "3":i+2})
             oo2 = eval(ooN_tmpl % {"name":"oo2", "1":j, "2":j+1, "3":j+2})
             oo1 = Diagram(oo1)
@@ -150,9 +158,9 @@ if __name__ == "__main__" :
     #pprint.pprint(G_2_2["L"], indent=4)
     if 0:
         G_2_2["L"].show()
-        print G_2_2["L"].edges
-        print 
-        print G_2_2["L"].nodes()
+        print(G_2_2["L"].edges)
+        print() 
+        print(G_2_2["L"].nodes())
     for g in G_2_2:    
         pass
         #G_2_2["L"].toGraphics("G_2_2", "order2", "L")    

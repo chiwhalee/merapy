@@ -1,13 +1,25 @@
 #coding=utf8
 """
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import hex
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
 import unittest 
 import inspect 
 import os 
+import io
 import numpy as np
 import collections
 from tempfile import mkdtemp 
-import cPickle as pickle 
+import pickle as pickle 
 import warnings 
 import sys
 import string
@@ -19,8 +31,9 @@ import zlib
 
 
 try: 
-    import cloud 
-    pickle_any = cloud.serialization.cloudpickle
+    #import cloud 
+    #pickle_any = cloud.serialization.cloudpickle
+    import cloudpickle as pickle_any 
 except ImportError as err: 
     warnings.warn(str(err))
 
@@ -114,7 +127,7 @@ def get_local(l1, l2):
     res= ""
     for i in l2:
         #print i, l1[i], 
-        if i in l1.keys():
+        if i in list(l1.keys()):
             res+= repr(i) +" " +  str(l1[i])  + " " 
     return res
 
@@ -160,7 +173,7 @@ def replace_num(a1):
         return  "[" + c  + "]."
     #print re.findall(patt4, a4)
     a5=re.sub(patt4,repl4,a4)
-    print a5
+    print(a5)
 
     patt5 = "(\d)\]([=\n])"
     def repl5(matchobj):
@@ -195,7 +208,7 @@ def load(path, as_str=False, decompress=True, info=0):
             s= zlib.decompress(s)
             msg += 'done' 
             if info>0: 
-                print msg
+                print(msg)
         if as_str: 
             res= s
         else:
@@ -217,33 +230,35 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
             out.close()
         else: 
             return pickle_any.dumps(obj)
+            #return pickle.dumps(obj)
     else: 
         try: 
+            print_vars(vars(),  ['type(obj)'])
             s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
         except Exception as err: 
-            print 'pickling error, diagonstic which value cant be dumped: '
+            print('pickling error, diagonstic which value cant be dumped: ')
             if isinstance(obj, dict): 
                 temp = obj 
             else: 
                 temp = dir(obj)
                 temp = {t: getattr(obj, t) for t in temp if t[:2]!= '__'}
-            print sorted(temp.keys())
+            print(sorted(temp.keys()))
             for k, v in sorted(temp.items()): 
                 try: 
-                    print k,   
+                    print(k, end=' ')   
                     pickle_any.dumps(v)
-                    print '--pass'
+                    print('--pass')
                 except Exception as e: 
-                    print '--fail'
+                    print('--fail')
                     #print e
-                    print str(e)[: 50]
+                    print(str(e)[: 50])
                 
             raise err 
         msg = 'compressing file ...'
         z = zlib.compress(s, compress_level)
         msg += 'done' 
         if info>0: 
-            print msg 
+            print(msg) 
         if not as_str: 
             with open(path, 'wb') as f:  
                 #pickle.dump(obj, f)
@@ -272,10 +287,10 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
         var_name_list = sorted(dic)
     if show_header: 
         msg = ''.join(['-'*10, str(var_name_list), '-'*10])
-        print msg 
+        print(msg) 
     def get_val(x): 
         #if not '.' in str(x): 
-        if not isinstance(x, unicode) and not isinstance(x, str): 
+        if not isinstance(x, str) and not isinstance(x, str): 
             res = dic[x]
         else: 
             #a, b = x.split('.')
@@ -306,18 +321,18 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
     res = head
     res  +=  sep.join([ get_val(i)  for i in  var_name_list])
     if not return_str:         
-        print  res
+        print(res)
     else: 
         return res 
 
 
 def dict_to_object(dic): 
-    class OBJECT:
+    class OBJECT(object):
         def __init__(self, **entries): 
             self.__dict__.update(entries)
         def __repr__(self): 
             #return '<%s>' % str('\n '.join('%s : %s' % (k, repr(v)) for (k, v) in self.__dict__.iteritems()))             
-            return ', '.join(self.__dict__.keys())
+            return ', '.join(list(self.__dict__.keys()))
     return OBJECT(**dic)
 
 
@@ -347,24 +362,24 @@ def send_email(msg):
 
     # Create SMTP Object
     smtp = smtplib.SMTP()
-    print 'connecting ...'
+    print('connecting ...')
 
     # show the debug log
     smtp.set_debuglevel(1)
 
     # connet
     try:
-        print smtp.connect(HOST,PORT)
+        print(smtp.connect(HOST,PORT))
     except:
-        print 'CONNECT ERROR ****'
+        print('CONNECT ERROR ****')
     # gmail uses ssl
     #smtp.starttls()
     # login with username & password
     try:
-        print 'loginning ...'
+        print('loginning ...')
         smtp.login(mail_username,mail_password)
     except:
-        print 'LOGIN ERROR ****'
+        print('LOGIN ERROR ****')
     
     # fill content with MIMEText's object 
     the_email = email.mime.text.MIMEText('send from merapy')
@@ -372,7 +387,7 @@ def send_email(msg):
     the_email['To'] = ';'.join(to_addrs)
     #the_email['Subject']='hello , today is a special day'
     the_email['Subject'] = msg.get('subject', 'no subject')
-    print the_email.as_string()
+    print(the_email.as_string())
     
     smtp.sendmail(from_addr,to_addrs,the_email.as_string())
     smtp.quit()
@@ -440,20 +455,23 @@ class OrderedSet(collections.MutableSet):
             return len(self) == len(other) and list(self) == list(other)
         return set(self) == set(other)
 
+class A(object):
+    def __init__(self, a):
+        self.a = a
+    def __str__(self) :
+        return str(self.a)
+
 class TestIt(unittest.TestCase): 
-    def test_temp(self): 
-        s = OrderedSet('sssssdfsdfdsf')
-        print_vars(vars(),  ['s', 'type(s)', 'list(s)'])
     
     def test_save_load(self): 
         for i in [0, 1]: 
             z = {'sda': 3, 'sesdf': 1000000}
             path = '/tmp/'  +  random_str( )
-            print  'path is ', path 
+            print('path is ', path) 
             save(z,  path, i)
             self.assertTrue(os.path.exists(path))
             b = load(path)
-            print 'bbb', b 
+            print('bbb', b) 
             self.assertEqual(z, b)
             os.remove(path)
     
@@ -461,18 +479,42 @@ class TestIt(unittest.TestCase):
         msg = {'a':1}
         send_email(msg)
            
+    def test_temp(self): 
+        from merapy import iTensor
+        o = iTensor.example(symmetry='U1')
+        #o = o
+        print_vars(vars(),  ['type(o)'])
+        if 1:
+            x = pickle.dumps(o)
+            print_vars(vars(),  ['x'])
+        if 0:
+            x = save(o, as_str=1)
+            print_vars(vars(),  ['x.decode()'])
+            print(o)
+        raise  
+        for i in [0, 1]: 
+            z = {'sda': 3, 'sesdf': 1000000}
+            path = '/tmp/'  +  random_str( )
+            print('path is ', path) 
+            save(z,  path, i)
+            self.assertTrue(os.path.exists(path))
+            b = load(path)
+            print('bbb', b) 
+            self.assertEqual(z, b)
+            os.remove(path)
 
 if __name__ == "__main__": 
     
 
-    if 1: 
-        unittest.main()
+    if 0: 
+        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        unittest.main(verbosity=-10)
     else: 
         suite = unittest.TestSuite()
         
         add_list = [
-        #'test_temp', 
-        'xtest_send_email', 
+        'test_temp', 
+        #'xtest_send_email', 
         #'test_save_load', 
           
         ]

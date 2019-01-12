@@ -4,7 +4,15 @@
 """
     V are of type (2, 1)
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 U_tmpl = """ 
      "U_%(U)s":[("I_%(I1)s", 2), ("I_%(I2)s", 2), ("V_%(V1)s", 2), ("V_%(V2)s",1)], 
     "Up_%(U)s":[("Vp_%(V1)s", 3), ("Vp_%(V2)s",2), ("I_%(I1)s", 1), ("I_%(I2)s", 1)], 
@@ -128,7 +136,7 @@ G_mb = {
 def make_template():
     res= "{"
     k = 4
-    for i in xrange(0, k, 2):
+    for i in range(0, k, 2):
         j=i*2
         #算子的相对位置
         #D={"I":i, "O":i, "V":i, "U":i, "V1":i-1, "V2":i, "I1":j-1, "I2":j}
@@ -145,7 +153,7 @@ if __name__ == "__main__":
     from merapy.diagrams.diagram import compare_template
     g = make_template()
     #g = eval(g)
-    print g
+    print(g)
     #compare_template(G3, g)
 
 

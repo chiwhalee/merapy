@@ -3,9 +3,19 @@
 
 #import numpy.linalg as linalg
 #import scipy
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import zip
+from builtins import str
+from builtins import range
+from builtins import *
 import sys
 import numpy as np
-import cPickle as pickle
+import pickle as pickle
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 import unittest
@@ -49,7 +59,7 @@ def initialize_S(S):
     if isinstance(S, dict): 
         S = System(symmetry='U1', init_state=S)
         S.info = 2
-        System.set_graph.im_func(S, getattr(S, 'graph_module_name', None))
+        System.set_graph.__func__(S, getattr(S, 'graph_module_name', None))
         S.initialize()
     return S
 
@@ -91,8 +101,8 @@ def rho_eig(rho, k=None, info=0):
         val.sort()
         val = val[::-1]
         if info>0:
-            print val[:10], '\n', val[-5:]
-            print val_neg
+            print(val[:10], '\n', val[-5:])
+            print(val_neg)
         
         EE = -np.sum(val*np.log2(val))
         
@@ -111,7 +121,7 @@ def partial_trace_rho(rho, n, average=0):
         return rho
     
     #res= rho.partial_trace(0) + rho.partial_trace(1)
-    site_total = range(rho.rank//2)
+    site_total = list(range(rho.rank//2))
     #site_left = range(n)
     #site_right = range(site_total-n, site_total)
     site_left = site_total[: n]
@@ -138,7 +148,7 @@ def concurrence(S, Jzz=None):
     if isinstance(S, dict): 
         S = System(symmetry='U1', init_state=S)
         S.info = 2
-        System.set_graph.im_func(S, getattr(S, 'graph_module_name', None))
+        System.set_graph.__func__(S, getattr(S, 'graph_module_name', None))
         S.initialize()
     
     descending_ham(S.mera, S, ilayer=1)
@@ -226,7 +236,7 @@ def entanglement_special(S, ):
     if isinstance(S, dict): 
         S = System(symmetry='U1', init_state=S)
         S.info = 2
-        System.set_graph.im_func(S, getattr(S, 'graph_module_name', None))
+        System.set_graph.__func__(S, getattr(S, 'graph_module_name', None))
         S.initialize()
   
     layer = 0 
@@ -311,7 +321,7 @@ def central_charge(S, force_update=False, verbose=True, info=0):
             #print 'record found'
             msg += 'record found'
             is_found = True
-        if verbose: print msg
+        if verbose: print(msg)
     
     if force_update:  is_found = False            
     
@@ -334,10 +344,10 @@ def central_charge(S, force_update=False, verbose=True, info=0):
     
     #if not is_found and is_loaded:
     if 0: 
-        if not S.record.has_key(S.iter):  
+        if S.iter not in S.record:  
             S.record[S.iter]={}
         S.record[S.iter].update({'central_charge':res})
-        if verbose:  print 'central_charge at step %d is saved'%S.iter
+        if verbose:  print('central_charge at step %d is saved'%S.iter)
         S._save(path)
 
     return res
@@ -350,7 +360,7 @@ def G_calc_EE(nsite):
                 'U_0_0': {1: (None, None),  2: (None, None),                  4: ('V_0_1', 1)}, 
                 'V_0_1': {                  2: (None, None), 3: (None, None), 4: (None, None) }, 
                 }
-        contract_order = range(3)
+        contract_order = list(range(3))
         final_order = [('V_0_0', 1), ('V_0_0', 2), ('U_0_0', 1), ('U_0_0', 2), ('V_0_1', 2), ('V_0_1', 3), 
                 ('V_0_0', 4), ('V_0_1', 4)]
         ind_offset = 1
@@ -378,7 +388,7 @@ def G_calc_EE(nsite):
                 ]
        
     res = Graphics.init_from_dict(G_dic, ind_offset)
-    contract_order = range(res.size)
+    contract_order = list(range(res.size))
     res.set_contract_order(contract_order)
     res.set_final_order(final_order, ind_offset)
 
@@ -433,7 +443,7 @@ def entanglement_brute_force(S, k=80, site_num_max=6, plot=False, average=False,
             2: (2, 1, 0), 
             3: (3, 2, 1, 0),  
             6: (6, 5, 4, 3), 
-            9: range(9, -1, -1)}
+            9: list(range(9, -1, -1))}
     def set_val(rho_red, site_num, k, info=info): 
         nn = mapper[site_num]
         for n in nn: 
@@ -448,7 +458,7 @@ def entanglement_brute_force(S, k=80, site_num_max=6, plot=False, average=False,
             EE[n1] = ee
             spectrum[n1] = sp
             if info>0: 
-                print 'sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp))
+                print('sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp)))
             #rho_red = partial_trace_rho(rho_red, site_num-n)
             rho_red = partial_trace_rho(rho_red, 1, average=average) 
         
@@ -479,8 +489,8 @@ def entanglement_brute_force(S, k=80, site_num_max=6, plot=False, average=False,
         layer = 1
         rho2 = S.rho_2[layer][0].copy()
         
-        temp, leg = A.contract(rho2, range(A.rank), [ 1000, 1001, A.rank-2,  A.rank-1])
-        v1 = range(temp.rank)
+        temp, leg = A.contract(rho2, list(range(A.rank)), [ 1000, 1001, A.rank-2,  A.rank-1])
+        v1 = list(range(temp.rank))
         v2 = [temp.rank-2, temp.rank-1] + [1000 + i for i in range(A_dag.rank-2)]
         rho_red, leg = temp.contract(A_dag, v1, v2)
       
@@ -503,16 +513,16 @@ def entanglement_brute_force(S, k=80, site_num_max=6, plot=False, average=False,
         rho2 = S.rho_2[layer][0].copy()
         rho1 = partial_trace_rho(rho2, n=1, average=average)
         
-        temp, leg = A.contract(rho1, range(A.rank), [ 1000,A.rank-1])
+        temp, leg = A.contract(rho1, list(range(A.rank)), [ 1000,A.rank-1])
         
-        v1 = range(temp.rank)
+        v1 = list(range(temp.rank))
         v2 = [temp.rank-1] + [1000 + i for i in range(A_dag.rank-1)]
         rho_red, leg = temp.contract(A_dag, v1, v2 )
         set_val(rho_red, 9, k=80, info=info)
         
     res = {'EE': EE, 'spectrum': spectrum}
     if plot: 
-        x, y = zip(*EE.items());
+        x, y = list(zip(*list(EE.items())));
         x = np.array(x)
         y = np.array(y)
         plt.plot(x, y, '.-')
@@ -524,7 +534,7 @@ def entanglement_brute_force(S, k=80, site_num_max=6, plot=False, average=False,
         x1 = np.log2(x[start:end]);
         y1 = y[start: end]
         c = np.polyfit(x1, y1, deg=1)
-        print 'central_charge is %s'%c
+        print('central_charge is %s'%c)
     
     return res
 
@@ -537,7 +547,7 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
     EE = {}
     spectrum = {}
     #mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: (9, 8, 7)}
-    mapper = {6: (6, 5, 4, 3, 2, 1, 0), 3: (3, 2, 1, 0),  2: (2, 1, 0), 9: range(9, -1, -1)}
+    mapper = {6: (6, 5, 4, 3, 2, 1, 0), 3: (3, 2, 1, 0),  2: (2, 1, 0), 9: list(range(9, -1, -1))}
     def set_val(rho_red, site_num, k, info=info): 
         nn = mapper[site_num]
         for n in nn: 
@@ -553,7 +563,7 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
             EE[n1] = ee
             spectrum[n1] = sp
             if info>0: 
-                print 'sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp))
+                print('sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp)))
             #rho_red = partial_trace_rho(rho_red, site_num-n)
             rho_red = partial_trace_rho(rho_red, 1) 
         
@@ -586,8 +596,8 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
         layer = 1
         rho2 = S.rho_2[layer][0].copy()
         
-        temp, leg = A.contract(rho2, range(A.rank), [ 1000, 1001, A.rank-2,  A.rank-1])
-        v1 = range(temp.rank)
+        temp, leg = A.contract(rho2, list(range(A.rank)), [ 1000, 1001, A.rank-2,  A.rank-1])
+        v1 = list(range(temp.rank))
         v2 = [temp.rank-2, temp.rank-1] + [1000 + i for i in range(A_dag.rank-2)]
         rho_red, leg = temp.contract(A_dag, v1, v2)
       
@@ -595,7 +605,7 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
     
     res = {'EE': EE, 'spectrum': spectrum}
     if plot: 
-        x, y = zip(*EE.items());
+        x, y = list(zip(*list(EE.items())));
         x = np.array(x)
         y = np.array(y)
         plt.plot(x, y, '.-')
@@ -607,7 +617,7 @@ def entanglement_brute_force_6(S, k=80, site_num_max=6, plot=False, info=0):
         x1 = np.log2(x[start:end]);
         y1 = y[start: end]
         c = np.polyfit(x1, y1, deg=1)
-        print 'central_charge is %s'%c
+        print('central_charge is %s'%c)
     
     return res
 
@@ -621,7 +631,7 @@ def entanglement_brute_force_9(S, k=80, site_num_max=9, plot=False, info=0):
     EE = {}
     spectrum = {}
     #mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: (9, 8, 7)}
-    mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: range(9, -1, -1)}
+    mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: list(range(9, -1, -1))}
     def set_val(rho_red, site_num, k, info=info): 
         nn = mapper[site_num]
         for n in nn: 
@@ -636,7 +646,7 @@ def entanglement_brute_force_9(S, k=80, site_num_max=9, plot=False, info=0):
             EE[n1] = ee
             spectrum[n1] = sp
             if info>0: 
-                print 'sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp))
+                print('sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp)))
             #rho_red = partial_trace_rho(rho_red, site_num-n)
             rho_red = partial_trace_rho(rho_red, 1) 
         
@@ -657,9 +667,9 @@ def entanglement_brute_force_9(S, k=80, site_num_max=9, plot=False, info=0):
         rho2 = S.rho_2[layer][0].copy()
         rho1 = partial_trace_rho(rho2, n=1)
         
-        temp, leg = A.contract(rho1, range(A.rank), [ 1000,A.rank-1])
+        temp, leg = A.contract(rho1, list(range(A.rank)), [ 1000,A.rank-1])
         
-        v1 = range(temp.rank)
+        v1 = list(range(temp.rank))
         v2 = [temp.rank-1] + [1000 + i for i in range(A_dag.rank-1)]
         rho_red, leg = temp.contract(A_dag, v1, v2 )
         set_val(rho_red, 9, k=160, info=info)
@@ -672,12 +682,12 @@ def entanglement_brute_force_9_test(S, k=80, site_num_max=9, plot=False, info=0)
     multiple = 1
     if S.symmetry == 'U1': 
         multiple = 2
-    print 'hhhhh'
+    print('hhhhh')
     
     EE = {}
     spectrum = {}
     #mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: (9, 8, 7)}
-    mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: range(9, -1, -1)}
+    mapper = {6: (6, 5, 4, 3), 2: (2, 1, 0), 9: list(range(9, -1, -1))}
     def set_val(rho_red, site_num, k, info=info): 
         nn = mapper[site_num]
         for n in nn: 
@@ -692,7 +702,7 @@ def entanglement_brute_force_9_test(S, k=80, site_num_max=9, plot=False, info=0)
             EE[n1] = ee
             spectrum[n1] = sp
             if info>0: 
-                print 'sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp))
+                print('sum of spectrum for n=%d  is  %1.15f'%(n, np.sum(sp)))
             #rho_red = partial_trace_rho(rho_red, site_num-n)
             rho_red = partial_trace_rho(rho_red, 1) 
         
@@ -714,9 +724,9 @@ def entanglement_brute_force_9_test(S, k=80, site_num_max=9, plot=False, info=0)
         rho2 = S.rho_2[layer][0].copy()
         rho1 = partial_trace_rho(rho2, n=1)
         
-        temp, leg = A.contract(rho1, range(A.rank), [ 1000,A.rank-1])
+        temp, leg = A.contract(rho1, list(range(A.rank)), [ 1000,A.rank-1])
         
-        v1 = range(temp.rank)
+        v1 = list(range(temp.rank))
         v2 = [temp.rank-1] + [1000 + i for i in range(A_dag.rank-1)]
         rho_red, leg = temp.contract(A_dag, v1, v2 )
         set_val(rho_red, 9, k=80, info=info)
@@ -729,7 +739,7 @@ def test():
     raise #
     #from merapy.all import *  # this is not allowed
     qsp=QspU1.easy_init([0,1,-1], [2,1,1])
-    qsp=qsp.copy_many(18, reverse=range(9,18))
+    qsp=qsp.copy_many(18, reverse=list(range(9,18)))
     qn=QnU1.qn_id()
 
 #t=iTensor(18, qsp,qn)
@@ -750,7 +760,7 @@ def test():
             return rho
         
         #res= rho.partial_trace(0) + rho.partial_trace(1)
-        site_total = range(rho.rank//2)
+        site_total = list(range(rho.rank//2))
         #site_left = range(n)
         #site_right = range(site_total-n, site_total)
         site_left = site_total[: n]
@@ -767,8 +777,8 @@ def test():
 
     rho2 = S.rho_2[layer][0].copy()
     rho1 = partial_trace_rho(rho2, n=1)
-    temp, leg = A.contract(rho1, range(A.rank), [ 1000,A.rank-1])
-    v1 = range(temp.rank)
+    temp, leg = A.contract(rho1, list(range(A.rank)), [ 1000,A.rank-1])
+    v1 = list(range(temp.rank))
     v2 = [temp.rank-1] + [1000 + i for i in range(A_dag.rank-1)]
     rho_red, leg = temp.contract(A_dag, v1, v2 )
 
@@ -842,7 +852,7 @@ class TestIt(unittest.TestCase):
          
         res = central_charge(S=S, force_update=True, info=0)
         res_old = {'EE': {1: 1.511427, 2: 1.688231}, 'c': 0.530412}
-        print res  
+        print(res)  
     
     def test_entanglement_extra(self):    
         pass 
@@ -858,12 +868,12 @@ class TestIt(unittest.TestCase):
 
         S = merapy.load(path)
         res=entanglement_entropy(S, spectrum=0, info=2, path=None, verbose=False) 
-        print  res 
-        print central_charge(S=S, force_update=True, info=0)
+        print(res) 
+        print(central_charge(S=S, force_update=True, info=0))
         #entanglement_extra(S, k=80, info=2)
         
         res = entanglement_brute_force_6(S=S, k=80, plot=0, info=2);  
-        print res['EE']
+        print(res['EE'])
 
     def test_concurrence(self): 
         #path= '/home/zhli/backup_tensor_dir/run-long-heisbg/mera/test/rmax12_4812125/alpha=0.88-init1p44/8.pickle'
@@ -914,14 +924,14 @@ if __name__ == '__main__':
                 #path = '/home/zhli/Documents/mera_backup_tensor/run-long-better/new_run/alpha=1.6/12-4lay.pickle'
                 S = System.load(path)
                  
-                print central_charge(S=S, force_update=True, info=0)
-                print "res should be {'EE': {1: 0.842492, 2: 1.010302}, 'c': 0.50343}" 
+                print(central_charge(S=S, force_update=True, info=0))
+                print("res should be {'EE': {1: 0.842492, 2: 1.010302}, 'c': 0.50343}") 
                 
                 #entanglement_extra(S, k=80, info=2)
                 #path = '/home/zhli/Documents/mera_backup_tensor/run-xx/ternary/traiv-symm/prod-state/4.pickle' 
                 
                 #res=entanglement_brute_force(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
-                res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print res['EE']
+                res=entanglement_brute_force_6(S=S, k=80, plot=0, site_num_max=6, info=2);  print(res['EE'])
                 #res=entanglement_brute_force_9(S=S, k=80, plot=1, site_num_max=9, info=2);  print res['EE']
     
     if 0: #examine

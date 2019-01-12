@@ -3,6 +3,13 @@
 
 #from vmps.config import CONFIG_HEISENBG_BASIC, copy_config
 #from vmps.config import CONFIG_HEISENBG_BASIC, copy_config, Config
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from merapy.config import CFG_HEISBG_BASIC, copy_config, Config 
 from merapy.top_level import top_level_product_state, top_level_product_state_u1, top_level_eigenstate
 from merapy.schedule import schedule_prod_state, copy_schedule
@@ -66,7 +73,7 @@ if __name__ == '__main__'    :
     cfg = make_config(Jzz=1.5,  root1='', which_top_state='scale_invar_state')
     aaa = ['backup_parpath', 'backup_parpath_local']
     for a in aaa: 
-        print a,  cfg[a]
+        print(a,  cfg[a])
    
 
 

@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 #coding=utf8
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import map
+from builtins import range
+from builtins import *
 import pprint
 import sys
 import math
@@ -33,7 +43,7 @@ def init_g2_modified():
     #order2 = np.ndarray((Graphics.MaxNode, 3), "int")        
     
     weight2 = {}
-    for k in G2.keys():
+    for k in list(G2.keys()):
         weight2[k] = 1/3.0    
     
     if 1:#G2[R] insert two Vg between V_0 and V_p0
@@ -204,7 +214,7 @@ def ascending_ham_modified(M, S, ilayer, tau=None, info=0):
     ilayer_p1 = ilayer + 1
     S.H_2[ilayer_p1].O[j].data[:] =0.0
     if info>0:
-        print "START ascending_ham"
+        print("START ascending_ham")
     for g in [-1, 0, 1]:
         G = G2[g]
         order = order2[g]
@@ -214,9 +224,9 @@ def ascending_ham_modified(M, S, ilayer, tau=None, info=0):
         
     
     if info>0:
-        print "H_2 at iLayer+1,",ilayer_p1
-        print S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3) 
-        print "END ascending_ham"
+        print("H_2 at iLayer+1,",ilayer_p1)
+        print(S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3)) 
+        print("END ascending_ham")
 
 def asd_op_1site(V):
     """
@@ -226,9 +236,9 @@ def asd_op_1site(V):
     V_dag = V.conjugate(r-1 )
     #lab1 = [0, 1, 2, 3]
     #lab2 = [4, 0, 5, 2]
-    lab1 = range(r) 
+    lab1 = list(range(r)) 
     lab1[1] = 100; lab1[-1] = 300
-    lab2 = [400] + range(r-1)
+    lab2 = [400] + list(range(r-1))
     lab2[2] = 500
     op, lab12 = V.contract(V_dag, lab1, lab2)
     return op
@@ -301,14 +311,14 @@ def calc_scaling_dim_1site(path=None, S=None, iterate=False, local=True, qn_list
         S = System.load(path)
     #msg = "energy = %f, symmetry = %s"%(S.energy, S.symmetry)
     energy_err = (S.energy - S.energy_exact)
-    print "energy = %1.15f, eng_err = %1.1e, symmetry = %s, trunc_dim = %d"%(
-            S.energy, energy_err, S.symmetry, S.mera.qsp_max.totDim)
+    print("energy = %1.15f, eng_err = %1.1e, symmetry = %s, trunc_dim = %d"%(
+            S.energy, energy_err, S.symmetry, S.mera.qsp_max.totDim))
     if 1:
         symmetry = S.symmetry
         if qn_list is None:
             qn_list = symmetry_to_Qn(symmetry).QNS
             if symmetry == "U1":
-                qn_list = range(3)
+                qn_list = list(range(3))
         qn_instance_list = [qn_factory(symmetry, i) for i in qn_list]
     
     #period = S.mera.period
@@ -336,20 +346,20 @@ def calc_scaling_dim_1site(path=None, S=None, iterate=False, local=True, qn_list
                 vals.sort()
                 vals= vals[-1::-1]
                 try:
-                    print qn, map(func, vals[:])
+                    print(qn, list(map(func, vals[:])))
                 except:
                     #raise Exception(str(vals))
                     msg = "vals are %s"%str(vals)
-                    print msg
+                    print(msg)
         else:
-            for i, vals in temp.items():
+            for i, vals in list(temp.items()):
                 vals = np.abs(vals)
                 vals.sort()
                 vals = vals[-1::-1]
-                print i, map(func, vals[:])
+                print(i, list(map(func, vals[:])))
 
     else:
-        print "iteratively eigs"
+        print("iteratively eigs")
 
         V_dag = S.mera.V_dag[SIlayer][0]
         if 1:
@@ -376,7 +386,7 @@ def calc_scaling_dim_1site(path=None, S=None, iterate=False, local=True, qn_list
                 vals, vecs = eigs(A=A, k=k, v0=v0, tol=tol)
             elif dim<3:
                 #vals, vecs = eigs(A=A, k=1, tol=tol)
-                print "dim too low, continue with next qn. dim = %d"%dim
+                print("dim too low, continue with next qn. dim = %d"%dim)
                 continue
             else:
                 vals, vecs = eigs(A=A, k=dim-2, v0=v0, tol=tol)
@@ -386,8 +396,8 @@ def calc_scaling_dim_1site(path=None, S=None, iterate=False, local=True, qn_list
             vals= np.abs(vals)
             vals.sort()
             vals= vals[-1::-1]
-            msg += "%s\n"%str(map(func, vals[:15])) 
-        print msg
+            msg += "%s\n"%str(list(map(func, vals[:15]))) 
+        print(msg)
 
     tensor_player.STATE = state_bac
 
@@ -396,7 +406,7 @@ def asd_op_2site(ascending_func, S, Vin, local=True, info=0, iter=None):
     ilayer = M.num_of_layer-2
     ilayer_p1 = ilayer + 1
     if not local:
-        if not S.network_tensor_dic.has_key("Vg"):
+        if "Vg" not in S.network_tensor_dic:
             S.network_tensor_dic.update({"Vg":("Vg", 0)})
         if not hasattr(S, "Vg"):
             temp = [[None]]*ilayer_p1
@@ -434,12 +444,12 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
             #print 'record not found'
             #print err
             msg += 'record not found:  '  + err.message
-            if verbose:  print msg
+            if verbose:  print(msg)
             is_loaded = True
         else:
             #print 'record found'
             msg  += 'record found'
-            if verbose:  print msg
+            if verbose:  print(msg)
             return res
         
     #print "energy = %f, symmetry = %s"%(S.energy, S.symmetry)
@@ -472,14 +482,14 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
     if qn_list is None:
         qn_list = symmetry_to_Qn(symmetry).QNS
         if symmetry == "U1":
-            qn_list = range(3)
+            qn_list = list(range(3))
     qn_instance_list = [qn_factory(symmetry, i) for i in qn_list]
 
     qsp0 = S.mera.V[ilayer][0].QSp[0].copy()
     rescale_factor = S.mera.V[ilayer][0].rank-1
     func = lambda x: round(-math.log(x, rescale_factor), 8)
     
-    print "2site, b = %d"%rescale_factor
+    print("2site, b = %d"%rescale_factor)
     res= {}
     for qn in qn_instance_list:
         #print "%s"%qn, 
@@ -500,7 +510,7 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
         if dim-1> k:
             vals, vecs = eigs(A=A, k=k, v0=v0, tol=tol)
         elif dim<3:
-            print "dim too low, continue with next qn. dim = %d"%dim
+            print("dim too low, continue with next qn. dim = %d"%dim)
             continue
         else:
             vals, vecs = eigs(A=A, k=dim-2, v0=v0, tol=tol)
@@ -515,9 +525,9 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
             #res.append((qn._val, map(func, vals[:k])))
             res[qn._val] = tuple(map(func, vals[:k]))
         except ValueError as err:
-            print err
+            print(err)
             del S.G_2_2
-            print 'S.G_2_2 is deleted, retry it'
+            print('S.G_2_2 is deleted, retry it')
             break
         
         S.only_NN = only_NN
@@ -531,10 +541,10 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
         tensor_player.STATE = state_bac
     
     if is_loaded:
-        if not S.record.has_key(S.iter):  
+        if S.iter not in S.record:  
             S.record[S.iter]={}
         S.record[S.iter].update({'scaling_dim':res})
-        print 'scaling_dima at step %d is saved'%S.iter
+        print('scaling_dima at step %d is saved'%S.iter)
         S._save(path)
         
     return res
@@ -556,12 +566,12 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
             #print 'record not found'
             #print err
             msg += 'record not found:  '  + err.message
-            if verbose:  print msg
+            if verbose:  print(msg)
             is_loaded = True
         else:
             #print 'record found'
             msg  += 'record found'
-            if verbose:  print msg
+            if verbose:  print(msg)
             return res
         
     #print "energy = %f, symmetry = %s"%(S.energy, S.symmetry)
@@ -594,7 +604,7 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
     if qn_list is None:
         qn_list = symmetry_to_Qn(symmetry).QNS
         if symmetry == "U1":
-            qn_list = range(3)
+            qn_list = list(range(3))
     qn_instance_list = [qn_factory(symmetry, i) for i in qn_list]
 
     qsp0 = S.mera.V[ilayer][0].QSp[0].copy()
@@ -622,7 +632,7 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
         if dim-1> k:
             vals, vecs = eigs(A=A, k=k, v0=v0, tol=tol)
         elif dim<3:
-            print "dim too low, continue with next qn. dim = %d"%dim
+            print("dim too low, continue with next qn. dim = %d"%dim)
             continue
         else:
             vals, vecs = eigs(A=A, k=dim-2, v0=v0, tol=tol)
@@ -637,9 +647,9 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
             #res.append((qn._val, map(func, vals[:k])))
             res[qn._val] = tuple(map(func, vals[:k]))
         except ValueError as err:
-            print err
+            print(err)
             del S.G_2_2
-            print 'S.G_2_2 is deleted, retry it'
+            print('S.G_2_2 is deleted, retry it')
             break
         
         S.only_NN = only_NN
@@ -675,7 +685,7 @@ if __name__ == "__main__":
             sys.exit(0)
         qn_list = None
         calc_scaling_dim_1site(fn, iterate=False, local=True, qn_list=qn_list)
-        res = calc_scaling_dim_2site(fn, local=True, S=None, qn_list=None, tol=1e-8, k=10); print res
+        res = calc_scaling_dim_2site(fn, local=True, S=None, qn_list=None, tol=1e-8, k=10); print(res)
         sys.exit(0)
     #decorators.tensor_player.NEXT_STATE = "record"
 
@@ -711,7 +721,7 @@ if __name__ == "__main__":
             #calc_scaling_dim_1site(fn, iterate=True, local=True, qn_list=qn_list)
             #res = calc_scaling_dim_2site(fn, local=True, S=None, qn_list=qn_list, tol=1e-8, k=12)
         S= System.load(fn)
-        res = calc_scaling_dim_2site(S=S, local=True, qn_list=qn_list, tol=1e-8, k=12); print res
+        res = calc_scaling_dim_2site(S=S, local=True, qn_list=qn_list, tol=1e-8, k=12); print(res)
         
 
 

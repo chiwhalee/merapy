@@ -4,7 +4,15 @@
 define graphs for long range heisenberg model
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 from merapy.diagrams.template_halfbb import G_HBB, oo1_tmpl, oo2_tmpl, oo2_Ntmpl, oo3_tmpl#G3, G3_new, oo2_tmpl, oo3_tmpl, ooN_tmpl
 from merapy.diagrams.diagram import Diagram #, graphs_info
 import pprint
@@ -39,7 +47,7 @@ OO = Diagram(OO)
 
 def gen_G_2_2():
     ng = {}
-    for i in xrange(7, 12):
+    for i in range(7, 12):
         oo = eval(oo2_tmpl % {"1":i, "2":i+1})
         oo = Diagram(oo)
         gg = G+oo
@@ -67,7 +75,7 @@ def gen_G_2_2():
 
 def gen_G_3_2():
     ng = {}
-    for i in xrange(7, 11):  #11):
+    for i in range(7, 11):  #11):
         oo = eval(oo3_tmpl % {"1":i, "2":i+1, "3":i+2})
         gg = G + oo
         gg = gg.Simplify()
@@ -88,7 +96,7 @@ gen_G_3_2()
 
 if 0:
 #g2
-    for i in xrange(7,12):
+    for i in range(7,12):
         oo = eval(oo2_tmpl % {"1":i, "2":i+1})
         gg = Simplify_Graph_HBB(Add_Graph(oo, G))
         check_graph(gg)
@@ -102,21 +110,21 @@ if 0:
         check_graph(gg)
     #    print_graph(gg)
         ii = i-7
-        print weight % (ii)
+        print(weight % (ii))
         Output_Fortran(ii, "G2", "order2", gg)
 #g3
-    for i in xrange(7,11):
+    for i in range(7,11):
         oo = eval(oo3_tmpl % {"1":i, "2":i+1, "3":i+2})
         gg = Simplify_Graph_HBB(Add_Graph(oo, G))
         weight="   weight3(%d)=1.d0/4.d0"
     #     if i==7 or i==11:
     #         weight="   weight3(%d)=1.d0/8.d0"
         ii = i-7
-        print weight % (ii)
+        print(weight % (ii))
         Output_Fortran(ii, "G3", "order3", gg)
 
-    for i in xrange(7,11):
-        for j in xrange(i+2,12):
+    for i in range(7,11):
+        for j in range(i+2,12):
             gg = G_HBB
             oo1 = eval(oo2_Ntmpl % {"name":"oo1", "1":i, "2":i+1})
             oo2 = eval(oo2_Ntmpl % {"name":"oo2", "1":j, "2":j+1})
@@ -124,11 +132,11 @@ if 0:
             ii = i-7
             jj = j-7
             weight="   weight_2_2(%d,%d)=1.d0/4.d0"
-            print weight % (ii,jj)
+            print(weight % (ii,jj))
             Output_Fortran(ii, "G_2_2", "order_2_2", gg, jj=jj)
         
-    for i in xrange(7,11):
-        for j in xrange(12,16):
+    for i in range(7,11):
+        for j in range(12,16):
             gg = G_HBB
             oo1 = eval(oo2_Ntmpl % {"name":"oo1", "1":i, "2":i+1})
             oo2 = eval(oo2_Ntmpl % {"name":"oo2", "1":j, "2":j+1})
@@ -136,7 +144,7 @@ if 0:
             ii = i-7
             jj = j-12
             weight="   weight_2_3(%d,%d)=1.d0/4.d0"
-            print weight % (ii,jj)
+            print(weight % (ii,jj))
             Output_Fortran(ii, "G_2_3", "order_2_3", gg, jj=jj)
     #        Output_Fortran(ii, "G3", "order3", gg)
 
@@ -222,8 +230,8 @@ if 0:
         8 graphs in all
         """
         ng = {}
-        for i in xrange(4,7):
-            for j in xrange(max(i+2,7), 10):
+        for i in range(4,7):
+            for j in range(max(i+2,7), 10):
                 oo1 = eval(ooN_tmpl % {"name":"oo1", "1":i, "2":i+1, "3":i+2})
                 oo2 = eval(ooN_tmpl % {"name":"oo2", "1":j, "2":j+1, "3":j+2})
                 oo1 = Diagram(oo1)
@@ -258,9 +266,9 @@ if __name__ == "__main__" :
         #pprint.pprint(G_2_2["L"], indent=4)
         if 0:
             G_2_2["L"].show()
-            print G_2_2["L"].edges
-            print 
-            print G_2_2["L"].nodes()
+            print(G_2_2["L"].edges)
+            print() 
+            print(G_2_2["L"].nodes())
         for g in G_2_2:    
             pass
             #G_2_2["L"].toGraphics("G_2_2", "order2", "L")    

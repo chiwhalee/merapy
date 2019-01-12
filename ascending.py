@@ -1,5 +1,13 @@
 #coding=utf8
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 import unittest 
 
 
@@ -34,7 +42,7 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
     ilayer_p1 = ilayer + 1
     S.H_2[ilayer_p1][j].data[:] =0.0
     if info>0:
-        print "START ascending_ham"
+        print("START ascending_ham")
     for g in sorted(G_2_2):
         G = G_2_2[g]
         order = G.contract_order
@@ -53,9 +61,9 @@ def ascending_ham(M, S, ilayer, tau=None, info=0):
 
     
     if info>0:
-        print "H_2 at iLayer+1,",ilayer_p1
-        print S.H_2[ilayer_p1][j].data[:4].round(3),"....", S.H_2[ilayer_p1][j].data[-4:].round(3) 
-        print "END ascending_ham"
+        print("H_2 at iLayer+1,",ilayer_p1)
+        print(S.H_2[ilayer_p1][j].data[:4].round(3),"....", S.H_2[ilayer_p1][j].data[-4:].round(3)) 
+        print("END ascending_ham")
 
 def ascending_ham_1site(M, S, ilayer, tau=None, info=0):
     """
@@ -83,7 +91,7 @@ def ascending_ham_1site(M, S, ilayer, tau=None, info=0):
     ilayer_p1 = ilayer + 1
     S.H_1[ilayer_p1][j].data[:] =0.0
     if info>0:
-        print "START ascending_ham"
+        print("START ascending_ham")
     for g in sorted(G_1_1):
         G = G_1_1[g]
     #for G in G_1_1.itervalues():
@@ -93,9 +101,9 @@ def ascending_ham_1site(M, S, ilayer, tau=None, info=0):
         
     
     if info>0:
-        print "H_1 at iLayer+1,",ilayer_p1
-        print S.H_1[ilayer_p1][j].data[:4].round(3),"....", S.H_1[ilayer_p1][j].data[-4:].round(3) 
-        print "END ascending_ham"
+        print("H_1 at iLayer+1,",ilayer_p1)
+        print(S.H_1[ilayer_p1][j].data[:4].round(3),"....", S.H_1[ilayer_p1][j].data[-4:].round(3)) 
+        print("END ascending_ham")
 
 def ascending_generic(S): 
     """
@@ -115,8 +123,8 @@ class TestIt(unittest.TestCase):
     
     def test_ascending(self): 
         pass 
-        from mera import Mera
-        from hamiltonian import System 
+        from .mera import Mera
+        from .hamiltonian import System 
         if 0:
             symm = "Travial"
             M = Mera.example(trunc_dim=2, tot_layer=5, symmetry=symm)
@@ -128,7 +136,7 @@ class TestIt(unittest.TestCase):
         
         #set_ham_to_identity(sys)
         #from decorators import set_STATE_end_simple
-        import decorators 
+        from . import decorators 
         for i in range(M.num_of_layer-1):
             #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
             decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)

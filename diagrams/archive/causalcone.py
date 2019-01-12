@@ -1,5 +1,13 @@
 #!/usr/bin/env python
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 m = {
     -3:0, -2:0, -1:(0,1), 0:(0,1), 
      1:(0,1), 2:(0,1), 3:1, 4:1,
@@ -17,7 +25,7 @@ m = {
 
 import types
 def isTuple(l):
-    return type(l) == types.TupleType
+    return type(l) == tuple
 
 def Asc(i):
     if isTuple(i):
@@ -37,11 +45,11 @@ def Asc(i):
             return 2*l+m[j]
     
 x=64
-for i in xrange(-x+1,x+1):
+for i in range(-x+1,x+1):
     i1 = Asc(i); i2 = Asc(i1); i3 = Asc(i2)
     l1,j = divmod(i+3,4); l2,j = divmod(l1+3,4)
     l3,j = divmod(l2+3,4)
-    print i, '|', l1,l2,l3, '|', i1, i2, i3
+    print(i, '|', l1,l2,l3, '|', i1, i2, i3)
 #     l1,j = divmod(l+3,4)
 #     l2,j = divmod(l1+3,4)
 #     print "%5d  %5d  %5d  %5d" % (i,l,l1,l2)

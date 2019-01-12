@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 import unittest
 import warnings
 import os, argparse
@@ -7,7 +14,7 @@ import collections
 
 CFG_LOCAL = None
 try:
-    from config_local import  config as CFG_LOCAL
+    from .config_local import  config as CFG_LOCAL
 except:
     warnings.warn('config_local.py not found')
 
@@ -52,7 +59,7 @@ def recursive_update_cfg(d, u):
     """
         this will be used later 
     """
-    for k, v in u.iteritems():
+    for k, v in u.items():
         if isinstance(v, collections.Mapping):
             r = update(d.get(k, {}), v)
             d[k] = r
@@ -266,14 +273,14 @@ def cfg_graph(which):
     exec(temp)
 
     G_2_2 = graph_module.G_2_2
-    k = G_2_2.keys()[0]
+    k = list(G_2_2.keys())[0]
     vnode = G_2_2[k].find_node('V')[0]
     vrank = G_2_2[k].nodes[vnode]
     tensor_defs = {
             "V":{"type":(vrank-1, 1)}, 
             "V_dag":{"type":(1, vrank-1)}, 
             }
-    print 'using %(which)s graph, V and V_dag are defined as %(tensor_defs)s'%vars()
+    print('using %(which)s graph, V and V_dag are defined as %(tensor_defs)s'%vars())
     mera_kwargs = {"tensor_defs":tensor_defs}
     sys_kwargs = {"graph_module":graph_module}
     new = {"mera_kwargs":mera_kwargs, "sys_kwargs":sys_kwargs}
@@ -365,7 +372,7 @@ class Config(dict):
                 if  abs(v) <= cfg['variance_lim']:
                     allow = False
                 if info>0:
-                    print '\tvariance',  '%1.2e'%v
+                    print('\tvariance',  '%1.2e'%v)
                     
             else:
                 Dmax_schedule = max([s['D'] for s in schedule])
@@ -378,8 +385,8 @@ class Config(dict):
                 #        Dmax_schedule <= Dmax ):
                 #    allow = False
                 if info>0:
-                    print '\tvariance',  '%1.2e'%v
-                    print '\ttrunc_err',  '%1.2e'%tem 
+                    print('\tvariance',  '%1.2e'%v)
+                    print('\ttrunc_err',  '%1.2e'%tem) 
                 
                 conditions = [
                         tem <= cfg['trunc_err_TOL'], 
@@ -427,8 +434,8 @@ class TestIt(unittest.TestCase):
         path  = cfg['parpath_relative']
         path = '/'.join([cfg['BACKUP_BASE_DIR_LOCAL'], path])
         a = '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir/proj/mera/middle/h=1.0-surf']) 
-        print 'path', path
-        print 'a', a
+        print('path', path)
+        print('a', a)
         self.assertTrue(path==a)
         
 

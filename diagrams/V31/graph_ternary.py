@@ -5,6 +5,14 @@
     e.g. G_123_01 means map from site 123 to a upper layer at 01
     this notation already contains info about num of sites and type of ops
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import *
 import json 
 import numpy as np
 
@@ -26,7 +34,7 @@ def init_mera_graph():
     order_top = np.ndarray(Graphics.MaxNode, "int")
     
     weight3 = {}
-    for k in G3.keys():
+    for k in list(G3.keys()):
         weight3[k] = 1/3.0    
 
     #  OO [['Vp_0', 1], ['Vp_1', 1], ['V_0', 4], ['V_1', 4]]
@@ -231,7 +239,7 @@ def init_g3():
     order_top = np.ndarray(Graphics.MaxNode, "int")
     
     weight3 = {}
-    for k in G3.keys():
+    for k in list(G3.keys()):
         weight3[k] = 1/3.0    
 
     #  OO [['Vp_0', 1], ['Vp_1', 1], ['V_0', 4], ['V_1', 4]]
@@ -435,7 +443,7 @@ def init_g2_old():
 
     
     weight2 = {}
-    for k in G2.keys():
+    for k in list(G2.keys()):
         weight2[k] = 1/3.0    
     if 1:
         #OO [('Vp_0', 1), ('Vp_1', 1), ('V_0', 4), ('V_1', 4)]
@@ -588,7 +596,7 @@ def init_g2():
 
     
     weight2 = {}
-    for k in G2.keys():
+    for k in list(G2.keys()):
         weight2[k] = 1/3.0    
     
     if 1:
@@ -1591,7 +1599,7 @@ def def_G_1_1():
         order_1_1[i] = np.ndarray(Graphics.MaxNode, "int")        
     #order_1_1 = np.ndarray((Graphics.MaxNode, 3), "int")        
     weight_1_1 = {}
-    for k in G_1_1.keys():
+    for k in list(G_1_1.keys()):
         #weight_1_1[k] = 1/3.0    
         weight_1_1[k] = None
     G_1_1[0].size = 4
@@ -1667,7 +1675,7 @@ def upgrade_graphs(graph_dic):
     """
         a workaroud for upgrade format of graphs 
     """
-    for k, v in graph_dic.items(): 
+    for k, v in list(graph_dic.items()): 
         v.contract_order = v.contract_order[: v.size]
         
 
@@ -1680,17 +1688,17 @@ if __name__ == "__main__":
 
     
     g=G_calc_EE_gen()
-    print g
+    print(g)
     if 0:  
         temp = [G_2_2, G_3_3, G_3_2, G_22_2, G_22_3]
         for g in temp: 
             
             for i in g: 
-                print i, g[i].graph_name,  g[i].comp_complexity
+                print(i, g[i].graph_name,  g[i].comp_complexity)
     
     
-    for i, j in G_22_3.items(): 
-        print j.graph_name 
+    for i, j in list(G_22_3.items()): 
+        print(j.graph_name) 
 
 
 

@@ -5,7 +5,15 @@
     this module serves as the test module 
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 import warnings
 import os
 import unittest
@@ -24,7 +32,7 @@ warnings.filterwarnings('ignore')
 
 class TestIt(unittest.TestCase): 
     def setUp(self):
-        self.seq = range(10)
+        self.seq = list(range(10))
     def test_temp(self): 
         pass 
     
@@ -152,7 +160,7 @@ if __name__ == '__main__':
             import common_64_ifort as c64
             common_util.contract_core_player_fort = c64.contract_core_player_fort_paralell_critical
             main.run(q_iter=10)
-            print "reduction "*5
+            print("reduction "*5)
             common_util.contract_core_player_fort = c64.contract_core_player_fort_paralell_reduction_1
             main.run(q_iter=10)
      
@@ -174,7 +182,7 @@ if __name__ == '__main__':
         
         #main.run_scale_invar(q_iter=0, backup_fn='auto', backup_parpath='./mera_backup_test_folder/', do_measure=0)
         
-        import config, schedule
+        from . import config, schedule
         backup_parpath = config.MERA_BACKUP_TENSOR_DIR  + '/mera_backup_test_folder' 
         os.system('rm /home/zhli/Documents/mera_backup_tensor/mera_backup_test_folder/*' )    
         

@@ -7,13 +7,21 @@ q:
     
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
-from tensor import *
-from tensor_svd import *
-from tensor_network import *
-from mera import *
-from hamiltonian import *
-from tensor_reflection import TensorReflect
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
+from .tensor import *
+from .tensor_svd import *
+from .tensor_network import *
+from .mera import *
+from .hamiltonian import *
+from .tensor_reflection import TensorReflect
 
 #from init_mera_graph import G_2_2
 from merapy.diagrams.V31.graph_ternary import G_2_2
@@ -33,7 +41,7 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
     """
     
     if info>0:
-        print "START all_in_once"
+        print("START all_in_once")
     # Translational invariant         
     jEnv = 0
     iEnv = 0
@@ -138,8 +146,8 @@ def update_all_in_once(M,S,layer,j=0, tau=None, info=0):
     M.U_dag[ilayer][j]=M.U[ilayer][j].conjugate(ndiv[n], buffer=data)
 
     if info>0:
-        print "U at layer", ilayer, M.U[layer][j].data[range(5) + range(-5, 0)]
-        print "END all_in_once"
+        print("U at layer", ilayer, M.U[layer][j].data[list(range(5)) + list(range(-5, 0))])
+        print("END all_in_once")
 
 
 if __name__ == "__main__":
@@ -154,7 +162,7 @@ if __name__ == "__main__":
     update_all_in_once(M, sys,layer=0, info=2)
     
     #print "\nafter all_in_once"
-    print M.__repr__(layers=[0], which=["U","V","U_dag","V_dag"])
+    print(M.__repr__(layers=[0], which=["U","V","U_dag","V_dag"]))
     #print sys.__repr__(layers=[0,1], which=["H_2","rho_2"])
 
 

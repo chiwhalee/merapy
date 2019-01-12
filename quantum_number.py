@@ -1,19 +1,26 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
 
 #from system_parameter import lang_tensor
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 which = 'py'
 
 if which == "py":
-    from quantum_number_py import *
+    from merapy.quantum_number_py import *
 elif which == "cython":
-    print "using cython implementation of quantum_number"*10
+    print("using cython implementation of quantum_number"*10)
     #import pyximport 
     #pyximport.install()  # above two lines are necessary, but why?
 
     from quantum_number_pyx  import *
     #from tensor_pyx import test_iTensor
 else:
-    print "wrong module to import, see quantum_number.py"
+    print("wrong module to import, see quantum_number.py")
     exit()
 
 

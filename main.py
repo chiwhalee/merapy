@@ -1,6 +1,18 @@
 #!/usr/bin/env python
 #coding=UTF8
 
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import input
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
+from past.utils import old_div
 import warnings 
 import time
 import datetime 
@@ -97,7 +109,7 @@ import merapy.main
 
 
 if 1: 
-    import copy_reg
+    import copyreg
     import types
  
     # to make  multiprocessing compatable with pickleing of method funcs
@@ -110,9 +122,9 @@ if 1:
     def _pickle_method(method):
         # Author: Steven Bethard
         # http://bytes.com/topic/python/answers/552476-why-cant-you-pickle-instancemethods
-        func_name = method.im_func.__name__
-        obj = method.im_self
-        cls = method.im_class
+        func_name = method.__func__.__name__
+        obj = method.__self__
+        cls = method.__self__.__class__
         if func_name.startswith('__') and not func_name.endswith('__'):
             #deal with mangled names
             cls_name = cls.__name__.lstrip('_')
@@ -133,12 +145,12 @@ if 1:
                 break
         return func.__get__(obj, cls)
 
-    copy_reg.pickle(types.MethodType, _pickle_method, _unpickle_method) 
+    copyreg.pickle(types.MethodType, _pickle_method, _unpickle_method) 
     
 class Main(object): 
     LOCALHOSTNAME = 'QTG-WS1-ubuntu'  #used in distributed computing 
     def __init__(self, **config): 
-        for k, v in config.iteritems(): 
+        for k, v in config.items(): 
             setattr(self, k, v)
         self.config = config
         self.initialized = False 
@@ -205,7 +217,7 @@ class Main(object):
         #if len(dim_diff_remap)>0: 
         if dim_diff_remap is not None:  
             #print dim_diff_remap; exit()
-            print 'remap of dim with energy_diff_min is %s'%dim_diff_remap
+            print('remap of dim with energy_diff_min is %s'%dim_diff_remap)
             for i in range(len(schedule)): 
                 dim = schedule[i]['shape'][0]
                 for d in sorted(dim_diff_remap.keys()): 
@@ -243,17 +255,17 @@ class Main(object):
             if len(shape)>2: nqn = shape[2]
             
             msg = '\nSTARTING TASK %s'%(task, )
-            if info>0: print msg
+            if info>0: print(msg)
             
             if dim in skip_dim_list: 
                 msg='dim=%d is in skip_dim_list, skip it'%(dim, )
-                if info>0: print msg
+                if info>0: print(msg)
                 continue
             try: 
                 qsp_destination = qsp_class.max(dim, nqn)
             except ValueError as err:
                 msg = 'error occurred, skip %s'%(shape, )
-                if info>0: print err, '\n',  msg
+                if info>0: print(err, '\n',  msg)
                 continue
             
             if 1: 
@@ -268,7 +280,7 @@ class Main(object):
                     if (not  qsp_destination >= qsp_min)   or layer <layer_min: 
                         #msg = 'shape (%d, %d) smaller than mera_shape_min %s, skip it'%(dim, layer, mera_shape_min, )
                         msg = 'shape %s smaller than mera_shape_min %s, skip it'%(shape, mera_shape_min, )
-                        if info>0: print msg
+                        if info>0: print(msg)
                         continue
                 
                 if mera_shape_max is not None :    
@@ -277,9 +289,9 @@ class Main(object):
                     if len(mera_shape_max)>2: nqn_max = mera_shape_max[2]
                     qsp_max = qsp_class.max(dim_max, nqn_max)
                     if 0: 
-                        print qsp_destination
-                        print qsp_max
-                        print  'qsp_destination>qsp_max', qsp_destination>qsp_max
+                        print(qsp_destination)
+                        print(qsp_max)
+                        print('qsp_destination>qsp_max', qsp_destination>qsp_max)
                         exit()
                     
                     if qsp_destination>qsp_max or (nqn> nqn_max and self.SYMMETRY=='U1')  or layer> layer_max: 
@@ -288,7 +300,7 @@ class Main(object):
                         
                         msg = 'shape %s exceeds mera_shape_max %s, skip it'%(shape, mera_shape_max, )
                         if info>0: 
-                            print msg
+                            print(msg)
                         continue
 
                 propt = self.S.key_property()
@@ -309,7 +321,7 @@ class Main(object):
                 #if dim_current>dim or layer_current> layer: 
                 if qsp_current> qsp_destination or layer_current> layer: 
                     msg = 'shape %s smaller than current shape = %s, skip it'%(shape, shape_current)
-                    print msg
+                    print(msg)
                     continue
                    
             run_param = dict([(i, task.get(i)) for i in run_param_name])
@@ -333,7 +345,7 @@ class Main(object):
             out = open(self.filename, 'a')
             out.write(msg)
             out.close()
-        print msg
+        print(msg)
             
     @classmethod
     def run_one(cls, config): 
@@ -373,19 +385,19 @@ class Main(object):
             #print 'KeyboardInterrupt in child for %s' %(config.get('model_param'), )
             msg += 'KeyboardInterrupt captured.'
             job_status = 'FAILED'
-        except Exception, exception:
-            print exception
+        except Exception as exception:
+            print(exception)
             traceback.print_exc()
             job_status = 'FAILED'
             raise
         finally: 
             #msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
             msg += ' EXIT.\n final status is %s'%(job_status)
-            print msg
+            print(msg)
             if is_registered:  
                 parpath = config['backup_parpath_local']
                 with rpyc_conn('local', 'service', 17012) as conn:                
-                    print 'iiiiiiiiiiiiiii', job_id 
+                    print('iiiiiiiiiiiiiii', job_id) 
                     conn.root.update_job(job_id, 'status', job_status)
                     #end_time = str(datetime.datetime.now()).split('.')[0]
                     #conn.root.update_job(job_id, 'end_time', end_time)
@@ -419,17 +431,17 @@ class Main(object):
                     ncpu_tot = min(ncpu_tot, 12)
                     nproc = ncpu_tot//nt 
                 elif 'qtg' in hostname: 
-                    nproc = ncpu_tot/2//nt
+                    nproc = old_div(ncpu_tot,2//nt)
                 elif hostname == Main.LOCALHOSTNAME: 
                     #nproc = 2
-                    nproc = ncpu_tot/2//nt
+                    nproc = old_div(ncpu_tot,2//nt)
                 else: 
                     warnings.warn('unfamiliar hostname %s'%(hostname, ))
-                    nproc = ncpu_tot/2//nt 
+                    nproc = old_div(ncpu_tot,2//nt) 
                 #assert nproc>0, 'nproc=%d'%(nproc, )
                 
                 nproc = min(nproc, 12)
-                print 'nproc is auto set to %d'%(nproc, )
+                print('nproc is auto set to %d'%(nproc, ))
                 
             try: 
                 pool = Pool(processes=nproc, initializer=None)
@@ -442,9 +454,9 @@ class Main(object):
                     pool.close()   
                     pool.join()   # the above two lines are needed to prevent main thread exit
             except KeyboardInterrupt: 
-                print 'KeyboardInterrupt in main exit'
+                print('KeyboardInterrupt in main exit')
             except Exception:
-                print 'EEEEE'*10
+                print('EEEEE'*10)
                 sys.exit(0)
             finally: 
                 #pool.terminate()
@@ -482,11 +494,11 @@ class Main(object):
                     )
         else: 
             if need_confirm:
-                i=raw_input('submit %s jobs? yes(y)\n'%(len(config_group)))
+                i=input('submit %s jobs? yes(y)\n'%(len(config_group)))
                 if i.lower()=='y':
-                    print 'allow'
+                    print('allow')
                 else:
-                    print  'canceled'
+                    print('canceled')
                     return 
             
             #job_info = {}
@@ -507,22 +519,22 @@ class Main(object):
                         server=task_center_server, 
                         job_info=job_info, 
                         querry_timeout=kwargs.get('querry_timeout', 10))
-                print status
+                print(status)
             
             #if 1:
             #    print 'updationg job order according to their priority... '
             #    tc = TaskCenter(host=LOCAL_IP)
             #    print tc.update_job_order()
         
-            if job_info.has_key('job_group_name'):
+            if 'job_group_name' in job_info:
                 job_group_name = job_info['job_group_name']
-                i=raw_input('add_notify for %s ? (press Enter if yes, otherwise no)\n'%(job_group_name))
+                i=input('add_notify for %s ? (press Enter if yes, otherwise no)\n'%(job_group_name))
                 if i.lower() in ['y', '']:
                     host = task_center_server[0]
                     tc = TaskCenter(host=host)
-                    print tc.add_notify(job_group_name)
+                    print(tc.add_notify(job_group_name))
                 else:
-                    print  'canceled'
+                    print('canceled')
             
     @staticmethod 
     def server_discover(servers=None, exclude_patterns=None,  querry_timeout=1, qsize=8, info=0): 
@@ -566,14 +578,14 @@ class Main(object):
         #import common_64_ifort as c64
         common_util.set_num_of_threads(n)
         if info>0: 
-            print 'set_num_of_threads to %d'%n
+            print('set_num_of_threads to %d'%n)
     
     @staticmethod
     def get_num_of_threads(): 
         #import common_64_ifort as c64
         raise NotImplemented('not pass test')
         n=common_util.get_num_of_threads()
-        print 'get_num_of_threads %d'%n
+        print('get_num_of_threads %d'%n)
         return n
     
     @staticmethod
@@ -610,7 +622,7 @@ class Main(object):
                 msg += '---succeed'
             else: 
                 msg += '---failed'
-            print msg
+            print(msg)
             with open(self.filename, 'a') as inn: 
                 inn.write(msg)
 
@@ -640,15 +652,15 @@ class Main(object):
     def __del__(self, ): 
         
         if self.config.get('info', 1)>-1: 
-            print 'exit main, and run main.stop_player'
+            print('exit main, and run main.stop_player')
         self.stop_player()
 
 
 class TestMain(unittest.TestCase): 
     def setUp(self): 
         if 1: 
-            from config import CFG_HEISBG_BASIC #, updaters_u1
-            from updaters_all import updaters_u1
+            from .config import CFG_HEISBG_BASIC #, updaters_u1
+            from .updaters_all import updaters_u1
             temp = dict(USE_CUSTOM_RAND=True, updaters=updaters_u1, trunc_dim=4, tot_layer=4, use_player=True, 
                     SYMMETRY="Travial", 
                     NUM_OF_THREADS=1, do_measure=0)
@@ -677,7 +689,7 @@ class TestMain(unittest.TestCase):
         g2 = Main.grid(['x'], [0])
         gg = Main.grid_merger(g1, g2)
         for g in gg: 
-            print g 
+            print(g) 
         
     def test_run(self): 
         config = self.config_heisbg 
@@ -693,7 +705,7 @@ class TestMain(unittest.TestCase):
             code = r"""from merapy.main import TestMain; self.test_run()"""
             #Main_remote = conn.modules['merapy.main'].Main
             conn.execute(code)
-            print conn.modules.os.getcwd()
+            print(conn.modules.os.getcwd())
     
     def xtest_resume_func(self): 
         config = self.config_heisbg 
@@ -705,7 +717,7 @@ class TestMain(unittest.TestCase):
             main.run(q_iter=5)
             main.run_scale_invar(q_iter=5)
         
-            print '\n'*3
+            print('\n'*3)
             with rpyc_conn_zerodeploy('sugon') as conn: 
                 main.use_local_storage = 1
                 conn.namespace['main'] = main
@@ -714,7 +726,7 @@ class TestMain(unittest.TestCase):
                 #code = 'main.resume_func()'
                 #Main_remote = conn.modules['merapy.main'].Main
                 conn.execute(code)
-                print conn.modules.os.getcwd()
+                print(conn.modules.os.getcwd())
 
     def test_resume(self): 
         config = self.config_heisbg.copy()
@@ -734,8 +746,8 @@ class TestMain(unittest.TestCase):
 
     def xtest_make_dir(self): 
         config = self.config_heisbg 
-        print config['backup_parpath']
-        print config['backup_parpath_local']
+        print(config['backup_parpath'])
+        print(config['backup_parpath_local'])
         a ='/tmp/lksjdfoi/oiweffw' 
         b ='/tmp/lksjdfoi/asdfoi' 
         main = Main(**config)
@@ -743,7 +755,7 @@ class TestMain(unittest.TestCase):
         os.rmdir(a)
         with rpyc_conn_local() as conn: 
             os_local = conn.modules['os']
-            print os_local
+            print(os_local)
             exist = os_local.path.exists(b)
             os_local.rmdir(b)
             
@@ -778,7 +790,7 @@ class TestMain(unittest.TestCase):
         #config['NUM_OF_THREADS'] = 4
         main = Main(**config)
         main.run(q_iter=5)
-        print Main.get_cpu_usage()
+        print(Main.get_cpu_usage())
     
     def xtest_run_many(self): 
         """  
@@ -819,8 +831,8 @@ class TestMain(unittest.TestCase):
     def xtest_transfer_pickle_file(self): 
         config = self.config_heisbg
         config['SYMMETRY'] = 'Travial'
-        print config['backup_parpath']
-        print config['backup_parpath_local']
+        print(config['backup_parpath'])
+        print(config['backup_parpath_local'])
         
         with make_temp_dir() as d1, make_temp_dir() as d2: 
             config['backup_parpath'] = d1
@@ -831,7 +843,7 @@ class TestMain(unittest.TestCase):
             main=Main(**config)
             main.run_schedule(mera_shape_max=(4, 4), q_iter_max=5)
             self.assertTrue(os.path.exists(d2 + '/4.pickle'))
-        print 'file exits  ---pass '
+        print('file exits  ---pass ')
         Main.LOCALHOSTNAME = bac
     
     def xtest_run_many_dist(self): 

@@ -4,6 +4,16 @@
 
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
 import sys 
 import os
 import math
@@ -35,17 +45,17 @@ class Diagram(dict):
         self.Nodes = {}
         self.name = ""
         
-        for k in old_graph.keys():
+        for k in list(old_graph.keys()):
             self.__setitem__(k, old_graph[k])
         
     def __repr__(self):
         r = ""
-        for k,v in self.connections.items():
+        for k,v in list(self.connections.items()):
             r = r+str(k)+": "+str(v)+"\r"
         return r
     
     def __repr__new(self):
-        print "rrrr"
+        print("rrrr")
         #return self.connections.__repr__()
         return pprint.saferepr(self.connections)
     
@@ -139,9 +149,9 @@ class Diagram(dict):
                 name = i.split('_')[0]
                 node = G.node[i]
                 #node['pos'] = nodep['pos']
-                if color_map.has_key(name):
+                if name in color_map:
                     node["color"] = color_map[name] 
-                if shape_map.has_key(name):
+                if name in shape_map:
                     node["shape"] = shape_map[name] 
                 node.update(node_ppt)
         propt = {
@@ -167,7 +177,7 @@ class Diagram(dict):
         
 
     def has_key(self, key):
-        return self.connections.has_key(key)
+        return key in self.connections
     
     def update(self):
         """
@@ -176,7 +186,7 @@ class Diagram(dict):
         self.NumOfEdges = 0
         self.edges = {}
         nn = 1
-        for key in self.connections.keys():
+        for key in list(self.connections.keys()):
             self.update_key(key)
             self.Nodes[key] = nn
             nn = nn+1
@@ -190,7 +200,7 @@ class Diagram(dict):
         value = self.connections[key]
         edges = []
         #print "eee", key, value
-        for i in xrange(0, len(value)):
+        for i in range(0, len(value)):
             
             ii = i+1
             v = value[i]
@@ -227,34 +237,34 @@ class Diagram(dict):
     def show(self, prefix=""):
         
         #print "definition of diagram: " + self.name
-        keys = self.connections.keys()
+        keys = list(self.connections.keys())
         keys.sort()
         for k in keys:
             v = self.connections[k]
-            print prefix+k+": "+str(v)
+            print(prefix+k+": "+str(v))
 
     if 1: #edges and connections
         def show_edges(self):
-            keys = self.edges.keys()
+            keys = list(self.edges.keys())
             keys.sort()
             for k in keys:
                 edges = self.edges[k]
                 estr = k+": "
                 for e in edges:
                     estr = estr+ " " +str(e[0])
-                print estr
+                print(estr)
                 
         def show_edge_info(self):
-            keys = self.edge_info.keys()
+            keys = list(self.edge_info.keys())
             keys.sort()
             for k in keys:
-                print k, self.edge_info[k]
+                print(k, self.edge_info[k])
                 
         def keys(self):
-            return self.connections.keys()
+            return list(self.connections.keys())
         
         def nodes(self):
-            return self.keys()
+            return list(self.keys())
         
         def get_edges(self, node):
             """
@@ -283,7 +293,7 @@ class Diagram(dict):
     
     def check(self):
         res = ""
-        for k in self.connections.keys():
+        for k in list(self.connections.keys()):
             e = 0
             for v in self.connections[k]:
                 e += 1
@@ -296,7 +306,7 @@ class Diagram(dict):
 
     def node_rename(self, oldnode, newnode):
         ng = Diagram({})
-        for k in self.keys():
+        for k in list(self.keys()):
             v = self[k]
             nv = []
             for n,e in v:
@@ -338,7 +348,7 @@ class Diagram(dict):
                         nv.append(self.connections[v[0]][e])
                 nd[k] = nv
             if info>0:
-                print "\n after simplify ", "I "*20
+                print("\n after simplify ", "I "*20)
                 pp(nd.edges)
             return nd
 
@@ -350,7 +360,7 @@ class Diagram(dict):
             ng = Diagram(self)
             #I_V stores all U that will be removed
             I_V = set([])
-            for k in ng.keys():
+            for k in list(ng.keys()):
                 ks,s = k.split("_",1)
                 if (ks == "U"):
                     kp = "Up_"+s
@@ -387,7 +397,7 @@ class Diagram(dict):
             ng = ng.Simplify_I()
             
             if info>0:
-                print "\n after simplify ", "U "*20
+                print("\n after simplify ", "U "*20)
                 pp(ng.edges)
             
             return ng
@@ -395,13 +405,13 @@ class Diagram(dict):
         def Simplify_VNodeG(self, name1, name2, info=0):
             ng = self
             I_V = set([])
-            for k in ng.keys():
+            for k in list(ng.keys()):
                 ks,s = k.split("_",1)
                 if (ks == name1):
                     kp = name2+"_"+s
                     match = True
                     cons = ng.connections[k]
-                    for en in xrange(0, len(cons)-1):
+                    for en in range(0, len(cons)-1):
                         kc,ec = cons[en]
     #                    print k, kp, kc, en, ec
                         if not ((ec==en+2) and (kc==kp)):
@@ -416,7 +426,7 @@ class Diagram(dict):
                 kv = []
                 kvp = [(Is,1,)]
                 nleg = len(ng.connections[k])
-                for i in xrange(1, nleg):
+                for i in range(1, nleg):
                     kv.append((kp,i+1,))
                     kvp.append((k,i,))
                 kv.append((Is,2,))
@@ -431,7 +441,7 @@ class Diagram(dict):
             ng = ng.Simplify_I()
             
             if info>0:
-                print "\n after simplify ", "V "*20
+                print("\n after simplify ", "V "*20)
                 pp(ng.edges)
 
             return ng
@@ -456,7 +466,7 @@ class Diagram(dict):
             ng = self
             I_V = set([])
             nng = {}
-            for k in ng.keys():
+            for k in list(ng.keys()):
                 ks,s = k.split("_", 1)
                 if (ks == "O"):
                     s = True
@@ -470,7 +480,7 @@ class Diagram(dict):
                     nng[k] = ng[k]
             
             nk = []  #num of key that is "O"
-            for k in nng.keys():
+            for k in list(nng.keys()):
                 ks,e = k.split("_",1)
                 if ks == "O":
                     nk.append(k)
@@ -501,7 +511,7 @@ class Diagram(dict):
             nng = gv+nng
             nng.update()
             if info>0:
-                print "\n after simplify ", "O "*20
+                print("\n after simplify ", "O "*20)
                 pp(nng.edges)
 
             return nng
@@ -518,10 +528,10 @@ class Diagram(dict):
             """
             path = path+[start]
             if start==end:  #recursion return condition
-                if len(path) == len(self.keys()):
+                if len(path) == len(list(self.keys())):
                     return [path]
                 return []
-            if not self.connections.has_key(start):
+            if start not in self.connections:
                 return []
             paths = []  #start from an empty
             path_nodes = set(path)
@@ -565,8 +575,8 @@ class Diagram(dict):
             base = 100. # base can be other values
             cost = math.pow(base, comp)*weight
             if pr:
-                print S1, S2
-                print str(path[1])+',', len(S_open), len(S_open)+len(SS), S_open
+                print(S1, S2)
+                print(str(path[1])+',', len(S_open), len(S_open)+len(SS), S_open)
             
             for p in path[2:]:
                 S1 = S_open  #note this line
@@ -582,20 +592,20 @@ class Diagram(dict):
 
                 cost = cost + math.pow(base, comp)*weight
                 if pr:
-                    print str(p)+',', len(S_open), len(S_open)+len(SS), S_open
+                    print(str(p)+',', len(S_open), len(S_open)+len(SS), S_open)
             if len(S_open) != 0 and not allow_open_leg:  # for a closed graph, there should be no open leg in the end!!
-                print "SSSS_open", S_open
+                print("SSSS_open", S_open)
                 return -1,-1,-1
             return max_leg, max_comp, cost        
 
         def find_optimal_path(self, pr=False, allow_open_leg=0):
-            keys = self.keys()
+            keys = list(self.keys())
             keys.sort()
             
             max_leg = 1000; max_comp = 10000
             max_cost = 1e200
-            for i in xrange(0,len(keys)):
-                for j in xrange(i+1, len(keys)):  #transverse all starts and ends
+            for i in range(0,len(keys)):
+                for j in range(i+1, len(keys)):  #transverse all starts and ends
                     start = keys[i]; end = keys[j]
                     paths = self.find_all_path(start, end)
                     for path in paths:  # transverse all paths for given start and end
@@ -606,12 +616,12 @@ class Diagram(dict):
                             max_comp = comp
                             optimal_path = path
                             max_cost = cost
-                            if pr: print leg, comp, path, cost
+                            if pr: print(leg, comp, path, cost)
                         if (cost == max_cost):
                             if (leg < max_leg):
                                 max_leg = leg
                                 optimal_path = path
-                                if pr: print leg, comp, path, cost
+                                if pr: print(leg, comp, path, cost)
                         
             return max_leg, max_comp, optimal_path, max_cost
 
@@ -621,30 +631,30 @@ class Diagram(dict):
         """
 
         ng = {}
-        for k in self.connections.keys():
+        for k in list(self.connections.keys()):
             ng[k] = self.connections[k]
-        for k in d.connections.keys():
+        for k in list(d.connections.keys()):
             ng[k] = d.connections[k]
         o1 = self.connections[node]
         o2 = d.connections[node]
         noo = []
         nn = 1
-        for i in xrange(0,n1):
+        for i in range(0,n1):
             noo.append(o1[i])
             ng[o1[i][0]][o1[i][1]-1] = (node, nn)
             nn = nn+1
             
-        for i in xrange(0,n2):
+        for i in range(0,n2):
             noo.append(o2[i])
             ng[o2[i][0]][o2[i][1]-1] = (node, nn)
             nn = nn+1
 
-        for i in xrange(n1,len(o1)):
+        for i in range(n1,len(o1)):
             noo.append(o1[i])
             ng[o1[i][0]][o1[i][1]-1] = (node, nn)
             nn = nn+1
 
-        if i in xrange(n2,len(o2)):
+        if i in range(n2,len(o2)):
             noo.append(o2[i])                    
             ng[o2[i][0]][o2[i][1]-1] = (node, nn)
             nn = nn+1
@@ -656,15 +666,15 @@ class Diagram(dict):
         
     def toFortran(self, Gname, Oname, i1, i2=-10000):
         self.show(prefix="!!$ ")
-        ks = self.connections.keys()
+        ks = list(self.connections.keys())
         if i2<-1000:
-            print "   %s(%d)%%nNode=%d" % (Gname, i1, len(ks))
-            print "   %s(%d)%%Nodes=-1" % (Gname, i1)
-            print "   %s(%d)%%Edges=-1" % (Gname, i1)
+            print("   %s(%d)%%nNode=%d" % (Gname, i1, len(ks)))
+            print("   %s(%d)%%Nodes=-1" % (Gname, i1))
+            print("   %s(%d)%%Edges=-1" % (Gname, i1))
         else:
-            print "   %s(%d,%d)%%nNode=%d" % (Gname, i1,i2, len(ks))
-            print "   %s(%d,%d)%%Nodes=-1" % (Gname, i1,i2)
-            print "   %s(%d,%d)%%Edges=-1" % (Gname, i1,i2)
+            print("   %s(%d,%d)%%nNode=%d" % (Gname, i1,i2, len(ks)))
+            print("   %s(%d,%d)%%Nodes=-1" % (Gname, i1,i2))
+            print("   %s(%d,%d)%%Edges=-1" % (Gname, i1,i2))
         for k in ks:
             j = self.Nodes[k]
             name = k.split("_",1)[0]
@@ -672,41 +682,41 @@ class Diagram(dict):
             leng = len(es)
             es = ",".join([str(x) for x in es])
 	    if i2<-1000:
-                print '''   %s(%d)%%Names(%d)="%s" !%s''' %(Gname, i1, j, name, k)
-                print '''   %s(%d)%%Nodes(%d)=%d''' % (Gname, i1, j, leng)
-                print '''   %s(%d)%%Edges(1:%d,%d) = (/%s/)''' % (Gname, i1, leng, j, es)
+                print('''   %s(%d)%%Names(%d)="%s" !%s''' %(Gname, i1, j, name, k))
+                print('''   %s(%d)%%Nodes(%d)=%d''' % (Gname, i1, j, leng))
+                print('''   %s(%d)%%Edges(1:%d,%d) = (/%s/)''' % (Gname, i1, leng, j, es))
 	    else:
-                print '''   %s(%d,%d)%%Names(%d)="%s" !%s''' %(Gname, i1, i2, j, name, k)
-                print '''   %s(%d,%d)%%Nodes(%d)=%d''' % (Gname, i1, i2, j, leng)
-                print '''   %s(%d,%d)%%Edges(1:%d,%d) = (/%s/)''' % (Gname, i1, i2, leng, j, es)
+                print('''   %s(%d,%d)%%Names(%d)="%s" !%s''' %(Gname, i1, i2, j, name, k))
+                print('''   %s(%d,%d)%%Nodes(%d)=%d''' % (Gname, i1, i2, j, leng))
+                print('''   %s(%d,%d)%%Edges(1:%d,%d) = (/%s/)''' % (Gname, i1, i2, leng, j, es))
 
         order = []
         leg,comp, path, cost= self.find_optimal_path()
         for k in path:
             order.append(self.Nodes[k])
-        print "!$$ %d/%d %20.14G" % (leg,comp, cost)            
+        print("!$$ %d/%d %20.14G" % (leg,comp, cost))            
         if i2 < -1000:
-            print "   %s(1:%d, %d)=(/%s/)" % (Oname, len(ks), i1, 
-                                          ",".join([str(x) for x in order]))
+            print("   %s(1:%d, %d)=(/%s/)" % (Oname, len(ks), i1, 
+                                          ",".join([str(x) for x in order])))
         else:
-            print "   %s(1:%d, %d,%d)=(/%s/)" % (Oname, len(ks), i1, i2, 
-                                          ",".join([str(x) for x in order]))
+            print("   %s(1:%d, %d,%d)=(/%s/)" % (Oname, len(ks), i1, i2, 
+                                          ",".join([str(x) for x in order])))
     
     def toGraphics(self, Gname, Oname, i1, i2=-10000, weight=None, calc_order=True):
         from merapy.graphics import Graphics
 
         self.show(prefix="# ")
-        ks = self.connections.keys()
-        print "%s[%s]=Graphics()" %(Gname, i1)
-        print "%s[%s].graph_name='%s[%s]'" %(Gname, i1, Gname, i1)
+        ks = list(self.connections.keys())
+        print("%s[%s]=Graphics()" %(Gname, i1))
+        print("%s[%s].graph_name='%s[%s]'" %(Gname, i1, Gname, i1))
         if i2<-1000:
-            print "%s[%s].size=%d" % (Gname, i1, len(ks))
-            print "%s[%s].nodes[:]=-1" % (Gname, i1)
-            print "%s[%s].edges[:, :]=-1" % (Gname, i1)
+            print("%s[%s].size=%d" % (Gname, i1, len(ks)))
+            print("%s[%s].nodes[:]=-1" % (Gname, i1))
+            print("%s[%s].edges[:, :]=-1" % (Gname, i1))
         else:
-            print "%s[%d,%d].size=%d" % (Gname, i1,i2, len(ks))
-            print "%s[%d,%d].nodes[:]=-1" % (Gname, i1,i2)
-            print "%s[%d,%d].edges[:, :]=-1" % (Gname, i1,i2)
+            print("%s[%d,%d].size=%d" % (Gname, i1,i2, len(ks)))
+            print("%s[%d,%d].nodes[:]=-1" % (Gname, i1,i2))
+            print("%s[%d,%d].edges[:, :]=-1" % (Gname, i1,i2))
         for k in ks:
             #j = self.Nodes[k]
             j = self.Nodes[k]-1
@@ -717,13 +727,13 @@ class Diagram(dict):
             leng = len(es)
             es = ",".join([str(x) for x in es])
             if i2<-1000:
-                    print '''%s[%s].names[%d]="%s"  #%s''' %(Gname, i1, j, name, k)
-                    print '''%s[%s].nodes[%d]=%d''' % (Gname, i1, j, leng)
-                    print '''%s[%s].edges[0:%d,%d] = [%s]\n''' % (Gname, i1, leng, j, es)
+                    print('''%s[%s].names[%d]="%s"  #%s''' %(Gname, i1, j, name, k))
+                    print('''%s[%s].nodes[%d]=%d''' % (Gname, i1, j, leng))
+                    print('''%s[%s].edges[0:%d,%d] = [%s]\n''' % (Gname, i1, leng, j, es))
             else:
-                    print '''%s[%d,%d].names[%d]="%s"  #%s''' %(Gname, i1, i2, j, name, k)
-                    print '''%s[%d,%d].nodes[%d]=%d''' % (Gname, i1, i2, j, leng)
-                    print '''%s[%d,%d].edges[0:%d,%d] = [%s]\n''' % (Gname, i1, i2, leng, j, es)
+                    print('''%s[%d,%d].names[%d]="%s"  #%s''' %(Gname, i1, i2, j, name, k))
+                    print('''%s[%d,%d].nodes[%d]=%d''' % (Gname, i1, i2, j, leng))
+                    print('''%s[%d,%d].edges[0:%d,%d] = [%s]\n''' % (Gname, i1, i2, leng, j, es))
         
         
         if calc_order:
@@ -734,17 +744,17 @@ class Diagram(dict):
                 order.append(self.Nodes[k])
 
             order = [i-1 for i in order]
-            print "# %d/%d %20.14G" % (leg,comp, cost)            
+            print("# %d/%d %20.14G" % (leg,comp, cost))            
             if weight is not None:
-                print '''%s[%s].weight = %1.15f  ''' %(Gname, i1, weight)
+                print('''%s[%s].weight = %1.15f  ''' %(Gname, i1, weight))
             if i2 < -1000:
                 #print "%s[%s][0:%d]=[%s]" % (Oname, i1, len(ks), 
                 #                              ",".join([str(x) for x in order]))
-                print '''%s[%s].contract_order=[%s]  \n''' %(Gname, i1, ",".join([str(x) for x in order]))
+                print('''%s[%s].contract_order=[%s]  \n''' %(Gname, i1, ",".join([str(x) for x in order])))
                 
             else:
-                print "%s[0:%d, %d,%d]=[%s]" % (Oname, len(ks), i1, i2, 
-                                              ",".join([str(x) for x in order]))
+                print("%s[0:%d, %d,%d]=[%s]" % (Oname, len(ks), i1, i2, 
+                                              ",".join([str(x) for x in order])))
     
     def toGraphics2(self, Gname, Oname, i1, i2=-10000, calc_order=True):
         from merapy.graphics import Graphics
@@ -753,18 +763,18 @@ class Diagram(dict):
         G = Graphics()
 
         self.show(prefix="# ")
-        ks = self.connections.keys()
+        ks = list(self.connections.keys())
 
         G_dic[i1].graph_name = Gname + "['%s']"%i1
         #print "%s[%s].graph_name='%s[%s]'" %(Gname, i1, Gname, i1)
         if i2<-1000:
-            print "%s[%s].size=%d" % (Gname, i1, len(ks))
-            print "%s[%s].nodes[:]=-1" % (Gname, i1)
-            print "%s[%s].edges[:, :]=-1" % (Gname, i1)
+            print("%s[%s].size=%d" % (Gname, i1, len(ks)))
+            print("%s[%s].nodes[:]=-1" % (Gname, i1))
+            print("%s[%s].edges[:, :]=-1" % (Gname, i1))
         else:
-            print "%s[%d,%d].size=%d" % (Gname, i1,i2, len(ks))
-            print "%s[%d,%d].nodes[:]=-1" % (Gname, i1,i2)
-            print "%s[%d,%d].edges[:, :]=-1" % (Gname, i1,i2)
+            print("%s[%d,%d].size=%d" % (Gname, i1,i2, len(ks)))
+            print("%s[%d,%d].nodes[:]=-1" % (Gname, i1,i2))
+            print("%s[%d,%d].edges[:, :]=-1" % (Gname, i1,i2))
         for k in ks:
             #j = self.Nodes[k]
             j = self.Nodes[k]-1
@@ -775,13 +785,13 @@ class Diagram(dict):
             leng = len(es)
             es = ",".join([str(x) for x in es])
             if i2<-1000:
-                    print '''%s[%s].names[%d]="%s"  #%s''' %(Gname, i1, j, name, k)
-                    print '''%s[%s].nodes[%d]=%d''' % (Gname, i1, j, leng)
-                    print '''%s[%s].edges[0:%d,%d] = [%s]''' % (Gname, i1, leng, j, es)
+                    print('''%s[%s].names[%d]="%s"  #%s''' %(Gname, i1, j, name, k))
+                    print('''%s[%s].nodes[%d]=%d''' % (Gname, i1, j, leng))
+                    print('''%s[%s].edges[0:%d,%d] = [%s]''' % (Gname, i1, leng, j, es))
             else:
-                    print '''%s[%d,%d].names[%d]="%s"  #%s''' %(Gname, i1, i2, j, name, k)
-                    print '''%s[%d,%d].nodes[%d]=%d''' % (Gname, i1, i2, j, leng)
-                    print '''%s[%d,%d].edges[0:%d,%d] = [%s]''' % (Gname, i1, i2, leng, j, es)
+                    print('''%s[%d,%d].names[%d]="%s"  #%s''' %(Gname, i1, i2, j, name, k))
+                    print('''%s[%d,%d].nodes[%d]=%d''' % (Gname, i1, i2, j, leng))
+                    print('''%s[%d,%d].edges[0:%d,%d] = [%s]''' % (Gname, i1, i2, leng, j, es))
         
         if calc_order:
             order = []
@@ -791,13 +801,13 @@ class Diagram(dict):
                 order.append(self.Nodes[k])
 
             order = [i-1 for i in order]
-            print "# %d/%d %20.14G" % (leg,comp, cost)            
+            print("# %d/%d %20.14G" % (leg,comp, cost))            
             if i2 < -1000:
-                print "%s[%s][0:%d]=[%s]" % (Oname, i1, len(ks), 
-                                              ",".join([str(x) for x in order]))
+                print("%s[%s][0:%d]=[%s]" % (Oname, i1, len(ks), 
+                                              ",".join([str(x) for x in order])))
             else:
-                print "%s[0:%d, %d,%d]=[%s]" % (Oname, len(ks), i1, i2, 
-                                              ",".join([str(x) for x in order]))
+                print("%s[0:%d, %d,%d]=[%s]" % (Oname, len(ks), i1, i2, 
+                                              ",".join([str(x) for x in order])))
     
     def to_networkx(self, directed=False, remove_O=False):
         """
@@ -807,7 +817,7 @@ class Diagram(dict):
         #print 'eeee'; exit()
         if not directed:
             G=nx.MultiGraph()
-            for k, v in self.connections.iteritems():
+            for k, v in self.connections.items():
                 leg0 = 1
                 for k1, leg1 in v:
                     e = (k, k1, (k, k1, leg0, leg1))
@@ -818,7 +828,7 @@ class Diagram(dict):
         else:
             raise NotImplemented
             G=nx.MultiDiGraph()
-            for k, v in self.connections.iteritems():
+            for k, v in self.connections.items():
                 leg0 = 1
                 for k1, leg1 in v:
                     e = (k, k1, (k, k1, leg0, leg1))
@@ -829,7 +839,7 @@ class Diagram(dict):
             #print G.edges()
         
         if remove_O:
-            print "ops 'O', 'OO', etc are omitted!"
+            print("ops 'O', 'OO', etc are omitted!")
             nodes= G.nodes()
             nodes= [i for i in nodes if i[0] not in ['O']  ]
             G = G.subgraph(nodes)
@@ -925,9 +935,9 @@ class Diagram(dict):
         for a in ['graph_attr', 'node_attr', 'edge_attr']:
             variables[a + '_default'].update( variables[a + '_adj'])
             for k in attr:
-                if variables[a + '_default'].has_key(k):
+                if k in variables[a + '_default']:
                     variables[a + '_default'][k] = attr[k]
-                    print "%s k is updated in %s to be %s"%(k, a, attr[k])
+                    print("%s k is updated in %s to be %s"%(k, a, attr[k]))
             g.__dict__[a].update(variables[a + '_default'])
 
         #g.graph_attr.update(graph_attr_default)
@@ -939,7 +949,7 @@ class Diagram(dict):
         #g.layout('dot')   #neato, dot, twopi, circo, fdp, nop
         g.layout()
         path = path if path is not None else 'test.png'
-        print g.string()
+        print(g.string())
         g.draw(path)
         
         os.popen("display " + path)
@@ -947,16 +957,16 @@ class Diagram(dict):
 
 def compare_template(g1, g2):
     g_1m2 = set(g1.keys())-set(g2.keys())
-    print "only in g1",  g_1m2
+    print("only in g1",  g_1m2)
     for i in g_1m2:
-        print i, g1[i]
+        print(i, g1[i])
     
     g_2m1 = set(g2.keys())-set(g1.keys())
-    print "\nonly in g2", g_2m1
+    print("\nonly in g2", g_2m1)
     for i in g_2m1:
-        print i,  g2[i]
+        print(i,  g2[i])
     
-    print "\nin both but different"
+    print("\nin both but different")
     g12 = set(g1.keys())&set(g2.keys())
     for i in g12:
         s1 = set(g1[i])
@@ -964,11 +974,11 @@ def compare_template(g1, g2):
         eq = s1 == s2 
         #print i, eq
         if not eq:
-            print i
-            print  "\t", (s1-s2),  s2-s1
+            print(i)
+            print("\t", (s1-s2),  s2-s1)
 
 
-class graphs_info:
+class graphs_info(object):
     def __init__(self):
         self.cur_gn = 1
         self.cur_grn= -1
@@ -977,14 +987,14 @@ class graphs_info:
         self.D={}
         
     def Add(self, gid):
-        if not self.D.has_key(gid):
+        if gid not in self.D:
             self.D[gid] = self.cur_gn
             self.cur_gn +=1
             self.Tot_GN += 1
             self.Tot_GN_Refl +=1
             
         grid = self.reflect_g(gid)
-        if not self.D.has_key(grid):
+        if grid not in self.D:
             self.D[grid] = self.cur_grn
             self.cur_grn -= 1            
             self.Tot_GN += 1
@@ -995,17 +1005,17 @@ class graphs_info:
         return gn
     
     def Show(self, name):
-        ks = self.D.keys()
+        ks = list(self.D.keys())
         ks.sort()
-        print "   TotGN_%s=%d" % (name, self.Tot_GN)
-        print "   RefGN_%s=%d" % (name, self.Tot_GN_Refl)
+        print("   TotGN_%s=%d" % (name, self.Tot_GN))
+        print("   RefGN_%s=%d" % (name, self.Tot_GN_Refl))
         
         for k in ks:
             gn = self.Get_GN(k)
             grn = self.Get_GN(self.reflect_g(k))            
-            print "   %s(:, %d)=(/%d,%d,  %d/)" % \
-                  (name, gn, k[0],k[1], grn)
-        print
+            print("   %s(:, %d)=(/%d,%d,  %d/)" % \
+                  (name, gn, k[0],k[1], grn))
+        print()
  
 
 def Simplify(g):
@@ -1023,7 +1033,7 @@ def main():
     #import HalfBB
     import template_halfbb as HalfBB
     G=Diagram(HalfBB.G_HBB)
-    for i in xrange(7, 8):
+    for i in range(7, 8):
         oo = eval(HalfBB.oo2_tmpl % {"1":i, "2":i+1})
         oo = Diagram(oo)
         
@@ -1032,10 +1042,10 @@ def main():
         ng.show()
         
         max_leg, max_comp, optimal_path, max_cost = ng.find_optimal_path()
-        print max_leg, max_comp, max_cost
-        print optimal_path
+        print(max_leg, max_comp, max_cost)
+        print(optimal_path)
 
-class Test_diagram():
+class Test_diagram(object):
     def __init__(self):
         #from merapy.diagrams.V31.template_ternary import  G3 as G, V_tmpl
         from merapy.diagrams.V21.template_binary import  G2 as G, V_tmpl
@@ -1079,7 +1089,7 @@ if __name__=="__main__":
         #G.show_edges()
         #G.show_edge_info()
         e1=G.get_edges(node="V_0")
-        print e1
+        print(e1)
 
 
 

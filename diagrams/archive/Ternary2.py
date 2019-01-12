@@ -1,4 +1,12 @@
 #!/usr/bin/env python
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 U_tmpl = """ 
  "U_%(U)s":[("I_%(I1)s", 2), ("I_%(I2)s", 2), ("V_%(V)s", 2), ("W_%(W)s",1)], 
 "Up_%(U)s":[("Vp_%(V)s", 3), ("Wp_%(W)s",2), ("I_%(I1)s", 1), ("I_%(I2)s", 1)], 
@@ -81,20 +89,20 @@ G_3 = {
 
 def main():
     k = 5
-    for i in xrange(1,k):
+    for i in range(1,k):
         j=i*3
         D={"U":i, "V":i-1, "W":i, "I1":j-1, "I2":j}
-        print U_tmpl % D
+        print(U_tmpl % D)
         
-    for i in xrange(0, k+1):
+    for i in range(0, k+1):
         j=i*3
         D={"W":i, "U":i, "V":i, "I":j+1}
-        print W_tmpl % D
+        print(W_tmpl % D)
 
-    for i in xrange(0, k+1):
+    for i in range(0, k+1):
         j=i*3
         D={"W":i, "U":i+1, "V":i, "O":i}
-        print V_tmpl % D
+        print(V_tmpl % D)
         
         
 if __name__ == "__main__":

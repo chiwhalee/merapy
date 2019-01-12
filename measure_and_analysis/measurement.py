@@ -1,13 +1,22 @@
 #!/usr/bin/env python
 #coding=utf8
 #PYTHON_ARGCOMPLETE_OK 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import *
+from builtins import object
 import numpy as np 
 import unittest
 import argparse, argcomplete
 import sys
 import os
 import pprint
-import cPickle as pickle
+import pickle as pickle
 from collections import OrderedDict
 import warnings
 #try: 
@@ -43,7 +52,7 @@ try:
     import vmps.measure_and_analysis.measurement_vmps as all_mps 
     #import vmps.measure_and_analysis.all as all_mps
 except ImportError as err: 
-    print err 
+    print(err) 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_vmps, ResultDB_mera, 
         ResultDB_idmrg,  BACKUP_STATE_DIR, RESULTDB_DIR, )
@@ -110,7 +119,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
             #then it becomes ~/resultdb_dir so cause mismatch !
             parpath = parpath.replace(BACKUP_stateTATE_DIR, REstateULTDB_DIR)
         except IOError as err: 
-            print 'loading %s faild'%(parpath, )
+            print('loading %s faild'%(parpath, ))
             if fault_tolerant: 
                 return 
             else: 
@@ -128,9 +137,9 @@ def store_result_decorator(measure_func, state=None, state_path=None,
     if param is None: 
         param = {}
     
-    print  'meassuring %s at %s %s'%(path, shape, iter)
+    print('meassuring %s at %s %s'%(path, shape, iter))
     if not allow_measure and not force: 
-        print '\tstate is not converged. not allowing measure. return None'
+        print('\tstate is not converged. not allowing measure. return None')
         return 
 
     if rdb is None: 
@@ -146,7 +155,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
         w = measure_func.__name__
         if 1:
             if db_version is None: 
-                is_found = _rdb[k].has_key(w)
+                is_found = w in _rdb[k]
             else:
                 #key_list = [w] + [shape, iter]
                 key_list = [w] + [shape]
@@ -154,7 +163,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
             if is_found: 
                 found.append(w)
         if found:
-            print 'found these fields {}, omit them.'.format(found)
+            print('found these fields {}, omit them.'.format(found))
         #which = [w for w in which if w not in found]
      
     failed_list = []
@@ -163,7 +172,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
     ff = func[w]
     w = func_name_map.get(ff.__name__, ff.__name__)
     field_name = w if field_surfix  == ''  else w + '_' +  field_surfix  
-    print '\t%s...   '%field_name,
+    print('\t%s...   '%field_name, end=' ')
     
     try:
         _param = param.get(w, {})
@@ -183,7 +192,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
         msg = '%20s'%('FAILED skip')
         if not fault_tolerant: 
             raise 
-    print msg
+    print(msg)
 
     if 1: 
         #load _rdb again! so that avoid chance of confliction due to measure time delay
@@ -200,12 +209,12 @@ def store_result_decorator(measure_func, state=None, state_path=None,
             changed = True
         
         if 1: 
-            if not _rdb.has_key('algorithm'): 
+            if 'algorithm' not in _rdb: 
                 _rdb['algorithm'] = algorithm
                 changed = True
                 
             if algorithm in ['mps', 'idmrg']: 
-                if not _rdb.has_key('dim_max'): 
+                if 'dim_max' not in _rdb: 
                     _rdb['dim_max'] = {}
                 if _rdb.has_key_list(['dim_max', shape[0]], info=0): 
                     dmax = _rdb.get_dim_max_for_N(shape[0])   #note this need access to local file system
@@ -220,9 +229,9 @@ def store_result_decorator(measure_func, state=None, state_path=None,
         if changed: 
             _rdb.commit(info=1)
         else: 
-            print 'No change to commit.'
+            print('No change to commit.')
     if len(failed_list)>0: 
-        print 'failed_list: %s'%failed_list
+        print('failed_list: %s'%failed_list)
 
 def measure_S(S=None, parpath=None, path=None,
         measure_func=None, 
@@ -269,11 +278,11 @@ def measure_S(S=None, parpath=None, path=None,
             algorithm = 'mps'
         #elif isinstance(S, np.ndarray): 
         elif isinstance(S, dict): 
-            if S.has_key('mps'): 
+            if 'mps' in S: 
                 algorithm = 'mps'
-            elif S.has_key('A'): 
+            elif 'A' in S: 
                 algorithm = 'idmrg'
-            elif S.has_key('mera'): 
+            elif 'mera' in S: 
                 algorithm = 'mera'
                 S= dict_to_object(S)
         else: 
@@ -290,7 +299,7 @@ def measure_S(S=None, parpath=None, path=None,
             #        pass
             
             from merapy.hamiltonian import System 
-            propt = System.key_property.im_func(S)
+            propt = System.key_property.__func__(S)
             #propt = S.key_property()
             dim,  layer = propt['trunc_dim'], propt['num_of_layer']
             nqn = len(propt['qns'])
@@ -341,7 +350,7 @@ def measure_S(S=None, parpath=None, path=None,
                     if not c1 >= c2:  
                         allow_measure = False 
                 
-            if S.has_key('lam_prev_inv'): 
+            if 'lam_prev_inv' in S: 
                 all_func = all_idmrg_mcc
             else: 
                 all_func = all_idmrg
@@ -364,7 +373,7 @@ def measure_S(S=None, parpath=None, path=None,
     if isinstance(which, str): 
         which = [which]
     if exclude_which:
-        print  'exlude this from measure_S: ', exclude_which
+        print('exlude this from measure_S: ', exclude_which)
         which = [i for i  in which if i not in exclude_which]
     
     if measure_func is None: 
@@ -385,9 +394,9 @@ def measure_S(S=None, parpath=None, path=None,
    
     #------------------------  start measureing ----------------------------------------#
     
-    print  'meassuring %s at %s'%(path, shape)
+    print('meassuring %s at %s'%(path, shape))
     if not allow_measure and not force: 
-        print '\tstate is not converged. not allowing measure. return None'
+        print('\tstate is not converged. not allowing measure. return None')
         return 
 
     if rdb is None: 
@@ -401,7 +410,7 @@ def measure_S(S=None, parpath=None, path=None,
         found = []
         for w in which: 
             if db_version is None: 
-                is_found = _rdb[k].has_key(w)
+                is_found = w in _rdb[k]
             else:
                 #key_list = [w] + [shape, iter]
                 key_list = [w] + [shape]
@@ -409,7 +418,7 @@ def measure_S(S=None, parpath=None, path=None,
             if is_found: 
                 found.append(w)
         if found:
-            print 'found these fields {}, omit them.'.format(found)
+            print('found these fields {}, omit them.'.format(found))
         which = [w for w in which if w not in found]
      
     failed_list = []
@@ -418,7 +427,7 @@ def measure_S(S=None, parpath=None, path=None,
         ff = func[w]
         w = func_name_map.get(ff.__name__, ff.__name__)
         field_name = w if field_surfix  == ''  else w + '_' +  field_surfix  
-        print '\t%s...   '%field_name,
+        print('\t%s...   '%field_name, end=' ')
         
         try:
             _param = param.get(w, {})
@@ -438,7 +447,7 @@ def measure_S(S=None, parpath=None, path=None,
             msg = '%20s'%('FAILED skip')
             if not fault_tolerant: 
                 raise 
-        print msg
+        print(msg)
     
     if 1: 
         #load _rdb again! so that avoid chance of confliction due to measure time delay
@@ -455,14 +464,14 @@ def measure_S(S=None, parpath=None, path=None,
             changed = True
         
         if 1: 
-            if not _rdb.has_key('algorithm'): 
+            if 'algorithm' not in _rdb: 
                 _rdb['algorithm'] = algorithm
                 changed = True
                 
             if algorithm in ['mps', 'idmrg']: 
                 N = shape[0]
                 D = shape[1]
-                if not _rdb.has_key('dim_max'): 
+                if 'dim_max' not in _rdb: 
                     _rdb['dim_max'] = {}
                 if _rdb.has_key_list(['dim_max', N], info=0): 
                     dmax = _rdb.get_dim_max_for_N(N)   #note this need access to local file system
@@ -477,9 +486,9 @@ def measure_S(S=None, parpath=None, path=None,
         if changed: 
             _rdb.commit(info=1)
         else: 
-            print 'No change to commit.'
+            print('No change to commit.')
     if len(failed_list)>0: 
-        print 'failed_list: %s'%failed_list
+        print('failed_list: %s'%failed_list)
 
 def backup_fn_gen(dim, layer, nqn=None):
     nqn = "5_" if nqn == 5 else "" 
@@ -598,13 +607,13 @@ def measure_all_by_dispy(arg_group):
         job.id = i
         job_list.append(job)
     
-    print len(job_list)
+    print(len(job_list))
     for job in job_list:
         #host, n = job() # waits for job to finish and returns results
         #print '%s executed job %s at %s with %s' % (host, job.id, job.start_time, n)
         # other fields of 'job' that may be useful:
         # job.stdout, job.stderr, job.exception, job.ip_addr, job.end_time
-        print job.stdout, job.stderr , job.id, job.exception  
+        print(job.stdout, job.stderr , job.id, job.exception)  
     cluster.stats()
 
 def mera_backup_dir_finder(root): 
@@ -639,7 +648,7 @@ class TestIt(unittest.TestCase):
                 do_measure=1, measure_only=['energy']) 
         
         v.minimize()
-        print '\n'*2
+        print('\n'*2)
         args = {
                 'which':['correlation', ],  #['correlation', 'variance', 'energy', 'entanglement_entropy', 'magnetization']
                 'param':{'correlation':{'i0':4}}, 
@@ -743,7 +752,7 @@ if __name__ == '__main__':
    
     if len(sys.argv)>1: 
     #if 0: 
-        from cmd_line_args import parser
+        from .cmd_line_args import parser
         parser.add_argument('-w', '--which', nargs='*', default=None)
         #some issue with mps algs, temporarily disable choices
         #parser.add_argument('-w', '--which', nargs='*', choices=FIELD_NAME_LIST,  default=None)

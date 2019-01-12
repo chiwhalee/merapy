@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 #coding=utf8
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from merapy.config import (Config, CFG_ISING_BASIC, updaters_u1 as _updaters_u1 , 
         updaters_z2 as _updaters_z2, 
         copy_config)
@@ -66,8 +73,8 @@ def make_config(h, backup_parpath=None, which_top_state='scale_invar_state',  su
 
 if __name__ == '__main__': 
     c=make_config(h=0.2)
-    print  c['backup_parpath']
-    print  c['backup_parpath_local']
+    print(c['backup_parpath'])
+    print(c['backup_parpath_local'])
     
 
 

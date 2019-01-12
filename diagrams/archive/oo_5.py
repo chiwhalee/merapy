@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 G5={
  "W1_1":[("I_1", 2), ("I_2", 2), ("V_1", 1)],
 "W1p_1":[("Vp_1", 2), ("I_1", 1), ("I_2", 1)],

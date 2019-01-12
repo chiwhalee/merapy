@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from merapy.measure_and_analysis.correlation import correlation, eta_fit, curve_fit, correlation_extra
 from merapy.measure_and_analysis.central_charge import *#central_charge, entanglement_entropy, entanglement_spectrum
 from merapy.measure_and_analysis.scaling_dimension import calc_scaling_dim_2site as scaling_dim

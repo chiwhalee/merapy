@@ -2,14 +2,28 @@
 #coding=utf8
 #PYTHON_ARGCOMPLETE_OK 
 from __future__ import division
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import absolute_import
+from future import standard_library
+from functools import reduce
+standard_library.install_aliases()
+from builtins import input
+from builtins import filter
+from builtins import map
+from builtins import str
+from builtins import zip
+from builtins import range
+from builtins import *
+from builtins import object
 import argparse, argcomplete
 import inspect 
 import os, sys
 import shutil 
 import warnings 
 import pprint
-from tabulate import tabulate
-import cPickle as pickle
+from .tabulate import tabulate
+import pickle as pickle
 from collections import OrderedDict
 from operator import itemgetter
 import time
@@ -252,7 +266,7 @@ class AnalysisTools(object):
             else: 
                 raise 
         if data is not None:
-            x, y = zip(*data)
+            x, y = list(zip(*data))
         else:
             x, y = line.get_data()
         x = np.copy(x)
@@ -293,7 +307,7 @@ class AnalysisTools(object):
                 
         """
         ll = list(ax.lines)
-        which_lines = range(len(ll)) if which_lines is None else which_lines 
+        which_lines = list(range(len(ll))) if which_lines is None else which_lines 
         #for l in ax.lines[:len(aa)]:
         temp = []
         fit_line_args= {a: kwargs.get(a) for a in 
@@ -339,12 +353,12 @@ class AnalysisTools(object):
           
             if plot_fit: 
                 args= kwargs.copy()
-                color = kwargs['color'] if kwargs.has_key('color') else l.get_color()
+                color = kwargs['color'] if 'color' in kwargs else l.get_color()
                 marker = kwargs.get('marker', None)
                 args.update(color=color, marker=marker)
                 #_ = self._plot.im_func(None, res['x'], res['y'], 
                 #        ax=ax, color=l.get_color(), label='', marker=None)        
-                _ = self._plot.im_func(None, res['x'], res['y'], 
+                _ = self._plot.__func__(None, res['x'], res['y'], 
                         ax=ax, **args)
                 #if x_extra is not None:
                 #    tic= ax.get_xticks().tolist()
@@ -497,8 +511,8 @@ class AnalysisTools(object):
                 ax.text(min_location, min_val, round(min_location, rounding), fontdict=fd,  )
             temp.append((l.get_label(), round(min_location, rounding), min_val))
         if temp: 
-            labels, loc, val= zip(*temp)
-            labels= map(str, labels)  # by default, labels are unicode, u'...', I remove u signiture
+            labels, loc, val= list(zip(*temp))
+            labels= list(map(str, labels))  # by default, labels are unicode, u'...', I remove u signiture
         else: 
             labels, loc, val = None, None, None 
             
@@ -540,7 +554,7 @@ class AnalysisTools(object):
         x, y = l.get_data()
         magnitude = magnitude if magnitude is not None else np.max(np.abs(y)) *0.8 
         yy = np.sign(y)*magnitude  + center 
-        self._plot.im_func(None, x, yy, ax=ax, **kwargs)
+        self._plot.__func__(None, x, yy, ax=ax, **kwargs)
     
     def compare_two_lines(self, line1, line2, plot_sign=False, **kwargs): 
         """
@@ -557,14 +571,14 @@ class AnalysisTools(object):
             y21 = y2[ind21]
             y_diff = y12 -y21
         axes= line1.get_axes()   
-        if not kwargs.has_key('ylabel'): 
+        if 'ylabel' not in kwargs: 
             ylabel = axes.get_ylabel()
             ylabel = '_'.join([ylabel, 'diff'])
             kwargs['ylabel'] = ylabel
-        if not kwargs.has_key('xlabel'): 
+        if 'xlabel' not in kwargs: 
             kwargs['xlabel'] = axes.get_xlabel()
         #self._plot.im_func(None, x1, y1-y2, **kwargs)
-        if not kwargs.has_key('label'): 
+        if 'label' not in kwargs: 
             label = '-'.join([line1.get_label(), line2.get_label()])
             kwargs['label'] = label 
         if plot_sign: 
@@ -573,7 +587,7 @@ class AnalysisTools(object):
         kwargs['yfunc'] = kwargs.get('yfunc', np.abs)
         kwargs['yscale'] = kwargs.get('yscale', 'log')
         
-        fig=self._plot.im_func(None, x_common, y_diff, **kwargs)
+        fig=self._plot.__func__(None, x_common, y_diff, **kwargs)
         if plot_sign: 
             self.plot_sign(fig.axes[-1])
     
@@ -592,7 +606,7 @@ class AnalysisTools(object):
         line_id_list = [l for l in line_id_list if l <  n]
         ll=[ax.lines[i] for i in line_id_list]
         temp=[(l, l.get_label()) for l in ll if '_line' not in l.get_label()]
-        x, y= zip(*temp)
+        x, y= list(zip(*temp))
         ax.legend(x, y, loc=0)
     
     @staticmethod 
@@ -600,7 +614,7 @@ class AnalysisTools(object):
         n = len(ax.lines)
         line_id_list = [i for i in line_id_list if i<n]
         if reverse: 
-            ll = range(len(ax.lines))
+            ll = list(range(len(ax.lines)))
             temp = list(line_id_list)
             line_id_list = [i for i in ll if i not in temp]
         lines  = [ax.lines[i] for i in line_id_list]
@@ -825,9 +839,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #    self.version = version
         #    self['version'] = version
          
-        if not self.has_key('version'): 
+        if 'version' not in self: 
             self['version'] = self.VERSION 
-        if not self.has_key('status'):   # means is the data correct。these make init slow, better make it lazy eval 
+        if 'status' not in self:   # means is the data correct。these make init slow, better make it lazy eval 
             self['status'] = 'good'   # default is good 
 
         #if self['version'] >= 1.0:  
@@ -891,17 +905,17 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             raise  
 
     def __repr__(self): 
-        return self.keys()
+        return list(self.keys())
         temp = []
         temp.append(self.parpath)
-        temp.append(str(self.keys()))
+        temp.append(str(list(self.keys())))
         res= '\n'.join(temp)
         return res 
     
     def __str__(self): 
         temp = []
         temp.append(self.parpath)
-        temp.append(str(self.keys()))
+        temp.append(str(list(self.keys())))
         res= '\n'.join(temp)
         return res 
     
@@ -926,10 +940,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             """
                 
             """
-            print 'iiiii'
+            print('iiiii')
             if not self.inited: 
                 self.init_db()
-                print 'iiiii'
+                print('iiiii')
             else: 
                 #return self[k]
                 return OrderedDict.__getitem__(self, k)
@@ -990,7 +1004,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             #        print 'not has this key: %s'%(k, )
             #    return False
             #if not hasattr(temp, 'has_key') or not temp.has_key(k): 
-            if not temp.has_key(k): 
+            if k not in temp: 
                 #if info>0: 
                 #    print 'not has this key: %s'%(k, )
                 return False
@@ -1023,7 +1037,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             res= old_dic 
         temp = res 
         for k in key_list[: -1]: 
-            if not temp.has_key(k): 
+            if k not in temp: 
                 temp[k] = OrderedDict()
             #temp[k] = OrderedDict()
             temp = temp[k]
@@ -1041,7 +1055,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if 1: 
             temp = self
             for k in key_list[: -1]: 
-                if not temp.has_key(k): 
+                if k not in temp: 
                     temp[k] = OrderedDict()
                 temp = temp[k]
             last_key = key_list[-1]
@@ -1052,7 +1066,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             #print self.has_key_list(key_list)
             #exit()
             if verbose: 
-                print 'add_key_list %s'%(key_list, )
+                print('add_key_list %s'%(key_list, ))
         else:  # replace above with make_nested_dict in future 
             temp=self.__class__.make_nested_dict(key_list[1: ], val=val)
             
@@ -1069,7 +1083,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             out.close()
         db = OrderedDict()
         rpyc_save(path, db, use_local_storage=use_local_storage)
-        print 'ResultDB %s has been created'%path
+        print('ResultDB %s has been created'%path)
     
     def get_fn_list(self, dir=None):
         dir = dir if dir is not None else self.state_parpath
@@ -1086,7 +1100,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     def get_time_serials(self, sh, attr_name=None, info=0, force=0): 
         #if rec is not None: 
-        if self.has_key('time_serials'): 
+        if 'time_serials' in self: 
             ts = self['time_serials'].get(sh)
         else: 
             self['time_serials'] = {}
@@ -1117,7 +1131,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             sh = [self.parse_fn(f) for f in fn]
         else:
             #warnings.warn('get_shape_list using energy rec')
-            sh = self.get(field, {}).keys()
+            sh = list(self.get(field, {}).keys())
        
         #if N is not None:
         #    sh_min = (N, 0)
@@ -1126,19 +1140,19 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #    sh_min = (0, D)
         #    sh_max = (np.inf, D)
         if N is not None:
-            sh=filter(lambda x: x[0]==N , sh)
+            sh=[x for x in sh if x[0]==N]
         if D is not None:
-            sh=filter(lambda x: x[1]==D , sh)
+            sh=[x for x in sh if x[1]==D]
         
         if sh_max is not None : 
-            sh=filter(lambda x: x[0]<=sh_max[0] and x[1] <= sh_max[1] , sh)
+            sh=[x for x in sh if x[0]<=sh_max[0] and x[1] <= sh_max[1]]
         if sh_min is not None : 
-            sh=filter(lambda x: x[0]>= sh_min[0] and x[1]>= sh_min[1] , sh)
+            sh=[x for x in sh if x[0]>= sh_min[0] and x[1]>= sh_min[1]]
         
         if only_return_max:
             NN = [i[0] for i in sh]
             NN = list(set(NN))
-            sh = [(N, max(filter(lambda x:x[0]==N, sh))[1]) for N in NN]
+            sh = [(N, max([x for x in sh if x[0]==N])[1]) for N in NN]
             #sh = [(N, self.get_dim_max_for_N(N)) for N in NN]
         if only_return_N:
             sh = [i[0] for i in sh]
@@ -1163,7 +1177,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             else: 
                 D = 0 
             if update_db: 
-                if not self.has_key('dim_max'): 
+                if 'dim_max' not in self: 
                     self['dim_max'] = {}
                 self['dim_max'][N] = D
                 self.commit(info=info)
@@ -1195,14 +1209,14 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         rpyc_save(path, OrderedDict(self), use_local_storage=use_local_storage)
         if info>0: 
             temp = str(path)
-            print '\tmodification in ...%s has been commited'%(temp[-90: ])
+            print('\tmodification in ...%s has been commited'%(temp[-90: ]))
     
     def _fetch(self, dim, num_of_layer=None): 
-        keys= self.iterkeys()
+        keys= iter(self.keys())
         #keys= filter(lambda x: x[0]==dim and x[1]==num_of_layer, keys)
-        keys= filter(lambda x: x[0]==dim, keys)
+        keys= [x for x in keys if x[0]==dim]
         if num_of_layer is not None: 
-            keys= filter(lambda x: x[1]==num_of_layer, keys)
+            keys= [x for x in keys if x[1]==num_of_layer]
         if len(keys)<1: 
             return None
         else: 
@@ -1211,8 +1225,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             try: 
                 res = max(keys, key=itemgetter(2))  #records with max S.iter
             except: 
-                print 'parpath %s'%(self.parpath, )
-                print 'keys are, %s'%keys
+                print('parpath %s'%(self.parpath, ))
+                print('keys are, %s'%keys)
                 raise
             return res
     
@@ -1221,16 +1235,16 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if key is None: 
             if info>0: 
                 msg = 'key (%s) not found in ResultDB  at %s\n keys are %s'%(
-                    (dim, num_of_layer), self.parpath,  self.keys())
-                print msg
+                    (dim, num_of_layer), self.parpath,  list(self.keys()))
+                print(msg)
             return None
         else: 
-            if self[key].has_key(field_name): 
+            if field_name in self[key]: 
                 return  self[key][field_name]
             else: 
                 if info>0: 
                     msg = "rec not found for field_name '%s' at %s"%(field_name, key)
-                    print msg
+                    print(msg)
                 return None
 
     def fetch_easy_old(self, field_name, mera_shape,  sub_key_list=None, mera_shape_optional=None, 
@@ -1246,7 +1260,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     'EE1': ['central_charge', 'EE', 1], 
                     'EE2': ['central_charge', 'EE', 2], 
                     }
-            if mapper.has_key(field_name): 
+            if field_name in mapper: 
                 temp = mapper[field_name]
                 field = temp[0]
                 key_list = temp[1: ]
@@ -1268,8 +1282,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                         rec = rec[key]
                 except: 
                     if fault_tolerant: 
-                        print 'error in fetch_easy_old'
-                        print 'keys are', rec.keys()
+                        print('error in fetch_easy_old')
+                        print('keys are', list(rec.keys()))
                     else: 
                         raise
         else:
@@ -1295,7 +1309,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         except KeyError as err: 
             if fault_tolerant: 
                 if info>0: 
-                    print 'key not found:', err
+                    print('key not found:', err)
                 return None
             else:
                 raise
@@ -1308,7 +1322,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     'EE1': ['central_charge', 'EE', 1], 
                     'EE2': ['central_charge', 'EE', 2], 
                     }
-            if mapper.has_key(field_name): 
+            if field_name in mapper: 
                 temp = mapper[field_name]
                 field = temp[0]
                 key_list = temp[1: ]
@@ -1328,8 +1342,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             except: 
                 if fault_tolerant: 
                     if info>0: 
-                        print 'error in fetch_easy'
-                        print 'existent keys are %s; required key_list is %s'%(rec.keys(), key_list)
+                        print('error in fetch_easy')
+                        print('existent keys are %s; required key_list is %s'%(list(rec.keys()), key_list))
                     return None 
                 else: 
                     raise
@@ -1345,7 +1359,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 mera_shape = mera_shape[0], self['dim_max'].get(mera_shape[0], 0)
             elif mera_shape[1] == 'field_max':  #the max dim for each field may differ, then may use this
                 N = mera_shape[0]
-                ss = self.get(field_name, {}).keys()
+                ss = list(self.get(field_name, {}).keys())
                 dd = [s[1] for s in ss if s[0]==N ]
                 D = max(dd) if dd else 0     
                 mera_shape = N, D
@@ -1353,7 +1367,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         except KeyError as err: 
             if fault_tolerant: 
                 if info>0: 
-                    print 'key not found:', err
+                    print('key not found:', err)
                 return default
             else:
                 raise err
@@ -1376,7 +1390,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #    all_field_names = self.ALL_FIELD_NAMES 
         #else: 
         #    all_field_names = self.iterkeys()
-        all_field_names = all_field_names if all_field_names is not None else self.iterkeys()
+        all_field_names = all_field_names if all_field_names is not None else iter(self.keys())
         ss = search_str.split(' ')
         ss_len = len(ss)
         found = False
@@ -1404,11 +1418,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
            
         """
-        all_field_names =  self.iterkeys()
+        all_field_names =  iter(self.keys())
         res = self.search_str(name, all_field_names, only_first=only_first, 
                 only_one = only_one, assert_found = assert_found,) 
         if has_sh is not None: 
-            res= [r for r in res if isinstance(self[r], dict) and self[r].has_key(has_sh)]
+            res= [r for r in res if isinstance(self[r], dict) and has_sh in self[r]]
         return res 
 
     def fetch_easier(self, name_str, sh, sub_key_list=None): 
@@ -1442,9 +1456,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             remove param iter
         """
         
-        if not self.has_key(field_name): 
+        if field_name not in self: 
             self[field_name] = OrderedDict()
-        if not self[field_name].has_key(sh): 
+        if sh not in self[field_name]: 
             self[field_name][sh] = OrderedDict()
             
         if sub_key_list is None: 
@@ -1455,7 +1469,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             self[field_name][sh] = dic 
 
     def rename_field(self, field_name_old, field_name_new): 
-        print 'rename key %s -> %s'%(field_name_old, field_name_new)
+        print('rename key %s -> %s'%(field_name_old, field_name_new))
         self[field_name_new] = self[field_name_old]
         self.pop(field_name_old)
         self.commit()
@@ -1488,21 +1502,21 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if state_parpath_new[-1] == '-':
             state_parpath_new = state_parpath_new[:-1]
         
-        print 'rename ...%s -> ...%s'%(
-                self.parpath[-100:], db_parpath_new[-100: ])
+        print('rename ...%s -> ...%s'%(
+                self.parpath[-100:], db_parpath_new[-100: ]))
         if not dry_run: 
             try:
                 os.rename(self.parpath, db_parpath_new)
             except Exception as err:
-                print err
+                print(err)
         
-        print 'rename ...%s -> ...%s'%(
-                self.state_parpath[-100:], state_parpath_new[-100: ])
+        print('rename ...%s -> ...%s'%(
+                self.state_parpath[-100:], state_parpath_new[-100: ]))
         if not dry_run: 
             try:
                 os.rename(self.state_parpath, state_parpath_new)
             except Exception as err:
-                print err
+                print(err)
     
     def move_folder(self, local_root): 
         dir = self.parpath 
@@ -1513,7 +1527,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             msg += '   ... done' 
         else: 
             raise 
-        print msg 
+        print(msg) 
     
     def get_surfix(self): 
         pass 
@@ -1588,25 +1602,25 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
             if cx is None or cz is None:
                 return None
-            rx, cx = zip(*cx.items()); cx=np.asarray(cx)
-            rz, cz = zip(*cz.items()); cz=np.asarray(cz)
+            rx, cx = list(zip(*list(cx.items()))); cx=np.asarray(cx)
+            rz, cz = list(zip(*list(cz.items()))); cz=np.asarray(cz)
             assert rx==rz
             r=rx
             cxz= cx+cz
-            res = OrderedDict(zip(r, cxz.tolist()))
+            res = OrderedDict(list(zip(r, cxz.tolist())))
         else:
             cx = db.fetch_easy(field, mera_shape=sh, sub_key_list=['xx'])
             cz = db.fetch_easy(field, mera_shape=sh, sub_key_list=['zz'])
             if cx is None or cz is None:
                 if info>0: 
-                    print 'eiher cx or cz is None, so return None '
+                    print('eiher cx or cz is None, so return None ')
                 return None
             r0 = [i[0] for i in cx]
             r1 = [i[1] for i in cx]
             cx=[i[2] for i in cx]; cx=np.asarray(cx)
             cz=[i[2] for i in cz]; cz=np.asarray(cz)
             cxz= cx+cz
-            res = zip(r0, r1, cxz.tolist())
+            res = list(zip(r0, r1, cxz.tolist()))
             
             pass
             
@@ -1632,7 +1646,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             try:
                 qn_spect_dic=self.fetch_easy('entanglement_entropy', sh, ['spectrum', i, 1])
                 res = 0.0
-                for v in qn_spect_dic.values(): 
+                for v in list(qn_spect_dic.values()): 
                     res += -np.sum(v*np.log(v))
             except Exception as err:
                 if info>0: 
@@ -1645,7 +1659,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
 
                 for i, dic in rec[1:]:
                     EE=0.0
-                    for v in dic.values(): 
+                    for v in list(dic.values()): 
                         EE += -np.sum(v*np.log(v))
                     res.append((i, EE))
             except Exception as err:
@@ -1692,7 +1706,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if ni is None:
                 warnings.warn('ni is None')
             return None
-        ni = ni.values()
+        ni = list(ni.values())
         
         if 0<clip<1:
             clip = int(clip*N)
@@ -1802,7 +1816,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             if not fault_tol:
                 raise  
             return None,None
-        ni=ni.values()
+        ni=list(ni.values())
        
         if corr.shape[0]<N:
             L = corr.shape[0]
@@ -1987,11 +2001,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         data=[]
         for N in NN:
             _sh = (N, D)
-            if not mapper.has_key(field_name):
+            if field_name not in mapper:
                 rec = db.fetch_easy(field_name, _sh)
             else:
                 args= args if args is not None else {}
-                rec_getter = mapper[field_name].im_func
+                rec_getter = mapper[field_name].__func__
                 rec = rec_getter(db, _sh, **args)
             if rec is not None:
                 data.append((1./N, rec))
@@ -2025,15 +2039,15 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
         msg = 'delete fields "%s" for sh in %s'%(field_name_list,  sh_list)
         if need_comfirm:
-            i=raw_input(msg + '?')
+            i=input(msg + '?')
             if i.lower()!='y':
-                print 'canceled'
+                print('canceled')
                 return 
         else:
-            print msg
+            print(msg)
         
         if field_name_list == 'all' : 
-            field_name_list = self.keys()
+            field_name_list = list(self.keys())
         if sh_list == 'all' : 
             for i in field_name_list: 
                 self.pop(i)
@@ -2043,7 +2057,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     sh = sh[0], self.get_dim_max_for_N(sh[0]) 
                 for f in field_name_list: 
                     temp = self[f]
-                    if isinstance(temp, dict) and temp.has_key(sh): 
+                    if isinstance(temp, dict) and sh in temp: 
                         temp.pop(sh)
                     if not temp:  # all sh deleted 
                         self.pop(f)
@@ -2055,11 +2069,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if D>0:
                     self['dim_max'][N] = D
                 else:
-                    if self['dim_max'].has_key(N):
+                    if N in self['dim_max']:
                         self['dim_max'].pop(N)
         if not dry_run:       
             self.commit()
-        print 'done'
+        print('done')
 
     def delete_db(self, info=1): 
         os.remove(self.path)
@@ -2078,12 +2092,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
         msg = 'delete files for sh in %s'%(sh_list)
         if need_comfirm:
-            i=raw_input(msg + '?')
+            i=input(msg + '?')
             if i.lower()!='y':
-                print 'canceled'
+                print('canceled')
                 return 
         else:
-            print msg
+            print(msg)
         
         #dir = self.parpath 
         dir = self.state_parpath
@@ -2098,7 +2112,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             except Exception as err: 
                 msg += '  ... failed. '  +  str(err)
             if info>0: 
-                print msg 
+                print(msg) 
         
         if delete_rec:
             NN = [sh[0] for sh in sh_list]
@@ -2109,8 +2123,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             self.delete_rec('all', sh_list, need_comfirm=need_comfirm)
         
     def dump(self, file=None): 
-        print '---'*30
-        print 'all records in %s'%self.dbname
+        print('---'*30)
+        print('all records in %s'%self.dbname)
         #print self.items()
         pprint.pprint(self, stream=sys.stdout)
 
@@ -2124,7 +2138,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         self.commit()
         if info>0: 
             msg = 'other rdb is merged into self'
-            print msg
+            print(msg)
         
     def merge_remote(self, parpath, remote_host=None): 
         raise  # deprecated 
@@ -2134,17 +2148,17 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         locale_parpath = self.parpath
         locale_path = locale_parpath + 'temp.pickle'
         cmd_str = 'scp %s %s'%(remote_path, locale_path)
-        print cmd_str
+        print(cmd_str)
         status=os.system(cmd_str)
         if status != 0: 
             msg = 'scp %s ---> %s'%(remote_path[-20:], locale_path[-20: ])                     
-            print 'scp failed'
+            print('scp failed')
         else: 
             other = ResultDB(self.parpath, 'temp.pickle')
             self.merge(other)
             os.system('rm %s'%locale_path)
             #os.system('ls %s'%self.parpath)
-            print 'merge succeed'
+            print('merge succeed')
     
     def _plot(self, x, y, **kwargs): 
         figsize = kwargs.get('figsize')
@@ -2170,7 +2184,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     raise Exception('ax is not defined; examine the layout of fig')
         if 1:  
             style_dic = {
-                    'marker':MARKER_CYCLE.next(), 
+                    'marker':next(MARKER_CYCLE), 
                     'ms': 5,    #'markersize': 7, 
                     'mfc': 'None',  #'w',
                     'linestyle': None, 
@@ -2187,11 +2201,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             style_dic = {}
             dic = {}
         
-        temp = style_dic.keys()  + ['color']
+        temp = list(style_dic.keys())  + ['color']
         if kwargs.get('label') and kwargs.get('label_surfix'): 
             kwargs['label'] = '-'.join([str(kwargs['label']), str(kwargs['label_surfix'])])
             
-        dic_temp = {i:kwargs.get(i) for i in temp if kwargs.has_key(i)  }
+        dic_temp = {i:kwargs.get(i) for i in temp if i in kwargs  }
         dic.update(dic_temp)
         
         linestyle = dic.get('linestyle')
@@ -2201,7 +2215,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if kwargs.get('yfunc'): 
             #y = kwargs['yfunc'](y)
             yfunc = kwargs['yfunc']
-            y = map(yfunc, y)
+            y = list(map(yfunc, y))
         if kwargs.get('xfunc'): 
             x = kwargs['xfunc'](x)
         if fig_type is None: 
@@ -2220,7 +2234,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 else: 
                     ax.__getattribute__('set_' + t)(tt)
         #if kwargs.has_key('title') and ax.is_first_row(): 
-        if kwargs.has_key('title'):   
+        if 'title' in kwargs:   
             ax.set_title(kwargs.get('title')) 
             
         for l in lines:  #line stype   #matploblib 可能有个bug，mfc = 'w', 则 mec总是黑色，和line color 不同，故这里要重新set mec
@@ -2254,7 +2268,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             else: 
                 rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
                 if type(rec_getter)==types.MethodType:
-                    rec_getter = rec_getter.im_func
+                    rec_getter = rec_getter.__func__
                 
                 rec = rec_getter(self, sh, **rec_getter_args)
             dim = sh[1]
@@ -2264,11 +2278,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 not_found.append(dim)
             
         if not_found and info: 
-            print 'not_found is ', not_found
+            print('not_found is ', not_found)
         #x, y=zip(*data)       
         data_is_empty = False 
         try: 
-            x,y=zip(*data)        
+            x,y=list(zip(*data))        
             x = np.asarray(x)
             y = np.asarray(y)
             if xfunc is None: 
@@ -2278,7 +2292,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 x = xfunc(x)
         
         except ValueError as err: 
-            print err
+            print(err)
             #x, y = np.nan, np.nan 
             return 
         
@@ -2312,7 +2326,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 else: 
                     rec_getter_args=rec_getter_args if rec_getter_args is not None else {}
                     if type(rec_getter)==types.MethodType:
-                        rec_getter = rec_getter.im_func
+                        rec_getter = rec_getter.__func__
                     rec = rec_getter(self, sh, **rec_getter_args)
                 size = sh[0]
                 if rec is not None:
@@ -2323,7 +2337,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             warnings.warn('empty data')
         else:
             try: 
-                x,y=zip(*data)        
+                x,y=list(zip(*data))        
                 x = np.asarray(x)
                 y = np.asarray(y)
                 y = y*x**exponent 
@@ -2333,7 +2347,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 else: 
                     x = xfunc(x)
             except ValueError as err: 
-                print err
+                print(err)
                 #x, y = np.nan, np.nan 
                 return 
             
@@ -2364,7 +2378,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                         fault_tolerant=fault_tolerant, info=info-1) 
             else: 
                 if type(rec_getter)==types.MethodType:
-                    rec_getter = rec_getter.im_func
+                    rec_getter = rec_getter.__func__
                 rec = rec_getter(self, sh, **rec_getter_args)
                 field_name=rec_getter.__name__.replace('_get_', '').replace('_', ' ')  #for ylabel
                 
@@ -2373,29 +2387,29 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         algorithm = self['algorithm']
         #if algorithm in ['idmrg', 'mera']: 
         if algorithm  ==  'idmrg':  
-            rec = rec.items()
-            x, y = zip(*rec)
+            rec = list(rec.items())
+            x, y = list(zip(*rec))
             if isinstance(x[0], tuple):
                 x = [a[1] for a in x]        
                 
         elif algorithm == 'mera' : 
-            x, y = zip(*rec)
+            x, y = list(zip(*rec))
             
         elif 'mps' in algorithm:   #elif self['algorithm'] == 'vmps':
             if field_name in ['correlation', 'correlation_bond'] : 
-                x, y = zip(*rec)
+                x, y = list(zip(*rec))
                 r0 = key_list[-1]
                 x = np.asarray(x)
                 x -= r0 
             else: 
                 if isinstance(rec, OrderedDict):
-                    rec = rec.items()
-                x, y = zip(*rec)
+                    rec = list(rec.items())
+                x, y = list(zip(*rec))
                 
         elif algorithm == 'proj_qmc': 
-            x, y = zip(*rec)
+            x, y = list(zip(*rec))
         else:
-            x, y = zip(*rec)
+            x, y = list(zip(*rec))
         
         #if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
         #    x = [a[1] for a in x]
@@ -2405,9 +2419,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         x = x[arg]
         y = y[arg]
         kwargs['return_ax'] = 1
-        if not kwargs.has_key('xlabel'):
+        if 'xlabel' not in kwargs:
             kwargs['xlabel'] = '$i$'
-        if not kwargs.has_key('ylabel'):
+        if 'ylabel' not in kwargs:
             kwargs['ylabel'] = field_name
         fig, ax=self._plot(x, y, **kwargs)
         if fit: 
@@ -2421,7 +2435,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if isinstance(cov, float): 
                     cov = np.array([[cov]])
             except Exception as err: 
-                print 'fitting faild', err 
+                print('fitting faild', err) 
                 fit_succeed = 0
             if fit_succeed:     
                 l = ax.lines[-1]
@@ -2455,7 +2469,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                         fault_tolerant=fault_tol, info=info-1) 
             else: 
                 if type(rec_getter)==types.MethodType:
-                    rec_getter = rec_getter.im_func
+                    rec_getter = rec_getter.__func__
                 rec = rec_getter(self, sh, **rec_getter_args)
                 field_name=rec_getter.__name__.replace('_get_', '').replace('_', ' ')  #for ylabel
                 
@@ -2463,16 +2477,16 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             return None
         algorithm = self['algorithm']
         #if algorithm in ['idmrg', 'mera']: 
-        x, y = zip(*rec)
+        x, y = list(zip(*rec))
         
         #if self.get('algorithm')=='idmrg' and 'corr' in field_name : 
         #    x = [a[1] for a in x]
         x = np.array(x); y=np.array(y)
         
         kwargs['return_ax'] = 1
-        if not kwargs.has_key('xlabel'):
+        if 'xlabel' not in kwargs:
             kwargs['xlabel'] = '$i$'
-        if not kwargs.has_key('ylabel'):
+        if 'ylabel' not in kwargs:
             kwargs['ylabel'] = field_name
         fig, ax=self._plot(x, y, **kwargs)
         
@@ -2498,7 +2512,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 #y=ts.EE.values.astype(float)
                 y=ts[attr_name].values.astype(float)
             else:
-                x,y=zip(*data)        
+                x,y=list(zip(*data))        
                 x = np.asarray(x)
                 y = np.asarray(y)
             
@@ -2509,10 +2523,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         except Exception as err:
             if fault_tol: 
                 if info>0: 
-                    print err 
+                    print(err) 
                 return 
             else: 
-                print sh, self.parpath 
+                print(sh, self.parpath) 
                 raise 
 
         #x, y=zip(*data)       
@@ -2545,10 +2559,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             df = pd.DataFrame(ts).T 
             #print df.columns 
             temp = df[attr]
-            x = temp.keys()
+            x = list(temp.keys())
             y = temp.values 
             kwargs.update(return_ax=1, marker=None)
-            fig, ax=self._plot(range(count, count+y.size), y, **kwargs)
+            fig, ax=self._plot(list(range(count, count+y.size)), y, **kwargs)
             kwargs['ax'] = ax 
             count += y.size  
     
@@ -2561,7 +2575,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                         fault_tolerant=fault_tolerant, info=info-1) 
             else: 
                 if type(rec_getter)==types.MethodType:
-                    rec_getter = rec_getter.im_func
+                    rec_getter = rec_getter.__func__
                 rec = rec_getter(self, sh, **rec_getter_args)
                 field_name=rec_getter.__name__.replace('_get_', '').replace('_', ' ')  #for ylabel
         
@@ -2571,7 +2585,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         else:
             n=num_level
             y=-np.log10(rec[:n])
-            x=range(min(n, y.size))
+            x=list(range(min(n, y.size)))
             kwargs.update(return_ax=1)
             kwargs['lw'] = kwargs.get('lw', 0)
             fig, ax=db._plot(x, y, 
@@ -2616,7 +2630,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     not_found.append(sh)
                     continue
                 rec = rec[: len(rec)/2-1]
-                x,y=(zip(*rec))
+                x,y=(list(zip(*rec)))
                 
             else: 
                 name = 'entanglement_brute_force'
@@ -2629,10 +2643,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if rec is None: 
                     not_found.append(sh)
                     continue
-                x,y=(zip(*rec.items()))
+                x,y=(list(zip(*list(rec.items()))))
             
             if show_res: 
-                print alpha, sh, rec
+                print(alpha, sh, rec)
             x=np.array(x); 
             y=np.array(y); 
             label = ''
@@ -2701,7 +2715,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 #rec = rec[: len(rec)/2-1]
                 site_end = len(rec)/2-1  if site_end is None else site_end
                 rec = rec[site_start: site_end: site_period]
-                x,y=(zip(*rec))
+                x,y=(list(zip(*rec)))
                 
             else: 
                 name = 'entanglement_brute_force'
@@ -2714,10 +2728,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if rec is None: 
                     not_found.append(sh)
                     continue
-                x,y=(zip(*rec.items()))
+                x,y=(list(zip(*list(rec.items()))))
             
             if show_res: 
-                print alpha, sh, rec
+                print(alpha, sh, rec)
             x=np.array(x); 
             y=np.array(y); 
             label = ''
@@ -2764,7 +2778,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     ax.set_xticklabels(tic)
             ax.grid(1)
         lll=locals()
-        if return_fig and lll.has_key('fig'): 
+        if return_fig and 'fig' in lll: 
             return fig
         if kwargs.get('return_ax'): 
             return lll.get('fig'), lll.get('ax')
@@ -2792,10 +2806,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 continue
             data.append((sh[1], ee))
         if filter_func is not None: 
-            data = filter(filter_func, data)
+            data = list(filter(filter_func, data))
         if not_found: 
-            print 'rec not found for %s'% not_found
-        x, y = zip(*data)
+            print('rec not found for %s'% not_found)
+        x, y = list(zip(*data))
         
         label=kwargs.get('label', '')
         x = np.log(x)
@@ -2806,7 +2820,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             label  += ' k=%1.2f c=%1.2f'% (k, c)
             kwargs['label'] = label 
         except Exception as err: 
-            print err
+            print(err)
        
         kwargs['return_ax'] = 1
         marker = kwargs.get('marker', '.')
@@ -2857,7 +2871,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         temp = np.array(temp)[: dist_max]
         sf = fft(temp)
         
-        fig = self._plot(range(len(sf)), sf, **kwargs)
+        fig = self._plot(list(range(len(sf))), sf, **kwargs)
         if kwargs.get('return_fig'): 
             return fig
         if show_fig: 
@@ -2884,11 +2898,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         else: 
             ax = fig.axes[-1]
         if 1:
-            t_eng = [(t, v[0])  for t, v in recs.iteritems()]
-            t, eng = zip(*t_eng)
+            t_eng = [(t, v[0])  for t, v in recs.items()]
+            t, eng = list(zip(*t_eng))
             t_diff = [(t_eng[i+1][0], (t_eng[i+1][1]-t_eng[i][1])/(t_eng[i+1][0]-t_eng[i][0])) 
                     for i in range(len(t_eng)-1)]
-            t, diff = zip(*t_diff)
+            t, diff = list(zip(*t_diff))
             diff = np.array(diff)
             diff_log = np.log10(abs(diff))  # 必须在log下画，否则什么都看不清楚
         ax.plot(t, np.sign(diff), label='$sign(E_{t+1}-E_t)$')           
@@ -2935,9 +2949,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             recs = self.get_energy(sh)
         except IOError as err: 
             if info>0: 
-                print err
+                print(err)
             return None
-        temp = np.asarray( [(k, v[0]) for k, v in recs.iteritems() if iter_min< k < iter_max])
+        temp = np.asarray( [(k, v[0]) for k, v in recs.items() if iter_min< k < iter_max])
         iter = temp[: , 0].astype(int)
         eng = temp[: , 1]
         
@@ -2950,9 +2964,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         num_pos =np.count_nonzero(num_pos)
         if 0: 
             #print num_pos, len(ind_inc), type(ind_inc), ind_inc, len(ind_dec)
-            print ind_inc
-            print iter[ind_inc]
-            print diff[ind_inc]
+            print(ind_inc)
+            print(iter[ind_inc])
+            print(diff[ind_inc])
         mean_fluc = np.mean(diff[ind_inc[5:]])
         
         return num_pos, mean_fluc
@@ -2965,13 +2979,13 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             return 
             
         if 1:
-            t_eng = [(t, v[0])  for t, v in recs.iteritems()]
-            t, eng = zip(*t_eng)
+            t_eng = [(t, v[0])  for t, v in recs.items()]
+            t, eng = list(zip(*t_eng))
         if 1:   
             if switch == 'diff':  
                 t_diff = [(t_eng[i+1][0], (t_eng[i+1][1]-t_eng[i][1])/(t_eng[i+1][0]-t_eng[i][0])) 
                         for i in range(len(t_eng)-1)]
-                t, diff = zip(*t_diff)
+                t, diff = list(zip(*t_diff))
                 t = np.array(t, dtype=int)
                 diff = np.array(diff)
                 if diff_lim is not None: 
@@ -2981,14 +2995,14 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 diff_log = np.log10(abs(diff))  # 必须在log下画，否则什么都看不清楚
                 show_fig = kwargs.get('show_fig')
                 kwargs['show_fig'] = 0
-                if not kwargs.has_key('label'): 
+                if 'label' not in kwargs: 
                    kwargs['label']  = '$sign(E_{t+1}-E_t)$' 
                 fig=self._plot(t, 0.8*np.sign(diff) + sign_center , **kwargs)           
                 kwargs['show_fig'] = show_fig
                 kwargs['fig'] = fig
                 if not only_sign: 
                     kk = kwargs.copy()
-                    if kk.has_key('label'): 
+                    if 'label' in kk: 
                         kk.pop('label')
                     self._plot(t, diff_log, label='$log(E_{t+1}-E_t)$', xlabel='t', **kk)
             elif switch  == 'err': 
@@ -3007,28 +3021,28 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 data.append(('a',) + rec[0][:5] + rec[1][:3] +rec[2][:3] )
                 #data.append( rec[0][:5] + rec[1][:3] +rec[2][:3] )
             else: 
-                print 'rec not found for sh = %s'%(sh, )
-        print tabulate(data, headers=['']+[str(i) for i in [0,0,0,0,0,1,1,1,2]], tablefmt='simple')
+                print('rec not found for sh = %s'%(sh, ))
+        print(tabulate(data, headers=['']+[str(i) for i in [0,0,0,0,0,1,1,1,2]], tablefmt='simple'))
 
     def upgrade_db(self): 
         if 0: 
-            print self.__version__; exit()
+            print(self.__version__); exit()
             if not hasattr(self, '__version__'): 
                 self.__version__ = 0.9
         if self.get('version')==1.0: 
-            print 'already newest version'
+            print('already newest version')
             return 
         self.backup()
         new = ResultDB(parpath=self.parpath, dbname=self.dbname + '.new')
         
         if 1: 
-            for sh_iter, V in self.iteritems(): 
+            for sh_iter, V in self.items(): 
                 sh = sh_iter[: -1]
                 it = sh_iter[-1]
-                for field_name, val in V.iteritems(): 
-                    if not new.has_key(field_name): 
+                for field_name, val in V.items(): 
+                    if field_name not in new: 
                         new[field_name] = OrderedDict()
-                    if not new[field_name].has_key(sh): 
+                    if sh not in new[field_name]: 
                         new[field_name][sh] = OrderedDict()
                     new[field_name][sh][it] = val
             
@@ -3038,7 +3052,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             new.commit(info=1)
             cmd = 'mv  %s %s'%(new.path, self.path)
             os.system(cmd)
-            print 'db is upgraded'
+            print('db is upgraded')
     
     def time_cost(self): 
         pass
@@ -3051,7 +3065,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         #cmd = 'cp %s %s'%(self.path, self.path + '.bac')
         shutil.copyfile(self.path, self.path + '.bac')
         #os.system(cmd)
-        print 'db is backuped to RESULTDB.pickle.bac'
+        print('db is backuped to RESULTDB.pickle.bac')
 
     def show_fig(self): 
         plt.show()
@@ -3099,7 +3113,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if Dmax == 0 and not force:                
                     print('\tmax D for %s is zero, skip it'%(sh, ))
                     continue
-                print '\tconverted %s->%s'%((sh[0], 'max'), _sh)
+                print('\tconverted %s->%s'%((sh[0], 'max'), _sh))
             elif sh[1] == 0:
                 Dmax = self.get_dim_max_for_N(sh[0], force=force)
                 if Dmax == 0 and not force:                
@@ -3109,7 +3123,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             else:
                 _sh = sh
             if isinstance(which, str) and self.has_key_list([which, _sh]) and not force:
-                print '   found, skip it'  
+                print('   found, skip it')  
                 continue
             
             ##################### make args  ############################
@@ -3144,7 +3158,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                             'delay_send': 20, 
                             })
                 
-                print '\tresponse: ', status
+                print('\tresponse: ', status)
             
     def shape_to_backup_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
@@ -3161,7 +3175,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
         if self['version'] < 1.2 and update_what in ['all', 'remove_iter']:
             #this is big change, removed  -1 from the key list
-            kk = self.keys()
+            kk = list(self.keys())
             kk = [k for k in kk if k not in ['algorithm', 'status', 'version', 'dim_max']]
             ss = self.get_shape_list(from_energy_rec=1)  #here I use from_energy_rec because state file may be lost, while only db file retained
             for k in kk:
@@ -3234,8 +3248,8 @@ class ResultDB_mera(ResultDB):
                 #not_found.append(sh)
                 return None
             period  = period if period is not None else 2
-            x1, y1=zip(*rec1[0:-1:period])
-            x2, y2 = zip(*rec2)
+            x1, y1=list(zip(*rec1[0:-1:period]))
+            x2, y2 = list(zip(*rec2))
             x1 = np.array(x1);    x2 = np.array(x2);  
             y1 = np.array(y1);    y2 = np.array(y2);  
             x1_max = np.max(x1);  temp = np.where(x2>x1_max) 
@@ -3259,17 +3273,17 @@ class ResultDB_mera(ResultDB):
             
             if algorithm == 'mps': 
                 #rec = map(lambda x: (x[1]-x[0], x[2]), rec) 
-                x, y = zip(*rec)
+                x, y = list(zip(*rec))
                 r0 = key_list[-1]
                 x = np.asarray(x)
                 x -= r0 
                 
             elif algorithm == 'idmrg' : 
                 #rec = map(lambda x: (x[1]-x[0], rec[x]), rec.iteritems()) 
-                rec = map(lambda k, v: (k[1]-k[0], v), rec.iteritems()) 
+                rec = list(map(lambda k, v: (k[1]-k[0], v), iter(rec.items()))) 
                 
             
-            x,y=zip(*rec[0:-1:period])
+            x,y=list(zip(*rec[0:-1:period]))
         
         if direct == 'pm':   
             y=np.array(y);  y=y*2;  
@@ -3312,7 +3326,7 @@ class ResultDB_mera(ResultDB):
             
         elif which == 'diff': 
             pass
-            temp = np.asarray( [(k, v[0]) for k, v in recs.iteritems() if iter_min< k < iter_max])
+            temp = np.asarray( [(k, v[0]) for k, v in recs.items() if iter_min< k < iter_max])
             iter = temp[: , 0].astype(int)
             eng = temp[: , 1]
             diff = eng[1: ] -eng[0: -1]
@@ -3348,7 +3362,7 @@ class ResultDB_mera(ResultDB):
                 x, y = xy
         
         if kwargs.get('info'): 
-            print 'xxx', x[0], x[-1], len(x)
+            print('xxx', x[0], x[-1], len(x))
         x=np.array(x); y=np.array(y);  
         y=np.abs(y)
         fit_succeed = 1
@@ -3358,7 +3372,7 @@ class ResultDB_mera(ResultDB):
                 cov = np.array([[cov]])
             
         except Exception as err: 
-            print 'fitting faild', err 
+            print('fitting faild', err) 
             fit_succeed = 0
       
         if fit_succeed: 
@@ -3367,7 +3381,7 @@ class ResultDB_mera(ResultDB):
                 fig=self._plot(x, func(x, *param), xscale='log',yscale='log', 
                         label=label, return_fig=1, marker=None,  **kwargs)
                 if plot_orig: 
-                    if not kwargs.has_key('fig'): kwargs['fig'] = fig
+                    if 'fig' not in kwargs: kwargs['fig'] = fig
                     fig=self._plot(x, y, xscale='log', yscale='log',   **kwargs)
             return param
        
@@ -3457,14 +3471,14 @@ class ResultDB_mera(ResultDB):
         ax.grid(1)
         if kwargs.get('show_fig'): plt.show()
         if draw: plt.show()
-        if len(not_found)>0: print 'not_found is ', not_found
+        if len(not_found)>0: print('not_found is ', not_found)
         if return_fig: return fig
     
     def plot_central_charge_vs_layer(self, sh, alpha_remap={}, alpha_sh_map={}, layer='all',  **kwargs):
         if layer=='top':
             ll= [sh[1]-2 ] 
         elif layer=='all':
-            ll=  range(sh[1]-1)
+            ll=  list(range(sh[1]-1))
         else: 
             ll = layer
         
@@ -3490,7 +3504,7 @@ class ResultDB_mera(ResultDB):
         #    fig, ax = None, None
         #else: 
         if 1: 
-            x,y=zip(*cc)    
+            x,y=list(zip(*cc))    
             kwargs.update(marker='.', return_ax=1)
             fig, ax = self._plot(x, y, **kwargs)
             #ax.plot(x,y, '.-')    
@@ -3499,7 +3513,7 @@ class ResultDB_mera(ResultDB):
             #ax.invert_xaxis()
             ax.grid(1)
         if len(not_found)>0: 
-            print 'rec for central_charge not_found is :%s'%not_found
+            print('rec for central_charge not_found is :%s'%not_found)
         if kwargs.get('return_ax'): 
             return fig, ax
         if kwargs.get('return_fig'): 
@@ -3527,7 +3541,7 @@ class ResultDB_vmps(ResultDB):
     
     def update_db_structure(self): 
         if self['version'] < 1.01:   
-            print 'update version from %s to %s'%(self['version'], 1.01)
+            print('update version from %s to %s'%(self['version'], 1.01))
             def update_correlation(db):
                 if db['version']==1.0:
                     ss= db.get_shape_list()
@@ -3538,15 +3552,15 @@ class ResultDB_vmps(ResultDB):
                         #db.insert('correlation_bac_v1.0', sh, -1, rec)
                         #db.insert('correlation_bac_v1.0', sh, rec)
                         rec_new=OrderedDict()
-                        for dir in rec.keys():
+                        for dir in list(rec.keys()):
                             temp=rec[dir]
                             rec_new[dir]=OrderedDict()
-                            x0, x1,y=zip(*temp)
-                            r=zip(x0, x1)
-                            r=map(lambda x:x[1]-x[0], r)
+                            x0, x1,y=list(zip(*temp))
+                            r=list(zip(x0, x1))
+                            r=[x[1]-x[0] for x in r]
                             
                             r0=x0[0]
-                            rec_new[dir][r0]=zip(x1, y)
+                            rec_new[dir][r0]=list(zip(x1, y))
 
                         #db.insert('correlation', sh, -1, rec_new)
                         db.insert('correlation', sh, rec_new)
@@ -3555,7 +3569,7 @@ class ResultDB_vmps(ResultDB):
             update_correlation(self)
         
         if self['version'] <  1.02: 
-            print 'update version from %s to %s'%(self['version'], 1.02)
+            print('update version from %s to %s'%(self['version'], 1.02))
             sh_list = self.get_shape_list()
             for sh in sh_list: 
                 N = sh[0]
@@ -3575,7 +3589,7 @@ class ResultDB_vmps(ResultDB):
        
       
         if j_list is None:
-            j_list = range(i0+1, sh[0])
+            j_list = list(range(i0+1, sh[0]))
             
         try: 
             rec = self['correlation'][sh][-1][direct][i0]
@@ -3718,7 +3732,7 @@ class ResultDB_idmrg(ResultDB):
             path='/'.join([self.parpath, 'N=0-D=%d.pickle'%dim])
             #S=iDMRG.load( path)
             S= self.load_S(path)
-            res = func.im_func(None, S)
+            res = func.__func__(None, S)
             
         except:
             #print a, path
@@ -3741,10 +3755,10 @@ class ResultDB_idmrg(ResultDB):
                 continue
             data.append((sh[1], ee))
         if filter_func is not None: 
-            data = filter(filter_func, data)
+            data = list(filter(filter_func, data))
         if not_found: 
-            print 'rec not found for %s'% not_found
-        x, y = zip(*data)
+            print('rec not found for %s'% not_found)
+        x, y = list(zip(*data))
         
         label=kwargs.get('label', '')
         x = np.log(x)
@@ -3755,7 +3769,7 @@ class ResultDB_idmrg(ResultDB):
             label  += ' k=%1.2f c=%1.2f'% (k, c)
             kwargs['label'] = label 
         except Exception as err: 
-            print err
+            print(err)
        
         kwargs['return_ax'] = 1
         marker = kwargs.get('marker', '.')
@@ -3786,7 +3800,7 @@ class ResultDB_idmrg(ResultDB):
                 from vmps.mps import MPS
                 from vmps.idmrg_mcc import iDMRG_mcc
                 state.N_max=1
-                temp=iDMRG_mcc.generate_finite_mps_func.im_func(state)
+                temp=iDMRG_mcc.generate_finite_mps_func.__func__(state)
                 
                 size = len(temp)
                 if state.combine_2site: 
@@ -3800,7 +3814,7 @@ class ResultDB_idmrg(ResultDB):
                         state.eigs_failure_lim = 0 
                         state.is_calc_v0_overlap = 0
                         state.trunc_err_tol = 1e-9 
-                    temp = iDMRG_mcc.reduce_finite_mps_size.im_func(state, small_size, temp)
+                    temp = iDMRG_mcc.reduce_finite_mps_size.__func__(state, small_size, temp)
                     
                     
                     
@@ -3835,7 +3849,7 @@ class ResultDB_idmrg(ResultDB):
         #if not self.has_key('version')
         if self['version'] <  1.01: 
             ver = 1.01
-            print 'update version from %s to %s'%(self['version'], ver)
+            print('update version from %s to %s'%(self['version'], ver))
             sh_list = self.get_shape_list()
             self.get_dim_max_for_N(0, update_db=1)  
             self['version'] = ver 
@@ -3843,7 +3857,7 @@ class ResultDB_idmrg(ResultDB):
         
         if self['version']<1.2:
             ver = 1.2
-            print 'update version from %s to %s'%(self['version'], ver)
+            print('update version from %s to %s'%(self['version'], ver))
             try:
                 ResultDB.update_db_structure(self, 'remove_iter')
                 succeed = True
@@ -3859,21 +3873,21 @@ class ResultDB_idmrg(ResultDB):
         
         if self['version']<1.21:
             ver = 1.21
-            print 'update version from %s to %s'%(self['version'], ver)
+            print('update version from %s to %s'%(self['version'], ver))
             def update_correlation(db):
                 #ss= db.get_shape_list()
-                ss = db.get('correlation', {}).keys()
+                ss = list(db.get('correlation', {}).keys())
                 for sh in ss: 
                     rec=db.fetch_easy('correlation', sh)
                     if rec is None: 
                         continue 
                     rec_new = OrderedDict()
-                    for dir in rec.keys():
+                    for dir in list(rec.keys()):
                         if not isinstance(rec[dir], OrderedDict): 
                             continue
                         old = rec[dir]
                         rec_new[dir] = OrderedDict()
-                        rr = old.keys()
+                        rr = list(old.keys())
                         rr = [r[1] for r in rr]
                         temp = [(r, old[(0, r)]) for r in rr]
                         rec_new[dir][0] = OrderedDict(temp)
@@ -3920,7 +3934,7 @@ class ResultDB_idmrg(ResultDB):
             print_vars(vars(),  ['db'])
         state = db.load_S(sh, use_local_storage=use_local_storage)
         period = state['period']
-        i0_list = i0_list if i0_list is not None else range(period)
+        i0_list = i0_list if i0_list is not None else list(range(period))
         calc_aver = len(i0_list)==period
         changed = False
         for i0 in i0_list:
@@ -3928,7 +3942,7 @@ class ResultDB_idmrg(ResultDB):
             if not db.has_key_list(kk):
                 db.add_key_list(kk) 
             res_old = db.fetch_from_key_list(kk)
-            r_old = res_old.keys()
+            r_old = list(res_old.keys())
             
             r_list_calc = set(r_list)-set(r_old) if not force  else r_list
             print_vars(vars(),  ['len(r_old)', 'len(r_list)', 'len(r_list_calc)'])
@@ -3944,7 +3958,7 @@ class ResultDB_idmrg(ResultDB):
         if changed: 
             if calc_aver:
                 corr = db['correlation'][sh]
-                if not corr.has_key('aver'):
+                if 'aver' not in corr:
                     corr['aver'] = OrderedDict()
                 aver = corr['aver']
                 temp = [(r, np.mean([corr[direct][i0][r] for i0 in i0_list]))
@@ -3955,7 +3969,7 @@ class ResultDB_idmrg(ResultDB):
             if not test_run:   
                 db.commit(info=1, use_local_storage=use_local_storage)
         else:
-            print 'nothing changed'
+            print('nothing changed')
 
     def calc_rdm_one_fermion(self, sh, i0_list=None, r_max=None, r_list=None, force=False, 
             use_local_storage=False, parpath_center=None, test_run=False,  
@@ -3986,7 +4000,7 @@ class ResultDB_idmrg(ResultDB):
             #print_vars(vars(),  ['db'])
         state = db.load_S(sh, use_local_storage=use_local_storage)
         period = state['period']
-        i0_list = i0_list if i0_list is not None else range(period)
+        i0_list = i0_list if i0_list is not None else list(range(period))
         calc_aver = len(i0_list)==period
         changed = False
         for i0 in i0_list:
@@ -3995,7 +4009,7 @@ class ResultDB_idmrg(ResultDB):
             if not db.has_key_list(kk):
                 db.add_key_list(kk) 
             res_old = db.fetch_from_key_list(kk)
-            r_old = res_old.keys()
+            r_old = list(res_old.keys())
             
             r_list_calc = set(r_list)-set(r_old) if not force  else r_list
             print_vars(vars(),  ['len(r_old)', 'len(r_list)', 'len(r_list_calc)'])
@@ -4011,7 +4025,7 @@ class ResultDB_idmrg(ResultDB):
         if changed: 
             if calc_aver:
                 corr = db['rdm_one_fermion'][sh]
-                if not corr.has_key('aver'):
+                if 'aver' not in corr:
                     corr['aver'] = OrderedDict()
                 aver = corr['aver']
                 temp = [(r, np.mean([corr[i0][r] for i0 in i0_list]))
@@ -4022,7 +4036,7 @@ class ResultDB_idmrg(ResultDB):
             if not test_run:   
                 db.commit(info=1, use_local_storage=use_local_storage)
         else:
-            print 'nothing changed'
+            print('nothing changed')
 
     #def calc_correlation_submit(self, sh, direct, i0_list=None, r_list=None):
     def calc_correlation_submit(self, sh, which, server=None, param=None):
@@ -4042,12 +4056,12 @@ class ResultDB_idmrg(ResultDB):
                 )
         kwargs.update(param)
         if which == 'correlation':
-            func = self.__class__.calc_correlation.im_func
+            func = self.__class__.calc_correlation.__func__
             direct = kwargs['direct']
             kwargs.pop('direct')
             args= (None, sh, direct)
         elif which == 'rdm_one_fermion' :
-            func = self.__class__.calc_rdm_one_fermion.im_func
+            func = self.__class__.calc_rdm_one_fermion.__func__
             args = (None, sh)
         else:
             raise  
@@ -4059,7 +4073,7 @@ class ResultDB_idmrg(ResultDB):
                     server = server, 
                     args=args, kwargs=kwargs, 
                     job_info = {'priority': 1, 'job_group_name': 'calcl-correlation', 'delay_send': 20, })
-            print '\tresponse: ', status
+            print('\tresponse: ', status)
         else:
             tasks= [(func, args, kwargs)]
             run_many(tasks, servers=('localhost', None))
@@ -4076,7 +4090,7 @@ class ResultDB_idmrg(ResultDB):
         set_num_of_threads(4) 
         r_list = [] if r_list is None else r_list 
         res_old = self['correlation_bond'][sh][-1]
-        r_old = res_old.keys()
+        r_old = list(res_old.keys())
         r_list = set(r_list)-set(r_old)
         
         if len(r_list)>0: 
@@ -4094,7 +4108,7 @@ class ResultDB_idmrg(ResultDB):
                 sh = sh[0], self['dim_max'].get(sh[0], 0)
             elif sh[1] == 'field_max':  #the max dim for each field may differ, then may use this
                 N = sh[0]
-                ss = self.get('correlation', {}).keys()
+                ss = list(self.get('correlation', {}).keys())
                 dd = [s[1] for s in ss if s[0]==N ]
                 D = max(dd) if dd else 0     
                 sh = N, D
@@ -4104,13 +4118,13 @@ class ResultDB_idmrg(ResultDB):
             corr = self.fetch_easy('correlation', sh, ['zz', 'aver'], default={}) 
             #print_vars(vars(),  ['len(rec), len(corr)'])
             if len(rec) < len(corr):
-                print 'updateing corr_conn'
+                print('updateing corr_conn')
                 force = 1
                 
         #return np.split(data, np.where(np.diff(data) != 1)[0]+1)
         if rec is None or force:
             corr = self.fetch_easy('correlation', sh, ['zz', 0], default={})
-            rr = corr.keys()
+            rr = list(corr.keys())
             func = self._get_corr_conn(sh, aver=True)
             rec = OrderedDict()
             if func is not None and rr:
@@ -4144,7 +4158,7 @@ class ResultDB_idmrg(ResultDB):
             warnings.warn('mag is needed')   
             return None
        
-        p = len(mag.keys())
+        p = len(list(mag.keys()))
         if not connected:
             mag = np.zeros(len(mag))
         def func(i0, r):
@@ -4158,7 +4172,7 @@ class ResultDB_idmrg(ResultDB):
                     corr[(i0+r)%p][-r] - mag[(i0+r)%p]*mag[i0] )
             return res
         
-        i0_list = range(p)
+        i0_list = list(range(p))
         def func_aver(r):
             res = 1./p*np.sum([func(i0, r) for i0 in i0_list])                
             return res
@@ -4234,9 +4248,9 @@ class ResultDB_idmrg(ResultDB):
         rec=db.fetch_easy('correlation', mera_shape=sh, 
                 sub_key_list=[which, i0])
         if rec is not None:
-            rec=rec.items()
-            x,y=zip(*rec)
-            data=zip(x,y)
+            rec=list(rec.items())
+            x,y=list(zip(*rec))
+            data=list(zip(x,y))
         else:
              return None
         if strict:
@@ -4277,7 +4291,7 @@ class ResultDB_idmrg(ResultDB):
             warnings.warn(str(err))
             return np.nan
             
-        data = zip(kk, y)
+        data = list(zip(kk, y))
         func = lambda x,K, b: K/(2*pi)*x+b
         #func = lambda x,K, b: K/2*x+b
         try:
@@ -4304,8 +4318,8 @@ class ResultDB_idmrg(ResultDB):
         rec = self.fetch_easy('rdm_one_fermion', sh, ['aver']) 
         if rec is None:
             return None
-        rec=rec.items()
-        x,y=zip(*rec)
+        rec=list(rec.items())
+        x,y=list(zip(*rec))
         x = np.asarray(x)
         y = np.asarray(y)
         p = period if period is not None else {0.5:2, 0.33:3}[nu]
@@ -4319,7 +4333,7 @@ class ResultDB_idmrg(ResultDB):
             y = y[arg]
             y = np.abs(y)  # note abs at here !
             
-            res=db.fit_line(None, func=func, data=zip(x, y), period=1,
+            res=db.fit_line(None, func=func, data=list(zip(x, y)), period=1,
                             x_min=x_min, x_max=x_max, )
             K = res['param'][0] if res is not None else np.nan
             yfunc=lambda x:x - np.sqrt(x**2-1)   # this operation sqares error around K=1.0  !
@@ -4330,7 +4344,7 @@ class ResultDB_idmrg(ResultDB):
             func = lambda x, K, C:  -C*(-1)**(x+1)*sin(pi*x/p)/pi*x**(-K/2.-1./(2.*K))
             #func = lambda x, K:  -sin(pi*x/2.)/pi*x**(-K/2.-1./(2.*K))
             #p0 is must, as there seems exists local minima!
-            res=db.fit_line(None, func=func, data=zip(x, y), period=1,
+            res=db.fit_line(None, func=func, data=list(zip(x, y)), period=1,
                     method = 'lm', 
                     p0 = (0.8, 1.0), 
                     x_min=x_min, x_max=x_max, )
@@ -4370,7 +4384,7 @@ class ResultDB_ed(ResultDB):
         rec = self.fetch_easy('energy', sh)
         temp = []
         if rec is not None:  
-            for k, v in rec.items(): 
+            for k, v in list(rec.items()): 
                 if k not in qn_exclude: 
                     temp.extend(v)
         else: 
@@ -4396,11 +4410,11 @@ class ResultDB_proj_qmc(ResultDB):
         data = self.fetch_easy('svb_sample', sh)
         #data=(db['svb_sample'][(N, N*20)])
         if data is not None: 
-            nn,yy=zip(*data)
+            nn,yy=list(zip(*data))
             n=np.sum(nn)
             x=np.arange(N//2)
             y=reduce(lambda x,y:x+y,yy, np.zeros(N//2, dtype=int))*np.log(2.)/n 
-            res = zip(x, y)
+            res = list(zip(x, y))
         else:
             res= None
         return res 
@@ -4429,8 +4443,8 @@ class ResultDB_bethe_ansatz(ResultDB):
                 self.insert('energy', sh, energy)
                 self.commit(info=1)
             except Exception as err:
-                print 'calc energy failed'
-                print err
+                print('calc energy failed')
+                print(err)
         return energy 
 
     def calc_K(self, L, tol, k0=0, force=False):
@@ -4454,14 +4468,14 @@ class ResultDB_bethe_ansatz(ResultDB):
                 self.insert('K', sh, K)
                 self.commit(info=1)
             except Exception as err:
-                print 'calc K failed'
+                print('calc K failed')
                 K = None
-                print err
+                print(err)
         return K 
         
 class TestResultDB(unittest.TestCase): 
     def setUp(self):
-        self.seq = range(10)
+        self.seq = list(range(10))
 
         args= {}
         #parpath = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=2.0'
@@ -4480,7 +4494,7 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         a = dict()
         
-        print '*'*80
+        print('*'*80)
         from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
         #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
         
@@ -4494,7 +4508,7 @@ class TestResultDB(unittest.TestCase):
         print_vars(vars(),  ['res'])
         db = xx[0.33, 0.5, 32.0]
         print_vars(vars(),  ['db["energy"]'])
-        print db['dim_max']
+        print(db['dim_max'])
         raise  
         fig, ax=xx.fig_layout(size=(6,4))
         for a in aa:
@@ -4524,12 +4538,12 @@ class TestResultDB(unittest.TestCase):
         #db.insert( 'xxx', (0, 4), -1, 'hate', [2])
         db.insert( 'xxx', (0, 4), 'love', [1])
         db.insert( 'xxx', (0, 4), 'hate', [2])
-        print db['xxx'] 
+        print(db['xxx']) 
         rec = db.fetch_easy('xxx', (0, 4), [1])
         self.assertTrue( rec=='love')
         rec = db.fetch_easy('xxx', (0, 4), [2])
         self.assertTrue( rec=='hate')
-        print ' ========================'
+        print(' ========================')
         rec = db.fetch_easy('xxx', (0, 4), [1000])  # 1000 is a wrong key 
         self.assertTrue(rec is None)
         
@@ -4538,7 +4552,7 @@ class TestResultDB(unittest.TestCase):
         parpath =  '/home/zhli/mps_backup_folder/run-heisbg-long/idmrg/alpha=2.0'
         db = ResultDB_idmrg(parpath)
         
-        print db.get_EE(2)
+        print(db.get_EE(2))
    
     def test_add_key_list(self): 
         xx = [1, 2, 3, 4]
@@ -4564,8 +4578,8 @@ if __name__ == '__main__':
         ]
            
         which_list = FIELD_NAME_LIST + ['structure_factor', 'fit_correlation']
-        temp  =  ResultDB.__dict__.keys()
-        which_list = filter(lambda x: 'plot' in x or 'show' in x or 'get' in x,  temp)
+        temp  =  list(ResultDB.__dict__.keys())
+        which_list = [x for x in temp if 'plot' in x or 'show' in x or 'get' in x]
         which_list += ['fit_correlation'] 
         #import types 
         #temp = filter(lambda x: isinstance(temp[x], types.FunctionType) , temp.keys())
@@ -4594,7 +4608,7 @@ if __name__ == '__main__':
             
             args.pop('which')
             res=db.__getattribute__(which)(sh=sh, show_fig=1, show_val=1, **args)
-            print res
+            print(res)
             #db.upgrade()
             #db.backup()
 
@@ -4627,7 +4641,7 @@ if __name__ == '__main__':
             if 1: 
                 args.pop('which')
                 res=db.__getattribute__(which)(sh=sh, show_fig=1, show_val=1, **args)
-                print res
+                print(res)
             else: 
                 pass
                 #db.upgrade()

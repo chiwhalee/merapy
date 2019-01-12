@@ -3,6 +3,13 @@
     schedules for Main.run_schedule
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from collections import OrderedDict
 
 #schedule = OrderedDict()
@@ -151,7 +158,7 @@ def copy_schedule(schedule, skip_list=[]):
 #---------------------------------------------------
 def test_copy_schedule(): 
     s=copy_schedule( schedule_scale_invar, skip_list=[(4, 4)])
-    print s
+    print(s)
     
 
 if __name__ == '__main__' : 

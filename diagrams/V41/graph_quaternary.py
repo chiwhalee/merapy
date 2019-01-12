@@ -1,3 +1,10 @@
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 import warnings 
 from merapy.graphics import Graphics
 
@@ -208,7 +215,7 @@ if 1:
 for i in G_2_2:
     G_2_2[i].weight = 1./4
 if 0:
-    print "i am not sure should there be key 6 in G_2_2, just remove it at present, see ./merapy/diagrams/V41/graph_quaternary.py"
+    print("i am not sure should there be key 6 in G_2_2, just remove it at present, see ./merapy/diagrams/V41/graph_quaternary.py")
     G_2_2.pop(6)
 else:
     msg = "in graph_quaternary G_2_2[2 and 6] are averaged"
@@ -1627,6 +1634,6 @@ if 1:
 G_3_3 = {}  #no G_3_3 for quaternary just empty dict
 #G[(2, 2)]=G_2_2
 if __name__ == "__main__":
-    print G_2_2
-    print G_22_2
-    print G_22_3
+    print(G_2_2)
+    print(G_22_2)
+    print(G_22_3)

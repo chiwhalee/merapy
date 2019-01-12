@@ -4,6 +4,14 @@ q:
     G_HBB is generated?
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import *
 U_tmpl = """ "U_%(U)s":[("I_%(I1)s", 2), ("I_%(I2)s", 2), ("W1_%(W1)s", 2), ("W2_%(W2)s",1)], 
 "Up_%(U)s":[("W1p_%(W1)s", 3), ("W2p_%(W2)s",2), ("I_%(I1)s", 1), ("I_%(I2)s", 1)], 
 "I_%(I1)s":[("Up_%(U)s", 3), ("U_%(U)s", 1)],
@@ -213,21 +221,21 @@ oo3_tmpl =  """{
 
 def main():
     X = 10
-    for i in xrange(1,X):
+    for i in range(1,X):
         D = {"U":i, "W1":i, "W2":i, "I1":4*i+1, "I2":4*i+2}
-        print U_tmpl % D
+        print(U_tmpl % D)
         
-    for i in xrange(1,X):
+    for i in range(1,X):
         D = {"W1":i, "U":i, "I":4*i, "V":i-1}
-        print W1_tmpl % D
+        print(W1_tmpl % D)
 
-    for i in xrange(1,X):
+    for i in range(1,X):
         D = {"W2":i, "U":i, "I":4*i+3, "V":i}
-        print W2_tmpl % D
+        print(W2_tmpl % D)
         
-    for i in xrange(0,X+1):
+    for i in range(0,X+1):
         D = {"W2":i, "W1":i+1, "O":i, "V":i}
-        print V_tmpl % D
+        print(V_tmpl % D)
         
 if __name__ == "__main__":
     main()

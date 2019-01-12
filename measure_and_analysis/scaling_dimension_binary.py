@@ -1,5 +1,15 @@
 #!/usr/bin/env python
 #coding=utf8
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import map
+from builtins import range
+from builtins import *
 import pprint
 import sys
 import math
@@ -40,7 +50,7 @@ def ascending_ham_3site(M, S, ilayer, tau=None, info=0):
         tau = ilayer
     
     if info>0:
-        print "START ascending_ham"
+        print("START ascending_ham")
     
     i=0
     j = 0
@@ -54,16 +64,16 @@ def ascending_ham_3site(M, S, ilayer, tau=None, info=0):
 
 
     if info>0:
-        print "H_2 at iLayer+1,",ilayer_p1
-        print S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3) 
-        print "END ascending_ham"
+        print("H_2 at iLayer+1,",ilayer_p1)
+        print(S.H_2[ilayer_p1].O[j].data[:4].round(3),"....", S.H_2[ilayer_p1].O[j].data[-4:].round(3)) 
+        print("END ascending_ham")
 
 def asd_op_3site(ascending_func, S, Vin, local=True, info=0, iter=None):
     M = S.mera
     ilayer = M.num_of_layer-2
     ilayer_p1 = ilayer + 1
     if not local:
-        if not S.network_tensor_dic.has_key("Vg"):
+        if "Vg" not in S.network_tensor_dic:
             S.network_tensor_dic.update({"Vg":("Vg", 0)})
         if not hasattr(S, "Vg"):
             temp = [[None]]*ilayer_p1
@@ -99,10 +109,10 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
         S = System.load(fn)
     #print "energy = %f, symmetry = %s"%(S.energy, S.symmetry)
     energy_err = (S.energy - S.energy_exact)
-    print "energy = %1.15f, eng_err = %1.1e, symmetry = %s, trunc_dim = %d"%(
-            S.energy, energy_err, S.symmetry, S.mera.qsp_max.totDim)
+    print("energy = %1.15f, eng_err = %1.1e, symmetry = %s, trunc_dim = %d"%(
+            S.energy, energy_err, S.symmetry, S.mera.qsp_max.totDim))
 
-    print "3site"
+    print("3site")
     M = S.mera
     ilayer = M.num_of_layer-2
     ilayer_p1 = ilayer + 1
@@ -120,7 +130,7 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
     if qn_list is None:
         qn_list = symmetry_to_Qn(symmetry).QNS
         if symmetry == "U1":
-            qn_list = range(3)
+            qn_list = list(range(3))
     qn_instance_list = [qn_factory(symmetry, i) for i in qn_list]
 
     qsp0 = S.mera.V[ilayer][0].QSp[0].copy()
@@ -147,7 +157,7 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
         if dim-1> k:
             vals, vecs = eigs(A=A, k=k, v0=v0, tol=tol)
         elif dim<3:
-            print "dim too low, continue with next qn. dim = %d"%dim
+            print("dim too low, continue with next qn. dim = %d"%dim)
             continue
         else:
             vals, vecs = eigs(A=A, k=dim-2, v0=v0, tol=tol)
@@ -161,7 +171,7 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
         vals.sort()
         vals= vals[-1::-1]
         
-        res.append((qn._val, map(func, vals[:k])))
+        res.append((qn._val, list(map(func, vals[:k]))))
         
         S.only_NN = only_NN
         #print S.H_3[ilayer][0].data[:10]
@@ -195,7 +205,7 @@ if __name__ == "__main__":
             sys.exit(0)
         qn_list = None
         #calc_scaling_dim_1site(fn, iterate=False, local=True, qn_list=qn_list)
-        res = calc_scaling_dim_3site(fn, local=True, S=None, qn_list=qn_list, tol=1e-8, k=12); print res
+        res = calc_scaling_dim_3site(fn, local=True, S=None, qn_list=qn_list, tol=1e-8, k=12); print(res)
         sys.exit(0)
     #decorators.tensor_player.NEXT_STATE = "record"
 
@@ -230,7 +240,7 @@ if __name__ == "__main__":
         #for i in res:
         #    print i
         #print res
-        res = calc_scaling_dim_3site(fn, local=True, S=None, qn_list=qn_list, tol=1e-8, k=12); print res
+        res = calc_scaling_dim_3site(fn, local=True, S=None, qn_list=qn_list, tol=1e-8, k=12); print(res)
         #for i in res:
         #    print i
         

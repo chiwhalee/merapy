@@ -2,6 +2,13 @@
 #coding=utf8
 
 
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import *
 from merapy.ascending import ascending_ham
 from merapy.descending import descending_ham
 from merapy.iteration import iterative_optimize_all

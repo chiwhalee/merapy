@@ -6,10 +6,20 @@
     to fully utilize computational resource, support communication between each hosts
 
 """
+from __future__ import unicode_literals
+from __future__ import print_function
+from __future__ import division
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import *
+from builtins import object
 import sys 
 import argparse 
 import unittest 
-import cPickle as pickle
+import pickle as pickle
 import cloud
 pickle_any = cloud.serialization.cloudpickle
 import os
@@ -69,7 +79,7 @@ class TaskServer(Service):
         config = rpyc.classic.obtain(config) if config is not None else {}
         pool = self.POOL
         #job_id = hash(backup_parpath)
-        if pool.has_key(job_id): 
+        if job_id in pool: 
             dir_status = 'locked'
         else:
             dir_status = 'open'
@@ -87,7 +97,7 @@ class TaskServer(Service):
                 job_info[i] = config.get(i)
             pool[job_id] = job_info 
             if info>0: 
-                print  'add job %s: %s'%(str(job_id)[-6:], job_info.items())
+                print('add job %s: %s'%(str(job_id)[-6:], list(job_info.items())))
         return dir_status 
     
     def exposed_update_job(self, job_id, key, val): 
@@ -95,7 +105,7 @@ class TaskServer(Service):
     
     def exposed_disregister_job(self, job_id): 
         self.POOL.pop(job_id)
-        print 'job %s is disregisterd'%(str(job_id)[-6:], )
+        print('job %s is disregisterd'%(str(job_id)[-6:], ))
     
     def exposed_get_pool(self): 
         return self.POOL 
@@ -104,7 +114,7 @@ class TaskServer(Service):
         self.POOL = pool 
     
     def exposed_operate_pool(self, func): 
-        print 'oooooperate'
+        print('oooooperate')
         func(self.POOL)
     
     def exposed_test(self, num):     # 对于服务端来说， 只有以"exposed_"打头的方法才能被客户端调用，所以要提供给客户端的方法都得加"exposed_" 
@@ -120,14 +130,14 @@ class TaskServer(Service):
         msg = 'try tump pool to %s'%(self.backup_path[-30: ])
         save(self.POOL, self.backup_path)
         msg +=  '  ... done' 
-        print msg 
+        print(msg) 
     
     def exposed_recover(self): 
         msg = 'try recover pool from %s'%(self.backup_path[-30: ])
         temp = load(self.backup_path)
         self.__class__.POOL = temp 
         msg +=  '  ... done' 
-        print self.POOL.keys() 
+        print(list(self.POOL.keys())) 
     
     def on_disconnect(self):
         msg = 'disconnected'
@@ -153,7 +163,7 @@ class TaskManager(object):
         a=df[df['status']=='FAILED']
         for i in a.index:
             msg = 'clear %s'%(i, )
-            print msg 
+            print(msg) 
             self.root.disregister_job(i)
     
     def disregister_job(self, job_id_list): 
@@ -161,16 +171,16 @@ class TaskManager(object):
             msg = 'disregister %s'%(i, )
             self.root.disregister_job(i)
             msg += '  ... done' 
-            print msg 
+            print(msg) 
             
     def save(self): 
         pool = self.get_pool(as_df=0)
         save(pool, DB_PATH)
-        print 'try to save pool to %s'%(DB_PATH), '   ... succeed'
+        print('try to save pool to %s'%(DB_PATH), '   ... succeed')
     
     def close(self):
         self.conn.close()
-        print  'conn closed'
+        print('conn closed')
         
     def __del__(self): 
         self.conn.close()
@@ -209,7 +219,7 @@ class TestIt(unittest.TestCase):
             self.conn.root.register_job(str(i), config=config)
         pool=get_pool(17000)
         df = pd.DataFrame(pool)
-        print  df.T  
+        print(df.T)  
     
     def test_register_job_1(self):
         from vmps.run_ising.config import make_config 
@@ -237,7 +247,7 @@ class TestIt(unittest.TestCase):
             
         for c in config_group: 
             id = (hash(c['backup_parpath_local']), 'bbb', 'ccc')
-            print  self.conn.root.register_job(id, c, info=0)
+            print(self.conn.root.register_job(id, c, info=0))
 
     def test_update_job(self): 
         #self.test_register_job()
@@ -245,11 +255,11 @@ class TestIt(unittest.TestCase):
         self.conn.root.update_job(1000, 'status', 'completed')
         pool=get_pool(17000)
         df = pd.DataFrame(pool)
-        print  df.T  
+        print(df.T)  
         self.conn.root.update_job(1000, 'status', 'hello')
         pool=get_pool(17000)
         df = pd.DataFrame(pool)
-        print  df.T  
+        print(df.T)  
     
     def tearDown(self): 
         self.conn.close()
@@ -276,7 +286,7 @@ if __name__ == '__main__' :
                 s.dump_pool()
                 sys.exit( )
             except Exception as err: 
-                print err 
+                print(err) 
         
     else: 
         #sr = ThreadedServer(TestRpyc, port=9999, auto_register=False)
