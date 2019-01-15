@@ -34,7 +34,10 @@ from matplotlib.lines import Line2D
 
 import itertools 
 from mpl_toolkits.mplot3d import Axes3D
-import pandas as pd 
+try:
+    import pandas as pd 
+except:
+    warnings.warn('pandas not imported')
 import math 
 from math import pi, cos, sin
 import socket 
@@ -43,16 +46,13 @@ import types
 
 import importlib
 import numpy as np
-import pandas
 from scipy.optimize import curve_fit
 from scipy.special import sici
 import unittest
 
-from sympy import fourier_transform
-from sympy.utilities.lambdify import lambdify
 
 
-from IPython.display import display
+#from IPython.display import display
 
 from merapy.utilities import dict_to_object , load , print_vars
 from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOSTNAME 
@@ -64,7 +64,7 @@ from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOST
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 
     'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
     'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 'ResultDB_bethe_ansatz', 
-    'display', 'lambdify', 'fourier_transform', 
+    'display',  'fourier_transform', 
     ]
 
 

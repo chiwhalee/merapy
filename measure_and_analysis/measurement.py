@@ -299,7 +299,10 @@ def measure_S(S=None, parpath=None, path=None,
             #        pass
             
             from merapy.hamiltonian import System 
-            propt = System.key_property.__func__(S)
+            if sys.version_info.major<3:
+                propt = System.key_property.__func__(S)
+            else:
+                propt = System.key_property(S)
             #propt = S.key_property()
             dim,  layer = propt['trunc_dim'], propt['num_of_layer']
             nqn = len(propt['qns'])

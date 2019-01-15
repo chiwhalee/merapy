@@ -251,8 +251,9 @@ class Main(object):
             
             
             dim, layer = shape[:2]
-            nqn = None
-            if len(shape)>2: nqn = shape[2]
+            nqn = 3
+            if len(shape)>2: 
+                nqn = shape[2]
             
             msg = '\nSTARTING TASK %s'%(task, )
             if info>0: print(msg)
@@ -293,6 +294,7 @@ class Main(object):
                         print(qsp_max)
                         print('qsp_destination>qsp_max', qsp_destination>qsp_max)
                         exit()
+                    
                     
                     if qsp_destination>qsp_max or (nqn> nqn_max and self.SYMMETRY=='U1')  or layer> layer_max: 
                     #if qsp_destination>qsp_max or nqn> nqn_max or layer> layer_max: 
@@ -659,8 +661,8 @@ class Main(object):
 class TestMain(unittest.TestCase): 
     def setUp(self): 
         if 1: 
-            from .config import CFG_HEISBG_BASIC #, updaters_u1
-            from .updaters_all import updaters_u1
+            from merapy.config import CFG_HEISBG_BASIC #, updaters_u1
+            from merapy.updaters_all import updaters_u1
             temp = dict(USE_CUSTOM_RAND=True, updaters=updaters_u1, trunc_dim=4, tot_layer=4, use_player=True, 
                     SYMMETRY="Travial", 
                     NUM_OF_THREADS=1, do_measure=0)
@@ -911,7 +913,7 @@ if __name__=="__main__":
         
         #'test_run',
         #'test_run_scale_invar',
-        #'test_run_schedule',
+        'test_run_schedule',
         #'test_run_many',
         #'xtest_run_many_dist',
         #'test_resume',
@@ -923,7 +925,7 @@ if __name__=="__main__":
         #'xtest_transfer_pickle_file',
         #'xtest_set_num_of_threads_1',
         
-        'test_temp',
+        #'test_temp',
                 ]
         for a in add_list: 
             suite.addTest(TestMain(a))

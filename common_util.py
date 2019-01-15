@@ -15,22 +15,28 @@ from builtins import *
 from past.utils import old_div
 from builtins import object
 import os, unittest
+import sys 
 import pickle as pickle
 import numpy as np
 from scipy import linalg
 import platform
 import socket
+
+
 #import matplotlib.pyplot as plt
 #from matplotlib.font_manager import FontProperties
 
 arch=  platform.architecture()[0]   #32 or 64 
 hostname = socket.gethostname()
 os1 = platform.system()
+IS_PY3 = sys.version_info.major>2
 
 if os1 == 'Linux':
-    #import merapy.lib
-    from merapy.lib.common_64_ifort import *
-    #from .lib.common_64_ifort import *
+    if IS_PY3:
+        from merapy.lib.linux_py3.common_64_ifort import *
+    else:
+        from merapy.lib.linux_py2.common_64_ifort import *
+    #from merapy.lib.common_64_ifort import *
 elif os1 == 'Windows':
     from merapy.lib.win.common_gfort import *
 
@@ -526,9 +532,15 @@ class TestCommon(unittest.TestCase):
         u, s, v=matrix_svd(min(a.shape), a) 
         print(a, id(a))
         print(a_orig, a_copy)
+        import sys 
         print("下面结果会是false，为了提醒 maxtrix_svd 对于1by1 矩阵有问题")
         #self.assertTrue(a_orig[0, 0]==a_copy[0, 0])
-        self.assertFalse(a_orig[0, 0]==a_copy[0, 0])
+        if not IS_PY3:
+            self.assertFalse(a_orig[0, 0]==a_copy[0, 0])
+        else:
+            #update,  it seems the bug is fixed for py3 
+            self.assertTrue(a_orig[0, 0]==a_copy[0, 0])
+            
        
     def test_get_num_of_threads(self): 
         set_num_of_threads(5)
@@ -757,7 +769,7 @@ if __name__=="__main__":
         #test_iShift()
 
 
-    if 1: #examine
+    if 0: #examine
         suite = unittest.TestLoader().loadTestsFromTestCase(TestCommon)
         unittest.TextTestRunner(verbosity=0).run(suite)    
         
@@ -768,7 +780,7 @@ if __name__=="__main__":
             #'test_matrix_multiply', 
             #'test_matrix_multiply_inplace', 
             #'test_get_num_of_threads', 
-            #'test_matrix_svd_1by1', 
+            'test_matrix_svd_1by1', 
             #'test_matrix_svd', 
             #'test_matrix_eigen_vector', 
         ]
@@ -779,17 +791,6 @@ if __name__=="__main__":
        
 
 
-
-    #tc = test_common()
-    #tc.contract_core_player_fort()
-    #tc.set_num_of_threads(2)
-    #tc.test_add_inplace()
-    #tc.matrix_svd_unitilize_1()
-    #tc.matrix_multiply_inplace()
-    #tc.matrix_multiply()
-    #tc.matrix_svd_unitilize_large_mat()
-    #tc.matrix_eigen_vector()
-    #tc.test_set_matrix()
 
 
 

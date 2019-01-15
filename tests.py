@@ -36,7 +36,7 @@ if 1:  #skip all test_temp
     for k, v in list(dic.items()): 
         #if hasattr(v, '__base__') and hasattr(v, 'test_temp'): 
         if hasattr(v, '__base__'):  
-            if v.__base__.__name__ ==  'TestCase': 
+            if v.__base__ is not None and  v.__base__.__name__ ==  'TestCase': 
                 all_cls.append(v)
                 if hasattr(v, 'test_temp'): 
                     temp =  unittest.skip("skip test_temp")(getattr(v, 'test_temp')) 

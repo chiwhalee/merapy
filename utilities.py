@@ -196,14 +196,18 @@ def random_str(size=6, head='', tail=''):
 def load(path, as_str=False, decompress=True, info=0):
     with open(path, 'rb') as f:
         s= f.read()
-        head = s[:10]
-        #print 'oooo', hex(ord(head[0])),  hex(ord(head[1]))
-        #print 'hhhh', repr(head)
-        #assert len(head)>2 
+        head = s[:10]  
         if not len(head)>2: 
             raise EOFError('file is proberbly broken, %s'%(path, ))
+        if sys.version_info.major>2:
+            head0 = hex(head[0])
+            head1 = hex(head[1])
+        else:
+            head0 = hex(ord(head[0]))
+            head1 = hex(ord(head[1]))
+            
         #head1 is different compress levels 
-        if decompress and hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
+        if decompress and head0=='0x78' and head1 in ['0x1', '0x9c', '0x5e', '0xda']: 
             msg = 'discompress file ... '
             s= zlib.decompress(s)
             msg += 'done' 
@@ -233,7 +237,6 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
             #return pickle.dumps(obj)
     else: 
         try: 
-            print_vars(vars(),  ['type(obj)'])
             s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
         except Exception as err: 
             print('pickling error, diagonstic which value cant be dumped: ')
@@ -474,34 +477,29 @@ class TestIt(unittest.TestCase):
             print('bbb', b) 
             self.assertEqual(z, b)
             os.remove(path)
+        if 1:
+            from merapy import iTensor
+            o = iTensor.example(symmetry='U1')
+            path = '/tmp/'  +  random_str( )
+            save(o, path=path,  as_str=0)   
+            ol = load(path)
+            assert o == ol  
+            print_vars(vars(),  ['o'])
+            
     
     def xtest_send_email(self):
         msg = {'a':1}
         send_email(msg)
            
     def test_temp(self): 
+        
         from merapy import iTensor
         o = iTensor.example(symmetry='U1')
-        #o = o
-        print_vars(vars(),  ['type(o)'])
-        if 1:
-            x = pickle.dumps(o)
-            print_vars(vars(),  ['x'])
-        if 0:
-            x = save(o, as_str=1)
-            print_vars(vars(),  ['x.decode()'])
-            print(o)
-        raise  
-        for i in [0, 1]: 
-            z = {'sda': 3, 'sesdf': 1000000}
-            path = '/tmp/'  +  random_str( )
-            print('path is ', path) 
-            save(z,  path, i)
-            self.assertTrue(os.path.exists(path))
-            b = load(path)
-            print('bbb', b) 
-            self.assertEqual(z, b)
-            os.remove(path)
+        path = '/tmp/'  +  random_str( )
+        save(o, path=path,  as_str=0)   
+        ol = load(path)
+        assert o == ol  
+        
 
 if __name__ == "__main__": 
     
@@ -513,9 +511,9 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         
         add_list = [
-        'test_temp', 
+        #'test_temp', 
         #'xtest_send_email', 
-        #'test_save_load', 
+        'test_save_load', 
           
         ]
         for a in add_list: 

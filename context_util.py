@@ -336,7 +336,14 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
         
         #first transfer string then decompress, this is of course faster!
         head = s[:10]
-        if hex(ord(head[0]))=='0x78' and hex(ord(head[1])) in ['0x1', '0x9c', '0x5e', '0xda']: 
+        if sys.version_info.major>2:
+            head0 = hex(head[0])
+            head1 = hex(head[1])
+        else:
+            head0 = hex(ord(head[0]))
+            head1 = hex(ord(head[1]))
+        
+        if head0=='0x78' and head1 in ['0x1', '0x9c', '0x5e', '0xda']: 
             msg = 'discompress file ... '
             s= zlib.decompress(s)
             msg += 'done' 
