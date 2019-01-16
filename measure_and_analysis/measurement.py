@@ -373,8 +373,10 @@ def measure_S(S=None, parpath=None, path=None,
     #which = which if which is not None else field 
     which = which if which is not None else []
     
-    if isinstance(which, str): 
+    #if isinstance(which, str) or isinstance(which, bytes) or isinstance(which, unicode): #to be compatable py2/3
+    if isinstance(which, str) or isinstance(which, bytes): #to be compatable py2/3
         which = [which]
+        
     if exclude_which:
         print('exlude this from measure_S: ', exclude_which)
         which = [i for i  in which if i not in exclude_which]
@@ -720,13 +722,13 @@ class TestIt(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        raise
-        #from projects_mps.run_long_sandvik.analysis import an_vmps,  an_idmrg_psi 
-        #xx = an_vmps.an_main_symm 
-        #
-        #aa=xx.filter_alpha(g=0.0)
-        ##aa = [(0.3,  0.0)]
-        #xx.measure_all(aa, [(60, 'max')], which='entanglement_entropy_ln', fault_tolerant=1)
+        xx=an_vmps.an_main_pbc
+        for a in aa[:]:
+            db=xx[a]
+            ss=db.get_shape_list(only_return_max=1, from_energy_rec=0, sh_max=(200, 1000))
+            db.measure(ss, which=[ 'correlation_all'], param={'L':1000}, submit=0, 
+                       use_local_storage=1, fault_tolerant=0)        
+        pass
 
 if __name__ == '__main__':
     

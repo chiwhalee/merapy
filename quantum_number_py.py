@@ -50,6 +50,9 @@ from builtins import object
 import unittest 
 import numpy as np
 import warnings
+from abc import ABCMeta 
+
+
 
 from merapy.utilities import print_vars
 from merapy.decorators import decorate_methods, tensor_player 
@@ -69,11 +72,14 @@ __all__=["QuantumNum", "QuantSpace", "QuantSpaceBase",  "init_System_QSp",
 GROUP_NAMES = ["Travial", "Z2", "Z3", "U1"]
 
 
-class QnBase(object):
+#class QnBase(object):
+class QnBase():   #with object new python cannot load old pickled files,  I dont know why 
+    #__metaclass__ = ABCMeta
     """
-    abstract base class, not meant for direct use
+        abstract base class, not meant for direct use
     """
-    
+    #def __init__(self, value):
+    #    pass
     def __getstate__1(self):
         """ not workable"""
         #print "pickled"
@@ -306,10 +312,11 @@ class QnU1(QnBase):
 
     def __init__(self, value):
         """
-        把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
-        num_of_symm: newly added atribute by lzh, 
+            把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
+            num_of_symm: newly added atribute by lzh, 
         """
-        
+        #super(QnU1, self).__init__()
+        #QnBase.__init__(self)
         #self._val = np.array(value, dtype=np.int, ndmin=1)
         self._val = value
     

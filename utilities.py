@@ -29,6 +29,7 @@ import zlib
 
 #from merapy.decorators import timer
 
+IS_PY3 = sys.version_info.major>2
 
 try: 
     #import cloud 
@@ -216,7 +217,13 @@ def load(path, as_str=False, decompress=True, info=0):
         if as_str: 
             res= s
         else:
-            res= pickle.loads(s)
+            #print('sssssss', type(s), s[:200])
+            if IS_PY3:
+                #res = pickle.loads(s, encoding='utf8')
+                res = pickle.loads(s, encoding='latin1')
+                #res= pickle.loads(s, encoding='bytes')
+            else:
+                res = pickle.loads(s)
         #res= pickle_any.loads(s)
     return res
 
@@ -225,19 +232,27 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
     """
         params:
             path: can be None if as_str=True
+        notes:
+            compatibility of py2/3
+                https://stackoverflow.com/questions/28218466/unpickling-a-python-2-object-with-python-3
+                https://stackoverflow.com/questions/46001958/typeerror-a-bytes-like-object-is-required-not-str-when-opening-python-2-pick/47814305#47814305
+                
     """
+    #issue: in futre use HIGHEST_PROTOCOL when fully porting to py3 
+    #protocol = pickle.HIGHEST_PROTOCOL
+    protocol = 2
     if not compress: 
         if not as_str: 
             out = open(path, "wb")
             #pickle.dump(obj, out)
-            pickle_any.dump(obj, out)
+            pickle_any.dump(obj, out, protocol=protocol)
             out.close()
         else: 
-            return pickle_any.dumps(obj)
+            return pickle_any.dumps(obj, protocol=protocol)
             #return pickle.dumps(obj)
     else: 
         try: 
-            s= pickle_any.dumps(obj, pickle.HIGHEST_PROTOCOL)
+            s= pickle_any.dumps(obj, protocol=protocol)
         except Exception as err: 
             print('pickling error, diagonstic which value cant be dumped: ')
             if isinstance(obj, dict): 
@@ -468,7 +483,7 @@ class TestIt(unittest.TestCase):
     
     def test_save_load(self): 
         for i in [0, 1]: 
-            z = {'sda': 3, 'sesdf': 1000000}
+            z = {'sda': 3, 'sesdf': 1000000, 'xx':u'你好'}
             path = '/tmp/'  +  random_str( )
             print('path is ', path) 
             save(z,  path, i)
@@ -484,7 +499,7 @@ class TestIt(unittest.TestCase):
             save(o, path=path,  as_str=0)   
             ol = load(path)
             assert o == ol  
-            print_vars(vars(),  ['o'])
+            
             
     
     def xtest_send_email(self):

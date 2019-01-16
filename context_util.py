@@ -491,10 +491,10 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_temp', 
+           'test_temp', 
            #'xtest_ssh_connect', 
            #'xtest_save_and_load', 
-           'test_save_and_load_sftp', 
+           #'test_save_and_load_sftp', 
            #'xtest_rpyc_conn_local', 
            #'xtest_rpyc_conn_local_zero', 
         ]
