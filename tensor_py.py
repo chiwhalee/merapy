@@ -97,9 +97,8 @@ class tBuffer(object):
 #meth_names= ["__init__", "set_data_entrance", "contract_core", "permutation"]
 #meth_names.pop(0)
 
-#print 'disabled decorator '*10
+#print( 'DISABLED DECORATOR '*10)
 @decorate_methods(decorator=tensor_player, meth_names=None)
-#class iTensor(object):
 class iTensor(TensorBase):
     """
         todo: 
@@ -193,7 +192,8 @@ class iTensor(TensorBase):
             if buffer is not None:
                 pass
             elif use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
-                buffer = self.buffer_assign(data_size=self.totDim)
+                #buffer = self.buffer_assign(data_size=self.totDim)
+                buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2)  #else complex 
             
             #well, I comment out the line bellow, as it hinders debug sometimes
             #assert self.totDim>0, ('conceptially a tensor is not empty',  self.totQN, self.shape)
@@ -3566,12 +3566,6 @@ class test_iTensor(object):
         #print u22
         print(t.matrix_view())
 
-    def conjugate():
-        """   ---pass  perfect! just what i need"""
-        u = simple_itensor()[0]
-        print(u.matrix_view(2))
-        u1=u.conjugate(2)
-        print(u1.matrix_view(2))
 
     def test_direct_product():
         """  -----pass"""
