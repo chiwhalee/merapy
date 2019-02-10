@@ -120,6 +120,7 @@ def get_ip_address():
 def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None): 
     """
         a convenient func
+        backend:  ['rpyc', 'paramiko']
     """
     timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
     args= dict(host=hostname, user=user, connect_timeout=timeout)
@@ -261,25 +262,8 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
             print('ssh connection failed')
             pass
 
-def rpyc_conn_easy(hostname, conn_type='classic',  port=17013): 
-    """
-        EOFError
-    """
-    
-    ssh = ssh_connect(hostname)
-    if conn_type == 'classic' : 
-        conn = rpyc.classic.ssh_connect(ssh, port)
-    elif conn_type == 'service' : 
-        conn = rpyc.ssh_connect(ssh, port, config={"allow_pickle":True})
-    else: 
-        raise 
-    return conn 
-   
 def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, info=0): 
     if not use_local_storage: 
-        #inn = open(path, "rb")
-        #res = pickle.load(inn)
-        #inn.close()
         res= load(path)
     else:
         if backend == 'rpyc':
