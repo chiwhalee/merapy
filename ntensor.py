@@ -1141,6 +1141,7 @@ def contract_tensors_new(X, Y, indX, indY, use_buff=False):
         this will be the standard one in future
     """
     if not hasattr(X, 'QSp'): 
+        #raise  # remove below 
         return contract_tensors(X, X.ndim, indX, Y, Y.ndim, indY)
     else:
         # transform of function interface 

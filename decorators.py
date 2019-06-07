@@ -45,7 +45,12 @@ __all__ = ["decorate_methods", "tensor_player", "set_STATE_end_1", "set_STATE_en
 
 def decorate_methods(decorator, meth_names):
     meth_names_dic = {
-            "iTensor":["__init__", "set_data_entrance", "contract_core", "permutation"], 
+            "iTensor":[
+                "__init__", 
+                "set_data_entrance", 
+                "contract_core", 
+                "permutation"
+                ], 
             "QuantSpaceBase":["copy"], 
             #"Tensor_svd":["group_legs"]   directly use tensor_player decorated see tensor_svd.py
             }
@@ -98,24 +103,39 @@ def tensor_player(which):
             }
     if which in mapper:
         which = mapper[which]
-    #default not using player
-    tensor_player.STATE = "stop"
+    
+    tensor_player.STATE = "stop"   #default not using player
     tensor_player.PREV_STATE = 'stop'
+    tensor_player.NEXT_STATE = None
     tensor_player.reset = False 
+    
     tensor_player.save_tape = False
     tensor_player.load_tape = False
-    tensor_player.clear_tape = False
     tensor_player.tape_prefix = ""
-    tensor_player.NEXT_STATE = None
-    #tensor_player.tape_full = True  #erase before record
-    #inner.tape_full = tensor_player.tape_full
+    
     def inner(func):
-        #this trick works only in that every innter returned by tensor_player are distinct objs
-        inner.tape = {}
-        inner.calls= 0
-        inner.calls_tot = 0
-        inner.tape_cleared = False
-        inner.tape_full = False 
+        """
+            this trick works only in that every inner returned by tensor_player
+            are distinct objs       
+            note:
+                1.  I have used  'inner.tape' to make 'tape' be able to used in wrapper, 
+                    another way to realize this is to use 'nonlocal' statement in wrapper
+                2.  inner.attr can be inspected in the following way:
+                    #t is an iTensor instance 
+                    inner = t.permutation.__closure__[1]
+                    print( inner.cell_contents.calls_tot)
+        
+        """
+        
+        def reset():
+            inner.tape = {}   # blank tape 
+            inner.calls = 0   # record/play at #song 
+            inner.calls_tot = 0   #total num of 'songs' recorded 
+            inner.reach_tape_end = False 
+            inner.tape_cleared = False
+        
+        reset()
+        
         inner.tape_saved = False
         inner.tape_loaded = False
 
@@ -247,7 +267,6 @@ def tensor_player(which):
                         self.idx_dim, self.totDim)=inner.tape[inner.calls]
 
             def permute_recorder(self, P, buffer=None, use_buf=False):
-                #print "in permut recorder"
                 rank = self.rank
                 #permute QSp, QNs
                 #first is more efficient; second is more robust
@@ -320,6 +339,7 @@ def tensor_player(which):
                 
                 nidx, tape_ind, tape_dim, tape_ord = inner.tape[inner.calls]
                 if self.data.dtype == float: 
+                    #print('ppppp', self.data.size, Tp.data.size)
                     array_permutation.permute_player_fort(self.rank, 
                                 tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
                 else:  #complex 
@@ -777,30 +797,40 @@ def tensor_player(which):
                     self.Dims=other.Dims.copy()
                     self.Addr=other.Addr.copy()
         
-        recorder_dic = {"init":init_recorder, 
-                        "data_entrance":data_entrance_recorder, 
-                        "contract":contract_core_recorder, 
-                        "permute":permute_recorder, 
-                        "group_legs":group_legs_recorder, 
-                        "Qsp_copy":Qsp_copy_recorder
-                        }
-        player_dic = {  "data_entrance":data_entrance_player, 
-                        "contract": contract_core_player_bac, #contract_core_player_bac, 
-                        "permute":  permute_player_bac, #permute_player_bac, 
-                        "group_legs":group_legs_player, 
-                        "init":init_player, 
-                        "Qsp_copy":Qsp_copy_player
-                        }
-        try:
-            recorder = recorder_dic[which]
-            player = player_dic[which]
-        except:
-            raise KeyError("wrong recorder/player name:%s"%which)
+            recorder_dic = {"init":init_recorder, 
+                            "data_entrance":data_entrance_recorder, 
+                            "contract":contract_core_recorder, 
+                            "permute":permute_recorder, 
+                            "group_legs":group_legs_recorder, 
+                            "Qsp_copy":Qsp_copy_recorder
+                            }
+            player_dic = {  "data_entrance":data_entrance_player, 
+                            "contract": contract_core_player_bac, #contract_core_player_bac, 
+                            "permute":  permute_player_bac, #permute_player_bac, 
+                            "group_legs":group_legs_player, 
+                            "init":init_player, 
+                            "Qsp_copy":Qsp_copy_player
+                            }
+            try:
+                recorder = recorder_dic[which]
+                player = player_dic[which]
+            except:
+                raise KeyError("wrong recorder/player name:%s"%which)
 
         def wrapper(*args, **kargs):
+            """
+                intro:
+                    This defines the logics of the tensor palyer, it behaves exactly
+                    as a normal walkman player. 
+                
+                tensor_player can have foure states:
+                    ['play', 'record', 'stop']
+                    I may add a 'pause'
+            
+            """
             #print "STATEEE", tensor_player.STATE, func.func_name , 
             #print "STATEEE", tensor_player.STATE #, tensor_player.__code__#, func.func_name 
-
+            
             if tensor_player.STATE == "play":
                 if inner.calls == 0:
                     if tensor_player.load_tape:
@@ -811,7 +841,7 @@ def tensor_player(which):
                             inn.close()
                             inner.tape = tape
                             inner.calls_tot = max(tape.keys())
-                            inner.tape_full = True
+                            inner.reach_tape_end = True
                             print("%s loaded successfully. directly play afterwards."%fn)
                             
                             inner.tape_loaded = True  #only need to load once
@@ -826,59 +856,56 @@ def tensor_player(which):
                             print("%s saved successfully."%fn)
                             inner.tape_saved = True
                     inner.calls = 0
-                    inner.tape_full = True
+                    inner.reach_tape_end = True
                     inner.tape_cleared = False
+                    #if 'permu' in func.__name__:  
+                    #    print('rrrrrrr'*10, inner.calls_tot)
 
                 inner.calls += 1 
                 return player(*args, **kargs)
 
             elif tensor_player.STATE == "record":
-               
-                
-                if inner.tape_full: 
-                    #print 'tape of %s is full, its length is %d, clear tape before record.'%( func.__name__, len(inner.tape))
-                    inner.tape = {}     #erase tape
+                if inner.reach_tape_end: 
+                    #print('tape of %s is full, its length is %d, clear tape before record.'%( func.__name__, len(inner.tape))) 
+                    inner.tape = {}     
                     inner.calls = 0
                     inner.calls_tot = 0
-                    inner.tape_full = False
+                    inner.reach_tape_end = False
                     
-                    
+                #print('ppppppppp', tensor_player.PREV_STATE)
                 if tensor_player.PREV_STATE  == 'record':
-                    #if 'grou' in func.__name__:  
-                    #    print 'rrrrrrr', inner.tape_cleared
                     if not inner.tape_cleared: 
-                        
-                        inner.tape = {}     #erase tape
+                        inner.tape = {}     
                         inner.calls = 0
                         inner.calls_tot = 0
-                        inner.tape_full = False
+                        inner.reach_tape_end = False
                         inner.tape_cleared = True
 
-
                 inner.calls += 1 
-                inner.calls_tot += 1 
-                if recorder is not None:
-                    return recorder(*args, **kargs)
-                else:
-                    return func(*args, **kargs)
+                inner.calls_tot += 1   #calls_tot only increases at here 
+                
+                return recorder(*args, **kargs)
             
             elif tensor_player.STATE == "stop": # return original method
-                if tensor_player.reset:
-                    tensor_player.load_tape = False
-                    tensor_player.save_tape = False
-                    inner.calls= 0
-                    inner.tape = {}
-                    inner.calls_tot = 0
-                    inner.tape_full = False 
-                    inner.tape_cleared = False
+                #inner.tape_cleared = False
+                if tensor_player.reset:  #issue: this actually has a problem 
+                    reset()
+                    
                     inner.tape_saved = False
                     inner.tape_loaded = False
+                    tensor_player.load_tape = False
+                    tensor_player.save_tape = False
+                    
+                    tensor_player.reset = False #issue: this can only reset one method 
+                    
                 return func(*args, **kargs)
 
         return wrapper
     return inner
 
 tensor_player.STATE = 'stop'   # this line is needed, because sometiems tensor_player.STATE is used but tensor_player has not been called as decorator 
+#tensor_player.NEXT_STATE = None 
+
 
 def set_STATE_end_simple(iter, q_iter=None, iter0=0, resume=False, power_on=True):
     if power_on:
@@ -924,9 +951,11 @@ def set_player_state_auto(iter, record_at, stop_at=10000000, verbose=False, info
         else:
             tensor_player.STATE = "play"
         if info>-1:  #default display this msg 
+            #if info>1:
+            #    print('iiii', iter, tensor_player.PREV_STATE)
             if tensor_player.PREV_STATE != tensor_player.STATE: 
-                print("STATE of tensor_player is changed from '%s' to '%s'"%(
-                        tensor_player.PREV_STATE, tensor_player.STATE))
+                print("STATE of tensor_player is changed from '%s' to '%s' at iter=%d"%(
+                        tensor_player.PREV_STATE, tensor_player.STATE, iter))
             if tensor_player.PREV_STATE == 'record' and tensor_player.STATE == 'record':   # in very rare curcumstances, this may happen; add this line for robustness
                 print('attention, PREV_STATE and current STATE of tensor_player are both "record"')
         
@@ -1090,8 +1119,8 @@ def func(x, y=2):
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass 
-    def test_temp(self): 
-        pass 
+    
+    
     def test_timer_count(self): 
         pass 
     
@@ -1116,9 +1145,10 @@ class TestIt(unittest.TestCase):
         #print tensor_player.STATE
 
     def test_tensor_player(self): 
-        from .tensor_py import iTensor 
+        from merapy.tensor_py import iTensor 
         t = iTensor.example(dtype=complex)
-        print(t.transpose([0, 2, 1, 3]))
+        t.transpose([0, 2, 1, 3])
+        #print(t.transpose([0, 2, 1, 3]))
         tensor_player.STATE = 'stop'
         tensor_player.PREV_STATE = 'stop'
         print(iTensor.permutation) 
@@ -1136,6 +1166,40 @@ class TestIt(unittest.TestCase):
             u.data[:] = range(u.data.size)
             v=u.contract_core(u, 2)
            
+    def test_tensor_player_2(self): 
+        from merapy.tensor_py import iTensor 
+        
+        iTensor = decorate_methods(tensor_player, None)(iTensor)
+        
+        def func():
+            t1 = iTensor.example(rank=4)
+            t2 = iTensor.example(rank=4)
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+        
+        for i in range(5):
+            set_player_state_auto(iter=i, record_at=0, info=1)    
+            func()
+        status = iTensor.get_player_status()
+        status_old = {u'contract_core': 2, u'permutation': 4}
+        self.assertEqual(status, status_old)
+        
+        for i in range(5):
+            set_player_state_auto(iter=i, record_at=0, info=1)    
+            func()
+        status = iTensor.get_player_status()
+        status_old = {u'contract_core': 2, u'permutation': 4}
+        self.assertEqual(status, status_old)
+        
+        #reset_player(iTensor)
+        iTensor.reset_player()
+        status = iTensor.get_player_status()
+        print(status)
+        status_old = {u'contract_core': 0, u'permutation': 0}
+        self.assertEqual(status, status_old)
+    
+    def test_temp(self): 
+        pass
             
     
 
@@ -1166,13 +1230,12 @@ if __name__ == "__main__":
     if 0:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
-        
     else: 
         suite = unittest.TestSuite()
         add_list = [
-            
-        'test_temp', 
+        #'test_temp', 
         #'test_tensor_player', 
+        'test_tensor_player_2', 
         #'test_timer_count', 
         ]
         for a in add_list: 

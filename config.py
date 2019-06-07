@@ -24,7 +24,7 @@ except:
 #LOCAL_USERNAME = 'zhli' 
 #LOCAL_HOSTNAME = 'qtgc30'
 
-LOCAL_IP = '222.25.16.117'
+LOCAL_IP = '222.25.29.116'
 LOCAL_USERNAME = 'ws' 
 LOCAL_HOSTNAME = 'ws-Precision-Tower-7910'
 
@@ -42,14 +42,15 @@ def gen_backup_base_dir():
     HOME=HOME.replace('\\', '/') 
     if 'cygwin' in HOME:  #properly deal with cygwin path
         assert 'cygwin64/home' in HOME
+        #HOME = HOME.replace('cygwin64/home', 'Users')
         HOME = HOME.replace('cygwin64/home', 'Users')
+        HOME  += '/Dropbox' 
     res = '/'.join([HOME, 'backup_tensor_dir'])
     return res
 
 BACKUP_BASE_DIR =  gen_backup_base_dir()
 
 BACKUP_BASE_DIR_LOCAL =  '/'.join(['', 'home', LOCAL_USERNAME, 'backup_tensor_dir'])
-
 
 
 ising_model_param = {"h":-1.0, "J_NN":-1.0, "J_NNN":0.0}
@@ -343,16 +344,12 @@ class Config(dict):
             from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
             alg = cfg['algorithm']
             db_class= {'idmrg':ResultDB_idmrg, 'vmps':ResultDB_vmps}[alg]
-        #if cfg['backup_parpath'] is None:
-        #     return True
         if cfg['parpath_relative'] is None:
              return True
         parpath = '/'.join([ BACKUP_BASE_DIR, cfg['parpath_relative']])
         if platform.system()=='Linux':
-            #parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'resultdb_dir')
             parpath = parpath.replace('backup_tensor_dir', 'resultdb_dir')
         else:
-            #parpath = cfg['backup_parpath'].replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
             parpath = parpath.replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
         
         db=db_class(parpath)
@@ -362,14 +359,17 @@ class Config(dict):
         msg = [os.path.basename(parpath), 'N=%d'%N,  
                 'threads=%d'%cfg['NUM_OF_THREADS']]
         if alg == 'vmps' :
-            schedule = cfg['schedule']
+            which_minimize = cfg.get('which_minimize', '1site')
             v = db.fetch_easy('variance', (N, 'max'), default=10.0)
             Dmax = db.get_dim_max_for_N(N)
+            schedule = cfg['schedule']
+            if cfg.get('auto_resume', True):
+                schedule = [s for s in schedule if s['D'] > Dmax]
+                cfg['schedule'] = schedule 
             
-            if cfg.get('which_minimize', '1site')=='1site':  #old for 1site algrithm and save file for each D 
-                #sh = (N, max(schedule))
-                #if db.has_shape(sh, from_energy_rec=1):
-                if  abs(v) <= cfg['variance_lim']:
+            if which_minimize =='1site':  #old for 1site algrithm and save file for each D 
+                if  (len(schedule)==0 or 
+                    abs(v) <= cfg['variance_lim']):
                     allow = False
                 if info>0:
                     print('\tvariance',  '%1.2e'%v)

@@ -740,7 +740,15 @@ class Tensor_svd(object):
         else: 
             val_mat = None 
         return {'vec_mat': res, 'val_mat': val_mat, 'trunc_err': trunc_err}    
+    
+    @staticmethod
+    def solve_rank2(A, b):
+        """
+            linear solver:  Ax = b
+        """
+        raise NotImplemented 
         
+    
     @classmethod
     def random_unit_tensor(cls,itensor, d):
         itensor.randomize_data()  #here method randomize_data inheriets from TensorBase

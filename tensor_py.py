@@ -52,12 +52,18 @@ from merapy.utilities import print_vars
 from merapy.ntensor import TensorBase, nTensor 
 from merapy.quantum_number import *  #QuantumNum, QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy import common_util
+#import merapy.common_util as common_util 
+
 from merapy import array_permutation
 from merapy.set1 import *
 from merapy import crandom
 from merapy.utilities import get_local
 from merapy import decorators, make_qsp
 from merapy.decorators import *
+#raise  
+#from merapy.decorators import (tensor_player, decorate_methods, 
+#        reset_tensor_player, set_player_state_auto)
+#
 
 #import scipy.weave as weave
 #from scipy import linalg
@@ -472,7 +478,18 @@ class iTensor(TensorBase):
     @property
     def dtype(self):
         return self.data.dtype
-        
+    
+    @property
+    def nbytes(self):
+        return self.data.nbytes
+    
+    
+    def memory_use(self):
+        a = self.data.nbytes/1e6
+        sh = [i.totDim for  i in self.shape]
+        b = np.prod(sh)*8/1e6 
+        return (a, b)
+    
     if 1: #for compatable with numpy
         @property  
         def shape(self): 
@@ -1247,9 +1264,9 @@ class iTensor(TensorBase):
             if qsp3[-1] ==  self.qsp_class.null(): 
                 leg_map[len(qsp2)-1] += (last_leg_3b, )
             else: 
-                raise Exception("inspecting leg_map failed")
+                raise Exception("inspecting leg_map failed, reshape function is not perfect yet")
         else: 
-            raise Exception("inspecting leg_map failed")
+            raise Exception("inspecting leg_map failed, reshape function is not perfect yet")
         
         if which == 'merge':
             arg = []
@@ -2248,7 +2265,7 @@ class iTensor(TensorBase):
         
         
         try:
-            #print_vars(vars(),  ['repr(Vp1)'])
+            #print_vars(vars(),  ['repr(Vp1)', 'T1.rank', 'T1.ind_labels'])
             nT1=T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排
             nT2=T2.permutation(Vp2, use_buf=use_buf)
             T3 = nT1.contract_core(nT2, V_1n2.size, data=data, use_buf=use_buf)
@@ -2328,6 +2345,7 @@ class iTensor(TensorBase):
                 if isinstance(t, list):
                     t = iTensor.contract_tensor_list(t)
                 head, _= head.contract(t)
+                #print_vars(vars(),  ['head.ind_labels', 'head.shape'])
         except Exception:
             raise  
         if final_ind_labels is not None:
@@ -2379,7 +2397,7 @@ class iTensor(TensorBase):
     
     def trace_ind_pairs(self, *ind_pairs):
         """
-            this is accuratly the general trace function
+            this is exactly the general trace function
             I named it trace_ind_pairs just because trace is occupied by meth above this
             rename it just to trace in future. 
             params:
@@ -3197,7 +3215,40 @@ class iTensor(TensorBase):
         #qn_delta_r = qn_delta.conj()
         #self.totQN = self.totQN + qn_delta_r  
         self.totQN = self.totQN + qn_delta
-        
+    
+    @staticmethod 
+    def get_player_status():
+        """
+            tensor_player status
+        """
+        res = {}
+        name_list = ['permutation', 'contract_core']
+        for i in name_list:
+            meth = getattr(iTensor, i)
+            #print_vars(vars(),  ['meth.__closure__[4].cell_contents'])
+            inner = meth.__closure__[1].cell_contents
+            calls_tot = getattr(inner, 'calls_tot')
+            res[i] = calls_tot
+        return res  
+    
+    @staticmethod
+    def reset_player():
+        """
+            when tensor_player.STATE changing 
+                play    -> record   √
+                record  -> record   may cause problem
+                stop    -> record   may cause problem 
+            in some rare and hard cases, it is not able to automatically clear
+            the tape before 'record', then I may force reset tensor player
+            through calling this function
+            
+        """
+        name_list = [  'set_data_entrance', 'contract_core', 'permutation' ]
+        for i in name_list:
+            meth = getattr(iTensor, i)
+            reset = meth.__closure__[4].cell_contents
+            reset.__call__()
+    
     
 class iTensor_new(TensorBase):
     def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
@@ -4219,25 +4270,60 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
-        #pau  = iTensorFactory.pauli_mat_1site('U1')
-        if 0: 
-            sz = pau['sz']
-            print_vars(vars(),  ['sz'])
-            print_vars(vars(),  ['sz.matrix_view()'])
-            q = QspU1.easy_init([1, -1], [1, 1])
-            qn = q.QnClass(1)
-            spin_up = iTensor(QSp=[q], totQN=qn)
-            spin_up.data[0] = 1.0
-            print_vars(vars(),  ['spin_up'])
+        from merapy.tensor_py import iTensor 
+        #tensor_player.STATE = 'stop'
+        def f():
+            t1 = iTensor.example(rank=3)
+            t2 = iTensor.example(rank=3)
+            t3, _ = t1.contract(t2, [0, 1, 2], [1, 4, 0])
+            t3.transpose([1, 0])
+            t1.transpose([0, 2, 1])
         
-        if 0: 
-            sp = pau['sp']
-            print_vars(vars(),  ['sp'])
-            print_vars(vars(),  ['sp.matrix_view()'])
-            print_vars(vars(),  ['sp.to_ndarray()'])
-        #pau  = iTensorFactory.pauli_mat_2site('U1')
-            
+        #for i in range(1, 5):
+        #    set_player_state_auto(iter=i, record_at=1, info=1)    
+        #    t1 = iTensor.example(rank=4)
+        #    t2 = iTensor.example(rank=4)
+        #    t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+        #    t3.permutation([0, 2, 3, 1, 4, 5])
+        #    t3.permutation([0, 2, 3, 1, 4, 5])
+        #tensor_player.STATE = 'stop'
+        #
+        #status = t3.get_player_status()
+        #self.assertEqual(status['permutation'], 4)
+        #self.assertEqual(status['contract_core'], 1)
+       
+        #f()
+        #f()
+
+        for i in range(1, 2):
+            set_player_state_auto(iter=i, record_at=1, info=1)    
+            t1 = iTensor.example(rank=4)
+            t2 = iTensor.example(rank=4)
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+        tensor_player.STATE = 'stop'
         
+        status = iTensor.get_player_status()
+        print_vars(vars(),  ['status'])
+        
+        
+        iTensor.reset_player()
+        for i in range(1, 5):
+            set_player_state_auto(iter=i, record_at=1, info=1)    
+            t1 = iTensor.example(rank=4)
+            t2 = iTensor.example(rank=4)
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+        tensor_player.STATE = 'stop'
+
+        status = iTensor.get_player_status()
+        print_vars(vars(),  ['status'])
+       
+
 
 class performance_iTensor(object):
     pass
@@ -4336,7 +4422,6 @@ class performance_iTensor(object):
     def contract(self):
         self._contract(symmetry="U1", rank1=8, rank2=4, dim=16, nqn=3,  
                 NUM_OF_THREADS=6, iter_times=10)
-
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
@@ -4475,9 +4560,9 @@ if __name__ == "__main__":
            #'test_reshape', 
            #'test_reshape_u1', 
            #
-           'test_conj_new', 
+           #'test_conj_new', 
            #'test_reduce_and_insert_1d_qsp', 
-           #'test_temp', 
+           'test_temp', 
         ]
         
         

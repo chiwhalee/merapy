@@ -26,17 +26,17 @@ import string
 import random
 import gzip 
 import zlib 
-
 #from merapy.decorators import timer
 
 IS_PY3 = sys.version_info.major>2
 
-try: 
-    #import cloud 
-    #pickle_any = cloud.serialization.cloudpickle
-    import cloudpickle as pickle_any 
-except ImportError as err: 
-    warnings.warn(str(err))
+#try: 
+#    #import cloud 
+#    #pickle_any = cloud.serialization.cloudpickle
+#    import cloudpickle as pickle_any 
+#except ImportError as err: 
+#    warnings.warn(str(err))
+import cloudpickle as pickle_any 
 
 #__all__=["getch"]
 
@@ -217,7 +217,7 @@ def load(path, as_str=False, decompress=True, info=0):
         if as_str: 
             res= s
         else:
-            #print('sssssss', type(s), s[:200])
+            #print('sssssss', type(s), s[:200].decode('latin1'))
             if IS_PY3:
                 #res = pickle.loads(s, encoding='utf8')
                 res = pickle.loads(s, encoding='latin1')

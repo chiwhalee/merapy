@@ -25,6 +25,7 @@ from merapy.tensor_network import TestIt as Test_tensor_network
 from merapy.top_level import TestIt as Test_top_level 
 from merapy.minimize import TestScaleInvar 
 from merapy.main import TestMain 
+from merapy.decorators import TestIt as Test_decorators 
 import platform 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)
