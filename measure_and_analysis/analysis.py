@@ -30,7 +30,7 @@ import copy
 import pprint
 import pickle as pickle
 import numpy as np
-import pandas as pd
+#import pandas as pd
 from collections import OrderedDict
 import platform
 import matplotlib.pyplot as plt
@@ -46,7 +46,7 @@ import types
 
 from merapy.utilities import print_vars, OrderedSet 
 from merapy.hamiltonian import System
-from .tabulate import tabulate
+#from .tabulate import tabulate
 from merapy.measure_and_analysis.measurement import mera_backup_dir_finder,  measure_all as measure_all_orig
 from merapy.context_util import rpyc_conn 
 import merapy.measure_and_analysis.result_db as result_db_module 
@@ -55,7 +55,7 @@ from merapy.measure_and_analysis.result_db import (ResultDB,
         ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
         ResultDB_proj_qmc, ResultDB_bethe_ansatz, 
         BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT, LOCAL_HOSTNAME)
-from .result_db import (  MARKER_CYCLE, 
+from  merapy.measure_and_analysis.result_db import (  MARKER_CYCLE, 
         AnalysisTools, AnalyticFormular
         )
 
@@ -161,7 +161,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         self.param_list= param_list
         self.default_resolution = default_resolution 
         self.result_db_class = result_db_class if result_db_class is not None else ResultDB
-        self.result_db_args = {'analysis_hook':self}
+        self.result_db_args = {'analysis_class':self}
         if result_db_args is not None:
             self.result_db_args.update(result_db_args)
        
@@ -268,7 +268,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
         for p in self.param_list: 
             temp = self.get_param_range(p, aa) 
             print_vars(vars(),  ['p, temp'])
-
     
     def filter_alpha(self, aa=None, sh=None, field=None, no_field=None, param_list=None, 
             surfix='', resolution='default', auto_refrese=1,  no_bad=False, field_range=None,   **kwargs): 
@@ -550,7 +549,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         for a in alpha_list: 
             try: 
                 p = self.alpha_parpath_dict[a]
-                db = self.result_db_class(parpath=p, create_empty_db=create_empty_db, version=db_version, algorithm=algorithm)
+                db = self.result_db_class(parpath=p, 
+                        create_empty_db=create_empty_db, version=db_version, 
+                        algorithm=algorithm)
                 #rdb[a] = db
                 self.alpha_rdb_dict[a] = db
             except Exception as err: 
@@ -731,19 +732,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         res = []
         for a in alpha_list:
             if which == 'file':  
-                sh_list = self.alpha_rdb_dict[a].get_mera_shape_list()
+                sh_list = self.alpha_rdb_dict[a].get_shape_list(from_energy_rec=0)
                 
                 diff_list = []
-                if show_eng_diff: 
-                    for sh in sh_list: 
-                        dir = self.alpha_parpath_dict[a]
-                        fn = self.shape_to_backup_fn((sh[0], sh[1]-1))
-                        path = '/'.join([dir, fn]) 
-                        S=self.load(path)
-                        diff = S.energy_diff
-                        diff_list.append('%1.2e'%diff)
-                        
-                    sh_list = list(zip(sh_list, diff_list))
             
             elif which == 'db': 
                 db=self.alpha_rdb_dict[a]
@@ -2604,13 +2595,15 @@ class Analysis(AnalysisTools, AnalyticFormular):
         
         ax.set_aspect(1)
 
-    def plot_fidelity(self, aa, sh_list=None, delta=0.1, use_dist_comp=0, **kwargs):  
+    def plot_fidelity(self, aa, sh_list=None, delta=0.1, fault_tol=1, use_dist_comp=0, **kwargs):  
         sh_list = sh_list if sh_list is not None  else self.get_shape_list_all()
         
         kwargs_orig = kwargs.copy()
         param_name, param_id = AlphaList.identify_param.__func__(self, aa) 
         for sh in sh_list:
-            data=self.calc_fidelity(aa[: -1], sh, delta=delta, force=kwargs_orig.get('force', False), use_dist_comp=use_dist_comp) #aa[: -1] means not calc fidelity for the last point 
+            data=self.calc_fidelity(aa[: -1], sh, 
+                    delta=delta, fault_tol=fault_tol, force=kwargs_orig.get('force', False), 
+                    use_dist_comp=use_dist_comp) #aa[: -1] means not calc fidelity for the last point 
             if data:
                 label = kwargs_orig.get('label', str(sh))
                 kwargs.update(return_ax=1, label=label, 
@@ -2619,20 +2612,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 x,y=list(zip(*data));  y=np.abs(np.asarray(y))
                 _=self._plot(x,y, **kwargs) 
             
-        if 0:
-            gif,_=self.fig_layout(len(fig.axes), size=(4,3))
-            i=0
-            for ax in fig.axes:
-                bx=gif.axes[i]; i+=1
-                temp=[]        
-                for l in ax.lines:
-                    x, y= l.get_data()
-                    m=y.argmin()
-                    temp.append((l.get_label(), round(x[m],2)))
-                u, v= list(zip(*temp))
-                bx.plot(u, v, 'o-')
-                bx.set_xscale('log')
-                bx.set_ylim(1.35, 1.72)
 
     def disregister_job(self, aa): 
         with rpyc_conn('local', 'service', 17012) as conn:     
@@ -2644,19 +2623,18 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 except Exception as err:
                     print(err, 'param=', a) 
 
-    def calc_fidelity(self, aa, sh, delta=0.1, force=0, use_dist_comp=False, fault_tolerant=1, **kwargs):
+    def calc_fidelity(self, aa, sh, delta=0.1, force=0, use_dist_comp=False, 
+            fault_tol=1, **kwargs):
         xx = self 
         if self.algorithm == 'vmps' : 
             from vmps.measure_and_analysis.measurement_vmps import fidelity
         elif self.algorithm == 'idmrg':
             from vmps.measure_and_analysis.measurement_idmrg_mcc import fidelity_direct  as fidelity
-            #from vmps.measure_and_analysis.measurement_idmrg import fidelity as fidelity
         else: 
             raise 
         
         dbs={}
         ss={}
-        #aa=xx.filter_alpha(g=1.0, sh=sh)
         param_name, param_name_id = AlphaList.identify_param.__func__(xx, aa)
         data=[]
         
@@ -2664,21 +2642,25 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if delta is not None:
             db_change_list = []
             for a1 in aa:
+                
                 a2 = list(a1)
-                ai  = a1[param_name_id]
+                ai = a1[param_name_id]
                 a2[param_name_id] = round(ai + delta, 5)
                 a2 = tuple(a2)
                 
                 db1 = xx[a1]
-                rec = db1.fetch_easy_new(which, sh, sub_key_list=[a2], fault_tolerant=1) 
+                rec = db1.fetch_easy(which, sh, sub_key_list=[a2], fault_tolerant=1) 
                 if rec is not None and not force:  
                     data.append((ai, rec))
                 else: 
+                    #print_vars(vars(),  ['a1, a2'])
                     try:
                         db2 = xx[a2]
                         s1 = db1.load_S(sh)
                         s2 = db2.load_S(sh)
-                        print_vars(vars(),  ['a2'])
+                        if s1 is None or s2 is None:
+                            continue
+                        #print_vars(vars(),  ['a2'])
                         if not use_dist_comp: 
                             ff=fidelity(s1, s2)
                         else: 
@@ -2691,20 +2673,29 @@ class Analysis(AnalysisTools, AnalyticFormular):
                             #ff = queue(fidelity, args=(s1, s2), querry=0, port=90900)
                             print_vars(vars(),  ['a2', 'ff'])
                             ff = ff[1]
-                        db1.insert(which, sh, iter=-1, sub_key_list=[a2], val=ff)
-                        db2.insert(which, sh, iter=-1, sub_key_list=[a1], val=ff)
-                        db_change_list.extend([a1, a2])
+                        
+                        if 1:
+                            N, D = sh
+                            D1 = db1.get_dim_max_for_N(N=N) if D == 'max' else D 
+                            D2 = db1.get_dim_max_for_N(N=N) if  D == 'max' else D 
+                            D = min(D1, D2)
+                            db1.insert(which, (N, D),  sub_key_list=[a2], val=ff)
+                            db2.insert(which, (N, D),  sub_key_list=[a1], val=ff)
+                            db_change_list.extend([a1, a2])
                         data.append((ai, ff))
                     except Exception as err:
                         if kwargs.get('info', 0)>0: 
                             print(a1, a2,  err) 
-                        if not fault_tolerant: 
+                        if not fault_tol: 
                             raise 
             if db_change_list: 
                 db_change_list = list(set(db_change_list))
+                db_change_list.sort()
+                print('fidelity updated for %s'%(db_change_list, ))
                 for a in db_change_list: 
                     db = xx[a]
-                    db.commit()
+                    #print_vars(vars(),  ['db["fidelity"]'])
+                    db.commit(info=0)
                 self.set_rdb_dict(db_change_list, reload_db_class=0)                      
         else:
             for i in range(len(aa)):
@@ -2750,7 +2741,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 db2=self[a2] 
                 if a1 <= a2:
                     
-                    f12 = db1.fetch_easy_new(which, sh, sub_key_list=[a2], fault_tolerant=1)
+                    #f12 = db1.fetch_easy_new(which, sh, sub_key_list=[a2], fault_tolerant=1)
+                    f12 = db1.fetch_easy(which, sh, sub_key_list=[a2], fault_tolerant=1)
                     
                     #if f12 or f21: 
                     if f12 is not None and not force:  
@@ -2863,15 +2855,27 @@ class TestAnalsysis(unittest.TestCase):
     def test_temp(self): 
         #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
         #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
-        #from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+        from mps_wigner_crystal.analysis import an_vmps
         #from vmps.run_hubbard.analysis import an_vmps
-        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
+        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
         
-        #
-        xx = an_vmps.an_main_symm
-        print(xx.scan_alpha())
+        xx=an_vmps.an_main_ham3
+
+        fig, ax=xx.fig_layout()
+
+        ss=[(24, 'max')]
+        NN=[24, 60]
+        for N in NN:
+            sh=(N, 40)
+            aa=xx.filter_alpha(nu=0.33, alpha=2.0, v='v>10')
+            #xx.plot_fidelity(aa, ss, ax=ax, delta=0.5 )
+            data = xx.calc_fidelity(aa, sh, ax=ax, delta=1.0,)
+            if data:
+                x, y = zip(*data)
+                _ = xx._plot(x, y, yfunc=np.abs, label=N, ax=ax)
         
-        xx.show_fig()
+        
+        #xx.show_fig()
     
     def test_preprocess_alpha_list(self): 
         an = self.an

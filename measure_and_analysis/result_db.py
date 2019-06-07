@@ -22,9 +22,9 @@ import os, sys
 import shutil 
 import warnings 
 import pprint
-from .tabulate import tabulate
+from tabulate import tabulate
 import pickle as pickle
-from collections import OrderedDict
+from collections import (OrderedDict, namedtuple)
 from operator import itemgetter
 import time
 
@@ -52,7 +52,7 @@ import unittest
 
 
 
-#from IPython.display import display
+from IPython.display import display
 
 from merapy.utilities import dict_to_object , load , print_vars
 from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOSTNAME 
@@ -64,7 +64,7 @@ from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOST
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 
     'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
     'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 'ResultDB_bethe_ansatz', 
-    'display',  'fourier_transform', 
+    'display',  
     ]
 
 
@@ -105,7 +105,7 @@ def set_matplotlib_style():
         raise  
         MATPLOTLIBRC = {
             u'grid.linestyle':'dotted', 
-            #'legend.alpha': 0,    # this will make the box totally transanalysis_hook 
+            #'legend.alpha': 0,    # this will make the box totally transanalysis_class 
             #'legend.edge_color': 'white',   # this will make the edges of the border white to match the background instead 
             'legend.frameon': 0,# whether or not to draw a frame around legend    
             'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
@@ -117,7 +117,7 @@ def set_matplotlib_style():
             'axes.grid':1, 
             u'legend.fontsize':'large', 
             u'grid.linestyle':'dotted', 
-            #'Legend.alpha': 0,    # this will make the box totally transanalysis_hook 
+            #'Legend.alpha': 0,    # this will make the box totally transanalysis_class 
             u'legend.edgecolor': 'white',   # this will make the edges of the border white to match the background instead 
             u'legend.frameon': False,# whether or not to draw a frame around legend    
             u'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
@@ -356,6 +356,7 @@ class AnalysisTools(object):
                 color = kwargs['color'] if 'color' in kwargs else l.get_color()
                 marker = kwargs.get('marker', None)
                 args.update(color=color, marker=marker)
+                #print_vars(vars(),  ['args'])
                 #_ = self._plot.im_func(None, res['x'], res['y'], 
                 #        ax=ax, color=l.get_color(), label='', marker=None)        
                 _ = self._plot.__func__(None, res['x'], res['y'], 
@@ -800,14 +801,14 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence', 'concurrence_2']
     def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
             use_local_storage=False, create_empty_db=False,  upgrade=0, 
-            analysis_hook=None):
+            analysis_class=None):
         """
             params: 
                 algorithm is necessary, or else it is difficult to determine which alg
         """
         self.use_local_storage = use_local_storage
         self.parpath = parpath
-        self.analysis_hook = analysis_hook
+        self.analysis_class = analysis_class
         dbname = dbname if dbname is not None else self.DBNAME
         self.dbname = dbname
         self.path = '/'.join([parpath , dbname])
@@ -960,15 +961,23 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             todo: load 时，应该支持 update state 
         """
         if sh[1] ==  'max':
-            sh = sh[0], self['dim_max'].get(sh[0], 0)
+            if 0: # this is not precise 
+                sh = sh[0], self['dim_max'].get(sh[0], 0)
+            else: 
+                N = sh[0]
+                temp = self.get_shape_list(N=N, only_return_max=1, from_energy_rec=0)
+                if not temp: # sh  == [] :
+                    sh = (N, -1)
+                else:
+                    sh = temp[0]
         
         path = self.shape_to_backup_path(sh)
-        
-        #with open(path, 'rb') as inn: 
-        #    res=pickle.load(inn)
-        #res= load(path)
-        res= rpyc_load(path, use_local_storage=use_local_storage)
-        if to_obj: 
+        try:
+            res= rpyc_load(path, use_local_storage=use_local_storage)
+        except IOError as err: 
+            warnings.warn(str(err))
+            res = None    
+        if res is not None and to_obj: 
             res= dict_to_object(res)
         return res
     
@@ -1209,7 +1218,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         rpyc_save(path, OrderedDict(self), use_local_storage=use_local_storage)
         if info>0: 
             temp = str(path)
-            print('\tmodification in ...%s has been commited'%(temp[-90: ]))
+            print('\tmodification in ...%s has been commited'%(temp, ))
     
     def _fetch(self, dim, num_of_layer=None): 
         keys= iter(self.keys())
@@ -1994,6 +2003,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 'Ck':self._get_corr_k, 
                 'charge_gap':self._get_charge_gap,  
                 'charge_gap_2':self._get_charge_gap_2,  
+                'charge_stiff':self._get_charge_stiff, 
             }
         db = self 
         D = D if D is not None else  sh[1]
@@ -2196,10 +2206,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     'lw': 1,  
                     }    
             dic = style_dic.copy()
-            
-        else: 
-            style_dic = {}
-            dic = {}
         
         temp = list(style_dic.keys())  + ['color']
         if kwargs.get('label') and kwargs.get('label_surfix'): 
@@ -2207,7 +2213,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
         dic_temp = {i:kwargs.get(i) for i in temp if i in kwargs  }
         dic.update(dic_temp)
-        
         linestyle = dic.get('linestyle')
         if linestyle and not isinstance(linestyle, str): # linestyle can be dashes tuple 
             dic.update(linestyle=None, dashes=linestyle)
@@ -2310,7 +2315,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     def plot_field_vs_size(self, field_name, sh_list, sub_key_list=None, 
             data=None, inverse_N=True, xfunc=None, yfunc=None, 
-            exponent=0, 
+            exponent=1, 
             rec_getter=None, rec_getter_args=None, **kwargs): 
         
         sub_key_list = sub_key_list if sub_key_list is not None else []
@@ -2340,10 +2345,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 x,y=list(zip(*data))        
                 x = np.asarray(x)
                 y = np.asarray(y)
-                y = y*x**exponent 
+                #y = y*x**exponent 
                 if xfunc is None: 
                     if inverse_N:  #inverse_N takes effects provided xfunc is None
                         x = 1./x
+                        x = x**exponent
                 else: 
                     x = xfunc(x)
             except ValueError as err: 
@@ -2353,7 +2359,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
             if yfunc is not None : 
                 y = yfunc(y)
-            xlabel = '1/N' if inverse_N else 'N'
+            xlabel = '$1/N$' if inverse_N else '$N$'
             ylabel = field_name if rec_getter is None else (
                     rec_getter.__name__.replace('_get', ''))
             kwargs.update(xlabel=xlabel, ylabel=field_name, return_ax=1)
@@ -2674,7 +2680,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             
         l=ax.legend(loc='lower right')    
         if rec is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
+            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_class
             l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
         
         if log2 and rec is not None: 
@@ -2765,7 +2771,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if 'ax' in locals():          
             l=ax.legend(loc='lower right')    
             if rec is not None : 
-                l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
+                l.get_frame().set_alpha(0) # this will make the box totally transanalysis_class
                 l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
             
             if log2 and rec is not None: 
@@ -2910,7 +2916,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         ax.set_xlabel('t',fontsize=16)
         l=ax.legend(prop={'size':14})  #fontsize
         if l is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
+            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_class
             l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
        
         
@@ -2942,7 +2948,44 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             recs = res.energy_record
             self.add_key_list(aa, val=recs, verbose=1)
             self.commit(info=1)
+
+    def calc_fidelity(self, sh, other, force=0):
+        algorithm = self['algorithm']
+        if algorithm in ['vmps', 'mps'] : 
+            from vmps.measure_and_analysis.measurement_vmps import fidelity
+        elif algorithm == 'idmrg':
+            from vmps.measure_and_analysis.measurement_idmrg_mcc import fidelity_direct  as fidelity
+        else: 
+            raise 
+        which = 'fidelity'
+        rec = self.fetch_easy(which, sh, sub_key_list=[other], fault_tolerant=1) 
         
+        if rec is not None and not force:  
+            return rec
+        else:
+            s1 = self.load_S(sh)
+            #print_vars(vars(),  ['self.analysis_class'])
+            db2 = self.analysis_class[other]
+            #print_vars(vars(),  ['db2.parpath'])
+            s2 = db2.load_S(sh)
+            if s1 is None or s2 is None:
+                res = None
+            else:
+                res = fidelity(s1, s2)        
+                if 1:
+                    ff = res 
+                    a2 = other 
+                    db1 = self 
+                    N, D = sh
+                    D1 = db1.get_dim_max_for_N(N=N) if D == 'max' else D 
+                    D2 = db1.get_dim_max_for_N(N=N) if  D == 'max' else D 
+                    #D = min(D1, D2)
+                    db1.insert(which, (N, D1),  sub_key_list=[a2], val=ff)
+                    db1.commit(info=0)
+                    #db2.insert(which, (N, D),  sub_key_list=[a1], val=ff)
+                
+            
+        return res 
     
     def count_eng_fluctuation(self, sh, iter_min=0, iter_max=1e10, info=0, **kwargs): 
         try: 
@@ -3072,7 +3115,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     def measure(self, sh_list, which=None, state=None, measure_func=None, 
             param=None, server=None,  field_surfix='', 
-            force=0, fault_tolerant=1, priority=1,  num_of_theads=2, 
+            force=0, fault_tolerant=1, priority=1,  num_of_threads=2, 
             use_local_storage=1, 
             job_group_name=None, 
             submit=1, info=1,  **kwargs): 
@@ -3086,7 +3129,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         from merapy.measure_and_analysis.measurement import measure_S 
         from mypy.brokest.task_center import submit_one, LOCAL_IP
         if isinstance(which, list) and len(which)==1:
+            print_vars(vars(),  ['which'])
             which = which[0]
+            print_vars(vars(),  ['wwwwww', 'which', 'len(which)'])
         if param is not None and isinstance(which, str):
             param = {which:param}  # to make it compatible with the interface of measure_S
         
@@ -3138,11 +3183,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                
             rdb = self 
             temp = ['parpath', 'path', 'rdb', 'which', 'measure_func', 'field_surfix', 'param', 
-                    'force', 'fault_tolerant', 'num_of_theads']
+                    'force', 'fault_tolerant', 'num_of_threads']
             dic = vars()
             temp = {t: dic[t] for t in temp}
             temp.update(kwargs)
-            temp['NUM_OF_THEADS'] = num_of_theads
+            temp['NUM_OF_THREADS'] = num_of_threads
             if not submit: 
                 measure_S(**temp)
             else: 
@@ -3155,11 +3200,19 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                         job_info = {'priority': priority, 
                             'job_group_name': job_group_name, 
                             'job_description': (os.path.dirname(path), sh), 
-                            'delay_send': 20, 
+                            'delay_send': 10, 
                             })
                 
                 print('\tresponse: ', status)
-            
+
+    def run(self):
+        from vmps.minimize import VMPS 
+        parpath = self.state_parpath
+        #v = VMPS()
+        
+        
+
+    
     def shape_to_backup_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
         dir = self.parpath.replace('Dropbox', '').replace('dropbox', '')
@@ -3465,7 +3518,7 @@ class ResultDB_mera(ResultDB):
             if fit: ax.set_xlim(x[0], x[-1]*10)
         l=ax.legend()   #l=ax.legend(title='$\\alpha$')
         if l is not None : 
-            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_hook
+            l.get_frame().set_alpha(0) # this will make the box totally transanalysis_class
             l.get_frame().set_edgecolor('white') # this will make the edges of the border white to match the background instead
            
         ax.grid(1)
@@ -3520,7 +3573,6 @@ class ResultDB_mera(ResultDB):
             return fig
         if kwargs.get('show_fig'): 
             plt.show()
-
 
 class ResultDB_vmps(ResultDB): 
     VERSION = 1.2
@@ -3702,6 +3754,57 @@ class ResultDB_vmps(ResultDB):
         return c 
     _get_c = _get_central_charge     #def _get_c
     
+    def _get_charge_stiff(self, sh, dphi=0.05, fault_tol=True):
+        """
+            here assumes num of fermion to be odd,  
+            so that E(phi) has minimu at phi=0.0  
+            note1:
+                there are different definations of D up to a factor of pi,
+                here I dont multiply it by pi 
+                
+            ref:
+                Giamarch's book p.405 and p.226 eq.7.80  
+            examine:
+                for free spinless fermion 
+                D = 2/pi        at half filling
+                D = sqrt(3)/pi  at 1/3 filling 
+        
+        """
+        path = self.parpath.replace('phi=0.0', 'phi=%s'%(dphi))
+        #print_vars(vars(),  ['path'])
+        db_phi = self.__class__(path)
+        temp =  [x.fetch_easy('energy', sh, fault_tolerant=fault_tol) 
+                for x in [self, db_phi] ]
+        if all(temp):
+            N = sh[0]
+            E_0,  E_phi = temp
+            E_0 = (N-1)*E_0   #note eng is energy per bond
+            E_phi = (N-1)*E_phi 
+            #D = pi* N* 2* (E_phi - E_0)/ dphi**2  
+            D =  N* 2* (E_phi - E_0)/ dphi**2   #note1
+        else:
+            D = None
+        
+        return D
+    
+    def _get_charge_stiff_2(self, sh, fault_tol=True):
+        """
+            phase sensitivity 
+        """
+        db_phi = self.__class__(self.parpath + '-anti_pbc')
+        temp =  [x.fetch_easy('energy', sh, fault_tolerant=fault_tol) 
+                for x in [self, db_phi] ]
+        if all(temp):
+            N = sh[0]
+            E_0,  E_phi = temp
+            #note eng is energy per bond
+            res =(-1)**N *N*(N-1)*(E_0 - E_phi)
+            res= res/pi*2
+        else:
+            res = None
+        
+        return res 
+   
 class ResultDB_idmrg(ResultDB): 
     VERSION = 1.21
     ALGORITHM = 'idmrg'
@@ -4143,7 +4246,8 @@ class ResultDB_idmrg(ResultDB):
                 rec = None
         
         return rec
-
+    
+    
     def _get_corr_conn(self, sh, aver=False, connected=True):
         """
             params:
@@ -4492,38 +4596,81 @@ class TestResultDB(unittest.TestCase):
             self.db = ResultDB(parpath)
         
     def test_temp(self): 
-        a = dict()
+        if 0:
+            param = namedtuple('param', ['nu', 'alpha', 'v'], defaults=[0.5, 3.0, 0.0 ]  )
+            a = param(0.5, None, 0.0)
+            a = param()
+            print_vars(vars(),  ['a', 'a[0]', 'a.alpha', 'list(a)'])
+            print(a==(0.5, 3.0, 0.0))
+            print_vars(vars(),  ['type(a)'])
+            raise  
+            
+        if 1:
+            from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+            xx = an_vmps.an_main_alt 
+            db=xx[0.5, 2.0, 0.0]
+            db.load_S((40, 'max'))
+            raise  
+            #print( db.get_shape_list())
+            sh=(40, 'max')   # N, D
+            
+            aa = xx.filter_alpha(nu=0.5, alpha=2.0)
+            delta=1.0
+            data=[]
+            for a in aa:
+                db=xx[a]
+                v=a[2]
+                other = (0.5, 2.0, v + delta)
+                f = db.calc_fidelity(sh, other)
+                data.append((v, f))
+            
+            raise  
+            data = [a for a in data if a[1] is not None]
+            x, y = zip(*data)
+            y = [abs(i) for i in y]
+            
         
-        print('*'*80)
-        from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
-        
-        xx=an_vmps.an_main_ham3
-        #xx.reset()
-        aa=xx.filter_alpha(nu=0.5, v=4.0, alpha='alpha<8.0')
-        aa=[(0.5, alpha, 1.0) for alpha in [3.0,  0.5, 0.0]]
-        
-        db = xx[0.33, 0.5, 32.0]
-        res= db._get_charge_gap((24, 'max'), fault_tol=1) 
-        print_vars(vars(),  ['res'])
-        db = xx[0.33, 0.5, 32.0]
-        print_vars(vars(),  ['db["energy"]'])
-        print(db['dim_max'])
-        raise  
-        fig, ax=xx.fig_layout(size=(6,4))
-        for a in aa:
-            db=xx[a]
-            ss=db.get_shape_list(only_return_max=1)
-            db.plot_field_vs_size('energy', ss, inverse_N=0, 
-                                  #xscale='log', 
-                                exponent = 1, 
-                                linestyle = (10, 2), 
-                                yfunc=np.abs,
-                                  #yscale='log',
-                                  label=a[1], ax=ax, 
-                                 )        
-        
-        xx.show_fig()
+        if 0:
+            a = dict()
+            #mpl.use('agg')
+            print('*'*80)
+            from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
+            #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
+            
+            if 1:
+                xx=an_vmps.an_main_pbc 
+                if 1:
+
+                    db = xx[0.5, 2.0, 8.0, 0.0]
+                    print_vars(vars(),  ['db.analysis_class'])
+                    raise  
+                    print_vars(vars(),  ['db.state_parpath'])
+                    sh = (62, 320)
+                    if 0:
+                        state = db.load_S(sh)
+                        m = state['mps']
+                        o = state['ham']
+                        m.expectationvalue_2(o, o)
+                        print_vars(vars(),  ['m.memory_use()'])
+                        print_vars(vars(),  ['o.memory_use()'])
+                    
+                    db.measure([sh], which='drude_weight',
+                            param = {
+                                'which_solver':'cgs', 
+                                'num_of_sweep':8, 
+                                #'trunc_dim':640, 
+                                #'is_calc_error':True, 
+                                'eigs_tol':1e-13, 
+                                'eigs_tol_tol':1e-5, 
+                                }, 
+                            force=1, num_of_threads=12, submit=0, fault_tolerant = 0)
+                    raise  
+                
+                #db.measure([sh], which='drude_weight', param = {'eigs_maxiter':1000, 'trunc_dim_min':4, 'which_solver':'cgs', 'eigs_tol_tol':0.1, 'info':1}, submit=0, force=1, fault_tolerant=0)
+                #res = db._get_charge_stiff(sh, dphi=0.05, fault_tol=0)
+                #print_vars(vars(),  ['res*np.pi'])
+                
+                #xx.show_fig()
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -4563,7 +4710,8 @@ class TestResultDB(unittest.TestCase):
         
 
 if __name__ == '__main__': 
-
+    #warnings.filterwarnings('ignore')
+    warnings.filterwarnings('once')
     if 1: 
         FIELD_NAME_LIST = [
             'energy', 
