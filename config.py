@@ -322,6 +322,8 @@ class Config(dict):
         alg_sur = cfg['algorithm_surfix']
         if alg_sur: 
             alg = '-'.join([alg, alg_sur])
+        
+        fn=fn.replace('=-', '=m')
         if surfix != '': 
             fn = '-'.join([fn, surfix])
             

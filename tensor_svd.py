@@ -409,7 +409,7 @@ class Tensor_svd(object):
             #print_vars(vars(),  ['i', 'ind', 'last'], head='', sep='  ')
         
         return val_largest, last_list, empty_list  
-    
+
     @staticmethod 
     def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, trunc_dim_min=None, 
             full_matrices=False, compute_uv=True, 
@@ -446,7 +446,10 @@ class Tensor_svd(object):
         uu = np.ndarray(num_blocks, dtype=np.object)
         ss = np.ndarray(num_blocks, dtype=np.object)
         vv = np.ndarray(num_blocks, dtype=np.object)
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        #dim_list = np.ndarray(num_blocks, dtype=np.int)
+        dim_list_l = np.ndarray(num_blocks, dtype=np.int)
+        dim_list_r = np.ndarray(num_blocks, dtype=np.int)
+        
         qn_list_l = np.ndarray(num_blocks, dtype=np.object)
         qn_list_r = np.ndarray(num_blocks, dtype=np.object)
         
@@ -466,10 +469,10 @@ class Tensor_svd(object):
             else:
                 try:  # sometimes there is SVD not converge error
                     if compute_uv: 
-                        u, s, v=scipy.linalg.svd(mat, full_matrices=False)
+                        u, s, v=scipy.linalg.svd(mat, full_matrices=full_matrices)
                         uu[i], ss[i], vv[i] = u, s, v
                     else: 
-                        s = scipy.linalg.svd(mat, full_matrices=False, compute_uv=False)
+                        s = scipy.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
                         ss[i] = s
                 except scipy.linalg.LinAlgError as err:  # see note1
                     msg = " scipy.linalg.svd not converge  use another version of SVD instead"
@@ -477,9 +480,14 @@ class Tensor_svd(object):
                     print(msg)
                     u, s, v = common_util.matrix_svd(min(dl, dr), mat)
                     uu[i], ss[i], vv[i] = u, s, v
-                    
-                    
-            dim_list[i] = s.size 
+                except Exception as err:
+                    raise 
+            
+            #dim_list[i] = s.size 
+            if compute_uv:
+                dim_list_l[i] = u.shape[1]
+                dim_list_r[i] = v.shape[0]
+            
             qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
             qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
         #print_vars(vars(),  ['ss'])
@@ -489,9 +497,11 @@ class Tensor_svd(object):
                 spect[qn_list_r[i].val] = ss[i]   # this assume qn_list_l  = qn_list_r.reverse()
             return spect 
         
+        dim_list = dim_list_l   # only used when doing trunc and full_matrices= True
         totdim = np.sum(dim_list)
         prepare_trunc = True 
         if trunc_err_tol is not None: 
+            assert not full_matrices  #when doing trunc,  should set full_matrices=False
             temp = np.zeros((3, totdim), dtype=float)
             d0 = 0
             #put together singular value for each quantum numbers, prepare for truncation
@@ -521,6 +531,7 @@ class Tensor_svd(object):
         trunc_dim = trunc_dim if trunc_dim_min is None else max(trunc_dim, trunc_dim_min)
         
         if trunc_dim < totdim:  
+            assert not full_matrices  #when doing trunc,  should set full_matrices=False
             if prepare_trunc: 
                 #把ss中的奇异值 连接起来用temp 这一ndarray存储
                 temp = np.zeros((3, totdim), dtype=float)
@@ -567,7 +578,8 @@ class Tensor_svd(object):
                 vv = vv[index]
                 ss = ss[index]
             #print_vars(vars(),  ['empty_list', 'dim_list'])
-                
+            dim_list_l = dim_list 
+            dim_list_r = dim_list
         else:
             trunc_err = 0.0
         
@@ -577,8 +589,8 @@ class Tensor_svd(object):
         #S = iTensor(QSp=[qsp_sl, qsp_sr])
         #V = iTensor(QSp=[qsp_sl, tt.QSp[1]])
         totqn = tt.totQN 
-        qsp_l = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
-        qsp_r = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
+        qsp_l = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_l)
+        qsp_r = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_r)
         qsp_l_rev = qsp_l.copy(); qsp_l_rev.reverse()
         qsp_r_rev = qsp_r.copy(); qsp_r_rev.reverse()
         
@@ -616,8 +628,17 @@ class Tensor_svd(object):
             
             p  = S.Block_idx[0, i]
             size = S.Block_idx[1, i]
-            #print_vars(vars(),  ['ss[i].shape', 'size'])
-            S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+            if not full_matrices:
+                S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+            else:
+                if dim_list_l[i] ==  dim_list_r[i]:
+                    S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+                else:
+                    m, n = dim_list_l[i], dim_list_r[i]
+                    temp = np.zeros((m, n))
+                    temp[np.diag_indices(min(m, n))]=ss[i]
+                    S.data[p: p + size] = temp.ravel(order='F')
+                #raise NotImplemented   #not completed, todo: ss[i] is not square matrix then, fill the diagonal element manually 
         if not return_trunc_err:
             return U, S, V 
         else:
@@ -871,6 +892,47 @@ class Tensor_svd(object):
 
         return res
     
+    @classmethod
+    def exp_rank2(cls, itensor, totQN=None):
+        
+        num_blocks = itensor.nidx 
+        tt = itensor  # a shorter name 
+
+
+        #res = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
+        res = tt.shallow_copy()
+      
+        dtype = tt.dtype 
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            assert dl == dr  
+            p  = tt.Block_idx[0, i]
+            size = tt.Block_idx[1, i]
+            mat = tt.data[p: p + size].reshape(dl, dr, order='F')
+            #if dtype==float: 
+            #    mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+            #    val = np.empty(dl, order='F')
+            #    common_util.matrix_eigen_vector(mat, val) 
+            #else:
+            #    mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+            #    val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
+            #    #val, mat = np.linalg.eigh(mat)
+            mat_exp = scipy.linalg.expm(mat)
+        
+            #p  = res.Block_idx[0, i]
+            #size  = res.Block_idx[1, i]
+            res.data[p: p + size] = mat_exp.ravel(order='F')
+        
+        #for i in range(res.nidx): 
+        #    p  = res.Block_idx[0, i]
+        #    size  = res.Block_idx[1, i]
+        #    res.data[p: p + size] = VEC[i].ravel(order='F')
+            
+        return res 
+
+
     @classmethod
     def get_block(cls, div, target_QN, gidx= -1, need_group=True):
         """ 
@@ -1127,6 +1189,22 @@ class TestIt(unittest.TestCase):
                 old = {0:0.96904496136089668, 1: 0.99202622859714307}[ii]
                 self.assertAlmostEquals(overlap, old, 12)
             print('test svd_rank2 by calc overlap --- pass')
+        if 1: 
+            np.random.seed(1234)
+            q1= QspU1.easy_init([0, 1, -1, ], [4, 2, 2])
+            q2= QspU1.easy_init([0, -1, 1, ], [3, 4, 2])
+            q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
+            q2= QspU1.easy_init([0, -1, 1], [3, 4, 3])
+            
+            qsp = [q1, q2]
+            
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            u, s, v = Tensor_svd.svd_rank2(t, full_matrices=1)
+            a = u.dot(s).dot(v) 
+            self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14))             
+            
     
     def test_svd_rank2_fix_err(self): 
         from merapy import QspU1 
@@ -1246,44 +1324,47 @@ class TestIt(unittest.TestCase):
                 c, _ = tt.contract(tt.conj(), [0, 1], [0, 2])
                 self.assertTrue(c.is_close_to(1))
                 
+    def test_exp_rank2(self): 
+        np.set_printoptions(precision=3)
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspU1.easy_init([0, 1, -1, ] , [4, 2, 3])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t = 1j*t 
+            tm = t.matrix_view()
+            t_exp = scipy.linalg.expm(tm)
+            print_vars(vars(),  ['t_exp'])
+        if 1: 
+            temp = Tensor_svd.exp_rank2(t)
+            temp = temp.matrix_view()
+            print_vars(vars(),  ['temp'])
+            
+        self.assertTrue(np.allclose(t_exp, temp, atol=1e-10))
+                
 
     def test_temp(self): 
-        pass
-        #np.set_printoptions(precision=3)
+            
         if 1: 
-            rank = 4
-            u = iTensor.example(rank=4, dtype=complex)
-            totqn = self.qn_identity.copy()
-            v, e=Tensor_svd.eig(u, totqn)
-            print_vars(vars(),  ['e'])
-            print_vars(vars(),  ['v'])
+            np.random.seed(1234)
+            q1= QspU1.easy_init([0, 1, -1, ], [4, 2, 2])
+            q2= QspU1.easy_init([0, -1, 1, ], [3, 4, 2])
+            q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
+            q2= QspU1.easy_init([0, -1, 1], [3, 4, 3])
             
-        if 1:
-            np.random.seed(333)
-            rank = 4
-            u = iTensor.example(rank=4)
-            totqn = self.qn_identity.copy()
-            print("tttt", type(totqn))
-            v, E=Tensor_svd.eig(u, totqn)
-            E_old = np.asarray([-1.64530983, -1.3290226 , -0.58372545, -0.16195959,  0.35432525, 0.48924165,  0.60459623,  0.81444748])
-            self.assertTrue(np.allclose(E, E_old, 1e-8))
+            qsp = [q1, q2]
             
-            v_old = np.abs(np.asarray([-0.29005013,  0.42709089, -0.52537203, -0.08798355, -0.09995058, 0.49136065, -0.42246346, -0.14073605]))
-            print_vars(vars(),  ['v.data'])
-            print_vars(vars(),  ['v_old'])
-            self.assertTrue(np.allclose(np.abs(v.data), v_old, 1e-8))
-            
-            
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            u, s, v = Tensor_svd.svd_rank2(t, full_matrices=1)
+            a = u.dot(s).dot(v) 
+            self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14))             
     
 if __name__ == "__main__":
-    if 0: 
-        tt = test_Tensor_svd(symmetry="Travial")
-        #tt.group_legs(rank=3)
-        tt.svd()
-        #tt.eig()
-        #tt.random_unit_tensor()
-        #tt.random_unit_tensor_large()
-    if 0: #examine
+    if 1: #examine
                 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
@@ -1292,15 +1373,16 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           'test_eig', 
+           #'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
-           'test_eig_rank2', 
+           #'test_eig_rank2', 
+           #'test_exp_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
-           #'test_temp', 
+           'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

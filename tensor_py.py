@@ -590,7 +590,7 @@ class iTensor(TensorBase):
                 
                 if data_format == 'ndarray' and self.size<1000:
                     t = self.to_ndarray()
-                    temp = '\n' + str(t)
+                    temp = '(in matrix view)\n' + str(t)
                 #elif data_format == 'none' :
                 #    temp = "...."
                 else:
@@ -2712,8 +2712,9 @@ class iTensor(TensorBase):
                         temp['totdim'] =  dim_tuple[k] 
             block_end = block_origin + np.asarray(dim_tuple)
             if qn_id_tuple in data_blocks: 
+                #sl = [slice(block_origin[iii], block_end[iii]) for iii in range(self.rank)]
                 sl = [slice(block_origin[iii], block_end[iii]) for iii in range(self.rank)]
-                res[sl] = data_blocks[qn_id_tuple].reshape(dim_tuple, order=data_order)
+                res[tuple(sl)] = data_blocks[qn_id_tuple].reshape(dim_tuple, order=data_order)
             
             #print_vars(vars(), ['block_origin', 'block_end'], sep=' ')
                 
@@ -2937,7 +2938,7 @@ class iTensor(TensorBase):
     def tensor_prod(self, T2, order="F"):
         return self.direct_product(T2, order)
 
-    def matrix_view(self, n=None, order='C', round=None):
+    def matrix_view(self, n=None, order='C', data_order='F', round=None):
         """
             map rank (n, rank-n) tensor to a 2-d mat. 
             this method is used for debug or getting a intuitive view of the tensor
@@ -2950,7 +2951,7 @@ class iTensor(TensorBase):
         rank = self.rank
         dim1 = np.prod(self.Dims[:n])
         dim2 = np.prod(self.Dims[n:self.rank])
-        res= np.zeros(np.prod(self.Dims[:self.rank])).reshape((dim1, dim2))
+        res= np.zeros(np.prod(self.Dims[:self.rank]), dtype=self.dtype).reshape((dim1, dim2))
         
         ddd = [self.QSp[i].nQN for i in range(self.rank)]
         pos1 = 0 
@@ -2971,7 +2972,7 @@ class iTensor(TensorBase):
                     d1 = np.prod([self.QSp[i].Dims[iQN[i]] for i in range(n)])
                     d2 = np.prod([self.QSp[i].Dims[iQN[i]] for i in range(n,self.rank)])            
                     start = self.Block_idx[0, idx]
-                    res[pos1:pos1+d1, pos2:pos2+d2] = self.data[start:start + d].reshape(d1, d2)
+                    res[pos1:pos1+d1, pos2:pos2+d2] = self.data[start:start + d].reshape(d1, d2, order=data_order)
                     #print res
                 db = np.prod([self.QSp[i].Dims[iQN[i]] for i in range(n, self.rank)])
                             
