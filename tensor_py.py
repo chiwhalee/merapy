@@ -1945,32 +1945,32 @@ class iTensor(TensorBase):
     
     def contract_core(self, T2, div, preserve_qsp=False, data=None, use_buf=False):
         """
-            see iTensor_Contraction2 in f90
             把T1，和T2的非零block 如果量子数组合相等则收缩
+            todo:
+                force check qsp pair are reverse of each other before contract
             locals:
                 div: num. of legs to be contracted for each tensor
                 buffer: use buffer to save data of T3
         """
-        #print "ccc"
 
         rank1 = self.rank
-        rank2=T2.rank
-        rank3=rank1+rank2-div-div
+        rank2 = T2.rank
+        rank3 = rank1+rank2-div-div
         tQN = self.totQN+T2.totQN
         shift = rank1-div
         #copy is needless conceptially
-        if 0:       #copy is more robust, while no copy is faster
-            QSp = [self.QSp[i].copy() for i in range(shift)]
-            QSp.extend([T2.QSp[i].copy() for i in range(div, rank2)])
-        else:
-            QSp = self.QSp[:shift]
-            QSp.extend(T2.QSp[div:rank2])
+        #copy is more robust, while no copy is faster
+        #QSp = [self.QSp[i].copy() for i in range(shift)]
+        #QSp.extend([T2.QSp[i].copy() for i in range(div, rank2)])
+        QSp = self.QSp[:shift]
+        QSp.extend(T2.QSp[div:rank2])
 
         if rank3==0:
             #QSp = [self.QSp[0].null()]
             QSp = []
         
         dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+        #print_vars(vars(),  ['QSp'])
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
         T3.data[:]=0.0
         
@@ -1978,9 +1978,9 @@ class iTensor(TensorBase):
         
         nidx3 = 0
         alpha = 1.0; beta=1.0
-        iQN1=np.empty(self.rank + 1,"int")
-        iQN2=np.empty(T2.rank + 1,"int")        
-        iQN3=np.empty(T3.rank + 1,"int") # +1 to avoid T3.rank=0
+        iQN1=np.empty(self.rank + 1, int)
+        iQN2=np.empty(T2.rank + 1, int)        
+        iQN3=np.empty(T3.rank + 1, int) # +1 to avoid T3.rank=0
 
         for idx2 in range(T2.nidx):
             iQN2[0] = 0  #!for rank=0
@@ -1997,7 +1997,7 @@ class iTensor(TensorBase):
                 iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
                 p1 = self.Block_idx[0, idx1]
                 #注意这里写得不适当，准确地，如果是
-                #U1 symm. 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定....写不清楚啊
+                #U1 symm 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定....写不清楚啊
                 iseq = np.all(iQN1[shift:shift+div] == iQN2[0:div])
                 if not iseq:
                     #如果量子数组合相等则收缩
@@ -2015,10 +2015,8 @@ class iTensor(TensorBase):
                 idx3 = T3.idx[p3]
                 
                 #one frequent error is the IndexError: index (9) out of xrange (0<=index<9) in dimension 1
-                #dic = locals()
-                #temp = ["idx3", "iQN1", "iQN2", "iQN3"]
-                #print get_local(dic, temp)
-
+                #print_vars(vars(),  ['idx3'])
+                
                 p3 = T3.Block_idx[0,idx3]
                 data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                 data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
@@ -2153,10 +2151,7 @@ class iTensor(TensorBase):
 
         V_1n2 = np.intersect1d(V1, V2,True)
         V3=np.setxor1d(V1,V2,True)
-        #print_vars(vars(),  ['repr(V3)', 'repr(V1)'])
 
-        if info>0:
-            print("contracted legs:\n\t", V_1n2)
 
         k=0
         l=0
@@ -2236,24 +2231,17 @@ class iTensor(TensorBase):
 
                 Vp1,先记录了T1的外腿，后记录内腿指标； Vp2先记录了内腿，后记录了外腿指标
         """
-        if info>0:
-            #\t{V1[0:rank1]}\t#{V2}[0:rank2]
-            msg = """\ncontracting: {0.type_name}\t{1.type_name}
-                rank: \t{0.rank}\t{1.rank}
-                label: \t{V1}\t{V2} 
-                dims: {0.Dims}\t{1.Dims}""".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank])
-            print(msg)
-            if 0:
-                print("\n\nstart contracting:", self.type_name, T2.type_name)
-                print("rank1, rank2, V1, V2:\n\t",self.rank, T2.rank,  V1[:self.rank], V2[:T2.rank])
-                #print "T1.data: ", self.data[:4].round(5), "...", self.data[-4:].round(5)
-                #print "T2.data: ", T2.data[:4].round(5), "...", T2.data[-4:].round(5)
-                print(self.data.round(3))
-                print(T2.data.round(3))
+        #if info>0:
+        #    #\t{V1[0:rank1]}\t#{V2}[0:rank2]
+        #    msg = """\ncontracting: {0.type_name}\t{1.type_name}
+        #        rank: \t{0.rank}\t{1.rank}
+        #        label: \t{V1}\t{V2} 
+        #        dims: {0.Dims}\t{1.Dims}""".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank])
+        #    print(msg)
+        #to impletement in the future
+        #self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
+        #T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
             
-            #to impletement in the future
-            #self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
-            #T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
         if V1 is None: 
             V1 = self.ind_labels 
         if V2 is None: 
@@ -2265,7 +2253,6 @@ class iTensor(TensorBase):
         
         
         try:
-            #print_vars(vars(),  ['repr(Vp1)', 'T1.rank', 'T1.ind_labels'])
             nT1=T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排
             nT2=T2.permutation(Vp2, use_buf=use_buf)
             T3 = nT1.contract_core(nT2, V_1n2.size, data=data, use_buf=use_buf)
@@ -2299,10 +2286,7 @@ class iTensor(TensorBase):
             if not err.args: 
                        err.args=('',)
             err.args = (err.args[0] + "\n"*2 + msg,)+err.args[1:]
-           
             raise 
-        
-
         
         #if track_name: 
         if info>0: 
@@ -2314,12 +2298,6 @@ class iTensor(TensorBase):
             T3 = T3.permutation(order)
             T3.ind_labels = final_ind_labels 
         
-        if info>0: 
-            #print "T3.data:", T3.data[range(4) + xrange(-4, 0)].round(5)        
-            #print "T3.data:", T3.data[range(4)].round(5), "...", T3.data[range(-4, 0)].round(5)
-            msg = """\n\tpermuted order: \t{Vp1}\t{Vp2}
-                    \tyielding:  rank3={rank3}\tV3={V3}""".format( rank3=T3.rank, V3=V3, Vp1=Vp1[:self.rank], Vp2=Vp2[:T2.rank])
-            print(msg)
         
         if out_Vc:
             Vc= V_1n2

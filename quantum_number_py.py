@@ -462,22 +462,28 @@ class QuantSpaceBase(object):
         """
             improving: in futrue use key_property to implement this
         """
-        key1 = ["nQN", "totDim"]
-        for i in key1:
-            res = self.__getattribute__(i)==other.__getattribute__(i)
-            if not res:
-                #print self.__getattribute__(i)
-                #print other.__getattribute__(i)
-                return res
-        key2 = ["QNs", "_dims"]
+        #key1 = ["nQN", "totDim"]
+        #for i in key1:
+        #    res = self.__getattribute__(i)==other.__getattribute__(i)
+        #    if not res:
+        #        return res
+        if self.nQN != other.nQN:
+            return False
+        if self.totDim != other.totDim:
+            return False
+            
         nQN = self.nQN
-        for i in key2:
-            res = self.__getattribute__(i)[:nQN]==other.__getattribute__(i)[:nQN]
-            res= np.all(res)
-            if not res:
-                #print self.__getattribute__(i)
-                #print other.__getattribute__(i)
-                return res
+        #key2 = ["QNs", "_dims"]
+        #for i in key2:
+        #    res = self.__getattribute__(i)[:nQN]==other.__getattribute__(i)[:nQN]
+        #    res= np.all(res)
+        #    if not res:
+        #        return res
+        if not np.all(self.QNs[:nQN]==other.QNs[:nQN]):
+            return False 
+        if not np.all(self._dims[:nQN]==other._dims[:nQN]):
+            return False 
+        
         return True
 
     def __ne__(self, other):
@@ -563,7 +569,7 @@ class QuantSpaceBase(object):
 
     def reverse(self):
         """
-        see QSp_Reverse in f90"""
+        """
         for i in range(self.nQN):
             self.QNs[i].reverse()
     
