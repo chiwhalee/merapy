@@ -425,7 +425,7 @@ class Tensor_svd(object):
                 if both are provided, the later will overide the former.
                 if further a 'trunc_dim_min' is provided, it guarantees not trunc too much
             params:
-                normalize_singular_val: it in fact always true
+                normalize_singular_val: in fact it is always true
                 
             note1:
                 it happens that it through an error saying  SVD not converge. 
@@ -530,7 +530,9 @@ class Tensor_svd(object):
         
         trunc_dim = trunc_dim if trunc_dim_min is None else max(trunc_dim, trunc_dim_min)
         
+        is_trunked = False
         if trunc_dim < totdim:  
+            is_trunked = True
             assert not full_matrices  #when doing trunc,  should set full_matrices=False
             if prepare_trunc: 
                 #把ss中的奇异值 连接起来用temp 这一ndarray存储
@@ -639,6 +641,8 @@ class Tensor_svd(object):
                     temp[np.diag_indices(min(m, n))]=ss[i]
                     S.data[p: p + size] = temp.ravel(order='F')
                 #raise NotImplemented   #not completed, todo: ss[i] is not square matrix then, fill the diagonal element manually 
+        #if not is_trunked and normalize_singular_val:  # when is_trunked=True it is automatically normalized 
+        #    S.data /= np.linalg.norm(Tensor_svd.diagonal_rank2(S))
         if not return_trunc_err:
             return U, S, V 
         else:
@@ -894,7 +898,6 @@ class Tensor_svd(object):
     
     @classmethod
     def exp_rank2(cls, itensor, totQN=None):
-        
         num_blocks = itensor.nidx 
         tt = itensor  # a shorter name 
 
@@ -932,7 +935,38 @@ class Tensor_svd(object):
             
         return res 
 
-
+    @classmethod
+    def trace_rank2(cls, itensor, totQN=None):
+        tt = itensor  # a shorter name 
+        dtype = tt.dtype 
+        res = 0.0
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            assert dl == dr  
+            p  = tt.Block_idx[0, i]
+            size = tt.Block_idx[1, i]
+            res += tt.data[p: p + size].reshape(dl, dr, order='F').trace()
+        return res 
+    
+    @classmethod
+    def diagonal_rank2(cls, itensor, totQN=None):
+        tt = itensor # a shorter name 
+        tot_size = np.sum(np.sqrt(tt.Block_idx[1, :tt.nidx]))
+        res = np.zeros(int(tot_size), tt.dtype)
+        k = 0
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            assert dl == dr  
+            p  = tt.Block_idx[0, i]
+            size = tt.Block_idx[1, i]
+            res[k:k+dl] = np.diagonal(tt.data[p: p + size].reshape(dl, dr, order='F'))
+            k += dl  
+        return res 
+    
     @classmethod
     def get_block(cls, div, target_QN, gidx= -1, need_group=True):
         """ 
@@ -1344,27 +1378,37 @@ class TestIt(unittest.TestCase):
             
         self.assertTrue(np.allclose(t_exp, temp, atol=1e-10))
                 
-
-    def test_temp(self): 
-            
+    def test_trace_rank2(self): 
         if 1: 
             np.random.seed(1234)
-            q1= QspU1.easy_init([0, 1, -1, ], [4, 2, 2])
-            q2= QspU1.easy_init([0, -1, 1, ], [3, 4, 2])
             q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
-            q2= QspU1.easy_init([0, -1, 1], [3, 4, 3])
+            q2= QspU1.easy_init([0, -1, 1], [4, 2, 5])
             
             qsp = [q1, q2]
             
             t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
-            data = np.random.random(t.totDim)
-            t.data[: ] = data
-            u, s, v = Tensor_svd.svd_rank2(t, full_matrices=1)
-            a = u.dot(s).dot(v) 
-            self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14))             
+            tm = t.matrix_view()
+            tr1 = tm.trace()
+            tr2 = Tensor_svd.trace_rank2(t)
+            self.assertAlmostEqual(tr1, tr2, 10)
+
+    def test_temp(self): 
+        if 1: 
+            np.random.seed(1234)
+            q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
+            q2= QspU1.easy_init([0, -1, 1], [4, 2, 5])
+            
+            qsp = [q1, q2]
+            
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            tm = t.matrix_view()
+            tr1 = tm.trace()
+            tr2 = Tensor_svd.diagonal_rank2(t)
+            print_vars(vars(),  ['np.sum(tr2)', 'tr1'])
+            
     
 if __name__ == "__main__":
-    if 1: #examine
+    if 0: #examine
                 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
@@ -1380,6 +1424,7 @@ if __name__ == "__main__":
            #'test_svd_rank2_fix_err', 
            #'test_eig_rank2', 
            #'test_exp_rank2', 
+           #'test_trace_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
            'test_temp', 
