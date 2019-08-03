@@ -824,7 +824,6 @@ class iTensorFactory(object):
         def make_op(xx):
             op = 0.0
             for a, b, c in xx:
-                #print_vars(vars(),  ['a', 'b'])
                 a = vec[a].insert_1d_qsp(1)  #|a>
                 b = vec[b].insert_1d_qsp(1) #|b>
                 a_tc = a.T.conj()
@@ -849,8 +848,6 @@ class iTensorFactory(object):
         res= {a:dic[a] for a in temp if a in dic}
         for i in res:
             res[i].type_name = i
-        
-        
         
         return res 
     
@@ -879,6 +876,28 @@ class iTensorFactory(object):
         mapping['op_type'] = op_type
         
         return mapping 
+    
+    @classmethod
+    def common_op(cls, op_name, symmetry=None, nmax=None, force=0):
+        """
+            for convenience 
+            params:
+                nmax: only for bosons 
+                force: only needed for bosons, when changing nmax 
+            
+        """
+        #if not force and hasattr(cls, op_name):
+        #    return getattr(cls, op_name)
+        
+        if 'b' in op_name:
+            temp = cls.lattice_op('boson', symmetry=symmetry, nmax=nmax)
+        elif 'sigma' in op_name:
+            temp = cls.lattice_op('spin', symmetry=symmetry, spin='one_half')
+        else:
+            raise NotImplemented  
+        res = temp[op_name]
+        
+        return res 
     
     @staticmethod
     def base_state(which, symmetry, nmax=None, shift_qn=True, **kwargs):
@@ -1023,8 +1042,6 @@ class TestIt(unittest.TestCase):
 
     def test_boson_op(self):
         for symm in ['Travial', 'U1']:
-            
-            
             nmax = 4
             res = iTensorFactory.boson_op(symm, nmax, 
                     shift_qn=1)
@@ -1046,33 +1063,15 @@ class TestIt(unittest.TestCase):
         
     def test_temp(self):
         
-        #for symm in ['Travial', 'U1']:
-        for symm in ['Travial']:
+        t = iTensorFactory.common_op('sigma_x', symmetry='Z2', nmax=4)
+        print_vars(vars(),  ['t'])
             
-            nmax = 4
-            res = iTensorFactory.boson_op(symm, nmax, 
-                    shift_qn=1)
-            bdag, b = res['bdag'], res['b']
-            I, n_i  =  res['I'], res['n_i']
-            
-            # test [b, b^+]  is almost 1 
-            c = b.commutator(bdag)  #After truncation of nmax [b, b^+1] no longer strictly equals 1 
-            c = c.to_ndarray().diagonal().round(5)
-            
-            
-            self.assertTrue(np.all(c[:-1]==[1]*nmax))
-            print_vars(vars(),  ['b.dot(bdag)'])
-            
-            # test n_i 
-            n_i = n_i.to_ndarray().diagonal().round(5)
-            print_vars(vars(),  ['n_i'])
-            self.assertTrue(np.all(n_i==np.arange(0, nmax + 1, 1.0)))
         
 
 
 if __name__ == "__main__":
     
-    if 1:
+    if 0:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main(verbosity=-10)
        

@@ -950,6 +950,18 @@ class QspZ2(QuantSpaceBase):
         c1 = self._dims[1]
         res= self.__class__.easy_init([1, -1], [d0, d1])
         return res 
+    
+    @classmethod
+    def easy_init(cls, qns=None, dims=None):
+        """ a slow but easy init """
+        n = len(dims)
+        assert dims is not None 
+        if qns is None: 
+            qns = [1, -1]
+            assert len(qns)>= len(dims)
+            qns = qns[: len(dims)]
+        qns1 = [cls.QnClass(i) for i in qns]
+        return cls(n=n, qns=qns1, dims=dims)
 
     @classmethod
     def set_base(cls, dim=None):
