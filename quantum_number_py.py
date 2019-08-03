@@ -587,8 +587,8 @@ class QuantSpaceBase(object):
         qns= [q.copy() for q in self.QNs[:self.nQN]]
         other=self.__class__(n=self.nQN, qns=qns, dims=self._dims)
         other._totDim = self.totDim
-        if hasattr(self, "RefQN"):
-            other.RefQN=self.RefQN.copy()
+        #if hasattr(self, "RefQN"):
+        #    other.RefQN=self.RefQN.copy()
         if reverse: 
             other.reverse()
         return other
@@ -596,8 +596,8 @@ class QuantSpaceBase(object):
     def copy_from(self, other):
         self.nQN = other.nQN
         self._totDim=other.totDim
-        if hasattr(self, "RefQN"):
-            self.RefQN=other.RefQN.copy()
+        #if hasattr(self, "RefQN"):
+        #    self.RefQN=other.RefQN.copy()
         nqn=other.nQN
         if nqn != 0:
             #print other.QNs
@@ -616,8 +616,6 @@ class QuantSpaceBase(object):
         #temp = self.__class__.__call__(n=0, qns=[], dims=[])
         temp = self.__class__.empty()
         if qsp_max is not None:
-            #temp.RefQN[:,:]=0
-            #temp.nQN=0
             nqn = 0
             for n in range(self.nQN):
                 i= qsp_max.has_quant_num(self.QNs[n])
@@ -700,7 +698,7 @@ class QuantSpaceBase(object):
         see CombineQSp2 in f90
         reture another instace of QuantSpace that is the squre of self
         """
-        RefQN=np.ndarray(2,self.MaxQNNum)
+        #RefQN=np.ndarray(2,self.MaxQNNum)
         res= QuantSpace()
         for i in range(self.nQN):
             for j in range(self.nQN):
@@ -886,8 +884,7 @@ class QspTravial(QuantSpaceBase):
         self._dims[:n] = dims[:n]
         #self._totDim = self._dims[0]
         self.QNs = [QnTravial()]
-        #self.QNs = np.array([QnTravial()])
-        self.RefQN = np.empty((2, 1))
+        #self.RefQN = np.empty((2, 1))
         #self.Addr=np.empty(self.MaxQNNum+1,"int")
 
 
@@ -924,7 +921,7 @@ class QspZ2(QuantSpaceBase):
 
         """
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
-        self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
+        #self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
     
     def __div__(self, other): 
         """
@@ -1000,8 +997,8 @@ class QspZ2(QuantSpaceBase):
             dims= [2, 2]
             qns=[QnZ2(i) for i in qns1]
             qsp_max2 = QspZ2(n=2, qns=qns, dims=dims)
-            qsp_max2.RefQN[0,0:2] = [2,1]
-            qsp_max2.RefQN[1,0:2] = [0,1]
+            #qsp_max2.RefQN[0,0:2] = [2,1]
+            #qsp_max2.RefQN[1,0:2] = [0,1]
             qsp_max2.update()
         #return qsp_max, qsp_max2
         return qsp_max
@@ -1011,7 +1008,7 @@ class QspZ3(QuantSpaceBase):
     QnClass = QnZ3
     def __init__(self, n, qns, dims,  RefQN=None):
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
-        self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
+        #self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
 
     @classmethod
     def set_base(cls, dim=None):
