@@ -178,8 +178,6 @@ class Main(object):
         if not self.initialized: 
             self.init_alg()
             self.initialized = True 
-        
-        #Main.set_num_of_threads(self.NUM_OF_THREADS)
         self.S._minimize_finite_size(**kwargs)
         return self.S
 
@@ -188,7 +186,6 @@ class Main(object):
             self.init_alg()
             self.initialized = True 
         
-        #Main.set_num_of_threads(self.NUM_OF_THREADS)
         self.S._minimize_scale_invar(**kwargs)
         return self.S
 

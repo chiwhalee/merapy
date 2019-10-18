@@ -550,6 +550,8 @@ class iTensorFactory(object):
             #I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
             
             I, Z = sigma_0, sigma_z 
+            
+            #spin_z = 0.5*sigma_z
         F = -sigma_z   # this used in jordan-wigner trans
         temp = vars()
         res= {k: v for k, v in temp.items() if isinstance(v, iTensor)}

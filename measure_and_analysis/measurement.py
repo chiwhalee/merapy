@@ -50,12 +50,14 @@ try:
     import vmps.measure_and_analysis.measurement_idmrg as all_idmrg 
     import vmps.measure_and_analysis.measurement_idmrg_mcc as all_idmrg_mcc
     import vmps.measure_and_analysis.measurement_vmps as all_mps 
+    import vmps.measure_and_analysis.measurement_tmps as all_time_evo
+    
     #import vmps.measure_and_analysis.all as all_mps
 except ImportError as err: 
     print(err) 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_vmps, ResultDB_mera, 
-        ResultDB_idmrg,  BACKUP_STATE_DIR, RESULTDB_DIR, )
+        ResultDB_idmrg, ResultDB_tdvp,   BACKUP_STATE_DIR, RESULTDB_DIR, )
 from merapy.decorators import timer
 
 
@@ -137,7 +139,7 @@ def store_result_decorator(measure_func, state=None, state_path=None,
     if param is None: 
         param = {}
     
-    print('meassuring %s at %s %s'%(path, shape, iter))
+    print('meassuring %s at %s '%(path, shape))
     if not allow_measure and not force: 
         print('\tstate is not converged. not allowing measure. return None')
         return 
@@ -276,9 +278,10 @@ def measure_S(S=None, parpath=None, path=None,
         #if isinstance(S, MPS): 
         if S.__class__.__name__ == 'MPS':                  
             algorithm = 'mps'
-        #elif isinstance(S, np.ndarray): 
         elif isinstance(S, dict): 
-            if 'mps' in S: 
+            if 'the_time' in S:   #this line put above mps 
+                algorithm = 'tdvp'
+            elif 'mps' in S: 
                 algorithm = 'mps'
             elif 'A' in S: 
                 algorithm = 'idmrg'
@@ -290,14 +293,6 @@ def measure_S(S=None, parpath=None, path=None,
         
         if algorithm == 'mera':  
             all_func = all_mera
-           
-            #if S.symmetry == 'U1': 
-            #    try: 
-            #        field.remove('entanglement_brute_force_9')
-            #        field.remove('entanglement_brute_force_9_aver')
-            #    except: 
-            #        pass
-            
             from merapy.hamiltonian import System 
             if sys.version_info.major<3:
                 propt = System.key_property.__func__(S)
@@ -322,26 +317,23 @@ def measure_S(S=None, parpath=None, path=None,
             rdb_class= ResultDB_mera 
             
             
-        elif algorithm == 'mps': 
+        elif algorithm in ['mps', 'tdvp']: 
             
-            #field = all_mps.DEFAULT_FIELD_LISt 
-            all_func = all_mps
             #S = S['mps']  #fuck, this is bad, but I like bad!
             #mps= S 
             mps= S['mps']
-            #db_version = 1.0
             N, D = mps.N, mps.D
-            #if mps.symmetry is not None : 
             if hasattr(mps, 'symmetry'):  
                 D = mps.bond_dim_max 
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
-            dim,  layer = None, None
             shape =  N,  D
-            iter = -1
-            
-            
-            rdb_class= ResultDB_vmps
+            if algorithm == 'mps':
+                all_func = all_mps
+                rdb_class= ResultDB_vmps
+            elif algorithm == 'tdvp' :
+                rdb_class = ResultDB_tdvp
+                all_func = all_time_evo 
             
         elif algorithm == 'idmrg': 
             #field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
@@ -361,12 +353,10 @@ def measure_S(S=None, parpath=None, path=None,
             symm = None if isinstance(A, np.ndarray) else A.symmetry 
             #db_version = 1.0
             N = 0
-            #D = A.shape[0] if symm is None else A.shape[0].totDim 
             D = S.get('trunc_dim')
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
             shape =  N, D 
-            iter = -1
             
             rdb_class= ResultDB_idmrg 
             
@@ -417,7 +407,6 @@ def measure_S(S=None, parpath=None, path=None,
             if db_version is None: 
                 is_found = w in _rdb[k]
             else:
-                #key_list = [w] + [shape, iter]
                 key_list = [w] + [shape]
                 is_found = _rdb.has_key_list(key_list)
             if is_found: 
@@ -444,11 +433,10 @@ def measure_S(S=None, parpath=None, path=None,
             if db_version is None: 
                 results.append(dict(field_name=field_name, key=k, res=res, sub_key_list=None))
             else: 
-                #results.append(dict(field_name=field_name, sh=shape, iter=iter, val=res))
                 results.append(dict(field_name=field_name, sh=shape, val=res))
                 
         except Exception as err:
-            failed_list.append((w, shape, iter, err))
+            failed_list.append((w, shape, err))
             msg = '%20s'%('FAILED skip')
             if not fault_tolerant: 
                 raise 
@@ -473,7 +461,7 @@ def measure_S(S=None, parpath=None, path=None,
                 _rdb['algorithm'] = algorithm
                 changed = True
                 
-            if algorithm in ['mps', 'idmrg']: 
+            if algorithm in ['mps', 'tdvp', 'idmrg']: 
                 N = shape[0]
                 D = shape[1]
                 if 'dim_max' not in _rdb: 
@@ -526,6 +514,9 @@ def make_measure_many_args(dir_list, sh_list, sh_min=None, sh_max=None,
         elif 'idmrg' in aaa:
             algorithm = 'idmrg'
             rdb_class= ResultDB_idmrg 
+        elif 'tdvp' in aaa:
+            algorithm = 'tdvp'
+            rdb_class= ResultDB_tdvp 
         else: 
             raise
     rdb_class= ResultDB.algorithm_name_to_rdb(algorithm)

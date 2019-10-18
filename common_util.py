@@ -323,6 +323,14 @@ def timer_del(func):
         return res 
     return wraper
 
+_set_num_of_threads = set_num_of_threads
+def set_num_of_threads(n, info=1):
+    """
+        a simple wrapper 
+    """
+    if info:
+        print('set_num_of_threads to %d'%n)
+    _set_num_of_threads(n)
 
 
 class test_common(object):

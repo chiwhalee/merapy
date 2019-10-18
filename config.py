@@ -343,9 +343,13 @@ class Config(dict):
     def filter(cfg,  strict=False,  db_class=None, 
             from_energy_rec=True, info=0):
         if db_class is None:
-            from merapy.measure_and_analysis.result_db import ResultDB_idmrg, ResultDB_vmps
+            from merapy.measure_and_analysis.result_db import (ResultDB_idmrg, 
+                    ResultDB_vmps, ResultDB_tdvp)
             alg = cfg['algorithm']
-            db_class= {'idmrg':ResultDB_idmrg, 'vmps':ResultDB_vmps}[alg]
+            db_class = {'idmrg':ResultDB_idmrg, 
+                    'vmps':ResultDB_vmps, 
+                    'tdvp':ResultDB_tdvp, 
+                    }[alg]
         if cfg['parpath_relative'] is None:
              return True
         parpath = '/'.join([ BACKUP_BASE_DIR, cfg['parpath_relative']])
@@ -407,12 +411,22 @@ class Config(dict):
             sh = (0, Dmax)
             if db.has_shape(sh, from_energy_rec=from_energy_rec):
                 allow = False
+        elif alg == 'tdvp' :
+            trunc_dim, the_time_lim = cfg['trunc_dim'], cfg['the_time_lim']
+            msg.insert(2, 'td=%d'%(trunc_dim, ))
+            sh = (N, trunc_dim)
+            the_time = db.fetch_easy('the_time', sh, default=0)
+            if the_time >=  the_time_lim:
+                allow = False 
+            else:
+                allow = True
+        else:
+            raise  
         
         
         if not cfg.get('auto_resume', True):
             allow = True
             
-        
         if not allow:
             msg = ['FOUND '] + msg[:2]
         else:

@@ -559,12 +559,12 @@ class QuantSpaceBase(object):
     @classmethod
     def easy_init(cls, qns=None, dims=None):
         """ a slow but easy init """
-        n = len(qns)
         symm =  cls.QnClass.SYMMETRY 
         if symm== 'Travial':
-            qns1 = None
+            qns1 = [QnTravial()]
         else:
             qns1 = [cls.QnClass(i) for i in qns]
+        n = len(qns1)
         return cls(n=n, qns=qns1, dims=dims) 
 
     def reverse(self):
