@@ -31,7 +31,7 @@ import pprint
 import pickle as pickle
 import numpy as np
 #import pandas as pd
-from collections import OrderedDict
+from collections import (OrderedDict, namedtuple)
 import platform
 import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
@@ -53,6 +53,7 @@ import merapy.measure_and_analysis.result_db as result_db_module
 from merapy.measure_and_analysis.result_db import (ResultDB, 
         MATPLOTLIBRC, 
         ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
+        ResultDB_tdvp, 
         ResultDB_proj_qmc, ResultDB_bethe_ansatz, 
         BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT, LOCAL_HOSTNAME)
 from  merapy.measure_and_analysis.result_db import (  MARKER_CYCLE, 
@@ -62,7 +63,7 @@ from  merapy.measure_and_analysis.result_db import (  MARKER_CYCLE,
 import matplotlib as mpl
 mpl.rcParams.update(MATPLOTLIBRC)
 
-
+IS_PY3 = sys.version_info.major>2
 
 __all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 
          'MARKER_CYCLE', ]
@@ -83,6 +84,9 @@ class OrderedDictLazy(OrderedDict):
             a = (a, )
         if a[-1] == '' : 
             a = a[: -1]
+        #if isinstance(a,  namedtuple):
+        if hasattr(a, '_fields'): 
+            a = tuple(a)
         if a not in self: 
             try: 
                 p = self.alpha_parpath_dict[a]
@@ -148,7 +152,12 @@ class Analysis(AnalysisTools, AnalyticFormular):
             param_name_list=None, 
             param_value_list=None, 
             default_resolution=None, 
+            Alpha=None, 
             result_db_class=None, result_db_args=None, algorithm='all'):
+        """
+        
+        
+        """
         self.local_root = local_root
         if local_root is not None and not os.path.exists(self.local_root): 
             msg="local_root '%s' not exists, create one? yes(y) "%(self.local_root, )
@@ -159,6 +168,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             else:
                 raise  
         self.param_list= param_list
+        self.Alpha = Alpha 
         self.default_resolution = default_resolution 
         self.result_db_class = result_db_class if result_db_class is not None else ResultDB
         self.result_db_args = {'analysis_class':self}
@@ -296,8 +306,12 @@ class Analysis(AnalysisTools, AnalyticFormular):
         
         if surfix is not None : 
             #surfix = None means all surfix; surfix = '' means empty surfix 
-            if surfix == '' : 
+            if surfix == '' :
                 aa = [x for x in aa if not isinstance(x[-1], str)]
+            elif '<' in surfix or '>' in surfix:
+                func = lambda x: eval(surfix.replace('surfix', x[-1]))
+                aa = list(filter(func, aa))
+                
             else:
                 aa = [x for x in aa if x[-1]==surfix]
             
@@ -430,11 +444,43 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if info>1: 
             print('dir_list is', dir_list)
         signiture = signiture if signiture is not None else '='
+        dir_list = [d for d in dir_list if signiture in d]
+        alpha_parpath_dict = OrderedDict()
         
-        if 1: 
+        
+        if self.Alpha is not None:  
+            def parse(term): 
+                if '=' in term: 
+                    key, val = term.split('=')
+                    if 'm' == val[0]:  #change 'm' to minus sign
+                        val = '-'  + val[1: ]
+                    try: 
+                        val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
+                    except: 
+                        val = val
+                    return (key, val)
+                else: 
+                    return ('surfix', term)# term is surfix 
+            
+            for name in dir_list: 
+                
+                nn = name.split('-')
+                temp = [parse(a) for a in nn]
+                if temp[-1][0] != 'surfix' :  #no surfix
+                    alpha = self.Alpha(** dict(temp))
+                    alpha = tuple(alpha)
+                else:
+                    surfix = temp[-1][1]
+                    alpha = self.Alpha(** dict(temp[:-1]))
+                    alpha += (surfix, ) 
+                
+                alpha_parpath_dict[alpha] =  '/'.join([root, name])
+        
+        else:
             def parse(xx): 
                 if '=' in xx: 
                     xx = xx.split('=')[1]
+                    #print('xxxxxxxxxxxxxxxxx', xx)
                     if 'm' == xx[0]:  #change 'm' to minus sign
                         xx = '-'  + xx[1: ]
                 else: 
@@ -446,21 +492,14 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     res= xx
                 return res
                 
-            alpha_parpath_dict = OrderedDict()
             for name in dir_list: 
-                if signiture in name: 
-                    
-                    split = name.split('-')
-                    #no mater one or many param,  use tuple as key uniformly 
-                    alpha = tuple([parse(a) for a in split])
-                    
-                    if surfix != '': 
-                        alpha = str(alpha) + '-' +  surfix
-                    alpha_parpath_dict[alpha] =  '/'.join([root, name])
-            
-            res = alpha_parpath_dict
+                aa = name.split('-')
+                alpha = tuple([parse(a) for a in aa])   #no mater one or many param,  use tuple as key uniformly 
+                if surfix != '': 
+                    alpha = str(alpha) + '-' +  surfix
+                alpha_parpath_dict[alpha] =  '/'.join([root, name])
         
-        return res
+        return alpha_parpath_dict
     
     def scan_sub_analysis_top(self): 
         temp = os.listdir(self.local_root)
@@ -585,6 +624,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             print(msg)
         
         alpha_list = list(dic.keys())
+        
         alpha_list.sort()
         self.alpha_list = list(alpha_list)
     
@@ -1182,7 +1222,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
         pass
         
     def _plot(self, x, y, **kwargs):
-        fig=ResultDB._plot.__func__(None, x, y, **kwargs)  
+        if IS_PY3:
+            fig=ResultDB._plot(None, x, y, **kwargs)  
+        else:
+            fig=ResultDB._plot.__func__(None, x, y, **kwargs)  
         return fig
     
     def _plot3d(self, xx, yy, data, which_plot=None, zfunc=None,   **kwargs):
@@ -1403,7 +1446,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 field_name += '_entropy' 
         
         if param_name is None: 
-            param_name, param_name_id = AlphaList.identify_param.__func__(self, aa)
+            #param_name, param_name_id = AlphaList.identify_param.__func__(self, aa)
+            param_name, param_name_id = AlphaList.identify_param(self, aa)
         else: 
             param_name_id = self.param_list.index(param_name)
         if param_name in ['alpha', 'beta']: 
@@ -1465,7 +1509,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 kwargs['fig'] = fig 
                 kwargs['ax'] = ax
             except Exception as err: 
-                warnings.warn(str(err))
+                if fault_tol:
+                    warnings.warn(str(err))
+                else:
+                    raise  
             
         if kwargs.get('return_fig'): 
             return fig 
@@ -2846,7 +2893,12 @@ class Analysis_proj_qmc(Analysis):
      def __init__(self, **kwargs): 
         kwargs.update(algorithm='proj_qmc', result_db_class=ResultDB_proj_qmc)
         Analysis.__init__(self, **kwargs)
-  
+
+class Analysis_tdvp(Analysis): 
+     def __init__(self, **kwargs): 
+        kwargs.update(algorithm='tdvp', result_db_class=ResultDB_tdvp)
+        Analysis.__init__(self, **kwargs)
+
 
 class TestAnalsysis(unittest.TestCase): 
     def setUp(self): 
@@ -2857,23 +2909,25 @@ class TestAnalsysis(unittest.TestCase):
         #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
         from mps_wigner_crystal.analysis import an_vmps
         #from vmps.run_hubbard.analysis import an_vmps
-        #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
+        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_tdvp
         
-        xx=an_vmps.an_main_ham3
-
-        fig, ax=xx.fig_layout()
-
-        ss=[(24, 'max')]
-        NN=[24, 60]
-        for N in NN:
-            sh=(N, 40)
-            aa=xx.filter_alpha(nu=0.33, alpha=2.0, v='v>10')
-            #xx.plot_fidelity(aa, ss, ax=ax, delta=0.5 )
-            data = xx.calc_fidelity(aa, sh, ax=ax, delta=1.0,)
-            if data:
-                x, y = zip(*data)
-                _ = xx._plot(x, y, yfunc=np.abs, label=N, ax=ax)
+        xx=an_tdvp.an_temp 
+        aa = xx.filter_alpha(surfix='surfix<5')
+        print_vars(vars(),  ['aa'])
+        raise  
         
+        aa = [(1.0, 4.0, '24')]
+        for a in aa:
+            #db = xx[1.0, 4.0, '5']
+            db = xx[a]
+            db.measure([(100, 5)], which='the_time', force=1, submit=0)
+        raise  
+        xx.measure_all(aa, [(20, 5)], which=['the_time'],
+                use_dist_comp = 0, 
+                submit=0, fault_tolerant=0)
+        print(db)
+        raise  
+
         
         #xx.show_fig()
     

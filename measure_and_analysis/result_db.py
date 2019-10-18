@@ -62,7 +62,7 @@ from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOST
 
 
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 
-    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 
+    'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 'ResultDB_tdvp', 
     'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 'ResultDB_bethe_ansatz', 
     'display',  
     ]
@@ -571,7 +571,8 @@ class AnalysisTools(object):
             y12 = y1[ind12]
             y21 = y2[ind21]
             y_diff = y12 -y21
-        axes= line1.get_axes()   
+        #axes= line1.get_axes()   
+        axes= line1.axes
         if 'ylabel' not in kwargs: 
             ylabel = axes.get_ylabel()
             ylabel = '_'.join([ylabel, 'diff'])
@@ -868,6 +869,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 'mps':ResultDB_vmps, 
                 'vmps':ResultDB_vmps, 
                 'idmrg':ResultDB_idmrg, 
+                'tdvp':ResultDB_tdvp, 
                 }
         return mapping[alg_name]
 
@@ -1058,7 +1060,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             temp[last_key] = val
         return res 
     
-    make_key_chain  =  make_nested_dict 
+    make_key_chain  =  make_nested_dict   #def make_key_chain
     
     def add_key_list(self, key_list, val=None, verbose=0): 
         if 1: 
@@ -1082,6 +1084,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             self[key_list[0]] = temp 
     
     add_key_chain = add_key_list 
+    insert_key_list = add_key_list   #def insert_key_list
     
     @classmethod
     def create_empty_db(cls, path, use_local_storage=False): 
@@ -1116,10 +1119,15 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             ts= None 
         if ts is None or force : 
             s= self.load_S(sh)
+            if s is None:
+                return None 
             ts= s['time_serials']
-            ts = pd.DataFrame(ts).T
-            self['time_serials'][sh] = ts 
-            self.commit()
+            if 0:
+                ts = pd.DataFrame(ts).T
+                self['time_serials'][sh] = ts 
+                self.commit()
+            else:
+                self['time_serials'][sh] = ts 
         res = ts 
         if attr_name is not None: 
             res = ts['attr_name']
@@ -2210,6 +2218,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         temp = list(style_dic.keys())  + ['color']
         if kwargs.get('label') and kwargs.get('label_surfix'): 
             kwargs['label'] = '-'.join([str(kwargs['label']), str(kwargs['label_surfix'])])
+        if kwargs.get('ls'):
+            kwargs['linestyle'] = kwargs['ls']
             
         dic_temp = {i:kwargs.get(i) for i in temp if i in kwargs  }
         dic.update(dic_temp)
@@ -3209,9 +3219,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         from vmps.minimize import VMPS 
         parpath = self.state_parpath
         #v = VMPS()
-        
-        
-
+    
+    @staticmethod
+    def shape_to_backup_fn(sh): 
+        N, D = sh
+        res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        return res
     
     def shape_to_backup_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
@@ -3666,6 +3679,30 @@ class ResultDB_vmps(ResultDB):
             self['correlation'][sh][-1][direct][i0] = rec
             self.commit(info=info)
     
+    def calc_base(self, sh, func, key_list):
+        pass
+    
+    def calc_current(self, sh, force=False):
+        from vmps.mpo import MPO_Fatcory 
+        key_list = ['current', sh]
+        N = sh[0]
+        if sh[1] == 'max' :
+            D = self.get_dim_max_for_N(N)
+            _sh = (N, D)
+            key_list[1] = _sh
+        else:
+            _sh = sh
+            
+        res = self.fetch_from_key_list(key_list, default=None)
+        if res is None or force:
+            op = MPO_Fatcory.current_operator(N)
+            state = self.load_S(sh)
+            if state is not None: 
+                mps= state['mps']
+                res = mps.expectationvalue(op)
+                self.insert_key_list(key_list, val=res)
+                self.commit()
+    
     def _get_energy_better(self, sh, N_diff=2):
         """
             better energy per bond. this solves the problem caused by OBC of VMPS
@@ -3804,7 +3841,43 @@ class ResultDB_vmps(ResultDB):
             res = None
         
         return res 
-   
+    
+    def _get_current(self, sh, dphi=0.05, times_N=True,  fault_tol=True):
+        """
+        
+        """
+        temp = self.parpath.split('-')
+        temp = [i for  i in temp if 'phi' in i][0]
+        phi_str = temp.split('=')[1]
+        phi = eval(phi_str.replace('m', '-'))
+        
+        phi2 = phi + dphi
+        if 0:
+            n = int(phi/dphi)
+            phi2 = (n + 2)*dphi
+        if 0:
+            print_vars(vars(),  ['phi2/dphi'])
+            phi2 = round(phi2/dphi, 14)*dphi 
+        phi2 = round(phi2, 6)
+        phi2_str = str(phi2).replace('-', 'm')
+       
+        path = self.parpath.replace(phi_str, phi2_str)
+        db2 = self.__class__(path)
+        temp =  [x.fetch_easy('energy', sh, fault_tolerant=fault_tol) 
+                for x in [self, db2] ]
+        if all(temp):
+            N = sh[0]
+            E_0,  E_phi = temp
+            E_0 = (N-1)*E_0   #note eng is energy per bond
+            E_phi = (N-1)*E_phi 
+            I = -(E_phi-E_0)/dphi 
+            if times_N:
+                I *= N
+        else:
+            I = None 
+        
+        return I
+
 class ResultDB_idmrg(ResultDB): 
     VERSION = 1.21
     ALGORITHM = 'idmrg'
@@ -4496,6 +4569,13 @@ class ResultDB_ed(ResultDB):
         temp.sort()
         return temp[i]
 
+class ResultDB_tdvp(ResultDB): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs['version'] = 1.0
+        kwargs.update(algorithm='tdvp')
+        ResultDB.__init__(self, parpath,  **kwargs)
+
+
 class ResultDB_proj_qmc(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
@@ -4597,15 +4677,6 @@ class TestResultDB(unittest.TestCase):
         
     def test_temp(self): 
         if 0:
-            param = namedtuple('param', ['nu', 'alpha', 'v'], defaults=[0.5, 3.0, 0.0 ]  )
-            a = param(0.5, None, 0.0)
-            a = param()
-            print_vars(vars(),  ['a', 'a[0]', 'a.alpha', 'list(a)'])
-            print(a==(0.5, 3.0, 0.0))
-            print_vars(vars(),  ['type(a)'])
-            raise  
-            
-        if 1:
             from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
             xx = an_vmps.an_main_alt 
             db=xx[0.5, 2.0, 0.0]
@@ -4628,49 +4699,36 @@ class TestResultDB(unittest.TestCase):
             data = [a for a in data if a[1] is not None]
             x, y = zip(*data)
             y = [abs(i) for i in y]
-            
         
-        if 0:
-            a = dict()
-            #mpl.use('agg')
-            print('*'*80)
+        if 1:
             from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-            #from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_bethe_ansatz
             
-            if 1:
-                xx=an_vmps.an_main_pbc 
-                if 1:
-
-                    db = xx[0.5, 2.0, 8.0, 0.0]
-                    print_vars(vars(),  ['db.analysis_class'])
-                    raise  
-                    print_vars(vars(),  ['db.state_parpath'])
-                    sh = (62, 320)
-                    if 0:
-                        state = db.load_S(sh)
-                        m = state['mps']
-                        o = state['ham']
-                        m.expectationvalue_2(o, o)
-                        print_vars(vars(),  ['m.memory_use()'])
-                        print_vars(vars(),  ['o.memory_use()'])
-                    
-                    db.measure([sh], which='drude_weight',
-                            param = {
-                                'which_solver':'cgs', 
-                                'num_of_sweep':8, 
-                                #'trunc_dim':640, 
-                                #'is_calc_error':True, 
-                                'eigs_tol':1e-13, 
-                                'eigs_tol_tol':1e-5, 
-                                }, 
-                            force=1, num_of_threads=12, submit=0, fault_tolerant = 0)
-                    raise  
-                
-                #db.measure([sh], which='drude_weight', param = {'eigs_maxiter':1000, 'trunc_dim_min':4, 'which_solver':'cgs', 'eigs_tol_tol':0.1, 'info':1}, submit=0, force=1, fault_tolerant=0)
-                #res = db._get_charge_stiff(sh, dphi=0.05, fault_tol=0)
-                #print_vars(vars(),  ['res*np.pi'])
-                
-                #xx.show_fig()
+            
+            xx=an_vmps.an_main_pbc 
+            a = tuple(xx.Alpha(nu=0.5, phi=round(-pi/20*8, 6),  alpha=10.0, V=1.0))
+            #aa = xx.filter_alpha(nu=0.5,  alpha=10.0, V=1.0)
+            print_vars(vars(),  ['aa'])
+            db = xx[a]
+            if 0:
+                db.calc_current((26, 'max'))
+                print_vars(vars(),  ['db["energy"]'])
+                print_vars(vars(),  ['db["current"]'])
+            sh = (26, 'max')
+            res= db._get_current(sh, dphi=pi/20)
+            print_vars(vars(),  ['res'])
+            xx=an_vmps.an_main_pbc
+            fig, ax=xx.fig_layout()
+            for rho in [2.0, 1.0, 0.5]:
+                aa=xx.filter_alpha(nu=0.5, alpha=10.0, rho=rho, v=1.0)
+                xx.plot_field_vs_alpha('', aa, [(26,'max')], param_name='phi', empty_to_nan=0, 
+                                    rec_getter=xx.result_db_class._get_current, 
+                                    rec_getter_args={'dphi':pi/20},                            
+                                       label=rho, 
+                                       yfunc=lambda x:x*26, 
+                              ax=ax)            
+            
+            xx.show_fig()
+            
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
