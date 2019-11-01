@@ -22,7 +22,8 @@ from merapy.tensor_svd import Tensor_svd
 from merapy.hamiltonian import System
 from merapy.tensor_py import iTensor
 from merapy.quantum_number import *
-from merapy.decorators import timer, set_STATE_end_1, tensor_player, decorate_methods
+from merapy.decorators import (timer, set_STATE_end_1, tensor_player, decorate_methods, 
+        get_player_state, set_player_state_manual)
 
 __all__ = ["calc_scaling_dim_1site", "calc_scaling_dim_2site"]
 
@@ -304,8 +305,8 @@ def asd_op_1site_another(V, V_dag, H1, Vin, iter=None):
     return Vout
 
 def calc_scaling_dim_1site(path=None, S=None, iterate=False, local=True, qn_list=None, tol=None):
-    state_bac = tensor_player.STATE
-    tensor_player.STATE = "stop"
+    state_bac = get_player_state()
+    set_player_state_manual('stop')
     tol =  tol if tol is not None else 0
     if S is None:
         S = System.load(path)
@@ -399,7 +400,7 @@ def calc_scaling_dim_1site(path=None, S=None, iterate=False, local=True, qn_list
             msg += "%s\n"%str(list(map(func, vals[:15]))) 
         print(msg)
 
-    tensor_player.STATE = state_bac
+    set_player_state_manual(state_bac)
 
 def asd_op_2site(ascending_func, S, Vin, local=True, info=0, iter=None):
     M = S.mera
@@ -462,7 +463,7 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
     temp1 = S.H_2[ilayer][0].data[:10].copy()
     use_player = True
     if use_player:
-        state_bac = tensor_player.STATE
+        state_bac = get_player_state()
         meth_names = ["set_data_entrance", "contract_core", "permutation"]
         meth_bac = {}
         meth_deced = {}
@@ -515,7 +516,7 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
         else:
             vals, vecs = eigs(A=A, k=dim-2, v0=v0, tol=tol)
 
-        tensor_player.STATE = "stop"
+        set_player_state_manual('stop')
         
         vals= np.abs(vals)
         #print "vv", vals
@@ -538,7 +539,7 @@ def calc_scaling_dim_2site_bac(path=None, ascending_func=ascending_ham, local=Tr
     if use_player:
         for i in meth_names:
             setattr(iTensor, i, meth_bac[i])
-        tensor_player.STATE = state_bac
+        set_player_state_manual(state_bac)
     
     if is_loaded:
         if S.iter not in S.record:  
@@ -584,7 +585,7 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
     temp1 = S.H_2[ilayer][0].data[:10].copy()
     use_player = True
     if use_player:
-        state_bac = tensor_player.STATE
+        state_bac = get_player_state()
         meth_names = ["set_data_entrance", "contract_core", "permutation"]
         meth_bac = {}
         meth_deced = {}
@@ -637,7 +638,7 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
         else:
             vals, vecs = eigs(A=A, k=dim-2, v0=v0, tol=tol)
 
-        tensor_player.STATE = "stop"
+        set_player_state_manual('stop')
         
         vals= np.abs(vals)
         #print "vv", vals
@@ -660,7 +661,7 @@ def calc_scaling_dim_2site(S, ascending_func=ascending_ham, local=True,  qn_list
     if use_player:
         for i in meth_names:
             setattr(iTensor, i, meth_bac[i])
-        tensor_player.STATE = state_bac
+        set_player_state_manual(state_bac)
     
         
     return res

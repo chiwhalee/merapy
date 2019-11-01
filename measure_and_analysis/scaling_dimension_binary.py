@@ -22,7 +22,7 @@ from merapy.tensor_svd import Tensor_svd
 from merapy.hamiltonian import System
 from merapy.tensor_py import iTensor
 from merapy.quantum_number import *
-from merapy.decorators import timer, set_STATE_end_1, tensor_player, decorate_methods
+from merapy.decorators import (timer, set_STATE_end_1, tensor_player, decorate_methods, set_player_state_manual)
 from merapy.graphics import Graphics
 
 __all__ = ["calc_scaling_dim_1site", "calc_scaling_dim_3site"]
@@ -97,7 +97,7 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
     """
         I compareed the results of NN heisbg model with J_nn = 0.241186 with that of Heisenberg/CritiDimention.f90 they coincied for different qns for all digits
     """
-    state_bac = tensor_player.STATE
+    state_bac = get_player_state()
     meth_names= ["set_data_entrance", "contract_core", "permutation"]
     meth_bac = {}
     for i in meth_names:
@@ -164,7 +164,7 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
 
         #print "num of iter = %d"%calc_scaling_dim_3site.iter
         #set_STATE_end_1(iter=None, record_at=None, stop_at=None, verbose=False, power_on=False)
-        tensor_player.STATE = "stop"
+        set_player_state_manual('stop')
         
         vals= np.abs(vals)
         #print "vv", vals
@@ -183,7 +183,7 @@ def calc_scaling_dim_3site(fn=None, ascending_func=ascending_ham_3site, local=Tr
 
     for i in meth_names:
         setattr(iTensor, i, meth_bac[i])
-    tensor_player.STATE = state_bac
+    set_player_state_manual(state_bac)
     return res
 
 
@@ -207,7 +207,6 @@ if __name__ == "__main__":
         #calc_scaling_dim_1site(fn, iterate=False, local=True, qn_list=qn_list)
         res = calc_scaling_dim_3site(fn, local=True, S=None, qn_list=qn_list, tol=1e-8, k=12); print(res)
         sys.exit(0)
-    #decorators.tensor_player.NEXT_STATE = "record"
 
     path = "./run-ising/" 
     path = "./run-xx-symm=trav/"

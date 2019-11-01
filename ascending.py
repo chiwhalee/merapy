@@ -135,12 +135,12 @@ class TestIt(unittest.TestCase):
             sys= System.example(M, model="Heisenberg", symmetry=symm, only_NN=False, only_NNN=True)
         
         #set_ham_to_identity(sys)
-        #from decorators import set_STATE_end_simple
-        from . import decorators 
+        from merapy.decorators import set_player_state_manual, set_STATE_end_simple
         for i in range(M.num_of_layer-1):
             #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
-            decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)
+            set_STATE_end_simple(i, 0)
             ascending_ham(M, sys, ilayer=i, info=0)
+        set_player_state_manual('stop')
 
 
 if __name__ == "__main__":

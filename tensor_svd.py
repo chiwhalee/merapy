@@ -67,7 +67,7 @@ class Tensor_svd(object):
         cls.QNG_Addr2 = None
 
     @classmethod
-    @tensor_player(which="group_legs")
+    #@tensor_player(which="group_legs")   #this has been disabled in 2019.11.1, because I use tensor_player_multiple,  may not compatible 
     def group_legs(cls,itensor, ndiv=None):
         """
             reshape of iTensor, i.e. group its QSps

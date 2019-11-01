@@ -315,16 +315,19 @@ class TestIt(unittest.TestCase):
         S= System.example(M, symm, 'Heisenberg')
         #top_level_eigenstate(M, S)
         print_vars(vars(),  ['M', 'S'])
-        from . import decorators
+        from merapy.decorators import (tensor_player, set_player_state_manual, set_STATE_end_simple)
         from merapy.ascending import ascending_ham 
         #np.set_printoptions(precision=3)
-        decorators.tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
         if 1: 
             for i in range(M.num_of_layer-1):
                 #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
-                decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)
+                #decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0)
+                set_STATE_end_simple(i, record_at=0)
                 ascending_ham(M, S, ilayer=i, info=0)
-        decorators.tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
         print_vars(vars(),  ['S'])
         top_level_eigenstate(M, S)
         #print_vars(vars(),  ['S'])
@@ -340,17 +343,20 @@ class TestIt(unittest.TestCase):
         S= System.example(M, symm, 'Heisenberg', info=2)
         #top_level_eigenstate(M, S)
         #print_vars(vars(),  ['M', 'S'])
-        from . import decorators
+        from merapy.decorators import (tensor_player, set_player_state_manual, set_STATE_end_simple)
+        
         from merapy.ascending import ascending_ham 
         #np.set_printoptions(precision=3)
-        decorators.tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
         S.expand_layer(5)
         if 1: 
             for i in range(M.num_of_layer-1):
                 #ilayer bellow 0 and >=M.num_of_layer-1 are not allowed
-                decorators.set_STATE_end_simple(i, M.num_of_layer-1, iter0=0, )
+                set_STATE_end_simple(i, 0)
                 ascending_ham(M, S, ilayer=i, info=-1)
-        decorators.tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
         print_vars(vars(),  ['S'])
         top_level_eigenstate(M, S)
         

@@ -47,6 +47,7 @@ import itertools
 import math 
 from collections import OrderedDict
 
+
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy.utilities import print_vars 
 from merapy.ntensor import TensorBase, nTensor 
@@ -58,17 +59,15 @@ from merapy import array_permutation
 from merapy.set1 import *
 from merapy import crandom
 from merapy.utilities import get_local
-from merapy import decorators, make_qsp
-from merapy.decorators import *
-#raise  
+from merapy import make_qsp
+from merapy.decorators import (tensor_player, decorate_methods, set_player_state_manual)
+#from merapy.tensor_player_multiple import decorate_methods,  tensor_player, set_player_state_auto
+
 #from merapy.decorators import (tensor_player, decorate_methods, 
 #        reset_tensor_player, set_player_state_auto)
 #
 
 #import scipy.weave as weave
-#from scipy import linalg
-#from scipy.weave import converters        
- 
 #import numexpr
 
 
@@ -1589,7 +1588,7 @@ class iTensor(TensorBase):
                     #print_vars(vars(), ['i', 'j', 'qn_id_tuple_3', 'qn_id_tuple_grouped', 
                     #    'dim_tuple_grouped',  'sh_start', 'sh_end'], sep=', ')
                     sl = [slice(sh_start[iii], sh_end[iii]) for iii in range(t2.rank)]
-                    data = data_block_2[sl].ravel(order='F')
+                    data = data_block_2[tuple(sl)].ravel(order='F')
                     t3.set_block(j, data)
             
             for j in matched_j_list: 
@@ -1733,7 +1732,7 @@ class iTensor(TensorBase):
                     db3 = t3.get_block(j)
                     db3 = db3.reshape(dim_delta,  order='F')
                     sl = [slice(sh_start[iii], sh_end[iii]) for iii in range(t2.rank)]
-                    data_block_2[sl] = db3 
+                    data_block_2[tuple(sl)] = db3 
             
             for j in matched_j_list: 
                 t3ind.remove(j)
@@ -2285,7 +2284,7 @@ class iTensor(TensorBase):
             
             if not err.args: 
                        err.args=('',)
-            err.args = (err.args[0] + "\n"*2 + msg,)+err.args[1:]
+            err.args = (str(err.args[0]) + "\n"*2 + msg,)+err.args[1:]
             raise 
         
         #if track_name: 
@@ -3201,13 +3200,15 @@ class iTensor(TensorBase):
             tensor_player status
         """
         res = {}
-        name_list = ['permutation', 'contract_core']
-        for i in name_list:
-            meth = getattr(iTensor, i)
-            #print_vars(vars(),  ['meth.__closure__[4].cell_contents'])
-            inner = meth.__closure__[1].cell_contents
-            calls_tot = getattr(inner, 'calls_tot')
-            res[i] = calls_tot
+        if 'single' in tensor_player.__module__:
+            name_list = ['permutation', 'contract_core']
+            for i in name_list:
+                meth = getattr(iTensor, i)
+                #print_vars(vars(),  ['meth.__closure__[4].cell_contents'])
+                inner = meth.__closure__[1].cell_contents
+                calls_tot = getattr(inner, 'calls_tot')
+                res[i] = calls_tot
+        
         return res  
     
     @staticmethod
@@ -3512,7 +3513,7 @@ class test_iTensor(object):
         print(t3[0].rank)
         print(t3[0])
     
-    @decorators.timer
+    #@decorators.timer
     def contract_large_tensor(self, threads=10):
         import os
         os.environ["OMP_NUM_THREADS"] = str(threads)
@@ -3844,7 +3845,38 @@ class Test_iTensor(unittest.TestCase):
             u = iTensor.example()
             #u.contract_core(u, 2)
             u.permutation([1, 3, 2, 0])
-        tensor_player.STATE = 'stop'
+        #tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
+        for i in range(1, 2):
+            set_player_state_auto(iter=i, record_at=1, info=1)    
+            t1 = iTensor.example(rank=4)
+            t2 = iTensor.example(rank=4)
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+        #tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
+        status = iTensor.get_player_status()
+        print_vars(vars(),  ['status'])
+        
+        
+        iTensor.reset_player()
+        for i in range(1, 5):
+            set_player_state_auto(iter=i, record_at=1, info=1)    
+            t1 = iTensor.example(rank=4)
+            t2 = iTensor.example(rank=4)
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+        #tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+
+        status = iTensor.get_player_status()
+        print_vars(vars(),  ['status'])
         
            
     def test_permutation(self): 
@@ -3914,7 +3946,6 @@ class Test_iTensor(unittest.TestCase):
             qa = QspZ2.easy_init([1, -1], [2, 2])
             qb = QspZ2.easy_init([1, -1], [2, 2])
             
-            #t3 = split_2to3(t2, 0, [qa, qb])
             t3 = t2.split_2to3(0, [qa, qb])
             c3, _ = t3.contract(t3, [0, 1, 2], [0, 1, 3])
             c3.show_data()
@@ -4249,58 +4280,24 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
-        from merapy.tensor_py import iTensor 
-        #tensor_player.STATE = 'stop'
-        def f():
-            t1 = iTensor.example(rank=3)
-            t2 = iTensor.example(rank=3)
-            t3, _ = t1.contract(t2, [0, 1, 2], [1, 4, 0])
-            t3.transpose([1, 0])
-            t1.transpose([0, 2, 1])
-        
-        #for i in range(1, 5):
-        #    set_player_state_auto(iter=i, record_at=1, info=1)    
-        #    t1 = iTensor.example(rank=4)
-        #    t2 = iTensor.example(rank=4)
-        #    t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-        #    t3.permutation([0, 2, 3, 1, 4, 5])
-        #    t3.permutation([0, 2, 3, 1, 4, 5])
-        #tensor_player.STATE = 'stop'
-        #
-        #status = t3.get_player_status()
-        #self.assertEqual(status['permutation'], 4)
-        #self.assertEqual(status['contract_core'], 1)
-       
-        #f()
-        #f()
-
-        for i in range(1, 2):
-            set_player_state_auto(iter=i, record_at=1, info=1)    
-            t1 = iTensor.example(rank=4)
-            t2 = iTensor.example(rank=4)
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3.permutation([0, 2, 3, 1, 4, 5])
-            t3.permutation([0, 2, 3, 1, 4, 5])
-        tensor_player.STATE = 'stop'
-        
-        status = iTensor.get_player_status()
-        print_vars(vars(),  ['status'])
+        #from tensor_player_multiple import set_player_state_auto
         
         
-        iTensor.reset_player()
         for i in range(1, 5):
-            set_player_state_auto(iter=i, record_at=1, info=1)    
+            set_player_state_auto(iter=i, record_at=1, info=-1)    
+            #print_vars(globals(),  ['tensor_player.the_tape.STATE'])
+            
             t1 = iTensor.example(rank=4)
             t2 = iTensor.example(rank=4)
             t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
             t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            
+            #print(tensor_player.the_tape.keys())
+            #t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
             t3.permutation([0, 2, 3, 1, 4, 5])
             t3.permutation([0, 2, 3, 1, 4, 5])
-        tensor_player.STATE = 'stop'
-
-        status = iTensor.get_player_status()
-        print_vars(vars(),  ['status'])
+        #print(tensor_player.the_tape.calls_tot)
+        #print(tensor_player.the_tape)
        
 
 

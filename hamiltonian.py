@@ -33,7 +33,7 @@ from vmps.iterative_optimize import IterativeOptimize
 
 from merapy.tensor_factory import iTensorFactory
 from merapy.config import gen_backup_base_dir
-from merapy.decorators import tensor_player 
+from merapy.decorators import (tensor_player, get_player_state,  set_player_state_manual )
 from merapy.utilities import print_vars
 import merapy.crandom as crandom 
 from merapy.models import *
@@ -2437,9 +2437,8 @@ class System(IterativeOptimize):
             print("qsp_max is not larger than original one, system not expaned")
             print("qsp_max is %s, self.mera.qsp_max is %s"%(qsp_max, self.mera.qsp_max))
             return
-        from .decorators import tensor_player, set_STATE_end_1
-        state_bac = tensor_player.STATE
-        tensor_player.STATE = "stop"
+        state_bac = get_player_state()
+        set_player_state_manual('stop')
         M = self.mera
         M.expand_dim(qsp_max)
         i = 0
@@ -2478,28 +2477,10 @@ class System(IterativeOptimize):
         
         msg = "\tqsp_max has been expanded to %s \n"%qsp_max
         print(msg) 
-        #tensor_player.NEXT_STATE = "record"
+        
         if out is not None:
             out.write("msg")
-        #if state_bac == "play": 
-        #    print "after expansion, tensor_player is switched from 'play' to 'record'"
-        #    tensor_player.NEXT_STATE = "record" 
        
-        #if self.energy is not None:
-        if 0:  #discard examine temporarily, due to self.energy may be not calced
-            print("after expansion, set player to record")
-            tensor_player.NEXT_STATE = "record"
-            e0 = self.energy
-            self.eng_ham(M.num_of_layer-1)
-            e1 = self.energy
-            e_diff = abs(e0 - self.energy)
-            if e_diff <=   1e-13:
-                iter = self.iter
-                print("energy test passed, at iter=%(iter)d both equal to %(e0)2.14f, e_diff = %(e_diff)e\n\n"%vars())
-            else:
-                self.energy = e0
-                err_msg = "energy test failed, e0 = %2.15f, e1 = %2.15f"%(e0, e1)
-                raise Exception(err_msg)
     
     def expand_dim(self, trunc_dim, nqn=None):
         print('\ntry to expand dim')
@@ -2529,13 +2510,14 @@ class System(IterativeOptimize):
         
         
     def _expand_layer(self, out=None):
-        from .decorators import tensor_player, set_STATE_end_1
-        #print_vars(vars(),  ['tensor_player'])
+        #from .decorators import tensor_player, set_STATE_end_1
+
         #raise 
         if not hasattr(tensor_player, 'STATE'):   # this could happen 
-            tensor_player.STATE = 'stop'
-        state_bac = tensor_player.STATE
-        tensor_player.STATE = "stop"
+            #tensor_player.STATE = 'stop'
+            set_player_state_manual('stop')
+        state_bac = get_player_state()
+        set_player_state_manual('stop')
 
         ilayer = self.mera.num_of_layer-1
         V_top = self.mera.V[ilayer][0]
@@ -2612,8 +2594,8 @@ class System(IterativeOptimize):
     @staticmethod
     def check_hermite(M, S, precision=None):
         print("\ncheck hermite")
-        state = tensor_player.STATE
-        tensor_player.STATE = "stop"
+        state = get_player_state()
+        set_player_state_manual('stop')
         for lay in range(M.num_of_layer-0):
         #if 1:
             #lay = M.num_of_layer-1
@@ -2633,17 +2615,14 @@ class System(IterativeOptimize):
                         
                         print("SpA adjoint to SmA", S.SpA[lay][0].is_adjoint_to(S.SmA[lay][0], precision=precision, out_more=True))
                         print("SpB adjoint to SmB", S.SpB[lay][0].is_adjoint_to(S.SmB[lay][0], precision=precision, out_more=True))
-        tensor_player.STATE = state
+        set_player_state_manual(state)
 
     def measure_S(self, S, parpath, exclude_which=None):
         from merapy.measure_and_analysis.measurement import measure_S
-        #state_bac = tensor_player.STATE
-        #self.stop_player()
-        tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
         msg = '\nmeasurement after final iter: '
          
         measure_S(S,  parpath, exclude_which=exclude_which, use_local_storage=self.use_local_storage)
-        #tensor_player.STATE = state_bac
     @staticmethod
     def set_ham_to_identity(sys):  #for testing
         """
@@ -2730,8 +2709,7 @@ class TestSystem(unittest.TestCase):
             self.M = M
     
     def tearDown(self): 
-        print('set tensor_player.STATE = "stop" in tearDown')
-        tensor_player.STATE = 'stop'
+        set_player_state_manual('stop', info=1)
     
     def xtest_example(self): 
         if 1: 
@@ -2777,8 +2755,7 @@ class TestSystem(unittest.TestCase):
         #some times the following fails, so diable it
         #I dont known why,  should be related to random etc
         #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
-        from merapy.decorators import tensor_player 
-        tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
         
         if 1: #test measure
             from merapy.measure_and_analysis.result_db import ResultDB_mera
@@ -2798,8 +2775,7 @@ class TestSystem(unittest.TestCase):
         #the following sometimes fails due conflict with main.TestMain  for random seed 
         #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
         if 1: 
-            from merapy.decorators import tensor_player 
-            tensor_player.STATE = 'stop'
+            set_player_state_manual('stop')
             m=System.example(model='Ising',
                     backup_parpath = dir, 
                     symmetry='Travial', info=1)
@@ -2809,7 +2785,7 @@ class TestSystem(unittest.TestCase):
             self.assertTrue(m.iter0==5 and m.iter1==10)
             
         if 1:  # test init mera using other_backup_path  
-            tensor_player.STATE = 'stop'
+            set_player_state_manual('stop')
             m1=System.example(model='Ising',
                     backup_parpath = tempfile.mkdtemp(), 
                     other_backup_path = dir + '/4.pickle', 
@@ -2818,8 +2794,7 @@ class TestSystem(unittest.TestCase):
             m1.minimize('prod_state', q_iter=6)
             print_vars(vars(),  ['m1.energy', 'm1.iter0', 'm1.iter1'])
             if 1: 
-                from merapy.decorators import tensor_player 
-                tensor_player.STATE = 'stop'
+                set_player_state_manual('stop')
                 m=System.example(model='Ising',
                         backup_parpath = dir, 
                         symmetry='Travial', info=1)
@@ -2838,8 +2813,7 @@ class TestSystem(unittest.TestCase):
         print_vars(vars(),  ['m.energy'])
         #this may fail due to randomness not properly fixed
         #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
-        from merapy.decorators import tensor_player 
-        tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
     
     def test_minimize_scale_invar(self): 
         m=System.example(model='Ising', rand_seed=1234, symmetry='Travial', info=1)
@@ -2847,8 +2821,7 @@ class TestSystem(unittest.TestCase):
         m._minimize_scale_invar()
         print_vars(vars(),  ['m.energy'])
         #self.assertAlmostEqual(m.energy, -0.98131885665452145, 10)
-        from merapy.decorators import tensor_player 
-        tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
     
     def test_expand_dim_and_layer(self): 
         m=System.example(model='Ising', symmetry='Travial', info=1)
@@ -2856,8 +2829,7 @@ class TestSystem(unittest.TestCase):
         #print_vars(vars(),  ['m.energy'])
         #self.assertAlmostEqual(m.energy, -1.1718439621684591, 10)
         print(m.mera) 
-        from merapy.decorators import tensor_player 
-        tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
         m.expand_dim(6)
         m._minimize_finite_size()
         print(m.mera) 
@@ -3982,10 +3954,10 @@ if __name__=='__main__':
            #'test_load', 
            #'xtest_example',  
            #'test_backup_path',  
-           'test_minimize',  
+           #'test_minimize',  
            #'test_resume',  
            #'test_minimize_finite_site',  
-           #'test_minimize_scale_invar',  
+           'test_minimize_scale_invar',  
            #'test_expand_dim_and_layer',
            #'test_temp', 
         ]

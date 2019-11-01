@@ -18,11 +18,12 @@ import time
 from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 
 from merapy import print_vars
-from merapy.decorators import set_STATE_end_1, tensor_player
+from merapy.decorators import (set_STATE_end_1, tensor_player, get_player_state, set_player_state_manual)
 from merapy.measure_and_analysis.scaling_dimension import  calc_scaling_dim_1site, calc_scaling_dim_2site 
 from merapy.measure_and_analysis.measurement import measure_S
 from merapy.top_level import top_level_product_state, top_level_product_state_u1
 from merapy.hamiltonian import System
+
 
    
 if 0: 
@@ -675,27 +676,34 @@ class ScaleInvar(object):
             eval_energy with its own tensor player
         
         """
-        S= self.S
-        state_bac = tensor_player.STATE
-        meth_names = ["set_data_entrance", "contract_core", "permutation"]
-        iTensor = S.H_2[0][0].__class__   # t is just used for passing one hook in
-        if not hasattr(self, 'meth_deced'):
-            self.meth_deced = {}
-            self.meth_bac = {}
-            for i in meth_names:
-                self.meth_bac[i] = iTensor.__dict__[i] #backup original method
-                self.meth_deced[i] = tensor_player(which=i)(iTensor.__dict__[i])
-        for i in meth_names:
-            setattr(iTensor, i, self.meth_deced[i]) 
-
-        tensor_player.STATE = 'record' if iter == iter0+1 else 'play'
-
         
-        self._eval_energy()
+        S= self.S
+        if 'single' in tensor_player.__module__:        
+            state_bac = get_player_state()
+            meth_names = ["set_data_entrance", "contract_core", "permutation"]
+            iTensor = S.H_2[0][0].__class__   # t is just used for passing one hook in
+            if not hasattr(self, 'meth_deced'):
+                self.meth_deced = {}
+                self.meth_bac = {}
+                for i in meth_names:
+                    self.meth_bac[i] = iTensor.__dict__[i] #backup original method
+                    self.meth_deced[i] = tensor_player(which=i)(iTensor.__dict__[i])
+            for i in meth_names:
+                setattr(iTensor, i, self.meth_deced[i]) 
 
-        for i in self.meth_bac:
-            setattr(iTensor, i, self.meth_bac[i])
-        tensor_player.STATE = state_bac
+            state = 'record' if iter == iter0+1 else 'play'
+            set_player_state_manual(state)
+            
+
+            
+            self._eval_energy()
+
+            for i in self.meth_bac:
+                setattr(iTensor, i, self.meth_bac[i])
+            set_player_state_manual(state_bac)
+        else:
+            self._eval_energy()
+            
 
         if 1:
             #S.eng_ham(ilayer=self.SIlayer)
