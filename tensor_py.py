@@ -52,6 +52,7 @@ from collections import OrderedDict
 from merapy.utilities import print_vars 
 from merapy.ntensor import TensorBase, nTensor 
 from merapy.quantum_number import *  #QuantumNum, QuantSpace, QN_idendity, QSp_null, QSp_base
+from merapy.quantum_number_py  import (QspU1, QspZ2, QspTravial, qsp_any, symmetry_to_Qsp)
 from merapy import common_util
 #import merapy.common_util as common_util 
 
@@ -1670,11 +1671,10 @@ class iTensor(TensorBase):
             leg_map[ii] = (x, )
             ii += 1  
         
-        #print_vars(vars(), ['leg_map']); raise 
+        #print_vars(vars(),  ['qsp'])
         
-        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
         
-        t2 = res 
+        t2 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
         t3 = self
         t3ind = list(range(t3.nidx))
         for i in range(t2.nidx): 
@@ -1745,127 +1745,94 @@ class iTensor(TensorBase):
         """
             I dont know how to split in general, 
             so I first write a simple one. this can be used in mps 
-            which: 
-                which leg to split,  take value in [0, 1]
+            params:
+                which: 
+                    which leg to split,  take value in [0, 1]
         """
-        warnings.warn("todo: avoid duplicate compare")
+        #warnings.warn("todo: avoid duplicate compare")
         assert self.rank == 2
         if which == 0: 
             qsp = qsp_list+[self.QSp[1]]
-            guide = (0, (0, 1))
+            common2, common3 = 1, 2
         elif which == 1: 
             qsp = [self.QSp[0]] + qsp_list
-            guide = (1, (1, 2))
-        assert self.qsp_class.prod_many(qsp_list)==self.QSp[which]
+            common2, common3 = 0, 0 
+        #assert self.qsp_class.prod_many(qsp_list)==self.QSp[which]   #use when debug 
         t2 = self 
         t3 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
-        #print_vars(vars(), ['t2.Addr_idx[:,:t2.nidx].T', 't2.Block_idx[:,:t2.nidx].T', ], sep_key_val='=\n')
-        #print_vars(vars(), ['t3.Addr_idx[:,:t3.nidx].T', 't3.Block_idx[:,:t3.nidx].T', ], sep_key_val='=\n')
+        jj = list(range(t3.nidx))
         for i in range(t2.nidx): 
             qn_id_tuple_2 = t2.Addr_idx[:, i]
-            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
-            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
-            data_block_2 = t2.get_block(i)
-            data_block_2 = data_block_2.reshape(dim_tuple_2, order='F')
-            
-            xx = 0; yy = 0
-            for j in range(t3.nidx):
+            matrix = t2.get_block(i)
+            if which == 0: 
+                n, m = (t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2))
+                matrix = matrix.reshape((n, m), order='F')
+            p = 0
+            temp = []
+            for j in jj: 
                 qn_id_tuple_3 = t3.Addr_idx[:, j]
-                qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
-                dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
-                
-                a = guide[0]
-                b, c = guide[1]
-                
-                if qn_tuple_2[a] == qn_tuple_3[b] + qn_tuple_3[c]:   #they match 
-                    if a == 0:  
-                        d0, d1, d2 = dim_tuple_3 
-                        size = t3.Block_idx[1, j]
-                        data = data_block_2[xx:xx+d0*d1, yy:d2].ravel(order='F')
-                        xx += d0*d1  
+                if qn_id_tuple_2[common2] == qn_id_tuple_3[common3]:  #they match 
+                    if which == 0:  #d2 = m
+                        d0, d1, d2 = (t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) )                                           
+                        data = matrix[p:p+d0*d1, :].ravel(order='F')
+                        p += d0*d1  
                         t3.set_block(j, data)
-                    elif a == 1:  
-                        d0, d1, d2 = dim_tuple_3 
+                    else:   #d0 = n
                         size = t3.Block_idx[1, j]
-                        data = data_block_2[xx:d0, yy:yy+d1*d2].ravel(order='F')
-                        yy += d1*d2  
+                        data = matrix[p:p+size]
+                        p += size
                         t3.set_block(j, data)
-                    else: 
-                        raise 
+                    temp.append(j)
+            for t in temp:
+                jj.remove(t)
+                        
         return  t3         
+
 
     def merge_3to2(self, which): 
         """
+            params:
+                which: can be (0, 1) or (1, 2)
         
         """
-        warnings.warn("todo: 避免重复比较")
-        args= [which]
-        
-        qsp_class = self.qsp_class
-        qn_class = qsp_class.QnClass 
-       
-        qsp = [] 
-        leg_map = {}
-        ii = 0  #ii points to legs of res 
-        l_prev =  -1 
-        leg_groups_to_merge = args
-        #for ll in args:
-        for ll in [which]: 
-            l = ll[0]
-            #if l-1>l_prev: 
-            #    qsp.extend(self.QSp[l_prev: l-1])
-            #    ii +=  l-1-l_prev 
-            if l-l_prev>1: 
-                qsp.extend(self.QSp[l_prev+1: l])
-                ii +=  l-l_prev-1 
-            l_prev = ll[-1]
-            leg_map[ii] = range(l, l_prev + 1)
-            temp = [self.QSp[l].copy() for l in leg_map[ii]]
-            qsp.append(qsp_class.prod_many(temp))
-            ii += 1 
-        qsp.extend([self.QSp[i].copy() for i in range(args[-1][-1]+1, self.rank)] )
-         
-        #print_vars(vars(), ['leg_map', 'len(qsp)', 'qsp']); raise 
-        
-        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
-        t2 = res 
+        q0, q1, q2 = self.QSp 
+        if which == (0, 1) :
+            qm = q0.tensor_prod(q1)
+            qsp = [qm, q2]
+            common2, common3 = 1, 2
+        else:
+            qm = q1.tensor_prod(q2)
+            qsp = [q0, qm]
+            common2, common3 = 0, 0
+                
+        t2 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
         t3 = self
+        jj = list(range(t3.nidx))
         for i in range(t2.nidx): 
             qn_id_tuple_2 = t2.Addr_idx[:, i]
-            qn_tuple_2 = [t2.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_2)]
-            dim_tuple_2 = [t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) ]
-            
-            data_block_2 = t2.get_block(i)
-            data_block_2 = data_block_2.reshape(dim_tuple_2, order='F')
-            #print 'ddd', dim_tuple_2
-            print_vars(vars(), ['qn_tuple_2', 'dim_tuple_2'], sep='\t')
+            n, m = (t2.QSp[i2].Dims[q] for i2, q in enumerate(qn_id_tuple_2) )
+            matrix = t2.get_block(i)
+            matrix = matrix.reshape((n, m), order='F')
+            temp = []
             xx = 0; yy = 0
-            for j in range(t3.nidx):
+            for j in jj:
                 qn_id_tuple_3 = t3.Addr_idx[:, j]
-                qn_tuple_3 = [t3.QSp[_i].QNs[q] for _i, q in enumerate(qn_id_tuple_3)]
-                dim_tuple_3 = [t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) ]
-                
-                match = True 
-                for l, v in leg_map.items(): 
-                    if qn_tuple_2[l] != qn_class.sum([qn_tuple_3[_i] for _i in leg_map[l]]): 
-                        match = False
-                        break 
-                if match:    
-                    db3 = t3.get_block(j)
+                if qn_id_tuple_2[common2] == qn_id_tuple_3[common3]:  #they match 
+                    d0, d1, d2 = (t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) )
+                    data = t3.get_block(j)
                     if which == (0, 1): 
-                        d0 = dim_tuple_3[0]*dim_tuple_3[1]; d1 = dim_tuple_3[2]
+                        nx = d0*d1
+                        matrix[xx:xx+nx, :] = data.reshape((nx, m), order='F')
+                        xx += nx 
                     else: 
-                        d0 = dim_tuple_3[0]; d1 = dim_tuple_3[1]*dim_tuple_3[2]; 
-                        
-                    db3 = db3.reshape((d0, d1), order='F')
-                    print_vars(vars(), ['qn_tuple_3', 'dim_tuple_3', 'xx', 'yy', 'd0', 'd1'], sep='\t')
-                    data_block_2[xx:xx+d0, yy:yy+d1] = db3 
-                    if which == (0, 1): 
-                        xx += d0 
-                    else: 
-                        yy += d1   
+                        ny = d1*d2
+                        matrix[:, yy:yy+ny] = data.reshape((n, ny), order='F')
+                        yy += ny 
+                    temp.append(j)
+            for t in temp:
+                jj.remove(t)
         return  t2         
-    
+
     def permutation(self, P, buffer=None, use_buf=False):
         """
             permutation 是一个re-index的操作, 这一操作保持指标集整体不变，而局部置换
@@ -3934,6 +3901,18 @@ class Test_iTensor(unittest.TestCase):
         pass 
     
     def test_split_2to3(self): 
+        if 1:
+            q0 = qsp_any('U1', [0], [14])
+            q1 = qsp_any('U1', [0], [4])
+            t2 = iTensor(QSp=[q0, q1])
+            t2.data[: ] = np.arange(t2.size)
+            q1a = qsp_any('U1', [1, 2, 3],    [1, 2, 3])
+            q1b = qsp_any('U1', [-1, -2, -3], [1, 2, 3])
+            #print_vars(vars(),  ['t2.matrix_view()'])
+            t3 = t2.split_2to3(0, [q1a, q1b])            
+            res_old=np.asarray([ 0., 14., 28., 42.,  1.,  2.,  3.,  4., 15., 16., 17., 18., 29., 30., 31., 32., 43., 44., 45., 46.,  5.,  6.,  7.,  8.,  9., 10., 11., 12., 13., 19., 20., 21., 22., 23., 24., 25., 26., 27., 33., 34., 35., 36., 37., 38., 39., 40., 41., 47., 48., 49., 50., 51., 52., 53., 54., 55.])               
+            self.assertTrue(np.all(t3.data==res_old))
+        
         if 1:  
             q0 = QspZ2.easy_init([1, -1], [8, 8])
             q1 = QspZ2.easy_init([1, -1], [4, 2])
@@ -4282,22 +4261,59 @@ class Test_iTensor(unittest.TestCase):
     def test_temp(self): 
         #from tensor_player_multiple import set_player_state_auto
         
+        #for i in range(1, 5):
+        #    set_player_state_auto(iter=i, record_at=1, info=-1)    
+        #    #print_vars(globals(),  ['tensor_player.the_tape.STATE'])
+        #    
+        #    t1 = iTensor.example(rank=4)
+        #    t2 = iTensor.example(rank=4)
+        #    t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+        #    t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+        #    
+        #    #print(tensor_player.the_tape.keys())
+        #    #t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+        #    t3.permutation([0, 2, 3, 1, 4, 5])
+        #    t3.permutation([0, 2, 3, 1, 4, 5])
         
-        for i in range(1, 5):
-            set_player_state_auto(iter=i, record_at=1, info=-1)    
-            #print_vars(globals(),  ['tensor_player.the_tape.STATE'])
-            
-            t1 = iTensor.example(rank=4)
-            t2 = iTensor.example(rank=4)
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            
-            #print(tensor_player.the_tape.keys())
-            #t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3.permutation([0, 2, 3, 1, 4, 5])
-            t3.permutation([0, 2, 3, 1, 4, 5])
-        #print(tensor_player.the_tape.calls_tot)
-        #print(tensor_player.the_tape)
+        if 1:
+            q0 = qsp_any('U1', [0], [14])
+            q1 = qsp_any('U1', [0], [4])
+            t2 = iTensor(QSp=[q0, q1])
+            t2.data[: ] = np.arange(t2.size)
+            q1a = qsp_any('U1', [1, 2, 3],    [1, 2, 3])
+            q1b = qsp_any('U1', [-1, -2, -3], [1, 2, 3])
+            #print_vars(vars(),  ['t2.matrix_view()'])
+            t3 = t2.split_2to3(0, [q1a, q1b])            
+            res_old=np.asarray([ 0., 14., 28., 42.,  1.,  2.,  3.,  4., 15., 16., 17., 18., 29., 30., 31., 32., 43., 44., 45., 46.,  5.,  6.,  7.,  8.,  9., 10., 11., 12., 13., 19., 20., 21., 22., 23., 24., 25., 26., 27., 33., 34., 35., 36., 37., 38., 39., 40., 41., 47., 48., 49., 50., 51., 52., 53., 54., 55.])               
+            self.assertTrue(np.all(t3.data==res_old))
+            print_vars(vars(),  ['t2.QSp'])
+            print_vars(vars(),  ['t3.QSp'])
+            #t2m = t3.merge_qsp((0, 1))
+            t2m = t3.merge_3to2((0, 1))
+            print_vars(vars(),  ['t2m.QSp', 't2m.size', 't2.size', 
+                't2m.nidx', 't2.nidx'])
+            print_vars(vars(),  ['t2m.data'])
+            print_vars(vars(),  ['t2m.Addr_idx'])
+            print_vars(vars(),  ['t2m.Block_idx'])
+            raise  
+                
+               
+        if 0:  
+            for i in range(1):
+                q0 = QspZ2.easy_init([1, -1], [8, 8])
+                q1 = QspZ2.easy_init([1, -1], [4, 2])
+                t2 = iTensor(QSp=[q0, q1])
+                t2.data[: ] = np.arange(t2.size)
+                #t2.show_data()
+                c2, _= t2.contract(t2, [0, 1], [0, 2])
+                
+                qa = QspZ2.easy_init([1, -1], [2, 2])
+                qb = QspZ2.easy_init([1, -1], [2, 2])
+                
+                t3 = t2.split_2to3(0, [qa, qb])
+                c3, _ = t3.contract(t3, [0, 1, 2], [0, 1, 3])
+                #c3.show_data()
+                self.assertTrue(np.all(c2.data==c3.data))
        
 
 

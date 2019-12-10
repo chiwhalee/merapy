@@ -880,7 +880,7 @@ class iTensorFactory(object):
         return mapping 
     
     @classmethod
-    def common_op(cls, op_name, symmetry=None, nmax=None, force=0):
+    def common_op(cls, op_name, which=None, symmetry=None, nmax=None, force=0):
         """
             for convenience 
             params:
@@ -891,7 +891,7 @@ class iTensorFactory(object):
         #if not force and hasattr(cls, op_name):
         #    return getattr(cls, op_name)
         
-        if 'b' in op_name:
+        if which == 'boson' or 'b' in op_name:
             temp = cls.lattice_op('boson', symmetry=symmetry, nmax=nmax)
         elif 'sigma' in op_name:
             temp = cls.lattice_op('spin', symmetry=symmetry, spin='one_half')
@@ -947,6 +947,7 @@ class iTensorFactory(object):
         
         elif which == 'boson':
             assert nmax is not None 
+            #the dimension of the basis = nmax+1
             names = ['%d'%i for i in range(nmax + 1)]
             if symmetry == 'Travial':
                 q = QspTravial.easy_init([1], [nmax + 1])                

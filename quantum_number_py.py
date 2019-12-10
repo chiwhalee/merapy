@@ -1153,6 +1153,7 @@ class QspU1_half(QuantSpaceBase):
     """
     pass
 
+
 #class QuantSpace(QspZ2, QspU1):  pass
 
 class QuantSpace(QuantSpaceBase):  pass
@@ -1174,6 +1175,8 @@ def make_qsp(symmetry, qns=None, dims=None):
     """
     cls= symmetry_to_Qsp(symmetry)
     return cls.easy_init(qns, dims)
+
+qsp_any = make_qsp  #def qsp_any 
 
 def qn_factory(symmetry, val):
     if symmetry == "Travial":
