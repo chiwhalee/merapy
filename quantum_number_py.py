@@ -1184,8 +1184,7 @@ def qn_factory(symmetry, val):
     else:
         return symmetry_to_Qn(symmetry)(val)
 
-def qsp_factory(symmetry, qns, dims):
-    pass
+qn_any = qn_factory
 
 #mapper = {"Z2":QspZ2, "Z3":QspZ3, "U1":QspU1, "Travial":QspTravial, "Trav":QspTravial}
 

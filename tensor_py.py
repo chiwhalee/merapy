@@ -402,10 +402,15 @@ class iTensor(TensorBase):
         #return  self.idx[pq]
         return pq 
     
-    def get_block(self, i): 
+    def get_block(self, i, linear=True): 
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
-        return self.data[p: p + size] 
+        if linear:
+            return self.data[p: p + size] 
+        else:
+            sh = self.get_block_shape(i)
+            return  self.data[p: p+size].reshape(sh, order='F')            
+            
     
     def get_block_shape(self, i):
         qn_id_tuple = self.Addr_idx[:, i]

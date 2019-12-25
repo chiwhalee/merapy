@@ -649,6 +649,52 @@ class Tensor_svd(object):
             return U, S, V , trunc_err 
     
     @staticmethod
+    def qr_rank2(tensor, totqn_on_which='q'):
+        """
+            ref: schollwock 2010 p. 108
+            M = QR
+        """
+        
+        num_blocks = tensor.nidx 
+        tt = tensor  # a shorter name 
+        
+        qq = {}
+        rr = {}
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            mat = tt.get_block(i, linear=False)
+            
+            qq[i], rr[i] = linalg.qr(mat)
+            dim_list[i] = min(mat.shape)
+            
+            q0, q1 = tt.Addr_idx[:, i]
+            qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
+            qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
+        
+        totqn = tt.totQN.copy()
+        
+        if totqn_on_which == 'q':
+            qsp = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
+            qsp_r = qsp.copy(reverse=True)
+            Q = iTensor(QSp=[tt.QSp[0], qsp], dtype=tt.dtype, totQN=totqn)
+            R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype)
+        else:
+            qsp = tt.qsp_class(tt.nidx, qn_list_l, dim_list)
+            qsp_r = qsp.copy(reverse=True)
+            Q = iTensor(QSp=[tt.QSp[0], qsp_r], dtype=tt.dtype)
+            R = iTensor(QSp=[qsp, tt.QSp[1]], dtype=tt.dtype, totQN=totqn)
+        
+        for i in range(Q.nidx): 
+            Q.set_block(i, qq[i].ravel(order='F'))
+            R.set_block(i, rr[i].ravel(order='F'))
+                
+        return Q, R        
+        
+    
+    @staticmethod
     def eig_rank2(tensor, trunc_dim=None, 
             return_trunc_err=False, return_val=False,  use_buff=False):
         """ 
@@ -1392,19 +1438,74 @@ class TestIt(unittest.TestCase):
             tr2 = Tensor_svd.trace_rank2(t)
             self.assertAlmostEqual(tr1, tr2, 10)
 
+    def test_qr_rank2(self): 
+        np.set_printoptions(5)
+        if 1: 
+            np.random.seed(1234)
+            q1 = QspU1.easy_init([0, 1, -1], [3, 2, 4])
+            q2 = QspU1.easy_init([0, -1, 1], [3, 2, 2])
+            qsp = [q1, q2]
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            print_vars(vars(),  ['t'])
+            q, r= Tensor_svd.qr_rank2(t)
+            qr = q.dot(r)
+            print_vars(vars(),  ['qr==t'])
+            self.assertTrue(qr==t)
+            print_vars(vars(),  ['qr.shape', 't.shape'])
+            #print_vars(vars(),  ['q.dot(q)'])
+            #print_vars(vars(),  ['q.shape'])
+            #qq = q.dot(q.T.conj())
+            qq = q.T.conj().dot(q)
+            print_vars(vars(),  ['qq'])
+            
+            
+        
+            
+        if 1:  #totqn ! =  qn_id 
+            if 1:
+                np.random.seed(1234)
+                q = QspU1.easy_init([ 1, -1, ], [2, 1])
+                qsp = q.copy_many(5)
+                totqn = QspU1.QnClass(1)
+                t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
+                t = t.merge_qsp((0, 1), (2, 3, 4))
+                #t = t.merge_qsp((0, 1, 2), (3, 4))
+                
+            if 0:
+                q1 = QspU1.easy_init([0, 1, -1], [5, 1, 4])
+                q2 = QspU1.easy_init([1, 0, 2], [3, 2, 6])
+                totqn = QspU1.QnClass(1)
+                qsp = [q1, q2]
+                t = iTensor.example(qsp=qsp, rank=2, totqn=totqn,  symmetry='U1')
+                
+            if 1: 
+                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='q')
+                qr = q.dot(r)
+                self.assertTrue(qr.totQN==t.totQN and r.totQN._val==0)
+                self.assertTrue(qr==t)
+            
+            if 1: 
+                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='r')
+                qr = q.dot(r)
+                self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
+                self.assertTrue(qr==t)
+            
+
     def test_temp(self): 
         if 1: 
             np.random.seed(1234)
-            q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
-            q2= QspU1.easy_init([0, -1, 1], [4, 2, 5])
-            
+            q1 = QspU1.easy_init([0, 1, -1], [3, 2, 4])
+            q2 = QspU1.easy_init([0, -1, 1], [3, 2, 2])
             qsp = [q1, q2]
-            
             t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
-            tm = t.matrix_view()
-            tr1 = tm.trace()
-            tr2 = Tensor_svd.diagonal_rank2(t)
-            print_vars(vars(),  ['np.sum(tr2)', 'tr1'])
+            print_vars(vars(),  ['t'])
+            q, r= Tensor_svd.qr_rank2(t)
+            qr = q.dot(r)
+            print_vars(vars(),  ['qr==t'])
+            print_vars(vars(),  ['qr.shape', 't.shape'])
+            
+           
+            
             
     
 if __name__ == "__main__":
@@ -1427,7 +1528,8 @@ if __name__ == "__main__":
            #'test_trace_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
-           'test_temp', 
+           'test_qr_rank2', 
+           #'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
