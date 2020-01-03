@@ -22,13 +22,14 @@
     #export FLIBS= "$FLIBS -lmkl_lapack95_lp64 -lmkl_mc -lmkl_core -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lmkl_def"
 
     #f2py -c -m common_64_ifort common4py.f90  $(LDFLAGS) $($FLIBS)  --fcompiler=intelem
+#log:
+    #2020.1.1 change module name: remove '_64_ifort'
 
 
+f2py -c -m array_permutation array_permutation4py.f90 -liomp5 --f90flags="-qopenmp"  --fcompiler=intelem
+f2py -c -m random2 random4py.f90 --fcompiler=intelem
 
-f2py -c -m array_permutation_64_ifort array_permutation4py.f90 -liomp5 --f90flags="-qopenmp"  --fcompiler=intelem
-f2py -c -m random_64_ifort random4py.f90 --fcompiler=intelem
-
-f2py -c -m common_64_ifort common4py.f90 -I/opt/intel/mkl/include  -L/opt/intel/mkl/lib/intel64 \
+f2py -c -m common common4py.f90 -I/opt/intel/mkl/include  -L/opt/intel/mkl/lib/intel64 \
     -lmkl_lapack95_lp64 -lmkl_mc -lmkl_core -lmkl_intel_lp64 -lmkl_intel_thread -liomp5 -lmkl_def  \
     --f90flags="-qopenmp -g -traceback -check all -fp-stack-check -heap-arrays 0" \
      --fcompiler=intelem

@@ -45,7 +45,7 @@ try:
     else:
         if os1 == 'Linux':
             if is_py3:
-                from merapy.lib.linux_py3.array_permutation_64_ifort import (
+                from merapy.lib.linux_py3.array_permutation import (
                        array_permutation_fort_parallel , 
                        array_permutation_fort_parallel_complex, 
                        #I have several versions of permute_player, the parallel dynamic is supposed to be fattest
