@@ -414,7 +414,7 @@ class Tensor_svd(object):
     def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, trunc_dim_min=None, 
             full_matrices=False, compute_uv=True, 
             return_trunc_err=False, totqn_on_which='s', 
-        normalize_singular_val=False):  
+        normalize_singular_val=True):  
         """
             itensor should be prepare into a rank 2 tensor 
             
@@ -561,7 +561,8 @@ class Tensor_svd(object):
                     last = int(temp[2][ind]) + 1 
                     #truncate vecs, and normalize singular values 
                     ss[i] = ss[i][: last]
-                    ss[i] *= 1./norm   # always normalize_singular_val
+                    if normalize_singular_val:
+                        ss[i] *= 1./norm   # always normalize_singular_val
                     dim_list[i] = last 
                     uu[i] = uu[i][:, :last]
                     vv[i] = vv[i][:last, :]
@@ -692,7 +693,6 @@ class Tensor_svd(object):
             R.set_block(i, rr[i].ravel(order='F'))
                 
         return Q, R        
-        
     
     @staticmethod
     def eig_rank2(tensor, trunc_dim=None, 

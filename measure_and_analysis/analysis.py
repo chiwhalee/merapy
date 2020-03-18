@@ -433,7 +433,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 or with a surfix in the end 
                     a=1.0-b=2.0-1
                     a=1.0-b=2.0-a
-                
         """
         if root is None: 
             if self.local_root is not None : 
@@ -446,7 +445,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
         signiture = signiture if signiture is not None else '='
         dir_list = [d for d in dir_list if signiture in d]
         alpha_parpath_dict = OrderedDict()
-        
         
         if self.Alpha is not None:  
             def parse(term): 
@@ -461,7 +459,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     return (key, val)
                 else: 
                     return ('surfix', term)# term is surfix 
-            
+            #print_vars(vars(),  ['dir_list'])
             for name in dir_list: 
                 
                 nn = name.split('-')
@@ -554,6 +552,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             antemp = self.__class__(local_root=sub_root, 
                     result_db_class= self.result_db_class, 
                     default_resolution=self.default_resolution, 
+                    Alpha=self.Alpha, 
                     param_list=self.param_list)
             antemp.name = name
             setattr(self, name, antemp)
@@ -2905,29 +2904,21 @@ class TestAnalsysis(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        #from projects_mps.run_long_sandvik.analysis import an_vmps , an_idmrg_psi, an_idmrg_lam 
-        #from current.run_long_better.analysis import an_vmps, an_mera, an_idmrg_psi
-        from mps_wigner_crystal.analysis import an_vmps
-        #from vmps.run_hubbard.analysis import an_vmps
-        from merapy.run_heisbg.analysis import an_vmps, an_idmrg_psi, an_tdvp
+        Alpha = namedtuple('Alpha', ['t', 'alpha', 'V', 'W'], 
+                defaults = [None, None, None, None])
         
-        xx=an_tdvp.an_temp 
-        aa = xx.filter_alpha(surfix='surfix<5')
-        print_vars(vars(),  ['aa'])
-        raise  
+        an_bose_long_tdvp = Analysis_tdvp(
+                local_root='/'.join([RESULTDB_ROOT, 'run-bose-long', 'tdvp', ]), 
+                Alpha=Alpha, 
+                param_list=Alpha._fields, 
+                )
+        an_bose_long_tdvp.add_sub_analysis()
+        xx = an_bose_long_tdvp.an_disorder
         
-        aa = [(1.0, 4.0, '24')]
-        for a in aa:
-            #db = xx[1.0, 4.0, '5']
-            db = xx[a]
-            db.measure([(100, 5)], which='the_time', force=1, submit=0)
-        raise  
-        xx.measure_all(aa, [(20, 5)], which=['the_time'],
-                use_dist_comp = 0, 
-                submit=0, fault_tolerant=0)
-        print(db)
-        raise  
-
+        #xx.set_parpath_dict()
+        #print(xx.alpha_list)
+        #db = xx[0.5, 1.0, 1.5, 4.0, '0']
+        #print(db)
         
         #xx.show_fig()
     

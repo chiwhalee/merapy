@@ -2212,14 +2212,14 @@ class iTensor(TensorBase):
         #to impletement in the future
         #self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
         #T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
-            
+        
+        #issue: when self contract with self but with different ind_labels, this cause problem
         if V1 is None: 
             V1 = self.ind_labels 
         if V2 is None: 
             V2 = T2.ind_labels
         
         V_1n2, Vp1, Vp2, V3 = self.prepare_leg(T2, V1, V2)        
-        
         T1=self
         
         
@@ -2268,7 +2268,6 @@ class iTensor(TensorBase):
             order = [ll.index(i) for i in final_ind_labels]
             T3 = T3.permutation(order)
             T3.ind_labels = final_ind_labels 
-        
         
         if out_Vc:
             Vc= V_1n2
@@ -4301,6 +4300,8 @@ class Test_iTensor(unittest.TestCase):
             print_vars(vars(),  ['t2m.Addr_idx'])
             print_vars(vars(),  ['t2m.Block_idx'])
             raise  
+        
+        
                 
                
         if 0:  
