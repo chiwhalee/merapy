@@ -169,9 +169,7 @@ class iTensor(TensorBase):
         rank = len(QSp)
         self.rank = rank 
         self.ind_labels = None 
-        #self.dtype = dtype 
         
-        #assert rank == len(QSp), ('aaaaaaaaaaaaaaaaaa\n', rank, len(QSp), QSp) 
         
         #NO COPYING CONVENTION
         self.QSp = QSp  #.copy()
@@ -204,11 +202,6 @@ class iTensor(TensorBase):
             #well, I comment out the line bellow, as it hinders debug sometimes
             #assert self.totDim>0, ('conceptially a tensor is not empty',  self.totQN, self.shape)
             self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
-    
-    def __getstate__del(self): 
-        d = dict(self.__dict__)
-        del d['buf_ref']
-        return d 
     
     def __setstate__(self, d): 
         self.__dict__.update(d)
@@ -275,7 +268,6 @@ class iTensor(TensorBase):
         rank_1 = rank if rank != 0 else 1 
        
         if rank == 0: 
-            #QSp = [symmetry_to_Qsp(totQN.SYMMETRY).null()]   # only use it temporarilly to generate idx
             QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
        
         #self.Dims= [QSp[i].totDim for  i in xrange(rank_1)]
@@ -285,60 +277,43 @@ class iTensor(TensorBase):
             temp *= QSp[i].nQN
         self.idx_dim = temp   # 量子数组合 总数目 
 
-        #attention_this_may_be_wrong 在python中  -1对应着最后一个元素，而Fortran中什么也不对应, 所以改成下面的
-        #self.idx=np.array([int(self.idx_dim)]*self.idx_dim, int)   #-1                
         self.idx=np.ndarray((self.idx_dim, ), int)   #-1                
         self.idx[: ] = self.idx_dim
         self.Block_idx=np.ndarray((3, self.idx_dim),dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
+        # 实际使用的addr_inx的长度为 self.nidx
+        self.Addr_idx=np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')        
         
         #iQN[i]用作leg i 上的量子数 计数
         iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
-        # 实际使用的addr_inx的长度为 self.nidx
-        self.Addr_idx=np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')        
             
         nidx=0
         totDim=0
         
-        #tQN_r= self.totQN.copy()  # here must copy
-        #tQN_r.reverse()
-        tQN_r= self.totQN   #note1  see doc str 
+        totqn = self.totQN 
 
         for p in range(self.idx_dim):
-            tQN = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tQN
             
-            for i in range(1,rank):
-                tQN = tQN+QSp[i].QNs[iQN[i]]   #判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
+            tqn = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
+            for i in range(1, rank):
+                tqn = tqn + QSp[i].QNs[iQN[i]]  
             
-            if tQN==tQN_r:
-                #why not tQN == totQN?  因为operater- state duality, 从而在操作下变换正好相反？
-                #其中包含协变/反变的意味
+            if tqn == totqn:
                 d = 1
-                for i in range(rank):
+                for i in range(rank):  #计算某一block的data size 
                     d = d*QSp[i].Dims[iQN[i]]
-                    #print "ddddd d", i, p, d,iQN[i], len(QSp[i].Dims)
-                #计算某一block的总数据量
 
-                self.idx[p] = nidx
-                #给出了0量子数组合与所有量子数组合的序号间的关系
-                #self.idx 和 self.Block_idx[2]互为反函数
-                #如果总量子数为0，则idx[p] =- 1(默认值) 
-                #在self.block中都是记录不为0的量子数组合
-                #0 is position,  1 is size, 2 is position in quantum number combinations
-                self.Block_idx[0, nidx] = totDim
-                #在该block在self.data中的position
-                self.Block_idx[1, nidx] = d
-                #block变成1d数组的长度
-                self.Block_idx[2, nidx] = p
+                self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
                 
-                #记录不为0的量子数组合，在所有量子数组合中的位置
-                #Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 
-                #对每一个iTensor都定义了这个函数
-                #Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
-                self.Addr_idx[0,nidx] = 0 #for rank=0
-                self.Addr_idx[0:rank,nidx] = iQN[0:rank]
-                nidx = nidx+1                
-                totDim = totDim+d
-                #最终得到self.data 的总长度
+                self.Block_idx[0, nidx] = totDim  #data block在self.data中的position
+                self.Block_idx[1, nidx] = d   #data block变成1d数组的长度
+                self.Block_idx[2, nidx] = p   #position in quantum number combinations
+                
+                #记录不为0的量子数组合，在所有量子数组合中的位置 Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对每一个iTensor都定义了这个函数 Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
+                self.Addr_idx[0, nidx] = 0 #for rank=0
+                self.Addr_idx[0:rank, nidx] = iQN[0:rank]
+                nidx  += 1 
+                totDim   += d   #最终得到self.data 的总长度
+                
             
             #遍历所有的量子数组合
             if order == "F": 
@@ -2113,49 +2088,47 @@ class iTensor(TensorBase):
             return common_util.matrix_multiply_complex(data1, data2, alpha, beta) 
     
     def prepare_leg(self,T2, V1, V2, info=0):
-        if not isinstance(V1, np.ndarray):
-            V1=np.array(V1)
-        if not isinstance(V2, np.ndarray):
-            V2=np.array(V2)
+        """
+            todo: rewrite this function using C language 
+            issue: this seems not efficient, improvement is needed.
+                However,  for use of low rank tensors in MPS algs, this is not a big issue.
+                Furthur, after putting it into tensor_player, this is not at all a problem. 
+                So dont need to fix this soon.
+                
+        """
+        V1 = np.array(V1) if not isinstance(V1, np.ndarray) else V1
+        V2 = np.array(V2) if not isinstance(V2, np.ndarray) else V2
         
-        if self.rank<V1.size:
-            V1=V1[:self.rank]
-        if T2.rank<V2.size:
-            V2=V2[:T2.rank]
+        if self.rank<V1.size: V1 = V1[:self.rank]
+        if T2.rank<V2.size: V2 = V2[:T2.rank]
 
-        V_1n2 = np.intersect1d(V1, V2,True)
-        V3=np.setxor1d(V1,V2,True)
-
-
-        k=0
-        l=0
+        V_1n2 = np.intersect1d(V1, V2, True)
         
-        #Vp1=np.empty(self.rank, int)
-        #Vp2=np.empty(T2.rank, int)
-        Vp1=np.empty(self.rank, np.int32)
-        Vp2=np.empty(T2.rank, np.int32)
-
-        #below calculate Vp1, Vp2
-        for i  in range(self.rank):
+        V3 = np.setxor1d(V1, V2, True)
+        Vp1 = np.empty(self.rank, np.int32)   # order of permutated index for tensor1 
+        Vp2 = np.empty(T2.rank, np.int32)
+        
+        k=0  #indexing Vp1
+        l=0  #indexing V3
+        j = 0  #indexing Vp2
+        
+        for i in range(self.rank): #below calculate Vp1, Vp2
             if V1[i] not in V_1n2:
-                Vp1[k] = i   
-                # 这里之所以用k，而非直接用Vp1[k]是因为下面k的值要继续，对于l 也一样
-                # p意指position，记录的T1中没有收缩的指标(leg)的编号
+                Vp1[k] = i   # 这里之所以用k，而非直接用Vp1[k]是因为下面k的值要继续，对于l 也一样 p意指position，记录的T1中没有收缩的指标(leg)的编号
                 V3[l] = V1[i]   #T3 来自T1 V1的外腿
-                l = l+1
-                k = k+1
+                l += 1 
+                k += 1 
 
-        #这一段程序做了两件事：1.验证内线上维数相等，2.计算了totDim3
-        #V_1n2=list(s_1n2)
-        for i in range(len(V_1n2)):
-            pos = np.where(V1==V_1n2[i])[0]
-            pos2 = np.where(V2==V_1n2[i])[0]
-            Vp1[k] = pos
-             
+        #for i in range(len(V_1n2)):  #这一段程序做了两件事：1.验证内线上维数相等，2.计算了totDim3
+        for v12 in V_1n2:
+            pos1 = np.where(V1==v12)[0]
+            pos2 = np.where(V2==v12)[0]
+            Vp1[k] = pos1
             k = k+1  #注意这里k接着上面的值了
-            #print_vars(vars(),  ['"in tensor_py"', 'pos', 'pos2', 'type(pos)', 'type(pos2)',  'pos.ndim', 'pos2.ndim'], '', ' ')
-            #if self.Dims[pos] != T2.Dims[pos2]:
-            if self.Dims[pos[0]] != T2.Dims[pos2[0]]:
+            Vp2[j] = pos2
+            j += 1   
+            
+            if self.Dims[pos1[0]] != T2.Dims[pos2[0]]:
                 #raise Exception("Error, size of contract tensor does not match, V1=%s, V2=%s\nself=%s\nT2=%s"%(V1, V2, self, T2))
                 #msg ="""error, dim of index to be contracted not equal: %s, %s, 
                 #\n V1=%s, V2=%s, self.Dims=%s, T2.Dims=%s"""%(
@@ -2169,23 +2142,12 @@ class iTensor(TensorBase):
                     """.format(self, T2, V1=V1, V2=V2, V_1n2=V_1n2)
                 raise Exception(msg)
         
-        k=0
-        for i  in range(len(V_1n2)):
-            pos=np.where(V2==V_1n2[i])[0]
-            Vp2[k] = pos
-            k = k+1
-       
-        for i  in range(T2.rank):
+        for i in range(T2.rank):
             if V2[i] not in V_1n2:
-                Vp2[k] = i
-                #try:
-                #    Vp2[k] = i
-                #except:
-                #    print Vp2, k, "len", len(Vp2)
-                #    raise
+                Vp2[j] = i
                 V3[l] = V2[i]  #T3 V3 来自T2 V2的外腿
-                k = k+1
-                l = l+1
+                j += 1 
+                l += 1
         
         return V_1n2, Vp1, Vp2, V3 
 
@@ -2195,7 +2157,6 @@ class iTensor(TensorBase):
             preserve_qsp=False, track_name=0,  info=0):
         """
             issue: todo: in future not return_v3 by default 
-            see Tensor_Contraction2 in f90
             V1,2,3 are arrays (maps) 张量指标 —> 自然数。用自然数来标记所有张量的指标
             在V1,V2中可能有相同的元素，存在s_1n2中，
             
@@ -2205,16 +2166,6 @@ class iTensor(TensorBase):
 
                 Vp1,先记录了T1的外腿，后记录内腿指标； Vp2先记录了内腿，后记录了外腿指标
         """
-        #if info>0:
-        #    #\t{V1[0:rank1]}\t#{V2}[0:rank2]
-        #    msg = """\ncontracting: {0.type_name}\t{1.type_name}
-        #        rank: \t{0.rank}\t{1.rank}
-        #        label: \t{V1}\t{V2} 
-        #        dims: {0.Dims}\t{1.Dims}""".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank])
-        #    print(msg)
-        #to impletement in the future
-        #self.ind_labels = dict(zip(range(self.rank), V1[:self.rank]))
-        #T2.ind_labels = dict(zip(range(T2.rank), V1[:T2.rank]))
         
         #issue: when self contract with self but with different ind_labels, this cause problem
         if V1 is None: 
@@ -2224,7 +2175,6 @@ class iTensor(TensorBase):
         
         V_1n2, Vp1, Vp2, V3 = self.prepare_leg(T2, V1, V2)        
         T1=self
-        
         
         try:
             nT1=T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排

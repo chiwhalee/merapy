@@ -80,14 +80,16 @@ TapeList[0] = Tape()
 
 def decorate_methods(decorator, meth_names):
     meth_names_dic = {
-            "iTensor":[
-                "__init__", 
-                "set_data_entrance", 
-                "contract_core", 
-                "permutation"
+            'iTensor':[
+                '__init__', 
+                'set_data_entrance', 
+                'contract_core', 
+                'prepare_leg', 
+                'permutation', 
+                
                 ], 
-            "QuantSpaceBase":["copy"], 
-            #"Tensor_svd":["group_legs"]   directly use tensor_player decorated see tensor_svd.py
+            'QuantSpaceBase':['copy'], 
+            #'Tensor_svd':['group_legs']   directly use tensor_player decorated see tensor_svd.py
             }
     meth_original_bac = {}
     
@@ -129,11 +131,12 @@ def tensor_player(which):
 
         which = "init", "contract", "permute"
     """
-    mapper = {"__init__":"init", 
-            "set_data_entrance":"data_entrance", 
-            "permutation":"permute", 
-            "contract_core":"contract", 
-            "copy":"Qsp_copy"
+    mapper = {'__init__':'init', 
+            'set_data_entrance':'data_entrance', 
+            'permutation':'permute', 
+            'contract_core':'contract', 
+            'prepare_leg':'prepare_leg', 
+            'copy':'Qsp_copy'
             }
     if which in mapper:
         which = mapper[which]
@@ -444,6 +447,72 @@ def tensor_player(which):
                 tensor_player.the_tape[tensor_player.the_tape.calls] = contract_record_1[:ind_count, :], ind_count
                 #print('xxxxxxxxxx contr', tensor_player.the_tape.calls)
                 return T3
+        
+            def prepare_leg_recorder(self,T2, V1, V2, info=0):
+                """
+                    todo: rewrite this function using C language 
+                    issue: this seems not efficient, improvement is needed.
+                        However,  for use of low rank tensors in MPS algs, this is not a big issue
+                """
+                V1 = np.array(V1) if not isinstance(V1, np.ndarray) else V1
+                V2 = np.array(V2) if not isinstance(V2, np.ndarray) else V2
+                
+                if self.rank<V1.size: V1 = V1[:self.rank]
+                if T2.rank<V2.size: V2 = V2[:T2.rank]
+
+                V_1n2 = np.intersect1d(V1, V2, True)
+                
+                V3 = np.setxor1d(V1, V2, True)
+                Vp1 = np.empty(self.rank, np.int32)   # order of permutated index for tensor1 
+                Vp2 = np.empty(T2.rank, np.int32)
+                
+                k=0  #indexing Vp1
+                l=0  #indexing V3
+                j = 0  #indexing Vp2
+                
+                for i in range(self.rank): #below calculate Vp1, Vp2
+                    if V1[i] not in V_1n2:
+                        Vp1[k] = i   # 这里之所以用k，而非直接用Vp1[k]是因为下面k的值要继续，对于l 也一样 p意指position，记录的T1中没有收缩的指标(leg)的编号
+                        V3[l] = V1[i]   #T3 来自T1 V1的外腿
+                        l += 1 
+                        k += 1 
+
+                #for i in range(len(V_1n2)):  #这一段程序做了两件事：1.验证内线上维数相等，2.计算了totDim3
+                for v12 in V_1n2:
+                    pos1 = np.where(V1==v12)[0]
+                    pos2 = np.where(V2==v12)[0]
+                    Vp1[k] = pos1
+                    k = k+1  #注意这里k接着上面的值了
+                    Vp2[j] = pos2
+                    j += 1   
+                    
+                    if self.Dims[pos1[0]] != T2.Dims[pos2[0]]:
+                        #raise Exception("Error, size of contract tensor does not match, V1=%s, V2=%s\nself=%s\nT2=%s"%(V1, V2, self, T2))
+                        #msg ="""error, dim of index to be contracted not equal: %s, %s, 
+                        #\n V1=%s, V2=%s, self.Dims=%s, T2.Dims=%s"""%(
+                        #        self.type_name, T2.type_name, V1, V2, self.Dims, T2.Dims)
+                        #msg ="""error, dim of index to be contracted not equal: {pos}""".format(locals())
+                        msg ="""error, dim of index to be contracted not equal: 
+                            {0.type_name}, {1.type_name}
+                            ind_label_1={V1}, ind_label_2={V2}, ind_label_1n2={V_1n2}
+                            dims_1={0.Dims}, dims_2={1.Dims}
+                            
+                            """.format(self, T2, V1=V1, V2=V2, V_1n2=V_1n2)
+                        raise Exception(msg)
+                
+                for i in range(T2.rank):
+                    if V2[i] not in V_1n2:
+                        Vp2[j] = i
+                        V3[l] = V2[i]  #T3 V3 来自T2 V2的外腿
+                        j += 1 
+                        l += 1
+                tensor_player.the_tape[tensor_player.the_tape.calls] = (V_1n2, Vp1, Vp2, V3)
+                return V_1n2, Vp1, Vp2, V3 
+
+            def prepare_leg_player(self,T2, V1, V2, info=0):
+                """
+                """
+                return tensor_player.the_tape[tensor_player.the_tape.calls] 
 
             def contract_core_player_bac(self, T2, div, data=None, use_buf=False):
                 """
@@ -796,6 +865,7 @@ def tensor_player(which):
             recorder_dic = {"init":init_recorder, 
                             "data_entrance":data_entrance_recorder, 
                             "contract":contract_core_recorder, 
+                            "prepare_leg":prepare_leg_recorder,
                             "permute":permute_recorder, 
                             "group_legs":group_legs_recorder, 
                             "Qsp_copy":Qsp_copy_recorder
@@ -803,6 +873,7 @@ def tensor_player(which):
             player_dic = {  "data_entrance":data_entrance_player, 
                             "contract": contract_core_player_bac, #contract_core_player_bac, 
                             "permute":  permute_player_bac, #permute_player_bac, 
+                            'prepare_leg':prepare_leg_player,
                             "group_legs":group_legs_player, 
                             "init":init_player, 
                             "Qsp_copy":Qsp_copy_player
