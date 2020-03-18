@@ -43,8 +43,502 @@ from merapy.utilities import print_vars, save
         
 """
 
+class iTensor_rank2_operation(object):
+    
+    @staticmethod
+    def qr_rank2(tensor, totqn_on_which='q'):
+        """
+            ref: schollwock 2010 p. 108
+            M = QR
+        """
+        
+        num_blocks = tensor.nidx 
+        tt = tensor  # a shorter name 
+        
+        qq = {}
+        rr = {}
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            mat = tt.get_block(i, linear=False)
+            
+            qq[i], rr[i] = linalg.qr(mat)
+            dim_list[i] = min(mat.shape)
+            
+            q0, q1 = tt.Addr_idx[:, i]
+            qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
+            qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
+            
+        totqn = tt.totQN.copy()
+        
+        if totqn_on_which == 'q':
+            qsp_q = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
+            qsp_r = qsp_q.copy(reverse=True)
+            totqn_q, totqn_r = totqn, None
+        else:
+            qsp_r = tt.qsp_class(tt.nidx, qn_list_l, dim_list)
+            qsp_q = qsp_r.copy(reverse=True)
+            totqn_q, totqn_r = None, totqn
+        Q = iTensor(QSp=[tt.QSp[0], qsp_q], dtype=tt.dtype, totQN=totqn_q)
+        R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype, totQN=totqn_r)
+        
+        for i in range(Q.nidx): 
+            Q.set_block(i, qq[i].ravel(order='F'))
+            R.set_block(i, rr[i].ravel(order='F'))
+                
+        return Q, R        
 
-class Tensor_svd(object):
+    @staticmethod
+    def qr_rank2_new(tensor, totqn_on_which='q'):
+        """
+            ref: schollwock 2010 p. 108
+            M = QR
+        """
+        
+        num_blocks = tensor.nidx 
+        tt = tensor  # a shorter name 
+        
+        qq = {}
+        rr = {}
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            mat = tt.get_block(i, linear=False)
+            
+            qq[i], rr[i] = linalg.qr(mat)
+            dim_list[i] = min(mat.shape)
+            
+            q0, q1 = tt.Addr_idx[:, i]
+            qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
+            qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
+        
+        totqn = tt.totQN.copy()
+        qsp_l = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
+        qsp_r = tt.qsp_class(tt.nidx, qn_list_l, dim_list)
+        Q = iTensor(QSp=[tt.shape[0], qsp_l], dtype=tt.dtype)
+        R = iTensor(QSp=[qsp_r, tt.shape[1]], dtype=tt.dtype)
+        print_vars(vars(),  ['Q.shape', 'R.shape'])
+        totqn = tt.totQN.copy()
+        if totqn_on_which == 'q':
+            Q.shift_qn(totqn, 1)
+        else:
+            R.shift_qn(totqn, 0)
+        
+        for i in range(Q.nidx): 
+            Q.set_block(i, qq[i].ravel(order='F'))
+            R.set_block(i, rr[i].ravel(order='F'))
+                
+        return Q, R        
+
+    @staticmethod 
+    def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, trunc_dim_min=None, 
+            full_matrices=False, compute_uv=True, 
+            return_trunc_err=False, totqn_on_which='s', 
+        normalize_singular_val=True):  
+        """
+            itensor should be prepare into a rank 2 tensor 
+            
+            this func also support the case when tensor.totqn not identity.
+                tensor.totqn is finally carried by S by default
+                but this can also be changed by param: totqn_on_which 
+            the dim is truncated if trunc_dim or trunc_err_tol is provided.
+                if both are provided, the later will overide the former.
+                if further a 'trunc_dim_min' is provided, it guarantees not trunc too much
+            params:
+                normalize_singular_val: in fact it is always true
+                
+            note1:
+                it happens that it through an error saying  SVD not converge. 
+                Actually, SVD may fail for some matrices,  but very few this would happen. 
+                If it happens frequently mostly because numpy use an early version of BLAS which has a bug. 
+                so I just try the fortran version common_util.matrix_svd instead when it fails. 
+                see also
+                    https://github.com/scipy/scipy/issues/3868
+                    https://github.com/numpy/numpy/issues/1588
+                    
+            
+        """
+        trunc_dim = trunc_dim if trunc_dim is not None else 10000
+        num_blocks = tensor.nidx 
+        tt = tensor  # a shorter name 
+        #uu, ss, vv = {}, {}, {}   #把每个block 分别做svd，记录在此, 最终由这些构造结果张量
+        #dim_list = []
+        uu = np.ndarray(num_blocks, dtype=np.object)
+        ss = np.ndarray(num_blocks, dtype=np.object)
+        vv = np.ndarray(num_blocks, dtype=np.object)
+        #dim_list = np.ndarray(num_blocks, dtype=np.int)
+        dim_list_l = np.ndarray(num_blocks, dtype=np.int)
+        dim_list_r = np.ndarray(num_blocks, dtype=np.int)
+        
+        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            p  = tt.Block_idx[0, i]
+            size  = tt.Block_idx[1, i]
+            assert dl*dr == size, (dl, dr, size) 
+            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+            if 0:
+                #issue225 #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
+                #暂时先不用它，而改用numpy
+                u, s, v = common_util.matrix_svd(min(dl, dr), mat)
+                uu[i], ss[i], vv[i] = u, s, v
+            else:
+                try:  # sometimes there is SVD not converge error
+                    if compute_uv: 
+                        u, s, v=scipy.linalg.svd(mat, full_matrices=full_matrices)
+                        uu[i], ss[i], vv[i] = u, s, v
+                    else: 
+                        s = scipy.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
+                        ss[i] = s
+                except scipy.linalg.LinAlgError as err:  # see note1
+                    msg = " scipy.linalg.svd not converge  use another version of SVD instead"
+                    warnings.warn(msg)
+                    print(msg)
+                    u, s, v = common_util.matrix_svd(min(dl, dr), mat)
+                    uu[i], ss[i], vv[i] = u, s, v
+                except Exception as err:
+                    raise 
+            
+            #dim_list[i] = s.size 
+            if compute_uv:
+                dim_list_l[i] = u.shape[1]
+                dim_list_r[i] = v.shape[0]
+            
+            qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
+            qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
+        #print_vars(vars(),  ['ss'])
+        if not compute_uv: 
+            spect = {}
+            for i in range(num_blocks): 
+                spect[qn_list_r[i].val] = ss[i]   # this assume qn_list_l  = qn_list_r.reverse()
+            return spect 
+        
+        dim_list = dim_list_l   # only used when doing trunc and full_matrices= True
+        totdim = np.sum(dim_list)
+        prepare_trunc = True 
+        if trunc_err_tol is not None: 
+            assert not full_matrices  #when doing trunc,  should set full_matrices=False
+            temp = np.zeros((3, totdim), dtype=float)
+            d0 = 0
+            #put together singular value for each quantum numbers, prepare for truncation
+            for i, d in enumerate(dim_list): 
+                temp[0, d0: d0 + d] = ss[i]
+                temp[1, d0: d0 + d] = i
+                temp[2, d0: d0 + d] = np.arange(d, dtype=int)
+                d0 += d
+            ind_sorted = temp[0].argsort() 
+            ind_sorted = ind_sorted[: : -1]
+            s_sorted = temp[0][ind_sorted]
+            s2_cumsum = np.cumsum(s_sorted**2)
+            #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
+            arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
+            try: 
+                dim = arg[0] + 1  
+            except IndexError:  # when arg = []
+                dim = s2_cumsum.size 
+            
+            if dim <= trunc_dim:  
+                trunc_dim = dim   # trunc_dim is overided 
+                
+            #print_vars(vars(),  ['trunc_dim', 's2_cumsum', '1-trunc_err_tol'])
+            norm = math.sqrt(s2_cumsum[trunc_dim-1])
+            prepare_trunc = False 
+        
+        trunc_dim = trunc_dim if trunc_dim_min is None else max(trunc_dim, trunc_dim_min)
+        
+        is_trunked = False
+        if trunc_dim < totdim:  
+            is_trunked = True
+            assert not full_matrices  #when doing trunc,  should set full_matrices=False
+            if prepare_trunc: 
+                #把ss中的奇异值 连接起来用temp 这一ndarray存储
+                temp = np.zeros((3, totdim), dtype=float)
+                d0 = 0
+                for i, d in enumerate(dim_list): 
+                    temp[0, d0: d0 + d] = ss[i]
+                    temp[1, d0: d0 + d] = i
+                    temp[2, d0: d0 + d] = np.arange(d, dtype=int)
+                    d0 += d
+                ind_sorted = temp[0].argsort()
+                ind_sorted = ind_sorted[: : -1]
+                
+            ind_largest = ind_sorted[:trunc_dim]
+            temp = temp[:, ind_largest]
+            
+            if prepare_trunc: 
+                norm = np.linalg.norm(temp[0])
+            trunc_err = 1-norm**2  
+            
+            empty_list = []
+            for i in range(tt.nidx): 
+                ind = np.where(temp[1]==float(i))[0]
+                if ind.size>0: 
+                    ind = ind[-1]
+                    last = int(temp[2][ind]) + 1 
+                    #truncate vecs, and normalize singular values 
+                    ss[i] = ss[i][: last]
+                    if normalize_singular_val:
+                        ss[i] *= 1./norm   # always normalize_singular_val
+                    dim_list[i] = last 
+                    uu[i] = uu[i][:, :last]
+                    vv[i] = vv[i][:last, :]
+                else: 
+                    empty_list.append(i)
+                #print_vars(vars(),  ['i', 'ind', 'last'], head='', sep='  ')
+            
+            index = list(range(num_blocks))
+            if empty_list: 
+                for i in empty_list: 
+                    index.remove(i)
+                qn_list_l = qn_list_l[index]
+                qn_list_r = qn_list_r[index]
+                dim_list = dim_list[index]
+                uu = uu[index]
+                vv = vv[index]
+                ss = ss[index]
+            #print_vars(vars(),  ['empty_list', 'dim_list'])
+            dim_list_l = dim_list 
+            dim_list_r = dim_list
+        else:
+            trunc_err = 0.0
+        
+        #qsp_sr = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
+        #qsp_sl = qsp_sr.copy(); qsp_sl.reverse()
+        #U = iTensor(QSp=[tt.QSp[0], qsp_sr])
+        #S = iTensor(QSp=[qsp_sl, qsp_sr])
+        #V = iTensor(QSp=[qsp_sl, tt.QSp[1]])
+        totqn = tt.totQN 
+        qsp_l = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_l)
+        qsp_r = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_r)
+        qsp_l_rev = qsp_l.copy(); qsp_l_rev.reverse()
+        qsp_r_rev = qsp_r.copy(); qsp_r_rev.reverse()
+        
+        U = iTensor(QSp=[tt.QSp[0], qsp_l_rev], dtype=tt.dtype)
+        V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]], dtype=tt.dtype)
+        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=float)
+        if totqn != totqn.__class__.qn_id():  # when itensor carry non-travial totqn  
+            if totqn_on_which == 's' : 
+                pass
+            elif totqn_on_which == 'u':
+                #S.shift_qn(totqn, 0)
+                #U.shift_qn(totqn.conj(), 1)
+                S.shift_qn(totqn.conj(), 0)
+                U.shift_qn(totqn, 1)
+            elif totqn_on_which == 'v':
+                #S.shift_qn(totqn, 1)
+                #V.shift_qn(totqn.conj(), 0)
+                S.shift_qn(totqn.conj(), 1)
+                V.shift_qn(totqn, 0)
+            else: 
+                raise ValueError(totqn_on_which) 
+        
+        for i in range(U.nidx): 
+            p  = U.Block_idx[0, i]
+            size  = U.Block_idx[1, i]
+            #print_vars(vars(), ['i', 'size', 'uu[i].size', 'vv[i].size', 'ss[i].size',  'len(uu)', 
+            #    'U.QSp[0].QNs[i]',
+            #    'U.QSp[1].QNs[i]', 
+            #    ], sep=' ')
+            U.data[p: p + size] = uu[i].ravel(order='F')
+            
+            p  = V.Block_idx[0, i]
+            size  = V.Block_idx[1, i]
+            V.data[p: p + size] = vv[i].ravel(order='F')
+            
+            p  = S.Block_idx[0, i]
+            size = S.Block_idx[1, i]
+            if not full_matrices:
+                S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+            else:
+                if dim_list_l[i] ==  dim_list_r[i]:
+                    S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+                else:
+                    m, n = dim_list_l[i], dim_list_r[i]
+                    temp = np.zeros((m, n))
+                    temp[np.diag_indices(min(m, n))]=ss[i]
+                    S.data[p: p + size] = temp.ravel(order='F')
+                #raise NotImplemented   #not completed, todo: ss[i] is not square matrix then, fill the diagonal element manually 
+        #if not is_trunked and normalize_singular_val:  # when is_trunked=True it is automatically normalized 
+        #    S.data /= np.linalg.norm(Tensor_svd.diagonal_rank2(S))
+        if not return_trunc_err:
+            return U, S, V 
+        else:
+            return U, S, V , trunc_err 
+    
+    @staticmethod
+    def eig_rank2(tensor, trunc_dim=None, 
+            return_trunc_err=False, return_val=False,  use_buff=False):
+        """ 
+            
+            仅仅为了在mps中 对角化密度矩阵 而写此函数，不做一般用途
+            exact diagonalizetion of a rank-2 symmetric tensor 
+            given A such that A = A^+, find V such that 
+                AV = lam V
+            lam is diagnal. A, lam, V are matrix
+        """
+        trunc_dim = trunc_dim if trunc_dim is not None else 10000
+        num_blocks = tensor.nidx 
+        tt = tensor  # a shorter name 
+        VEC = np.ndarray(num_blocks, dtype=np.object)
+        VAL = np.ndarray(num_blocks, dtype=np.object)
+        
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        dim_list_trunc = np.ndarray(num_blocks, dtype=np.int)   #truncated dim_list 
+        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        dtype = tt.dtype 
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qn_id_tuple = tt.Addr_idx[:, i]
+            qn0, qn1 = qn_id_tuple
+            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
+            assert dl == dr  
+            p  = tt.Block_idx[0, i]
+            size = tt.Block_idx[1, i]
+            if dtype==float: 
+                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+                val = np.empty(dl, order='F')
+                common_util.matrix_eigen_vector(mat, val) 
+            else:
+                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+                val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
+                #val, mat = np.linalg.eigh(mat)
+            
+            VAL[i] = val[: dl] 
+            VEC[i] = mat
+            dim_list[i] = dl 
+            qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()
+            qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
+        totdim = np.sum(dim_list)
+        index = list(range(num_blocks))
+        if trunc_dim < totdim:  
+            #print_vars(vars(),  ['totdim'])
+            temp = {}
+            temp[0] = np.ndarray(totdim, dtype=float)
+            temp[1] = np.ndarray(totdim, dtype=np.int)
+            temp[2] = np.ndarray(totdim, dtype=np.int)
+            d0 = 0
+            for i, d in enumerate(dim_list): 
+                temp[0][d0: d0 + d] = VAL[i]
+                temp[1][d0: d0 + d] = i
+                temp[2][d0: d0 + d] = np.arange(d, dtype=int)
+                d0 += d
+            arg = temp[0].argsort()
+            arg_large = arg[-1:-trunc_dim-1:-1]
+                   
+            sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
+            for i in range(3): 
+                temp[i] = temp[i][arg_large]
+            
+            trunc_err = 1-old_div(np.sum(temp[0]),sum_tot)  
+            #trunc_err = 1-np.sum(temp[0])
+                
+            empty_list = []
+            for i in range(len(dim_list)): 
+                #ii = float(i)
+                ind = temp[2][np.where(temp[1]==i)]
+                D = ind.size
+                if D>0: 
+                    VAL[i] = VAL[i][ind]
+                    VEC[i] = VEC[i][:, ind]
+                else: 
+                    empty_list.append(i)
+                dim_list_trunc[i] = D 
+                
+            if empty_list: 
+                for i in empty_list: 
+                    index.remove(i)
+                #qn_list_l = qn_list_l[index]
+                #qn_list_r = qn_list_r[index]
+                #dim_list = dim_list[index]
+                dim_list_trunc = dim_list_trunc[index]
+                VEC = VEC[index]
+                if return_val: 
+                    VAL = VAL[index]
+        else: 
+            dim_list_trunc = dim_list 
+            trunc_err = np.nan 
+                
+        qn_list_r = qn_list_r[index]
+        q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
+        q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trunc)
+        
+        res = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
+        
+        for i in range(res.nidx): 
+            p  = res.Block_idx[0, i]
+            size  = res.Block_idx[1, i]
+            res.data[p: p + size] = VEC[i].ravel(order='F')
+            
+        if return_val: 
+            
+            val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff)
+            
+                
+            for i in range(val_mat.nidx): 
+                p  = val_mat.Block_idx[0, i]
+                size  = val_mat.Block_idx[1, i]
+                #print_vars(vars(),  ['size', 'VAL[i].shape'])
+                val_mat.data[p: p + size] = np.diag(VAL[i]).ravel(order='F')
+        else: 
+            val_mat = None 
+        return {'vec_mat': res, 'val_mat': val_mat, 'trunc_err': trunc_err}    
+    
+    @staticmethod
+    def solve_rank2(A, b):
+        """
+            linear solver:  Ax = b
+        """
+        raise NotImplemented 
+        
+    @classmethod
+    def exp_rank2(cls, itensor, totQN=None):
+        tt = itensor  # a shorter name 
+        res = tt.shallow_copy()
+        for i in range(tt.nidx):   # 遍历非零blocks
+            mat = tt.get_block(i, linear=False)
+            mat_exp = scipy.linalg.expm(mat)
+            mat_exp=mat_exp.ravel(order='F')
+            tt.set_block(i, mat_exp)
+        return res 
+
+    @classmethod
+    def diagonal_rank2(cls, itensor, totQN=None):
+        """
+            store all diagonal elements of M in a 1D array
+        
+        """
+        tt = itensor # a shorter name 
+        tot_size = np.sum(np.sqrt(tt.Block_idx[1, :tt.nidx]))
+        res = np.zeros(int(tot_size), tt.dtype)
+        k = 0
+        for i in range(tt.nidx):   # 遍历非零blocks
+            data = tt.get_block(i, linear=False)
+            diag = np.diagonal(data)
+            size = diag.size 
+            res[k:k+size] = diag
+            k += size 
+        return res 
+
+    @classmethod
+    def trace_rank2(cls, itensor):
+        """
+            compute Tr(M)
+        """
+        res = 0.0
+        for i in range(itensor.nidx):   # 遍历非零blocks
+            data = itensor.get_block(i, linear=False)
+            res += data.trace()
+        return res 
+
+class Tensor_svd(iTensor_rank2_operation):
     """
     this implementation without inheriete from iTensor
     """
@@ -410,415 +904,6 @@ class Tensor_svd(object):
         
         return val_largest, last_list, empty_list  
 
-    @staticmethod 
-    def svd_rank2(tensor, trunc_dim=None, trunc_err_tol=None, trunc_dim_min=None, 
-            full_matrices=False, compute_uv=True, 
-            return_trunc_err=False, totqn_on_which='s', 
-        normalize_singular_val=True):  
-        """
-            itensor should be prepare into a rank 2 tensor 
-            
-            this func also support the case when tensor.totqn not identity.
-                tensor.totqn is finally carried by S by default
-                but this can also be changed by param: totqn_on_which 
-            the dim is truncated if trunc_dim or trunc_err_tol is provided.
-                if both are provided, the later will overide the former.
-                if further a 'trunc_dim_min' is provided, it guarantees not trunc too much
-            params:
-                normalize_singular_val: in fact it is always true
-                
-            note1:
-                it happens that it through an error saying  SVD not converge. 
-                Actually, SVD may fail for some matrices,  but very few this would happen. 
-                If it happens frequently mostly because numpy use an early version of BLAS which has a bug. 
-                so I just try the fortran version common_util.matrix_svd instead when it fails. 
-                see also
-                    https://github.com/scipy/scipy/issues/3868
-                    https://github.com/numpy/numpy/issues/1588
-                    
-            
-        """
-        trunc_dim = trunc_dim if trunc_dim is not None else 10000
-        num_blocks = tensor.nidx 
-        tt = tensor  # a shorter name 
-        #uu, ss, vv = {}, {}, {}   #把每个block 分别做svd，记录在此, 最终由这些构造结果张量
-        #dim_list = []
-        uu = np.ndarray(num_blocks, dtype=np.object)
-        ss = np.ndarray(num_blocks, dtype=np.object)
-        vv = np.ndarray(num_blocks, dtype=np.object)
-        #dim_list = np.ndarray(num_blocks, dtype=np.int)
-        dim_list_l = np.ndarray(num_blocks, dtype=np.int)
-        dim_list_r = np.ndarray(num_blocks, dtype=np.int)
-        
-        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
-        
-        for i in range(tt.nidx):   # 遍历非零blocks
-            qn_id_tuple = tt.Addr_idx[:, i]
-            qn0, qn1 = qn_id_tuple
-            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
-            p  = tt.Block_idx[0, i]
-            size  = tt.Block_idx[1, i]
-            assert dl*dr == size, (dl, dr, size) 
-            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            if 0:
-                #issue225 #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
-                #暂时先不用它，而改用numpy
-                u, s, v = common_util.matrix_svd(min(dl, dr), mat)
-                uu[i], ss[i], vv[i] = u, s, v
-            else:
-                try:  # sometimes there is SVD not converge error
-                    if compute_uv: 
-                        u, s, v=scipy.linalg.svd(mat, full_matrices=full_matrices)
-                        uu[i], ss[i], vv[i] = u, s, v
-                    else: 
-                        s = scipy.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
-                        ss[i] = s
-                except scipy.linalg.LinAlgError as err:  # see note1
-                    msg = " scipy.linalg.svd not converge  use another version of SVD instead"
-                    warnings.warn(msg)
-                    print(msg)
-                    u, s, v = common_util.matrix_svd(min(dl, dr), mat)
-                    uu[i], ss[i], vv[i] = u, s, v
-                except Exception as err:
-                    raise 
-            
-            #dim_list[i] = s.size 
-            if compute_uv:
-                dim_list_l[i] = u.shape[1]
-                dim_list_r[i] = v.shape[0]
-            
-            qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
-            qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
-        #print_vars(vars(),  ['ss'])
-        if not compute_uv: 
-            spect = {}
-            for i in range(num_blocks): 
-                spect[qn_list_r[i].val] = ss[i]   # this assume qn_list_l  = qn_list_r.reverse()
-            return spect 
-        
-        dim_list = dim_list_l   # only used when doing trunc and full_matrices= True
-        totdim = np.sum(dim_list)
-        prepare_trunc = True 
-        if trunc_err_tol is not None: 
-            assert not full_matrices  #when doing trunc,  should set full_matrices=False
-            temp = np.zeros((3, totdim), dtype=float)
-            d0 = 0
-            #put together singular value for each quantum numbers, prepare for truncation
-            for i, d in enumerate(dim_list): 
-                temp[0, d0: d0 + d] = ss[i]
-                temp[1, d0: d0 + d] = i
-                temp[2, d0: d0 + d] = np.arange(d, dtype=int)
-                d0 += d
-            ind_sorted = temp[0].argsort() 
-            ind_sorted = ind_sorted[: : -1]
-            s_sorted = temp[0][ind_sorted]
-            s2_cumsum = np.cumsum(s_sorted**2)
-            #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
-            arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
-            try: 
-                dim = arg[0] + 1  
-            except IndexError:  # when arg = []
-                dim = s2_cumsum.size 
-            
-            if dim <= trunc_dim:  
-                trunc_dim = dim   # trunc_dim is overided 
-                
-            #print_vars(vars(),  ['trunc_dim', 's2_cumsum', '1-trunc_err_tol'])
-            norm = math.sqrt(s2_cumsum[trunc_dim-1])
-            prepare_trunc = False 
-        
-        trunc_dim = trunc_dim if trunc_dim_min is None else max(trunc_dim, trunc_dim_min)
-        
-        is_trunked = False
-        if trunc_dim < totdim:  
-            is_trunked = True
-            assert not full_matrices  #when doing trunc,  should set full_matrices=False
-            if prepare_trunc: 
-                #把ss中的奇异值 连接起来用temp 这一ndarray存储
-                temp = np.zeros((3, totdim), dtype=float)
-                d0 = 0
-                for i, d in enumerate(dim_list): 
-                    temp[0, d0: d0 + d] = ss[i]
-                    temp[1, d0: d0 + d] = i
-                    temp[2, d0: d0 + d] = np.arange(d, dtype=int)
-                    d0 += d
-                ind_sorted = temp[0].argsort()
-                ind_sorted = ind_sorted[: : -1]
-                
-            ind_largest = ind_sorted[:trunc_dim]
-            temp = temp[:, ind_largest]
-            
-            if prepare_trunc: 
-                norm = np.linalg.norm(temp[0])
-            trunc_err = 1-norm**2  
-            
-            empty_list = []
-            for i in range(tt.nidx): 
-                ind = np.where(temp[1]==float(i))[0]
-                if ind.size>0: 
-                    ind = ind[-1]
-                    last = int(temp[2][ind]) + 1 
-                    #truncate vecs, and normalize singular values 
-                    ss[i] = ss[i][: last]
-                    if normalize_singular_val:
-                        ss[i] *= 1./norm   # always normalize_singular_val
-                    dim_list[i] = last 
-                    uu[i] = uu[i][:, :last]
-                    vv[i] = vv[i][:last, :]
-                else: 
-                    empty_list.append(i)
-                #print_vars(vars(),  ['i', 'ind', 'last'], head='', sep='  ')
-            
-            index = list(range(num_blocks))
-            if empty_list: 
-                for i in empty_list: 
-                    index.remove(i)
-                qn_list_l = qn_list_l[index]
-                qn_list_r = qn_list_r[index]
-                dim_list = dim_list[index]
-                uu = uu[index]
-                vv = vv[index]
-                ss = ss[index]
-            #print_vars(vars(),  ['empty_list', 'dim_list'])
-            dim_list_l = dim_list 
-            dim_list_r = dim_list
-        else:
-            trunc_err = 0.0
-        
-        #qsp_sr = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list)
-        #qsp_sl = qsp_sr.copy(); qsp_sl.reverse()
-        #U = iTensor(QSp=[tt.QSp[0], qsp_sr])
-        #S = iTensor(QSp=[qsp_sl, qsp_sr])
-        #V = iTensor(QSp=[qsp_sl, tt.QSp[1]])
-        totqn = tt.totQN 
-        qsp_l = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list_l)
-        qsp_r = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_r)
-        qsp_l_rev = qsp_l.copy(); qsp_l_rev.reverse()
-        qsp_r_rev = qsp_r.copy(); qsp_r_rev.reverse()
-        
-        U = iTensor(QSp=[tt.QSp[0], qsp_l_rev], dtype=tt.dtype)
-        V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]], dtype=tt.dtype)
-        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=float)
-        if totqn != totqn.__class__.qn_id():  # when itensor carry non-travial totqn  
-            if totqn_on_which == 's' : 
-                pass
-            elif totqn_on_which == 'u':
-                #S.shift_qn(totqn, 0)
-                #U.shift_qn(totqn.conj(), 1)
-                S.shift_qn(totqn.conj(), 0)
-                U.shift_qn(totqn, 1)
-            elif totqn_on_which == 'v':
-                #S.shift_qn(totqn, 1)
-                #V.shift_qn(totqn.conj(), 0)
-                S.shift_qn(totqn.conj(), 1)
-                V.shift_qn(totqn, 0)
-            else: 
-                raise ValueError(totqn_on_which) 
-        
-        for i in range(U.nidx): 
-            p  = U.Block_idx[0, i]
-            size  = U.Block_idx[1, i]
-            #print_vars(vars(), ['i', 'size', 'uu[i].size', 'vv[i].size', 'ss[i].size',  'len(uu)', 
-            #    'U.QSp[0].QNs[i]',
-            #    'U.QSp[1].QNs[i]', 
-            #    ], sep=' ')
-            U.data[p: p + size] = uu[i].ravel(order='F')
-            
-            p  = V.Block_idx[0, i]
-            size  = V.Block_idx[1, i]
-            V.data[p: p + size] = vv[i].ravel(order='F')
-            
-            p  = S.Block_idx[0, i]
-            size = S.Block_idx[1, i]
-            if not full_matrices:
-                S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
-            else:
-                if dim_list_l[i] ==  dim_list_r[i]:
-                    S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
-                else:
-                    m, n = dim_list_l[i], dim_list_r[i]
-                    temp = np.zeros((m, n))
-                    temp[np.diag_indices(min(m, n))]=ss[i]
-                    S.data[p: p + size] = temp.ravel(order='F')
-                #raise NotImplemented   #not completed, todo: ss[i] is not square matrix then, fill the diagonal element manually 
-        #if not is_trunked and normalize_singular_val:  # when is_trunked=True it is automatically normalized 
-        #    S.data /= np.linalg.norm(Tensor_svd.diagonal_rank2(S))
-        if not return_trunc_err:
-            return U, S, V 
-        else:
-            return U, S, V , trunc_err 
-    
-    @staticmethod
-    def qr_rank2(tensor, totqn_on_which='q'):
-        """
-            ref: schollwock 2010 p. 108
-            M = QR
-        """
-        
-        num_blocks = tensor.nidx 
-        tt = tensor  # a shorter name 
-        
-        qq = {}
-        rr = {}
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
-        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
-        
-        for i in range(tt.nidx):   # 遍历非零blocks
-            mat = tt.get_block(i, linear=False)
-            
-            qq[i], rr[i] = linalg.qr(mat)
-            dim_list[i] = min(mat.shape)
-            
-            q0, q1 = tt.Addr_idx[:, i]
-            qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
-            qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
-        
-        totqn = tt.totQN.copy()
-        
-        if totqn_on_which == 'q':
-            qsp = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
-            qsp_r = qsp.copy(reverse=True)
-            Q = iTensor(QSp=[tt.QSp[0], qsp], dtype=tt.dtype, totQN=totqn)
-            R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype)
-        else:
-            qsp = tt.qsp_class(tt.nidx, qn_list_l, dim_list)
-            qsp_r = qsp.copy(reverse=True)
-            Q = iTensor(QSp=[tt.QSp[0], qsp_r], dtype=tt.dtype)
-            R = iTensor(QSp=[qsp, tt.QSp[1]], dtype=tt.dtype, totQN=totqn)
-        
-        for i in range(Q.nidx): 
-            Q.set_block(i, qq[i].ravel(order='F'))
-            R.set_block(i, rr[i].ravel(order='F'))
-                
-        return Q, R        
-    
-    @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, 
-            return_trunc_err=False, return_val=False,  use_buff=False):
-        """ 
-            
-            仅仅为了在mps中 对角化密度矩阵 而写此函数，不做一般用途
-            exact diagonalizetion of a rank-2 symmetric tensor 
-            given A such that A = A^+, find V such that 
-                AV = lam V
-            lam is diagnal. A, lam, V are matrix
-        """
-        trunc_dim = trunc_dim if trunc_dim is not None else 10000
-        num_blocks = tensor.nidx 
-        tt = tensor  # a shorter name 
-        VEC = np.ndarray(num_blocks, dtype=np.object)
-        VAL = np.ndarray(num_blocks, dtype=np.object)
-        
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
-        dim_list_trunc = np.ndarray(num_blocks, dtype=np.int)   #truncated dim_list 
-        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
-        dtype = tt.dtype 
-        for i in range(tt.nidx):   # 遍历非零blocks
-            qn_id_tuple = tt.Addr_idx[:, i]
-            qn0, qn1 = qn_id_tuple
-            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
-            assert dl == dr  
-            p  = tt.Block_idx[0, i]
-            size = tt.Block_idx[1, i]
-            if dtype==float: 
-                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-                val = np.empty(dl, order='F')
-                common_util.matrix_eigen_vector(mat, val) 
-            else:
-                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-                val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
-                #val, mat = np.linalg.eigh(mat)
-            
-            VAL[i] = val[: dl] 
-            VEC[i] = mat
-            dim_list[i] = dl 
-            qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()
-            qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
-        totdim = np.sum(dim_list)
-        index = list(range(num_blocks))
-        if trunc_dim < totdim:  
-            #print_vars(vars(),  ['totdim'])
-            temp = {}
-            temp[0] = np.ndarray(totdim, dtype=float)
-            temp[1] = np.ndarray(totdim, dtype=np.int)
-            temp[2] = np.ndarray(totdim, dtype=np.int)
-            d0 = 0
-            for i, d in enumerate(dim_list): 
-                temp[0][d0: d0 + d] = VAL[i]
-                temp[1][d0: d0 + d] = i
-                temp[2][d0: d0 + d] = np.arange(d, dtype=int)
-                d0 += d
-            arg = temp[0].argsort()
-            arg_large = arg[-1:-trunc_dim-1:-1]
-                   
-            sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
-            for i in range(3): 
-                temp[i] = temp[i][arg_large]
-            
-            trunc_err = 1-old_div(np.sum(temp[0]),sum_tot)  
-            #trunc_err = 1-np.sum(temp[0])
-                
-            empty_list = []
-            for i in range(len(dim_list)): 
-                #ii = float(i)
-                ind = temp[2][np.where(temp[1]==i)]
-                D = ind.size
-                if D>0: 
-                    VAL[i] = VAL[i][ind]
-                    VEC[i] = VEC[i][:, ind]
-                else: 
-                    empty_list.append(i)
-                dim_list_trunc[i] = D 
-                
-            if empty_list: 
-                for i in empty_list: 
-                    index.remove(i)
-                #qn_list_l = qn_list_l[index]
-                #qn_list_r = qn_list_r[index]
-                #dim_list = dim_list[index]
-                dim_list_trunc = dim_list_trunc[index]
-                VEC = VEC[index]
-                if return_val: 
-                    VAL = VAL[index]
-        else: 
-            dim_list_trunc = dim_list 
-            trunc_err = np.nan 
-                
-        qn_list_r = qn_list_r[index]
-        q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list)
-        q2 = tt.qsp_class(len(qn_list_r), qn_list_r, dim_list_trunc)
-        
-        res = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
-        
-        for i in range(res.nidx): 
-            p  = res.Block_idx[0, i]
-            size  = res.Block_idx[1, i]
-            res.data[p: p + size] = VEC[i].ravel(order='F')
-            
-        if return_val: 
-            
-            val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff)
-            
-                
-            for i in range(val_mat.nidx): 
-                p  = val_mat.Block_idx[0, i]
-                size  = val_mat.Block_idx[1, i]
-                #print_vars(vars(),  ['size', 'VAL[i].shape'])
-                val_mat.data[p: p + size] = np.diag(VAL[i]).ravel(order='F')
-        else: 
-            val_mat = None 
-        return {'vec_mat': res, 'val_mat': val_mat, 'trunc_err': trunc_err}    
-    
-    @staticmethod
-    def solve_rank2(A, b):
-        """
-            linear solver:  Ax = b
-        """
-        raise NotImplemented 
-        
     
     @classmethod
     def random_unit_tensor(cls,itensor, d):
@@ -942,76 +1027,6 @@ class Tensor_svd(object):
 
         return res
     
-    @classmethod
-    def exp_rank2(cls, itensor, totQN=None):
-        num_blocks = itensor.nidx 
-        tt = itensor  # a shorter name 
-
-
-        #res = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
-        res = tt.shallow_copy()
-      
-        dtype = tt.dtype 
-        for i in range(tt.nidx):   # 遍历非零blocks
-            qn_id_tuple = tt.Addr_idx[:, i]
-            qn0, qn1 = qn_id_tuple
-            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
-            assert dl == dr  
-            p  = tt.Block_idx[0, i]
-            size = tt.Block_idx[1, i]
-            mat = tt.data[p: p + size].reshape(dl, dr, order='F')
-            #if dtype==float: 
-            #    mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            #    val = np.empty(dl, order='F')
-            #    common_util.matrix_eigen_vector(mat, val) 
-            #else:
-            #    mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            #    val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
-            #    #val, mat = np.linalg.eigh(mat)
-            mat_exp = scipy.linalg.expm(mat)
-        
-            #p  = res.Block_idx[0, i]
-            #size  = res.Block_idx[1, i]
-            res.data[p: p + size] = mat_exp.ravel(order='F')
-        
-        #for i in range(res.nidx): 
-        #    p  = res.Block_idx[0, i]
-        #    size  = res.Block_idx[1, i]
-        #    res.data[p: p + size] = VEC[i].ravel(order='F')
-            
-        return res 
-
-    @classmethod
-    def trace_rank2(cls, itensor, totQN=None):
-        tt = itensor  # a shorter name 
-        dtype = tt.dtype 
-        res = 0.0
-        for i in range(tt.nidx):   # 遍历非零blocks
-            qn_id_tuple = tt.Addr_idx[:, i]
-            qn0, qn1 = qn_id_tuple
-            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
-            assert dl == dr  
-            p  = tt.Block_idx[0, i]
-            size = tt.Block_idx[1, i]
-            res += tt.data[p: p + size].reshape(dl, dr, order='F').trace()
-        return res 
-    
-    @classmethod
-    def diagonal_rank2(cls, itensor, totQN=None):
-        tt = itensor # a shorter name 
-        tot_size = np.sum(np.sqrt(tt.Block_idx[1, :tt.nidx]))
-        res = np.zeros(int(tot_size), tt.dtype)
-        k = 0
-        for i in range(tt.nidx):   # 遍历非零blocks
-            qn_id_tuple = tt.Addr_idx[:, i]
-            qn0, qn1 = qn_id_tuple
-            dl = tt.QSp[0].Dims[qn0]; dr = tt.QSp[1].Dims[qn1]
-            assert dl == dr  
-            p  = tt.Block_idx[0, i]
-            size = tt.Block_idx[1, i]
-            res[k:k+dl] = np.diagonal(tt.data[p: p + size].reshape(dl, dr, order='F'))
-            k += dl  
-        return res 
     
     @classmethod
     def get_block(cls, div, target_QN, gidx= -1, need_group=True):
@@ -1284,7 +1299,6 @@ class TestIt(unittest.TestCase):
             u, s, v = Tensor_svd.svd_rank2(t, full_matrices=1)
             a = u.dot(s).dot(v) 
             self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14))             
-            
     
     def test_svd_rank2_fix_err(self): 
         from merapy import QspU1 
@@ -1437,6 +1451,21 @@ class TestIt(unittest.TestCase):
             tr1 = tm.trace()
             tr2 = Tensor_svd.trace_rank2(t)
             self.assertAlmostEqual(tr1, tr2, 10)
+    
+    def test_diagonal_rank2(self): 
+        if 1: 
+            np.random.seed(1234)
+            q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
+            q2= QspU1.easy_init([0, -1, 1], [4, 2, 5])
+            
+            qsp = [q1, q2]
+            
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            tm = t.matrix_view()
+            tr1 = tm.diagonal()
+            tr2 = Tensor_svd.diagonal_rank2(t)
+            self.assertTrue(np.allclose(tr1, tr2, 1e-10))
+
 
     def test_qr_rank2(self): 
         np.set_printoptions(5)
@@ -1458,8 +1487,6 @@ class TestIt(unittest.TestCase):
             qq = q.T.conj().dot(q)
             print_vars(vars(),  ['qq'])
             
-            
-        
             
         if 1:  #totqn ! =  qn_id 
             if 1:
@@ -1489,24 +1516,32 @@ class TestIt(unittest.TestCase):
                 qr = q.dot(r)
                 self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
                 self.assertTrue(qr==t)
-            
 
     def test_temp(self): 
-        if 1: 
-            np.random.seed(1234)
-            q1 = QspU1.easy_init([0, 1, -1], [3, 2, 4])
-            q2 = QspU1.easy_init([0, -1, 1], [3, 2, 2])
-            qsp = [q1, q2]
-            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
-            print_vars(vars(),  ['t'])
-            q, r= Tensor_svd.qr_rank2(t)
-            qr = q.dot(r)
-            print_vars(vars(),  ['qr==t'])
-            print_vars(vars(),  ['qr.shape', 't.shape'])
+        if 1:  #totqn ! =  qn_id 
+            if 1:
+                np.random.seed(1234)
+                q = QspU1.easy_init([ 1, -1, ], [2, 1])
+                qsp = q.copy_many(5)
+                totqn = QspU1.QnClass(1)
+                t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
+                t = t.merge_qsp((0, 1), (2, 3, 4))
+                #t = t.merge_qsp((0, 1, 2), (3, 4))
+                
+                
+            if 1: 
+                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='q')
+                qr = q.dot(r)
+                self.assertTrue(qr.totQN==t.totQN and r.totQN._val==0)
+                self.assertTrue(qr==t)
+                
+                print_vars(vars(),  ['t.shape', 'q.shape', 'r.shape'])
             
-           
-            
-            
+            if 0: 
+                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='r')
+                qr = q.dot(r)
+                self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
+                self.assertTrue(qr==t)
     
 if __name__ == "__main__":
     if 0: #examine
@@ -1526,10 +1561,11 @@ if __name__ == "__main__":
            #'test_eig_rank2', 
            #'test_exp_rank2', 
            #'test_trace_rank2', 
+           #'test_diagonal_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
-           'test_qr_rank2', 
-           #'test_temp', 
+           #'test_qr_rank2', 
+           'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

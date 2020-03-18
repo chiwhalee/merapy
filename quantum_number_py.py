@@ -262,9 +262,6 @@ class QnZ2(QnBase):
             故变成加法
         """
         return QnZ2(self._val*other._val)
-    
-    def __reduce__del(self,other):
-        return QnZ2(self.val*other.val)
 
 class QnZ3(QnBase):
     SYMMETRY = "Z3"
@@ -348,22 +345,6 @@ class QnU1(QnBase):
         #return QnU1(self.val+other.val)
         return QnU1(self._val + other._val)
     
-    def __reduce__del(self,other):
-        """
-        see QN_Minus in f90
-        status_1
-        """
-        qn3= QuantumNum()
-
-        if self.SYMMETRY=="Z2" or "Z2Z2":
-            qn3.val = self.val*other.val
-            qn3.val = self.val*other.val
-        if self.SYMMETRY=="U1":
-            qn3.val = self.val-other.val
-        if self.SYMMETRY=="U1Z2":
-            qn3.val[0] = self.val[0]-other.val[0]
-            qn3.val[1] = self.val[1]*other.val[1]
-        return qn3
     
 
 class QuantumNum(QnZ2, QnU1):
@@ -393,7 +374,7 @@ class QuantSpaceBase(object):
 
         #self.QNs= np.ndarray(self.MaxQNNum, np.object)
         #self.QNs[:n]= qns[:n]
-        self.QNs= qns
+        self.QNs = qns
     
     @property
     def totDim(self):
@@ -654,7 +635,6 @@ class QuantSpaceBase(object):
                 res[i].reverse()
         return res
 
-
     def link(self):
         return self
 
@@ -814,6 +794,7 @@ class QuantSpaceBase(object):
                 res.add_to_quant_space(qn, d)
         return res
     
+    #def add
     add = tensor_prod 
     
     @staticmethod
@@ -872,8 +853,6 @@ class QuantSpaceBase(object):
         
         res= self.__class__.easy_init(qns, dims)
         return res 
-                
-                
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
@@ -1065,8 +1044,7 @@ class QspU1(QuantSpaceBase):
         n = len(dims)
         assert dims is not None 
         if qns is None: 
-            qns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 
-                    6, -6, 7, -7, -8, 8, -9, 9, -10, 10]
+            qns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, -8, 8, -9, 9, -10, 10]
             assert len(qns)>= len(dims)
             qns = qns[: len(dims)]
         qns1 = [cls.QnClass(i) for i in qns]
@@ -1146,6 +1124,16 @@ class QspU1(QuantSpaceBase):
             key3 = [x for x in keys if x[0]==3]; key3.sort()
             key5 = [x for x in keys if x[0]==5]; key5.sort()
             raise Exception("key (%d, %d) is not found. \n allowed keys are \n\t%s\n\t%s"%(trunc_dim, nqn, key3, key5))
+    
+    def shift_qn(self, qn_delta):
+        """
+           change all the qns by qn_delta, not changing dim; an inplace operation
+        """
+        n= self.nQN
+        if not isinstance(qn_delta, int):
+            qn_delta = qn_delta._val
+        for i in range(n):
+            self.QNs[i]._val += qn_delta 
     
 class QspU1_half(QuantSpaceBase):
     """
@@ -1455,6 +1443,17 @@ class TestIt(unittest.TestCase):
     def test_temp(self): 
         q = QspU1.easy_init(None, [2, 1, 1])
         print(q)
+        print(q.QNs)
+        q.shift_qn(q.QNs[0])
+        print(q.QNs)
+    
+    def test_shift_qn(self): 
+        q = QspU1.easy_init(None, [2, 1, 1])
+        print(q)
+        q.shift_qn(2)
+        q1 = QspU1.easy_init([2, 3, 1], [2, 1, 1])
+        print(q1)
+        self.assertTrue(q==q1)
       
     
     def test_old_all(self): 
@@ -1563,7 +1562,8 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           'test_temp', 
+           #'test_temp', 
+           'test_shift_qn', 
            #'test_old_all', 
            #'test_compare', 
            #'test_power', 

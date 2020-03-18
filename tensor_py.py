@@ -402,14 +402,17 @@ class iTensor(TensorBase):
         #return  self.idx[pq]
         return pq 
     
-    def get_block(self, i, linear=True): 
+    def get_block(self, i, linear=True, order='F'): 
+        """
+        
+        """
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
         if linear:
             return self.data[p: p + size] 
         else:
             sh = self.get_block_shape(i)
-            return  self.data[p: p+size].reshape(sh, order='F')            
+            return  self.data[p: p+size].reshape(sh, order=order)            
             
     
     def get_block_shape(self, i):
@@ -3157,12 +3160,12 @@ class iTensor(TensorBase):
             shift totqn and  qn of a qsp at the same time, not changing data 
             an inplace operation
             this is efficient enough for production use 
-            
+            params:
+                qn_delta: of type QnU1, etc.
         """
-        qsp_delta = self.qsp_class(1, [qn_delta], [1])
-        self.QSp[qsp_id] = self.QSp[qsp_id]*qsp_delta 
-        #qn_delta_r = qn_delta.conj()
-        #self.totQN = self.totQN + qn_delta_r  
+        #qsp_delta = self.qsp_class(1, [qn_delta], [1])
+        #self.QSp[qsp_id] = self.QSp[qsp_id]*qsp_delta 
+        self.QSp[qsp_id].shift_qn(qn_delta)
         self.totQN = self.totQN + qn_delta
     
     @staticmethod 
