@@ -1138,12 +1138,25 @@ class Tensor_svd(iTensor_rank2_operation):
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass
-        from merapy.tensor import  test_iTensor
+        #from merapy.tensor import  test_iTensor
         #u,  w, u2234= simple_itensor()
         #u = test_iTensor.instance("u")
         #w = test_iTensor.instance("w")
-        u = test_iTensor(symmetry='U1').u
-        self.u = u 
+        symmetry = 'U1'
+        dim = 4
+        self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
+        QSbase = self.qsp_base.copy
+        totQN=self.qn_identity.copy
+        if dim is None:
+            QSbase = self.qsp_base.copy
+        else:
+            QSbase = self.qsp_base.__class__.max(dim).copy
+        #qsp = self.qsp_base.max(dim)
+
+        self.u=iTensor(4,[QSbase() for i in range(4)],totQN())
+        
+        #u = test_iTensor(symmetry='U1').u
+        #self.u = u 
         self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry='Z2')
     
     def test_group_legs(self, rank=3):

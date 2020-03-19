@@ -33,7 +33,7 @@ from vmps.iterative_optimize import IterativeOptimize
 
 from merapy.tensor_factory import iTensorFactory
 from merapy.config import gen_backup_base_dir
-from merapy.decorators import (tensor_player, get_player_state,  set_player_state_manual )
+from merapy.decorators import (tensor_player, get_player_state,  set_player_state_manual, set_player_state_auto)
 from merapy.utilities import print_vars
 import merapy.crandom as crandom 
 from merapy.models import *
@@ -2689,7 +2689,11 @@ class System(IterativeOptimize):
             Get_Position(T3,mp, pos)
             print("[6[1x,I4], E15.8]", pos[0:6], ME)
             #endif        
-  
+
+    def __del__(self, ): 
+        set_player_state_auto(None, None, power_on=False, info=1)
+    
+ 
 class TestSystem(unittest.TestCase):
     def setUp(self): 
         if 0: 

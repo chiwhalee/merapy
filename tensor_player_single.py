@@ -892,6 +892,8 @@ def tensor_player(which):
         return wrapper
     return inner
 
+
+tensor_player.version = 'single'
 tensor_player.STATE = 'stop'   # this line is needed, because sometiems tensor_player.STATE is used but tensor_player has not been called as decorator 
 #tensor_player.NEXT_STATE = None 
 

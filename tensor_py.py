@@ -61,7 +61,7 @@ from merapy.set1 import *
 from merapy import crandom
 from merapy.utilities import get_local
 from merapy import make_qsp
-from merapy.decorators import (tensor_player, decorate_methods, set_player_state_manual)
+from merapy.decorators import (tensor_player, decorate_methods, set_player_state_manual, set_player_state_auto)
 #from merapy.tensor_player_multiple import decorate_methods,  tensor_player, set_player_state_auto
 
 #from merapy.decorators import (tensor_player, decorate_methods, 
@@ -72,7 +72,7 @@ from merapy.decorators import (tensor_player, decorate_methods, set_player_state
 #import numexpr
 
 
-__all__ = ["TensorBase", "nTensor", "iTensor", "test_iTensor"]
+__all__ = ['TensorBase', 'nTensor', 'iTensor', ]
 
 
 class tBuffer(object):
@@ -119,7 +119,7 @@ class iTensor(TensorBase):
     T_BUFFER=[tBuffer(size=100, dtype=float) for  i in range(4)]
     #BUFFER_ON = False
     
-    def __init__(self, rank=None, QSp=None, totQN=None, order="F", dtype=float, 
+    def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
             buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
         """
             params: 
@@ -163,44 +163,29 @@ class iTensor(TensorBase):
                         问题是 idx 应不应该设？—— 需要. 指标的变化范围就是1 
                 
         """
-        #comment this only for a little faster
-        #TensorBase.__init__(self, rank, None)
-        
+        #TensorBase.__init__(self, rank, None)  #comment this only for a little faster
         rank = len(QSp)
         self.rank = rank 
+        self.QSp = QSp  #NO COPYING CONVENTION 
         self.ind_labels = None 
-        
-        
-        #NO COPYING CONVENTION
-        self.QSp = QSp  #.copy()
-        #it cant be QSp = [] and totQN = None at the same time 
         self.totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
           
         self.ndiv = None   #ndiv 实际是把协变反变腿分开 一个(ndiv, rank-ndiv) tensor
         self.use_buf=use_buf
-        self.buf_ref = np.array([-1, -1], np.int)
-        self.type_name = ""
-        self.index_order = order
+        self.buf_ref = np.array([-1, -1], int)
+        self.type_name = ''
         
         if rank == 0:   #Dims 指的是对应的**dense** tensor 的维数
-            self.Dims = np.array((1, ), np.int) 
+            self.Dims = np.array((1, ), int) 
         else: 
-            self.Dims= [QSp[i].totDim for  i in range(rank)]
+            self.Dims = [QSp[i].totDim for i in range(rank)]
 
-        if index_data:  
-            #this sets idx, nidx, idx_dim, totDim, Addr_idx, Block_idx 
+        if index_data:  #this sets idx, nidx, idx_dim, totDim, Addr_idx, Block_idx 
             self.set_data_entrance(order=order )
 
-        #use_buf = False;buffer=None;warnings.warn("not use bufferrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"*100)
         if has_data:
-            if buffer is not None:
-                pass
-            elif use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
-                #buffer = self.buffer_assign(data_size=self.totDim)
+            if buffer is None and use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
                 buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2)  #else complex 
-            
-            #well, I comment out the line bellow, as it hinders debug sometimes
-            #assert self.totDim>0, ('conceptially a tensor is not empty',  self.totQN, self.shape)
             self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
     
     def __setstate__(self, d): 
@@ -437,16 +422,14 @@ class iTensor(TensorBase):
     
     def __del__(self):
         """
-        task: replace __del__ with __exit__ in future
+            task: replace __del__ with __exit__ in future
 
-        it was said __del__ is BAD!
-        但它仍然可以使用，只要__init__ 不包含 raise exception
-        "If you do use __del__ make sure you are covered for any case 
-        in which __init__ didn’t finish running."
-
-
+            it was said __del__ is BAD!
+            但它仍然可以使用，只要__init__ 不包含 raise exception
+            "If you do use __del__ make sure you are covered for any case 
+            in which __init__ didn’t finish running."
         """
-        if self.use_buf and (self.buf_ref[0]!=-1):
+        if self.use_buf and self.buf_ref[0]!=-1:
             #if iTensor != None:
             iTensor.T_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
 
@@ -559,7 +542,7 @@ class iTensor(TensorBase):
         if rank == 0:
             rank = 0
         if keys is None:
-            #keys=["rank", "type_name", 'ind_labels', "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
+            #keys=["rank", "type_name", 'ind_labels',  "nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
             keys=['rank', 'type_name', 'ind_labels', 
                     'nidx', 'totQN','QNs', 'Dims','totDim', 
                      'data']
@@ -627,7 +610,7 @@ class iTensor(TensorBase):
         if rank == 0:
             rank = 0
         if keys is None:
-            #keys=["rank", "type_name", 'ind_labels', "ndiv", "buf_ref","nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
+            #keys=["rank", "type_name", 'ind_labels',  "nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
             keys=["rank", "type_name", 'ind_labels', "nidx","totQN","QNs", "Dims","totDim", "Block_idx", "Addr_idx", "data"]
 
         str0="----Begin iTensor----------------------------------------------\n"
@@ -3147,12 +3130,14 @@ class iTensor(TensorBase):
             through calling this function
             
         """
-        name_list = [  'set_data_entrance', 'contract_core', 'permutation' ]
-        for i in name_list:
-            meth = getattr(iTensor, i)
-            reset = meth.__closure__[4].cell_contents
-            reset.__call__()
-    
+        if tensor_player.version == 'single':
+            name_list = [  'set_data_entrance', 'contract_core', 'permutation' ]
+            for i in name_list:
+                meth = getattr(iTensor, i)
+                reset = meth.__closure__[4].cell_contents
+                reset.__call__()
+        elif tensor_player.version == 'multiple':
+            raise NotImplemented
     
 class iTensor_new(TensorBase):
     def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
@@ -3164,7 +3149,6 @@ class iTensor_new(TensorBase):
         TensorBase.__init__(self,rank,[0]*rank)
         use_buf0=False
         shallow0=False
-        self.ndiv = None
 
         self.use_buf=use_buf
         self.shallow=shallow
@@ -3260,512 +3244,506 @@ class Tensor(iTensor, nTensor):
     
     def __init__(self, qsp): 
         pass 
-
-class test_iTensor(object):
-    def __init__(self, symmetry, dim=None):
-        self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
-        QSbase = self.qsp_base.copy
-        totQN=self.qn_identity.copy
-        if dim is None:
+if 0:
+    class test_iTensor(object):
+        def __init__(self, symmetry, dim=None):
+            self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
             QSbase = self.qsp_base.copy
-        else:
-            QSbase = self.qsp_base.__class__.max(dim).copy
-        #qsp = self.qsp_base.max(dim)
+            totQN=self.qn_identity.copy
+            if dim is None:
+                QSbase = self.qsp_base.copy
+            else:
+                QSbase = self.qsp_base.__class__.max(dim).copy
+            #qsp = self.qsp_base.max(dim)
 
-        self.u=iTensor(4,[QSbase() for i in range(4)],totQN())
-        self.w = iTensor(3, [QSbase() for i in range(3)], totQN())
+            self.u=iTensor(4,[QSbase() for i in range(4)],totQN())
+            self.w = iTensor(3, [QSbase() for i in range(3)], totQN())
 
-        self.u22 = iTensor(2,[QSbase() for i in range(2)],totQN())
-        
-        self.u222=  iTensor(3,[QSbase() for i in range(3)],totQN())
-        self.u2222=  iTensor(4,[QSbase() for i in range(4)],totQN())
+            self.u22 = iTensor(2,[QSbase() for i in range(2)],totQN())
+            
+            self.u222=  iTensor(3,[QSbase() for i in range(3)],totQN())
+            self.u2222=  iTensor(4,[QSbase() for i in range(4)],totQN())
 
-    def dump(self):
-        print("this func not work ")
-        import pickle
-        out = open("/tmp/test", "wb")
-        pickle.dump(self.u.QSp[0].QNs, out)
-        out.close()
-        exit()
+        def dump(self):
+            print("this func not work ")
+            import pickle
+            out = open("/tmp/test", "wb")
+            pickle.dump(self.u.QSp[0].QNs, out)
+            out.close()
+            exit()
 
-    @classmethod
-    def instance(cls, which="all"):
-        u = cls.u.copy()
-        w = cls.w.copy()
-        u22 = cls.u22.copy()
-        #t0 = cls.t0.copy()
+        @classmethod
+        def instance(cls, which="all"):
+            u = cls.u.copy()
+            w = cls.w.copy()
+            u22 = cls.u22.copy()
+            #t0 = cls.t0.copy()
 
-        keys = list(locals().keys())
+            keys = list(locals().keys())
 
-        if which == "all":
-            return u, w, u22
-        if which in keys:
-            return locals()[which]
+            if which == "all":
+                return u, w, u22
+            if which in keys:
+                return locals()[which]
 
-    @classmethod
-    def init(cls):
-        pass
-        print(cls.w)
-    
-    @staticmethod
-    def use_buf():
-        u=iTensor(4,[QSp_base.copy() for i in range(4)],QN_idendity.copy(), use_buf=True)
-        print(u.data)
-        print(iTensor.T_BUFFER[0].T[0])
-        print(u.data.base is iTensor.T_BUFFER[0].T[0])
-
-        return u
-
-    def test_copy():
-        """  --- pass  """
-        w1 = w.copy()
-        #w1.QSp_
-        w1.QSp[0] = QSbase().add(QSbase())
-        print("www1 ", w1.QSp, '\n'*2)
-        print(w.QSp)
-   
-    @classmethod
-    def is_same_shape(cls):
-        """  ---pass """
-        u = cls.u.copy()
-        w = cls.w.copy()
-        a = u.is_same_shape(u)
-        print(a)
-    
-    def test_get_position_and_rev() :
-        """ --- pass """
-        p=w.get_position([0,0,0])
-        print(p)
-        for i in range(7):
-            pos=w.get_position_rev(i)
-            print(pos)
-    
-    def test_get_element_and_set_element():
-        #print w.__repr__()  #['Addr_idx']
-        #这么做不对
-        #w244 = w.copy()
-        #w244.QSp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
-        #print "w244", w244.QSp
-        qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
-        w244 = iTensor(3, qsp, totQN)
-        
-        qDims= [1, 0, 1]
-        w244.set_element(qDims, [0, 1, 1], 5.)
-        x = w244.get_element(qDims, [0, 1, 1])
-        print(x)
-        print(w244.__repr__(["data"]))
-    #test_get_element_and_set_element()
-    def test_to_ntensor():
-        """ ---pass   """
-        qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
-        w= iTensor(3, qsp, totQN)
-        
-        w.set_element([0,0,0], [0, 0, 0], 3.)
-        #w.set_element([1,0,1], [0, 1, 1], 4.)            
-        w.set_element([0,1,1], [0, 1, 1], 5.)                        
-        print(w.__repr__(["data"]))
-        nw=w.to_nTensor()
-        print(nw)
-    #test_to_ntensor() 
-    def test_trace():
-        a=u.trace()
-        print(a)
-        pass
-    #test_trace()
-    
-    @classmethod
-    def contract_core(cls):
-        """ --- not sure"""
-        u = cls.u.copy()
-        w = cls.w.copy()
-        a=u.contract_core(u,2)
-        print(a)
-
-    @classmethod
-    def contract_core_buff(cls):
-        """using buffer --- pass"""
-        u = cls.u.copy()
-        w = cls.w.copy()
-        a=u.contract_core(u,2,use_buf=True)
-        print(a.data)
-        print(iTensor.T_BUFFER[0].T[0])
-        print(a.data.base is iTensor.T_BUFFER[0].T[0])
-
-
-    @classmethod
-    def contract_core1(cls):
-        """ contract with a rank 0 tensor """
-        t0 = cls.t0.copy()
-        u = cls.u.copy()
-        a=u.contract_core(t0,0)
-        print(a)
-
-    @classmethod
-    def contract_core2(cls):
-        """ contract to a rank 0 tensor """
-        u = cls.u.copy()
-        a=u.contract_core(u.copy(),4)
-        print(a)
-
-    @classmethod
-    def contract_U_H2(cls):
-        """   --- pass"""
-        U = cls.u.copy()
-        H2 = cls.u.copy()
-        U.data[:] = [ 1.,  0.,  1.,  0.,  0.,  1.,  0.,  1.]
-        H2.data[:] = [ 0.,  -1.,  -1.,  -0.,2 -0.,2 -1.,  -1.,  -2.]
-
-
-        res= U.contract_core(H2, 2)
-        #res= H2.contract_core(U,2)
-        print(U.data)
-        print(H2.data)
-
-        print(res.data.round(5))
-    
-    def contract(self):
-        """    --- not sure """
-        t1 = self.u2222.copy()
-        t1.data[:] = np.arange(t1.totDim)
-        t2 = self.u222.copy()
-        t2.data[:] = np.arange(t2.totDim)
-        #v1 = [1, 2, 5, 9]
-        #v2 = [5, 1, 3, 6]
-        v1 = ['a', 'b', 'c', 'd']
-        v2 = ['e', 'c', 'a']
-        t3 = t1.contract(t2, v1, v2,use_buf=True)
-        print(t3[0].rank)
-        print(t3[0])
-    
-    #@decorators.timer
-    def contract_large_tensor(self, threads=10):
-        import os
-        os.environ["OMP_NUM_THREADS"] = str(threads)
-        qn_identity, qsp_base, qsp_null = init_System_QSp("Z2")
-        qsp_max , qsp_max2= qsp_base.__class__.max(16)
-        QSbase = qsp_max.copy
-        totQN = qn_identity.copy
-        ranku = 6
-        rankv = 6
-        Vu = range(ranku)
-        Vw = range(rankv)
-        #Vw.reverse()
-
-        for i in range(1):
-            u=iTensor(ranku,[QSbase() for i in range(ranku)],totQN())
-            w = iTensor(rankv, [QSbase() for i in range(rankv)], totQN())
-            out=u.contract_core(w, 3)
-            #out, leg=u.contract(w,Vu, Vw )
-        print(out.rank)
-
-
-
-    def decoration(self):
-        if 1:
+        @classmethod
+        def init(cls):
             pass
-            common_util.contract_core_player_fort =\
-                    common_util.contract_core_player_fort_parallel
+            print(cls.w)
+        
+        @staticmethod
+        def use_buf():
+            u=iTensor(4,[QSp_base.copy() for i in range(4)],QN_idendity.copy(), use_buf=True)
+            print(u.data)
+            print(iTensor.T_BUFFER[0].T[0])
+            print(u.data.base is iTensor.T_BUFFER[0].T[0])
 
-        for i in range(5):
-            rank = 4
-            set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
-            qsp = self.qsp_base.copy_many(rank)
-            totQN = self.qn_identity.copy()
+            return u
+
+       
+        @classmethod
+        def is_same_shape(cls):
+            """  ---pass """
+            u = cls.u.copy()
+            w = cls.w.copy()
+            a = u.is_same_shape(u)
+            print(a)
+        
+        def test_get_position_and_rev() :
+            """ --- pass """
+            p=w.get_position([0,0,0])
+            print(p)
+            for i in range(7):
+                pos=w.get_position_rev(i)
+                print(pos)
+        
+        def test_get_element_and_set_element():
+            #print w.__repr__()  #['Addr_idx']
+            #这么做不对
+            #w244 = w.copy()
+            #w244.QSp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
+            #print "w244", w244.QSp
+            qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
+            w244 = iTensor(3, qsp, totQN)
             
-            u = iTensor(rank=rank, QSp=qsp, totQN=totQN)
-            u.data[:] = range(u.data.size)
-            #v=u.contract(u, [0, 1, 2, 3], [8, 0, 3, 1])
-            v=u.contract_core(u, 2)
-            print(v.data)
+            qDims= [1, 0, 1]
+            w244.set_element(qDims, [0, 1, 1], 5.)
+            x = w244.get_element(qDims, [0, 1, 1])
+            print(x)
+            print(w244.__repr__(["data"]))
+        #test_get_element_and_set_element()
+        def test_to_ntensor():
+            """ ---pass   """
+            qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
+            w= iTensor(3, qsp, totQN)
             
-            #set_STATE_end(i, 8)
-
-    def test_permutation():
-        """  ---not sure"""
-        qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
-        w244 = iTensor(3, qsp, totQN)
-        qDims= [1, 0, 1]
-        w244.set_element(qDims, [0, 1, 1], 5.)
-        w244.set_element(qDims, [0, 1, 0], 4.)
-        w244.set_element(qDims, [0, 0, 1], 3.)            
-        w244.set_element(qDims, [0, 0, 0], 2.)                        
-        print(w244.matrix_view(1).round(4))  
+            w.set_element([0,0,0], [0, 0, 0], 3.)
+            #w.set_element([1,0,1], [0, 1, 1], 4.)            
+            w.set_element([0,1,1], [0, 1, 1], 5.)                        
+            print(w.__repr__(["data"]))
+            nw=w.to_nTensor()
+            print(nw)
+        #test_to_ntensor() 
+        def test_trace():
+            a=u.trace()
+            print(a)
+            pass
+        #test_trace()
         
-        W=w244.permutation([0,2,1])
-        print(W.matrix_view(1).round(4))   
-        print(W.get_element([1, 1, 0], [0, 1, 0]))  #result is supposed to be 3.0
-        print(W.get_element([1, 1, 0], [0, 0, 1]))  #result is supposed to be 4.0
-    
+        @classmethod
+        def contract_core(cls):
+            """ --- not sure"""
+            u = cls.u.copy()
+            w = cls.w.copy()
+            a=u.contract_core(u,2)
+            print(a)
 
-    @classmethod
-    def permutation_buffon(cls):
-        #u=simple_itensor()[0]
-        u=cls.u.copy()
-        u.data[:]=np.arange(u.totDim)
-        print(u.matrix_view(2))
-        u1 = u.permutation([1, 0, 2, 3],use_buf=True)
-        print(iTensor.T_BUFFER[0].T[0])
-        u2 = u.permutation([0, 1, 3, 2])
-        print("\n", u1.matrix_view(2))
-        print("\n", u2.matrix_view(2))
-
-    @classmethod 
-    def unit_tensor(cls):
-        """   ----pass  """
-        u = cls.u.copy()
-        t = u.unit_tensor()
-        print(t.matrix_view(2).round(5))
-
-        u22 = cls.u22.copy()
-        t = u22.unit_tensor()
-        #print u22
-        print(t.matrix_view())
+        @classmethod
+        def contract_core_buff(cls):
+            """using buffer --- pass"""
+            u = cls.u.copy()
+            w = cls.w.copy()
+            a=u.contract_core(u,2,use_buf=True)
+            print(a.data)
+            print(iTensor.T_BUFFER[0].T[0])
+            print(a.data.base is iTensor.T_BUFFER[0].T[0])
 
 
-    def test_direct_product():
-        """  -----pass"""
-        rank=2
-        QSp=[QSp_base.copy() for i in range( rank )]
-        QSp[0].add_to_quant_space(1, 1)
-        #QSp[1].add_to_quant_space(1, 2)
-        #QSp[0].add_to_quant_space(-1, 5)
-        #QSp[1].add_to_quant_space(-1, 3)
-        #print 'qqq', QSp[0]
-        QSbase = QSp_base.copy
-        totQN=QN_idendity.copy()
-        u=iTensor(rank,QSp,totQN)
+        @classmethod
+        def contract_core1(cls):
+            """ contract with a rank 0 tensor """
+            t0 = cls.t0.copy()
+            u = cls.u.copy()
+            a=u.contract_core(t0,0)
+            print(a)
 
-        u.data[:u.totDim] = np.arange(1, u.totDim + 1)
-        #print u
-        u1=u.matrix_view()
-        print(u1)
+        @classmethod
+        def contract_core2(cls):
+            """ contract to a rank 0 tensor """
+            u = cls.u.copy()
+            a=u.contract_core(u.copy(),4)
+            print(a)
 
-        uu=u.direct_product(u)
-        u2=uu.matrix_view()
-        print(u2)
-        print(uu.rank)
+        @classmethod
+        def contract_U_H2(cls):
+            """   --- pass"""
+            U = cls.u.copy()
+            H2 = cls.u.copy()
+            U.data[:] = [ 1.,  0.,  1.,  0.,  0.,  1.,  0.,  1.]
+            H2.data[:] = [ 0.,  -1.,  -1.,  -0.,2 -0.,2 -1.,  -1.,  -2.]
 
-        print(uu.__repr__(['data']))
 
-    def direct_product2():
-        rank = 2
-        totQN = QN_idendity.copy()
+            res= U.contract_core(H2, 2)
+            #res= H2.contract_core(U,2)
+            print(U.data)
+            print(H2.data)
 
-        QSp = [QSp_base.copy() for i in range(rank)]
+            print(res.data.round(5))
         
-        sigma_x=iTensor(rank, QSp, totQN)
-        sigma_x.data[0:2] = [1., -1.]
+        def contract(self):
+            """    --- not sure """
+            t1 = self.u2222.copy()
+            t1.data[:] = np.arange(t1.totDim)
+            t2 = self.u222.copy()
+            t2.data[:] = np.arange(t2.totDim)
+            #v1 = [1, 2, 5, 9]
+            #v2 = [5, 1, 3, 6]
+            v1 = ['a', 'b', 'c', 'd']
+            v2 = ['e', 'c', 'a']
+            t3 = t1.contract(t2, v1, v2,use_buf=True)
+            print(t3[0].rank)
+            print(t3[0])
         
-        #totQN.val = -1
-        totQN.set_val(-1)
-        I_2=iTensor(rank, QSp, totQN )
-        I_2.data[0:2] = [1.0,1.0]
+        #@decorators.timer
+        def contract_large_tensor(self, threads=10):
+            import os
+            os.environ["OMP_NUM_THREADS"] = str(threads)
+            qn_identity, qsp_base, qsp_null = init_System_QSp("Z2")
+            qsp_max , qsp_max2= qsp_base.__class__.max(16)
+            QSbase = qsp_max.copy
+            totQN = qn_identity.copy
+            ranku = 6
+            rankv = 6
+            Vu = range(ranku)
+            Vw = range(rankv)
+            #Vw.reverse()
 
-        #print sigma_x 
-        #print I_2
-        #print sigma_x.totDim
-        #print QN_idendity
-        xx= sigma_x.direct_product(I_2)
-    
-    def direct_prod_vs_contract(self):
-        u = self.u
-        self.u.data[:] = np.random.random(u.data.size)
-        uu, nothing=self.u.contract(self.u, [1, 2, 3, 4], [5, 6, 7, 8])
-        print(uu.data[:5])
-        uu = u.direct_product(u)
-        print(uu.data[:5])
-
-
-    @staticmethod
-    def direct_product_u1():
-        """
-        --- pass
-        test direct_product for U1 symm.
-        """
-        rank=2
-        QSp=[QSp_base.copy(),QSp_base.copy()]
-        QSp[1].reverse()
-        totQN=QN_idendity.copy()
-        t=iTensor(rank,QSp,totQN)
-        t.data[:]=np.arange(6)
-        #print t
-        t1=t.copy()
-        print(t.direct_product(t1))
-
-        """
-        --- pass
-            ----Begin Tensor-------------------------------------------
-                T%rank=    4
-                T%totQN=     0
-                T%nQN=     3     3     3     3
-                T%nIdx=   19
-                T%QNs(:,1)     =     0     1    -1
-                T%QNs%Dims(:,1)=     2     1     1
-                T%QNs(:,2)     =     0     1    -1
-                T%QNs%Dims(:,2)=     2     1     1
-                T%QNs(:,3)     =     0    -1     1
-                T%QNs%Dims(:,3)=     2     1     1
-                T%QNs(:,4)     =     0    -1     1
-                T%QNs%Dims(:,4)=     2     1     1
-                Data=
-                T%Block_QN=     0     0     0     0
-                 0.00E+00 0.00E+00 0.00E+00 0.10E+01 0.00E+00 0.00E+00 0.20E+01 0.30E+01 0.00E+00 0.20E+01 0.00E+00 0.30E+01 0.40E+01 0.60E+01 0.60E+01 0.90E+01
-                T%Block_QN=     2     1     0     0
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     1     2     0     0
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     1     0     1     0
-                 0.00E+00 0.40E+01 0.80E+01 0.12E+02
-                T%Block_QN=     0     1     1     0
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     2     0     2     0
-                 0.00E+00 0.50E+01 0.10E+02 0.15E+02
-                T%Block_QN=     0     2     2     0
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     1     0     0     1
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     0     1     0     1
-                 0.00E+00 0.40E+01 0.80E+01 0.12E+02
-                T%Block_QN=     1     1     1     1
-                 0.16E+02
-                T%Block_QN=     0     0     2     1
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     2     1     2     1
-                 0.20E+02
-                T%Block_QN=     1     2     2     1
-                 0.00E+00
-                T%Block_QN=     2     0     0     2
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     0     2     0     2
-                 0.00E+00 0.50E+01 0.10E+02 0.15E+02
-                T%Block_QN=     0     0     1     2
-                 0.00E+00 0.00E+00 0.00E+00 0.00E+00
-                T%Block_QN=     2     1     1     2
-                 0.00E+00
-                T%Block_QN=     1     2     1     2
-                 0.20E+02
-                T%Block_QN=     2     2     2     2
-                 0.25E+02
-            ----End Tensor-------------------------------------------
+            for i in range(1):
+                u=iTensor(ranku,[QSbase() for i in range(ranku)],totQN())
+                w = iTensor(rankv, [QSbase() for i in range(rankv)], totQN())
+                out=u.contract_core(w, 3)
+                #out, leg=u.contract(w,Vu, Vw )
+            print(out.rank)
 
 
 
-            ----Begin iTensor----------------------------------------------
-                rank:	4
-                idx_dim:	81
-                ndiv:	None
-                nidx:	19
-                totQN:	(    0)
-                QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
-                Dims:	array([4, 4, 4, 4])
-                totDim:	70
-                idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
-                       81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
-                       81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
-                       81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
-                       16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
-                Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
-                    [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
-                    [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+        def decoration(self):
+            if 1:
+                pass
+                common_util.contract_core_player_fort =\
+                        common_util.contract_core_player_fort_parallel
 
-                Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
-                 [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
-                 [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
-                 [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
-                data:	[0 0 0 0]: [ 0.  0.  0.  1.  0.  0.  2.  3.  0.  2.  0.  3.  4.  6.  6.  9.]
-                [2 1 0 0]: [ 0.  0.  0.  0.]
-                [1 2 0 0]: [ 0.  0.  0.  0.]
-                [1 0 1 0]: [  0.   4.   8.  12.]
-                [0 1 1 0]: [ 0.  0.  0.  0.]
-                [2 0 2 0]: [  0.   5.  10.  15.]
-                [0 2 2 0]: [ 0.  0.  0.  0.]
-                [1 0 0 1]: [ 0.  0.  0.  0.]
-                [0 1 0 1]: [  0.   4.   8.  12.]
-                [1 1 1 1]: [ 16.]
-                [0 0 2 1]: [ 0.  0.  0.  0.]
-                [2 1 2 1]: [ 20.]
-                [1 2 2 1]: [ 0.]
-                [2 0 0 2]: [ 0.  0.  0.  0.]
-                [0 2 0 2]: [  0.   5.  10.  15.]
-                [0 0 1 2]: [ 0.  0.  0.  0.]
-                [2 1 1 2]: [ 0.]
-                [1 2 1 2]: [ 20.]
-                [2 2 2 2]: [ 25.]
+            for i in range(5):
+                rank = 4
+                set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+                qsp = self.qsp_base.copy_many(rank)
+                totQN = self.qn_identity.copy()
+                
+                u = iTensor(rank=rank, QSp=qsp, totQN=totQN)
+                u.data[:] = range(u.data.size)
+                #v=u.contract(u, [0, 1, 2, 3], [8, 0, 3, 1])
+                v=u.contract_core(u, 2)
+                print(v.data)
+                
+                #set_STATE_end(i, 8)
 
-            ----End iTensor----------------------------------------------
-
-        """
-
-    @staticmethod
-    def direct_product_u1_2():
-        """
-        another test
-        test direct_product for U1 symm.
-        """
-        rank=2
-        QSp=[QSp_base.copy(),QSp_base.copy()]
-        QSp[1].reverse()
+        def test_permutation():
+            """  ---not sure"""
+            qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
+            w244 = iTensor(3, qsp, totQN)
+            qDims= [1, 0, 1]
+            w244.set_element(qDims, [0, 1, 1], 5.)
+            w244.set_element(qDims, [0, 1, 0], 4.)
+            w244.set_element(qDims, [0, 0, 1], 3.)            
+            w244.set_element(qDims, [0, 0, 0], 2.)                        
+            print(w244.matrix_view(1).round(4))  
+            
+            W=w244.permutation([0,2,1])
+            print(W.matrix_view(1).round(4))   
+            print(W.get_element([1, 1, 0], [0, 1, 0]))  #result is supposed to be 3.0
+            print(W.get_element([1, 1, 0], [0, 0, 1]))  #result is supposed to be 4.0
         
-        totQN=QN_idendity.copy()
-        totQN.set_val(1)
-        tp=iTensor(rank,QSp,totQN)
-        tp.data[:]=np.arange(1, tp.totDim + 1)
 
-        rank=2
-        QSp=[QSp_base.copy(),QSp_base.copy()]
-        QSp[1].reverse()
+        @classmethod
+        def permutation_buffon(cls):
+            #u=simple_itensor()[0]
+            u=cls.u.copy()
+            u.data[:]=np.arange(u.totDim)
+            print(u.matrix_view(2))
+            u1 = u.permutation([1, 0, 2, 3],use_buf=True)
+            print(iTensor.T_BUFFER[0].T[0])
+            u2 = u.permutation([0, 1, 3, 2])
+            print("\n", u1.matrix_view(2))
+            print("\n", u2.matrix_view(2))
 
+        @classmethod 
+        def unit_tensor(cls):
+            """   ----pass  """
+            u = cls.u.copy()
+            t = u.unit_tensor()
+            print(t.matrix_view(2).round(5))
+
+            u22 = cls.u22.copy()
+            t = u22.unit_tensor()
+            #print u22
+            print(t.matrix_view())
+
+
+        def test_direct_product():
+            """  -----pass"""
+            rank=2
+            QSp=[QSp_base.copy() for i in range( rank )]
+            QSp[0].add_to_quant_space(1, 1)
+            #QSp[1].add_to_quant_space(1, 2)
+            #QSp[0].add_to_quant_space(-1, 5)
+            #QSp[1].add_to_quant_space(-1, 3)
+            #print 'qqq', QSp[0]
+            QSbase = QSp_base.copy
+            totQN=QN_idendity.copy()
+            u=iTensor(rank,QSp,totQN)
+
+            u.data[:u.totDim] = np.arange(1, u.totDim + 1)
+            #print u
+            u1=u.matrix_view()
+            print(u1)
+
+            uu=u.direct_product(u)
+            u2=uu.matrix_view()
+            print(u2)
+            print(uu.rank)
+
+            print(uu.__repr__(['data']))
+
+        def direct_product2():
+            rank = 2
+            totQN = QN_idendity.copy()
+
+            QSp = [QSp_base.copy() for i in range(rank)]
+            
+            sigma_x=iTensor(rank, QSp, totQN)
+            sigma_x.data[0:2] = [1., -1.]
+            
+            #totQN.val = -1
+            totQN.set_val(-1)
+            I_2=iTensor(rank, QSp, totQN )
+            I_2.data[0:2] = [1.0,1.0]
+
+            #print sigma_x 
+            #print I_2
+            #print sigma_x.totDim
+            #print QN_idendity
+            xx= sigma_x.direct_product(I_2)
         
-        totQN=QN_idendity.copy()
-        totQN.set_val(-1)
-        tm=iTensor(rank,QSp,totQN)
-        tm.data[:]=np.arange(1, tm.totDim + 1)
+        def direct_prod_vs_contract(self):
+            u = self.u
+            self.u.data[:] = np.random.random(u.data.size)
+            uu, nothing=self.u.contract(self.u, [1, 2, 3, 4], [5, 6, 7, 8])
+            print(uu.data[:5])
+            uu = u.direct_product(u)
+            print(uu.data[:5])
 
-        print(tp.direct_product(tm))
 
-    def expand_u(self):
-        pass
-        #qn, qsp, null = init_System_QSp(self.symmetry)
-        t = self.u.copy()
-        t.data[:] = 1.0
-        #print t.matrix_view()
-        #qsp1 = QspU1.easy_init(qn=)
-        new_qsp = [q.copy() for q in t.QSp]
-        for q in new_qsp:
-            q.Dims= [i*2 for i in q.Dims]
-        #print new_qsp
-        t2 = t.expand(new_qsp)
-        #print t2.matrix_view()
-        print(t, t2)
-        print(t2.data)
-    
-    def index_merge(self):
-        if 0:
+        @staticmethod
+        def direct_product_u1():
+            """
+            --- pass
+            test direct_product for U1 symm.
+            """
+            rank=2
+            QSp=[QSp_base.copy(),QSp_base.copy()]
+            QSp[1].reverse()
+            totQN=QN_idendity.copy()
+            t=iTensor(rank,QSp,totQN)
+            t.data[:]=np.arange(6)
+            #print t
+            t1=t.copy()
+            print(t.direct_product(t1))
+
+            """
+            --- pass
+                ----Begin Tensor-------------------------------------------
+                    T%rank=    4
+                    T%totQN=     0
+                    T%nQN=     3     3     3     3
+                    T%nIdx=   19
+                    T%QNs(:,1)     =     0     1    -1
+                    T%QNs%Dims(:,1)=     2     1     1
+                    T%QNs(:,2)     =     0     1    -1
+                    T%QNs%Dims(:,2)=     2     1     1
+                    T%QNs(:,3)     =     0    -1     1
+                    T%QNs%Dims(:,3)=     2     1     1
+                    T%QNs(:,4)     =     0    -1     1
+                    T%QNs%Dims(:,4)=     2     1     1
+                    Data=
+                    T%Block_QN=     0     0     0     0
+                     0.00E+00 0.00E+00 0.00E+00 0.10E+01 0.00E+00 0.00E+00 0.20E+01 0.30E+01 0.00E+00 0.20E+01 0.00E+00 0.30E+01 0.40E+01 0.60E+01 0.60E+01 0.90E+01
+                    T%Block_QN=     2     1     0     0
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     1     2     0     0
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     1     0     1     0
+                     0.00E+00 0.40E+01 0.80E+01 0.12E+02
+                    T%Block_QN=     0     1     1     0
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     2     0     2     0
+                     0.00E+00 0.50E+01 0.10E+02 0.15E+02
+                    T%Block_QN=     0     2     2     0
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     1     0     0     1
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     0     1     0     1
+                     0.00E+00 0.40E+01 0.80E+01 0.12E+02
+                    T%Block_QN=     1     1     1     1
+                     0.16E+02
+                    T%Block_QN=     0     0     2     1
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     2     1     2     1
+                     0.20E+02
+                    T%Block_QN=     1     2     2     1
+                     0.00E+00
+                    T%Block_QN=     2     0     0     2
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     0     2     0     2
+                     0.00E+00 0.50E+01 0.10E+02 0.15E+02
+                    T%Block_QN=     0     0     1     2
+                     0.00E+00 0.00E+00 0.00E+00 0.00E+00
+                    T%Block_QN=     2     1     1     2
+                     0.00E+00
+                    T%Block_QN=     1     2     1     2
+                     0.20E+02
+                    T%Block_QN=     2     2     2     2
+                     0.25E+02
+                ----End Tensor-------------------------------------------
+
+
+
+                ----Begin iTensor----------------------------------------------
+                    rank:	4
+                    idx_dim:	81
+                    nidx:	19
+                    totQN:	(    0)
+                    QNs:	['[(    0) (    1) (   -1)]', '[(    0) (    1) (   -1)]', '[(    0) (   -1) (    1)]', '[(    0) (   -1) (    1)]']
+                    Dims:	array([4, 4, 4, 4])
+                    totDim:	70
+                    idx:	array([ 0, 81, 81, 81, 81,  1, 81,  2, 81, 81,  3, 81,  4, 81, 81, 81, 81,
+                           81, 81, 81,  5, 81, 81, 81,  6, 81, 81, 81,  7, 81,  8, 81, 81, 81,
+                           81, 81, 81, 81, 81, 81,  9, 81, 81, 81, 81, 10, 81, 81, 81, 81, 11,
+                           81, 12, 81, 81, 81, 13, 81, 81, 81, 14, 81, 81, 15, 81, 81, 81, 81,
+                           16, 81, 17, 81, 81, 81, 81, 81, 81, 81, 81, 81, 18])
+                    Block_idx:	[ 0 16 20 24 28 32 36 40 44 48 49 53 54 55 59 63 67 68 69]
+                        [16  4  4  4  4  4  4  4  4  1  4  1  1  4  4  4  1  1  1]
+                        [ 0  5  7 10 12 20 24 28 30 40 45 50 52 56 60 63 68 70 80]
+
+                    Addr_idx:	[[0 2 1 1 0 2 0 1 0 1 0 2 1 2 0 0 2 1 2]
+                     [0 1 2 0 1 0 2 0 1 1 0 1 2 0 2 0 1 2 2]
+                     [0 0 0 1 1 2 2 0 0 1 2 2 2 0 0 1 1 1 2]
+                     [0 0 0 0 0 0 0 1 1 1 1 1 1 2 2 2 2 2 2]]
+                    data:	[0 0 0 0]: [ 0.  0.  0.  1.  0.  0.  2.  3.  0.  2.  0.  3.  4.  6.  6.  9.]
+                    [2 1 0 0]: [ 0.  0.  0.  0.]
+                    [1 2 0 0]: [ 0.  0.  0.  0.]
+                    [1 0 1 0]: [  0.   4.   8.  12.]
+                    [0 1 1 0]: [ 0.  0.  0.  0.]
+                    [2 0 2 0]: [  0.   5.  10.  15.]
+                    [0 2 2 0]: [ 0.  0.  0.  0.]
+                    [1 0 0 1]: [ 0.  0.  0.  0.]
+                    [0 1 0 1]: [  0.   4.   8.  12.]
+                    [1 1 1 1]: [ 16.]
+                    [0 0 2 1]: [ 0.  0.  0.  0.]
+                    [2 1 2 1]: [ 20.]
+                    [1 2 2 1]: [ 0.]
+                    [2 0 0 2]: [ 0.  0.  0.  0.]
+                    [0 2 0 2]: [  0.   5.  10.  15.]
+                    [0 0 1 2]: [ 0.  0.  0.  0.]
+                    [2 1 1 2]: [ 0.]
+                    [1 2 1 2]: [ 20.]
+                    [2 2 2 2]: [ 25.]
+
+                ----End iTensor----------------------------------------------
+
+            """
+
+        @staticmethod
+        def direct_product_u1_2():
+            """
+            another test
+            test direct_product for U1 symm.
+            """
+            rank=2
+            QSp=[QSp_base.copy(),QSp_base.copy()]
+            QSp[1].reverse()
+            
+            totQN=QN_idendity.copy()
+            totQN.set_val(1)
+            tp=iTensor(rank,QSp,totQN)
+            tp.data[:]=np.arange(1, tp.totDim + 1)
+
+            rank=2
+            QSp=[QSp_base.copy(),QSp_base.copy()]
+            QSp[1].reverse()
+
+            
+            totQN=QN_idendity.copy()
+            totQN.set_val(-1)
+            tm=iTensor(rank,QSp,totQN)
+            tm.data[:]=np.arange(1, tm.totDim + 1)
+
+            print(tp.direct_product(tm))
+
+        def expand_u(self):
+            pass
+            #qn, qsp, null = init_System_QSp(self.symmetry)
             t = self.u.copy()
-            t.data[:] = np.arange(t.data.size) + 1
-            t1 = t.index_merge([2, 3])
-            #t1.data[:] = 1.0
-            #print t, t1
-            print(t.data, t1.data)
+            t.data[:] = 1.0
+            #print t.matrix_view()
+            #qsp1 = QspU1.easy_init(qn=)
+            new_qsp = [q.copy() for q in t.QSp]
+            for q in new_qsp:
+                q.Dims= [i*2 for i in q.Dims]
+            #print new_qsp
+            t2 = t.expand(new_qsp)
+            #print t2.matrix_view()
+            print(t, t2)
+            print(t2.data)
+        
+        def index_merge(self):
+            if 0:
+                t = self.u.copy()
+                t.data[:] = np.arange(t.data.size) + 1
+                t1 = t.index_merge([2, 3])
+                #t1.data[:] = 1.0
+                #print t, t1
+                print(t.data, t1.data)
 
-        if 1:
-            t = self.u22.copy()
-            t.data[:] = np.arange(t.data.size) + 1
-            t1 = t.index_merge([0, 1])
-            #t1.data[:] = 1.0
-            #print t, t1
-            print(t.data, t1.data)
+            if 1:
+                t = self.u22.copy()
+                t.data[:] = np.arange(t.data.size) + 1
+                t1 = t.index_merge([0, 1])
+                #t1.data[:] = 1.0
+                #print t, t1
+                print(t.data, t1.data)
 
 class Test_iTensor(unittest.TestCase): 
     def setUp(self): 
         pass
     
-    
-    def test_tensor_player(self): 
+    def test_tensor_player_single(self): 
+        if tensor_player.version == 'multiple':
+            return 
         for i in range(10):
             print_vars(vars(),  ['i'], '', ' ')
             rank = 4
-            set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+            set_player_state_auto(iter=i, record_at=0, info=1)    
+            #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
             u = iTensor.example()
             #u.contract_core(u, 2)
             u.permutation([1, 3, 2, 0])
@@ -3801,6 +3779,45 @@ class Test_iTensor(unittest.TestCase):
 
         status = iTensor.get_player_status()
         print_vars(vars(),  ['status'])
+    
+    def test_tensor_player_multiple(self): 
+        if tensor_player.version == 'single':
+            return 
+        if 1:
+            print(iTensor.contract_core)
+            print(iTensor.__init__)
+        
+        for i in range(10):
+            print_vars(vars(),  ['i'], '', ' ')
+            rank = 4
+            set_player_state_auto(iter=i, record_at=0, info=1)    
+            #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+            u = iTensor.example()
+            #u.contract_core(u, 2)
+            u.permutation([1, 3, 2, 0])
+        #tensor_player.STATE = 'stop'
+        print((type(tensor_player.the_tape)))
+        print_vars(globals(),  ['tensor_player.the_tape.values()'])
+        print(tensor_player.the_tape.keys())
+        print(tensor_player.the_tape.get(1))
+        set_player_state_manual('stop')
+       
+        for i in range(1, 2):
+            set_player_state_auto(iter=i, record_at=1, info=1)    
+            t1 = iTensor.example(rank=4)
+            t2 = iTensor.example(rank=4)
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+            t3.permutation([0, 2, 3, 1, 4, 5])
+        #tensor_player.STATE = 'stop'
+        set_player_state_manual('stop')
+        
+        tensor_player.the_tape.reset()   #dont remove this line, otherwise, other tests may fail
+        
+        #status = iTensor.get_player_status()
+        #print_vars(vars(),  ['status'])
+        
         
            
     def test_permutation(self): 
@@ -4277,7 +4294,6 @@ class Test_iTensor(unittest.TestCase):
 
 
 class performance_iTensor(object):
-    pass
     def __init__(self, symmetry):
         self.symmetry = symmetry
         pass
@@ -4377,121 +4393,12 @@ class performance_iTensor(object):
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
     if 0: 
-        if 0: 
-            ti = test_iTensor("Z2", 4)
-            ti_e = test_iTensor("Travial")
-            itf = iTensorFactory("Travial")
-            pf = performance_iTensor("U1")
-            #pauli_mat=itf.pauli_mat()
-            #pf.permute()
-            #pf.contract()
-            #ti.index_merge()
-
-
-            #t=iTensorFactory.simple(6, [8]*6, "U1")
-
-            #itf.pauli_mat_1site()
-
-
-            #itf.check_pauli_mat()
-            #print ti_e.qsp_base
-            #ti_e.contract()
-
-            
-            #print ti.instance(which="t0")
-            #ti.dump()
-            #ti.contract_core()
-            #ti.contract_core_buff()
-            #ti.contract_core1()
-            #ti.contract_core2()
-            #ti.permutation_buffon()
-            #ti.contract()
-            #ti.contract_large_tensor()
-            #ti.decoration()
-            #ti.direct_product_u1()   
-            
-            #ti.direct_product_u1_2()
-            #ti.contract_U_H2()
-            #ti.is_same_shape()
-            #u=ti.use_buf()
-            #print iTensor.buff_free()
-
-            #tiu.init()
-            #print tiu.unit_tensor()
-            #ti.expand_u()
-        
-        if 0: 
-            rank=4
-            qsp = QspZ2.easy_init([1,-1], [1, 1 ]) 
-            qsp = qsp.copy_many(4)
-            qn = QnZ2.qn_id()
-            t = iTensor(rank, qsp, qn) 
-            t.data[: ] = range(t.data.size)
-            print(t.__repr__(fewer=0,keys=['data']))
-            tm=t.index_merge_simple()
-            print(tm.__repr__(fewer=0,keys=['data']))
-            print(t.matrix_view())
-            print(tm.matrix_view())
-            
-        if 0: 
-            symm = 'Z2'
-            pau1 = iTensorFactory.pauli_mat_1site(symm)
-            pau2 = iTensorFactory.pauli_mat_2site(symm)
-            if 1: 
-                print('----- 0 -----')
-                s0 = pau1['sigma_0']
-                s0 = pau1['sigma_0']
-                s0i = s0.direct_product(s0)
-                #s0i.show_data()
-                print(s0i.matrix_view())
-                s0i_mer = s0i.index_merge_simple()
-                #s0i_mer.show_data()
-                print(s0i_mer.matrix_view())
-                print(pau2['s00'].matrix_view())
-            if 1: 
-                print('----- z -----')
-                sz = pau1['sigma_z']
-                s0 = pau1['sigma_0']
-                szi = sz.direct_product(s0)
-                print(szi.matrix_view())
-                szi_mer = szi.index_merge_simple()
-                print(szi_mer.matrix_view())
-                szi_mer = szi.index_merge_simple_2()
-                print(szi_mer.matrix_view())
-               
-                print(pau2['szi'].matrix_view())
-            if 1: 
-                print('----- x -----')
-                sx = pau1['sigma_x']
-                s0 = pau1['sigma_0']
-                sxi = sx.direct_product(s0)
-                print(sxi.matrix_view())
-                sxi_mer = sxi.index_merge_simple()
-                print(sxi_mer.matrix_view())
-                sxi_mer = sxi.index_merge_simple_2()
-                print(sxi_mer.matrix_view())
-               
-                print(pau2['sxi'].matrix_view())
-                
-            if 1: 
-                print('----- y -----')
-                sy = pau1['sigma_y']
-                s0 = pau1['sigma_0']
-                syi = sy.direct_product(s0)
-                print(syi.matrix_view())
-                syi_mer = syi.index_merge_simple()
-                print(syi_mer.matrix_view())
-                print(pau2['syi'].matrix_view())
-  
-    if 0: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
-        
     else: 
         suite = unittest.TestSuite()
         add_list_iTensor = [
-           #'test_tensor_player', 
            #'test_permutation', 
            #'test_to_ndarray', 
            #'test_rank_zero', 
@@ -4513,7 +4420,9 @@ if __name__ == "__main__":
            #
            #'test_conj_new', 
            #'test_reduce_and_insert_1d_qsp', 
-           'test_temp', 
+           #'test_tensor_player_single', 
+           'test_tensor_player_multiple', 
+           #'test_temp', 
         ]
         
         

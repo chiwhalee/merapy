@@ -18,7 +18,8 @@ import time
 from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 
 from merapy import print_vars
-from merapy.decorators import (set_STATE_end_1, tensor_player, get_player_state, set_player_state_manual)
+from merapy.decorators import (set_STATE_end_1, tensor_player, get_player_state, 
+        set_player_state_manual, set_player_state_auto)
 from merapy.measure_and_analysis.scaling_dimension import  calc_scaling_dim_1site, calc_scaling_dim_2site 
 from merapy.measure_and_analysis.measurement import measure_S
 from merapy.top_level import top_level_product_state, top_level_product_state_u1
@@ -728,6 +729,8 @@ class ScaleInvar(object):
             except Exception as err:
                 print(err)
             
+    def __del__(self, ): 
+        set_player_state_auto(None, None, power_on=False, info=1)
     
 
 class TestScaleInvar(unittest.TestCase): 
