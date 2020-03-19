@@ -81,10 +81,10 @@ TapeList[0] = Tape()
 def decorate_methods(decorator, meth_names):
     meth_names_dic = {
             'iTensor':[
-                #'__init__', 
-                'set_data_entrance', 
+                '__init__', 
+                #'set_data_entrance', 
                 'contract_core', 
-                #'prepare_leg', 
+                'prepare_leg', 
                 'permutation', ], 
             'QuantSpaceBase':[
                 'copy'], 

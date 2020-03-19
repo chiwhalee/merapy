@@ -201,60 +201,6 @@ class TestIt(unittest.TestCase):
 
         #print tensor_player.STATE
 
-    def test_tensor_player(self): 
-        from merapy.tensor_py import iTensor 
-        t = iTensor.example(dtype=complex)
-        t.transpose([0, 2, 1, 3])
-        #print(t.transpose([0, 2, 1, 3]))
-        tensor_player.STATE = 'stop'
-        tensor_player.PREV_STATE = 'stop'
-        print(iTensor.permutation) 
-        #it seems not able to test tensor_player within THIS modeule itself !!!
-        for i in range(10): 
-            #set_player_state_auto(iter=i, record_at=0, info=-1)    
-            #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
-            pass 
-        for i in range(50):
-            #print_vars(vars(),  ['i'], '', ' ')
-            rank = 4
-            #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
-      
-            u = iTensor.example()
-            u.data[:] = range(u.data.size)
-            v=u.contract_core(u, 2)
-           
-    def test_tensor_player_2(self): 
-        from merapy.tensor_py import iTensor 
-        
-        iTensor = decorate_methods(tensor_player, None)(iTensor)
-        
-        def func():
-            t1 = iTensor.example(rank=4)
-            t2 = iTensor.example(rank=4)
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-        
-        for i in range(5):
-            set_player_state_auto(iter=i, record_at=0, info=1)    
-            func()
-        if 'single' in tensor_player.__module__:
-            status = iTensor.get_player_status()
-            status_old = {u'contract_core': 2, u'permutation': 4}
-            self.assertEqual(status, status_old)
-            
-            for i in range(5):
-                set_player_state_auto(iter=i, record_at=0, info=1)    
-                func()
-            status = iTensor.get_player_status()
-            status_old = {u'contract_core': 2, u'permutation': 4}
-            self.assertEqual(status, status_old)
-            
-            #reset_player(iTensor)
-            iTensor.reset_player()
-            status = iTensor.get_player_status()
-            print(status)
-            status_old = {u'contract_core': 0, u'permutation': 0}
-            self.assertEqual(status, status_old)
     
     def test_temp(self): 
         pass
@@ -292,8 +238,6 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         add_list = [
         #'test_temp', 
-        #'test_tensor_player', 
-        'test_tensor_player_2', 
         #'test_timer_count', 
         ]
         for a in add_list: 
