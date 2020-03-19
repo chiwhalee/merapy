@@ -201,7 +201,6 @@ class TestIt(unittest.TestCase):
 
         #print tensor_player.STATE
 
-    
     def test_temp(self): 
         pass
             

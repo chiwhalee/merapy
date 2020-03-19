@@ -132,7 +132,6 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
         self.val[:]=val[:]
     
     def __eq__(self, other):
-        #return np.all(self.val == other.val)
         return self._val == other._val 
     
     def __ne__(self, other):
@@ -247,7 +246,6 @@ class QnZ2(QnBase):
     def copy(self):
         #if use the following line, program will grow slower and slower, I don't know why yet
         return QnZ2(self._val)
-        #return QnZ2(self._val[0])
         
     def reverse(self):
         """
@@ -306,45 +304,36 @@ class QnU1(QnBase):
     NUM_OF_SYMM = 1
     QNS = tuple(range(-10, 11))
     QnId = 0
-
     def __init__(self, value):
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
         """
-        #super(QnU1, self).__init__()
-        #QnBase.__init__(self)
-        #self._val = np.array(value, dtype=np.int, ndmin=1)
         self._val = value
     
-    def __new__1(cls, value):
+    def __new__x(cls, value):
         self = super(QnU1, cls).__new__(cls, value)
         self._val = value
         return value
     
     def copy(self):
-        #print self.val, self._val[0]
-        #return  QnU1(self.val)
         return  QnU1(self._val)
         
     def reverse(self):
         """
-        reverse refers to conjugate repr. of a group
-        see QN_Reverse in f90
+            reverse refers to conjugate repr. of a group
         """
-        #self.val = -self.val
         self._val = -self._val
-
 
     def __add__(self, other):
         """
-        q: 所谓 add 应该是该对称算子乘积的特征值, 因为是Abelian群，
-        故变成加法
+            所谓 add 应该是该对称算子乘积的特征值, 因为是Abelian群，
+            故变成加法
         """
-
-        #return QnU1(self.val+other.val)
         return QnU1(self._val + other._val)
     
+    def conj(self): 
+        return QnU1(-self._val)
     
 
 class QuantumNum(QnZ2, QnU1):
@@ -352,9 +341,8 @@ class QuantumNum(QnZ2, QnU1):
     pass
 
 
-meth_names= ["copy"]
-#meth_names.pop(0)
-@decorate_methods(tensor_player, meth_names)
+#meth_names= ["copy"]
+#@decorate_methods(tensor_player, meth_names)
 class QuantSpaceBase(object):
     """
         abstract base class
@@ -368,11 +356,10 @@ class QuantSpaceBase(object):
         """
         self.nQN = n
         self._dims=np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
-        #self._dims=np.empty(n, int) 
         self._dims[:n] = dims[:n]
         #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
 
-        #self.QNs= np.ndarray(self.MaxQNNum, np.object)
+        #self.QNs = np.ndarray(self.MaxQNNum, np.object)
         #self.QNs[:n]= qns[:n]
         self.QNs = qns
     
@@ -470,33 +457,6 @@ class QuantSpaceBase(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
-    def __repr__old(self,exclude=["RefQN"]):
-        """ 
-       
-        """
-        keys= ["class", 'nQN', 'QNs', '_dims', 'RefQN']
-        if exclude:
-            for k in exclude:
-                keys.remove(k)
-        res= ""
-        n = self.nQN
-        for k in keys:
-            if k == 'QNs': 
-                temp = str(self.QNs[:n])
-            elif k == '_dims': 
-                temp = str(self._dims[:n])
-            elif k == 'RefQN': 
-                temp = str(self.RefQN[:, :n])
-            elif k == "class":
-                temp = self.__class__.__name__
-            else:
-                temp = str(self.__dict__[k])
-
-            #res += k+":\n\t" + temp +"\n"
-            res += k+":\t" + temp +"\n"
-
-        return res
-    
     def __repr__(self,exclude=["RefQN"]):
         """ 
        
@@ -566,10 +526,8 @@ class QuantSpaceBase(object):
     #@tensor_player(which="Qsp_copy")
     def copy(self, reverse=False):
         qns= [q.copy() for q in self.QNs[:self.nQN]]
-        other=self.__class__(n=self.nQN, qns=qns, dims=self._dims)
+        other = self.__class__(n=self.nQN, qns=qns, dims=self._dims)
         other._totDim = self.totDim
-        #if hasattr(self, "RefQN"):
-        #    other.RefQN=self.RefQN.copy()
         if reverse: 
             other.reverse()
         return other
@@ -587,46 +545,21 @@ class QuantSpaceBase(object):
 
     def update(self, qsp_max=None):
         """
-        calculate totDim, RefQN
-        see QSp_update in f90
         """
-        D_Max0 = np.ndarray(self.MaxQNNum, int)
-        D_Max0[:]=10000000   
-
-        #temp=self.__class__.__call__()
-        #temp = self.__class__.__call__(n=0, qns=[], dims=[])
         temp = self.__class__.empty()
+        #temp = self.__class__.null()
         if qsp_max is not None:
             nqn = 0
             for n in range(self.nQN):
                 i= qsp_max.has_quant_num(self.QNs[n])
                 if i>=0:
                     temp.QNs.append(self.QNs[n])
-                    #temp.QNs[nqn]=self.QNs[n]
-                    #temp.nQN=temp.nQN+1
                     temp._dims[nqn]=min(self._dims[n], qsp_max._dims[i] )
                     nqn += 1 
-                    #temp.RefQN[0,i]=min(self.RefQN[0,n], qsp_max.RefQN[0,i])
-                    #temp.RefQN[1,i]=min(self.RefQN[1,n], qsp_max.RefQN[1,i])
+            #print('nqn', nqn, self.nQN, self.__class__)
             temp.nQN = nqn
             self.copy_from(temp)
             
-            #self.__dict__.update(temp.__dict__)
-        if 0:
-            n=0
-            #self.Addr[n]=0
-            totDim=self._dims[0]
-            
-            for n in range(1, self.nQN):
-                #self.Addr[n]=self.Addr[n-1]+self._dims[n-1]
-                if self._dims[n]>D_Max0[n]:
-                    self._dims[n]=D_Max0[n]
-                totDim += self._dims[n]
-            n=self.nQN+1
-            
-            #attention_this_may_be_wrong
-            #self.Addr[n]=self.Addr[n-1] + self._dims[n-1]
-            self._totDim =totDim
 
     def copy_many(self, n, reverse=None):
         res=[self.copy() for i in range(n)]
@@ -725,11 +658,12 @@ class QuantSpaceBase(object):
         res.RefQN=RefQN
         return res
 
-    def has_quant_num(self, qn):
+    def get_qn_id(self, qn):
+        return self.QNs.index(qn) 
+
+    def has_quant_num_bac(self, qn):
         """
-            see InQuantSpace in f90
             qn: instance of QuantumNum  or a tuple
-        
         """
         if self.nQN ==0:  #empty quantum space
             res = -1    # -1 indicates self.nQN=0
@@ -741,12 +675,17 @@ class QuantSpaceBase(object):
         res = -1
         return res
     
-    def get_qn_id(self, qn):
-        #try:
-        #    return self.QNs.index(qn)
-        #except ValueError:
-        #    return -1 
-        return self.QNs.index(qn) 
+    def has_quant_num(self, qn):
+        """
+            qn: instance of QuantumNum  or a tuple
+        """
+        if self.nQN == 0:
+            return -1
+        try:
+            return self.QNs.index(qn)
+        except:
+            return -1 
+        
 
     def add_to_quant_space(self, qn, d):
         """
@@ -764,9 +703,7 @@ class QuantSpaceBase(object):
 
             self.nQN+=1
             self._dims[i]=0
-
-        # when qn in self.QNs 的情况
-        self._dims[i] += d
+        self._dims[i] += d  # when qn in self.QNs 
         if not hasattr(self, "_totDim"):
             self._totDim = self.totDim
         self._totDim += d
@@ -1213,75 +1150,8 @@ def reset_System_QSp(symmetry):
     return init_System_QSp(symmetry=symmetry)
 
 
-if 0:
-    def swap(qn1,qn2,isZ2):
-        """
-        q: 不理解意思
-        status_1
-        """
-        if isZ2:
-            res= qn1==-1 and qn2 == -1
-        else:
-            res= (abs(qn1)//2)==1 and (abs(qn2//2)==1)
-        return res
-
-    def swap1(QN1, QN2):
-        if QuantumNum.SYMMETRY =="Z2":
-            res= swap(QN1.val, QN2.val, True)
-        elif QuantumNum.SYMMETRY =="Z2Z2":
-            res= swap(QN1.val[1],QN2.val[0], True)
-        elif QuantumNum.SYMMETRY=="U1":
-            res= swap(QN1.val, QN2.val, False)
-        elif QuantumNum.SYMMETRY=="U1U1":
-            res= swap(QN1.val[1],qn2.val[0], False)
-        return res
-
-    def swap2(QN1, QN2):
-        if QuantumNum.SYMMETRY =="Z2":
-            res= swap(QN1.val, QN2.val, True)
-        elif QuantumNum.SYMMETRY =="Z2Z2":
-            res= swap(QN1.val[0],QN2.val[1], True)
-        elif QuantumNum.SYMMETRY=="U1":
-            res= swap(QN1.val, QN2.val, False)
-        elif QuantumNum.SYMMETRY=="U1U1":
-            res= swap(QN1.val[0], QN2.val[1], False)
-        return res
-    def qspace_get_dim(n,QSp_list,nd,_dims):
-        """
-        status_1_uncheck
-        see QSpace_GetDim in f90
-        q: still don't understand this function
-        """
-        pTot=1
-        for i in range(n):
-            pTot*=QSp_list[i].nQN
-        nd=pTot
-
-        _dims=[]
-
-        iQN =[1 for i in range(n)]
-
-        for p in range(pTot):
-            d=1
-            for i in range(n):
-                d *= QSp_list[i]._dims([iQN[i]])
-                _dims.append(d)
-                inc =1
-                
-                i=0
-                while inc==1 and i <=n:
-                    iQN[i]+= 1
-                    if iQN[i] <= QSp_list[i].nQN:
-                        inc =0
-                    else:
-                        iQN[i]=1
-                        i+=1
-
-        #attention_this_may_be_wrong
-        return nd, _dims
 
 
-# ====================================================================================== 
 
 class test_qn(object):
     def __init__(self, symmetry):
