@@ -338,7 +338,7 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
             
     return res
            
-def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=False): 
+def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=False, timeout=None): 
     """
         comparison of speed  'scp' > 'paramiko.sftp' >'rpyc'
     """
@@ -379,7 +379,7 @@ def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=Fals
             ##ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             #ssh.connect(LOCAL_IP, username='zhli')
             #ssh = ssh_connect('localhost', backend='paramiko')
-            ssh = ssh_connect('local', backend='paramiko')
+            ssh = ssh_connect('local', backend='paramiko', timeout=timeout)
             
             ftp = ssh.open_sftp()
             f=ftp.file(path, 'w', -1)
@@ -427,7 +427,7 @@ class TestIt(unittest.TestCase):
         with make_temp_dir() as dd: 
             fn = dd + '/aaa'
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-            rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1)
+            rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1, timeout=3)
             a=rpyc_load(fn, backend='sftp', use_local_storage=1)
             self.assertTrue(a==obj)
 

@@ -355,12 +355,10 @@ class QuantSpaceBase(object):
             _dims: 每个量子数对应子空间的维数
         """
         self.nQN = n
-        self._dims=np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
+        self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
         self._dims[:n] = dims[:n]
         #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
-
-        #self.QNs = np.ndarray(self.MaxQNNum, np.object)
-        #self.QNs[:n]= qns[:n]
+        self._totDim = None
         self.QNs = qns
     
     @property
@@ -368,7 +366,9 @@ class QuantSpaceBase(object):
         """
             lazy evaluation
         """
-        if hasattr(self, "_totDim"):
+        #if hasattr(self, "_totDim"):
+        #    return self._totDim
+        if self._totDim is not None:
             return self._totDim
         else:
             self._totDim = np.sum(self._dims[:self.nQN])  
@@ -633,48 +633,10 @@ class QuantSpaceBase(object):
         res.Addr=0
         res.RefQN=RefQN
         return res
-    def square3(self):
-        """
-        see CombineQSp3 in f90
-        reture another instace of QuantSpace that is the squre of self
-        """
-        RefQN=np.ndarray(2,self.MaxQNNum)
-        res= QuantSpace()
-        for i in range(self.nQN):
-            for j in range(self.nQN):
-                qn=self.QNs[i]+self.QNs[j]
-                n,m= self._dims[i], self._dims[j]
-                d=n*m
-                pidx=res.add_to_quant_space(qn,d)
-                if pidx>= self.MaxQNNum:
-                    continue 
-                if i==j:
-                    RefQN[0,pidx] = RefQN[0,pidx]+old_div(n*(n+1),2)
-                    RefQN[1,pidx] = RefQN[1,pidx]+old_div(n*(n-1),2)
-                else:
-                    RefQN[0,pidx] = RefQN[0,pidx]+d
-                    RefQN[1,pidx] = RefQN[1,pidx]+d
-        res.Addr=0
-        res.RefQN=RefQN
-        return res
 
     def get_qn_id(self, qn):
         return self.QNs.index(qn) 
 
-    def has_quant_num_bac(self, qn):
-        """
-            qn: instance of QuantumNum  or a tuple
-        """
-        if self.nQN ==0:  #empty quantum space
-            res = -1    # -1 indicates self.nQN=0
-            return res
-        
-        for i in range(self.nQN):
-            if qn == self.QNs[i]:
-                return i 
-        res = -1
-        return res
-    
     def has_quant_num(self, qn):
         """
             qn: instance of QuantumNum  or a tuple
@@ -685,7 +647,6 @@ class QuantSpaceBase(object):
             return self.QNs.index(qn)
         except:
             return -1 
-        
 
     def add_to_quant_space(self, qn, d):
         """
@@ -693,21 +654,14 @@ class QuantSpaceBase(object):
             note that direct sum is not a commutable operation
         """
         i = self.has_quant_num(qn)
-        ind= abs(i)
-        if ind > self.MaxQNNum: return None
-
-        #when qn not in self.QNs
-        if i<0:
-            i=self.nQN
+        assert i<self.MaxQNNum 
+        if i<0:  #when qn not in self.QNs
             self.QNs.append(qn)
-
-            self.nQN+=1
-            self._dims[i]=0
-        self._dims[i] += d  # when qn in self.QNs 
-        if not hasattr(self, "_totDim"):
-            self._totDim = self.totDim
-        self._totDim += d
-        return ind
+            self._dims[self.nQN] = d
+            self.nQN += 1
+        else:  # when qn in self.QNs 
+            self._dims[i] += d  
+        self._totDim = self.totDim  + d
    
     def tensor_prod(self, other):
         """ 
@@ -799,6 +753,7 @@ class QspTravial(QuantSpaceBase):
         self._dims = np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
         self._dims[:n] = dims[:n]
         #self._totDim = self._dims[0]
+        self._totDim = None
         self.QNs = [QnTravial()]
         #self.RefQN = np.empty((2, 1))
         #self.Addr=np.empty(self.MaxQNNum+1,"int")

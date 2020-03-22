@@ -167,14 +167,11 @@ def tensor_player(which):
                     buffer=None, use_buf=False, index_data=True, has_data=True, 
                     shallow=False):
 
-                #following is wrong,  because change self wold affect tensor_player.the_tape,  e.g. append data attr
-                #self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls]     
-                
                 #following is not deepcopy, self and tape share same value, but NOT share key
                 #self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()
                 self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls]
-                self.buf_ref = np.array([-1, -1], np.int)
-                if self.dtype != dtype:
+                #self.buf_ref = np.array([-1, -1], np.int)
+                if self.dtype != dtype:   # It could happen that dtype change in later iterations, e.g. in TDVP algrithom
                     self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered               
                 if 0:                
                     if has_data:
