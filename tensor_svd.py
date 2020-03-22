@@ -1144,7 +1144,9 @@ class TestIt(unittest.TestCase):
         #w = test_iTensor.instance("w")
         symmetry = 'U1'
         dim = 4
-        self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
+        #self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry)
+        self.qn_identity, self.qsp_base, self.qsp_null = QspU1.set_base()
+       
         QSbase = self.qsp_base.copy
         totQN=self.qn_identity.copy
         if dim is None:
@@ -1157,7 +1159,7 @@ class TestIt(unittest.TestCase):
         
         #u = test_iTensor(symmetry='U1').u
         #self.u = u 
-        self.qn_identity, self.qsp_base, self.qsp_null = init_System_QSp(symmetry='Z2')
+        self.qn_identity, self.qsp_base, self.qsp_null = QspZ2.set_base()
     
     def test_group_legs(self, rank=3):
         """
@@ -1566,7 +1568,7 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_eig', 
+           'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
@@ -1578,7 +1580,7 @@ if __name__ == "__main__":
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
            #'test_qr_rank2', 
-           'test_temp', 
+           #'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

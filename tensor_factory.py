@@ -461,6 +461,7 @@ class iTensorFactory(object):
                 szz = sigma_z.tensor_prod(sigma_z)
 
         elif symmetry ==  "Travial":
+            #print_vars(vars(),  ['qsp_base'])
             temp = lambda: (2, qsp_base.copy_many(2, reverse=[1]),  qn_identity.copy())
 
             rank, qsp, totqn = temp()

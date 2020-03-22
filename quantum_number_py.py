@@ -24,9 +24,6 @@
             imutable 就可一大胆放心、随意第使用.
             这要求，所有对其的操作都是 not-inplaced 
             
-        
-        
-
     Qsp
         a Qsp is a (reducible) L-module for lie algebra L
     QuantumNumber 定义了对于给定李代数表示的root(or weight?)集合，以及fusion rule
@@ -57,20 +54,13 @@ from abc import ABCMeta
 from merapy.utilities import print_vars
 from merapy.decorators import decorate_methods, tensor_player 
 from merapy.utilities import print_vars 
-#__all__=["QuantumNum", "QuantSpace", "QN_idendity", "QSp_null", "QSp_base", "init_System_QSp", "QspU1", "QspZ2", "reset_System_QSp"]
-__all__=["QuantumNum", "QuantSpace", "QuantSpaceBase",  "init_System_QSp", 
+
+__all__=[  "QuantSpaceBase",  
     "QnU1", "QnZ2", "QnZ3", "QnTravial", 
     "QspU1", "QspZ2", "QspZ3", "QspTravial", 
-    "reset_System_QSp", "symmetry_to_Qn", "symmetry_to_Qsp", 'symmetry_to_QspClass', "qn_factory"]
+     "symmetry_to_Qn", "symmetry_to_Qsp", 'symmetry_to_QspClass', "qn_factory"]
 
-
-
-#self.MaxQNNum= 16
-
-
-#group_names=["Travial", "Z2", "Z2Z2", "U1", "U1Z2", "U1U1"]
 GROUP_NAMES = ["Travial", "Z2", "Z3", "U1"]
-
 
 #class QnBase(object):
 class QnBase():   #with object new python cannot load old pickled files,  I dont know why 
@@ -116,7 +106,7 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
             raise ValueError(self.val)
         return res
     
-    def set_val_back(self,val):
+    def set_val_del(self,val):
         """
         newly added, assign val to self.val
         val: an instance of QuantumNum  or   an integer or an iterable
@@ -150,6 +140,7 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
             self._val = val
         else:
             raise ValueError("type of val not correct: %s"%type(val))
+    
     @classmethod
     def qn_id(cls):
         return cls(cls.QnId)
@@ -171,8 +162,7 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
     
 class QnTravial(QnBase):
     SYMMETRY = "Travial"
-    #this may be an issue NUM_OF_SYMM should be 0?
-    NUM_OF_SYMM = 1
+    NUM_OF_SYMM = 1  #this may be an issue NUM_OF_SYMM should be 0?
     QNS = (1, )
     QnId = 1
     def __init__(self, value=None):
@@ -184,21 +174,22 @@ class QnTravial(QnBase):
 
     def set_val(self, val):
         """
-        _val always is 1
+            _val always is 1
         """
-        #print "ssss", type(val)
-        #self._val = val
         self._val = 1
 
     def copy(self):
         return QnTravial()
+    
     def reverse(self):
         pass # do nothing
+    
     def __add__(self, other):
-        return QnTravial()
+        return self 
+    
     def __eq__(self, other):
         """
-        always True
+            always True
         """
         if self._val != other._val:
             raise Exception
@@ -206,9 +197,8 @@ class QnTravial(QnBase):
     
     def __ne__(self, other):
         """
-        always False since only one qn 1
+            always False since only one qn 1
         """
-        #print "qqqq", type(self), type(self._val), type(other._val)
         if self._val != other._val:
             raise Exception
         return False
@@ -239,17 +229,14 @@ class QnZ2(QnBase):
             num_of_symm: newly added atribute by lzh, 
         """
         
-        #self._val = np.array(value, dtype=np.int, ndmin=1)
-        #self._val = np.array([value], "int")
         self._val = value
     
     def copy(self):
-        #if use the following line, program will grow slower and slower, I don't know why yet
-        return QnZ2(self._val)
+        return QnZ2(self._val)  #if use the following line, program will grow slower and slower, I don't know why yet
         
     def reverse(self):
         """
-        reverse refers to conjugate repr. of a group
+            reverse refers to conjugate repr. of a group
         """
         pass
 
@@ -334,12 +321,6 @@ class QnU1(QnBase):
     
     def conj(self): 
         return QnU1(-self._val)
-    
-
-class QuantumNum(QnZ2, QnU1):
-    SYMMETRY = "Z2"
-    pass
-
 
 #meth_names= ["copy"]
 #@decorate_methods(tensor_player, meth_names)
@@ -347,12 +328,21 @@ class QuantSpaceBase(object):
     """
         abstract base class
         so MaxQNNum only defined in subclassed
+        issue:
+            method may be slow:
+                __eq__, Dims , update, tensor_prod
     """
-        
     def __init__(self, n, qns, dims):
         """
             QSp真正有用的只有 QNs, _dims 两个属性
             _dims: 每个量子数对应子空间的维数
+            
+            note:
+                1. is it better to change self._dims to be varying length 
+                2. is it better to store self._dim in numpy array or list?
+                some refs:
+                   http://stackoverflow.com/questions/46860970/why-use-numpy-over-list-based-on-speed0       
+ 
         """
         self.nQN = n
         self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
@@ -428,30 +418,17 @@ class QuantSpaceBase(object):
 
     def __eq__(self, other):
         """
-            improving: in futrue use key_property to implement this
         """
-        #key1 = ["nQN", "totDim"]
-        #for i in key1:
-        #    res = self.__getattribute__(i)==other.__getattribute__(i)
-        #    if not res:
-        #        return res
         if self.nQN != other.nQN:
             return False
         if self.totDim != other.totDim:
             return False
             
         nQN = self.nQN
-        #key2 = ["QNs", "_dims"]
-        #for i in key2:
-        #    res = self.__getattribute__(i)[:nQN]==other.__getattribute__(i)[:nQN]
-        #    res= np.all(res)
-        #    if not res:
-        #        return res
         if not np.all(self.QNs[:nQN]==other.QNs[:nQN]):
             return False 
         if not np.all(self._dims[:nQN]==other._dims[:nQN]):
             return False 
-        
         return True
 
     def __ne__(self, other):
@@ -489,7 +466,6 @@ class QuantSpaceBase(object):
         """
         msg = 'divide of qsp cant be defined,  as it is not unique. see doc string'
         raise NotImplemented(msg)
-        
     
     def __pow__(self, n): 
         res= self.__class__.null()
@@ -535,31 +511,27 @@ class QuantSpaceBase(object):
     def copy_from(self, other):
         self.nQN = other.nQN
         self._totDim=other.totDim
-        #if hasattr(self, "RefQN"):
-        #    self.RefQN=other.RefQN.copy()
         nqn=other.nQN
         if nqn != 0:
-            #print other.QNs
             self.QNs[:nqn]=[other.QNs[i].copy() for i in range(nqn)]
         self._dims=other._dims.copy()
 
     def update(self, qsp_max=None):
         """
+            this method only has limited use, and in non critical block 
         """
-        temp = self.__class__.empty()
-        #temp = self.__class__.null()
         if qsp_max is not None:
             nqn = 0
+            QNs= []
+            _dims= np.empty(self.MaxQNNum, np.int)
             for n in range(self.nQN):
                 i= qsp_max.has_quant_num(self.QNs[n])
                 if i>=0:
-                    temp.QNs.append(self.QNs[n])
-                    temp._dims[nqn]=min(self._dims[n], qsp_max._dims[i] )
+                    QNs.append(self.QNs[n])
+                    _dims[nqn]=min(self._dims[n], qsp_max._dims[i] )
                     nqn += 1 
-            #print('nqn', nqn, self.nQN, self.__class__)
-            temp.nQN = nqn
+            temp = self.__class__(nqn, QNs, _dims)
             self.copy_from(temp)
-            
 
     def copy_many(self, n, reverse=None):
         res=[self.copy() for i in range(n)]
@@ -568,81 +540,11 @@ class QuantSpaceBase(object):
                 res[i].reverse()
         return res
 
-    def link(self):
-        return self
-
-    def is_equal(self,other):
-        """
-        deprecated, use __eq__ instead
-        status_1
-        see QSp_IsEq in f90
-        """
-        #keys=self.__dict__.keys()
-        keys= ["nQN", "totDim", "QNs","_dims"]
-        
-        for k in keys:
-            a=self.__dict__[k]; 
-            b=other.__dict__[k]
-            res= a == b
-            #if type(a) !=np.ndarray:
-            if not isinstance(a, np.ndarray):
-                if res != True:
-                    print(k+" not equal " , a, b)
-                    return res
-            else:
-                res=res.all()
-                if res != True:
-                    print(k+" not equal, their difference is ")
-                    #ind = np.where(res1==False)
-                    #print ind
-                    print(a-b)
-                    return res
-        return True
-
-
-    def key_property(self):
-        qns = tuple([q._val for q in self.QNs]) 
-        dims= tuple(self._dims[:self.nQN].tolist())
-        res = {'qns':qns, 'dims':dims, 'nqn':len(qns)}
-        return res
-
-    def square(self):
-        """
-        see CombineQSp2 in f90
-        reture another instace of QuantSpace that is the squre of self
-        """
-        #RefQN=np.ndarray(2,self.MaxQNNum)
-        res= QuantSpace()
-        for i in range(self.nQN):
-            for j in range(self.nQN):
-                qn=self.QNs[i]+self.QNs[j]
-                n,m= self._dims[i], self._dims[j]
-                d=n*m
-                if i==j:
-                    res.add_to_quant_space(qn,d)
-                else:
-                    res.add_to_quant_space(qn,d+d)
-                if pidx>= self.MaxQNNum:
-                    continue 
-                if i==j:
-                    RefQN[0,pidx] = RefQN[0,pidx]+old_div(n*(n+1),2)
-                    RefQN[1,pidx] = RefQN[1,pidx]+old_div(n*(n-1),2)
-                else:
-                    RefQN[0,pidx] = RefQN[0,pidx]+d
-                    RefQN[1,pidx] = RefQN[1,pidx]+d
-        res.Addr=0
-        res.RefQN=RefQN
-        return res
-
-    def get_qn_id(self, qn):
-        return self.QNs.index(qn) 
 
     def has_quant_num(self, qn):
         """
-            qn: instance of QuantumNum  or a tuple
+            qn: instance of Quantum Num  or a tuple
         """
-        if self.nQN == 0:
-            return -1
         try:
             return self.QNs.index(qn)
         except:
@@ -665,9 +567,7 @@ class QuantSpaceBase(object):
    
     def tensor_prod(self, other):
         """ 
-            acturally tensorprod of self and other,  though named add
-            q571, RefQN is not added!, RefQN[:,:] is arbitrary valued
-            RefQN 写起来比较麻烦
+             although named add, acturally tensorprod of self and other
             todo: change the name to prod in future 
         """
         if self.nQN==0:
@@ -680,13 +580,12 @@ class QuantSpaceBase(object):
 
         for i in range(self.nQN):
             for j in range(other.nQN):
-                qn =self.QNs[i] + other.QNs[j]
-                d= self._dims[i]*other._dims[j]
+                qn = self.QNs[i] + other.QNs[j]
+                d = self._dims[i] * other._dims[j]
                 res.add_to_quant_space(qn, d)
         return res
     
-    #def add
-    add = tensor_prod 
+    add = tensor_prod  #def add
     
     @staticmethod
     def prod_many( qsp_list): 
@@ -697,23 +596,15 @@ class QuantSpaceBase(object):
     
     @classmethod
     def null(cls):
-        qn_identity = cls.QnClass.qn_id()
-        qsp_null = cls(n=1, qns=[qn_identity], dims=[1])
-        #qsp_null.update()
-        return qsp_null
+        """
+            a trivial (1D) vector space
+        """
+        qn = cls.QnClass.qn_id()
+        return  cls(n=1, qns=[qn], dims=[1])
     
     @classmethod
     def empty(cls):
         return cls(n=0, qns=[], dims=[])
-    
-    def qn_to_ind(self, qn): 
-        """
-            reverse of self.QNs[ind]
-        """
-        #return self.QNs.index(qn)
-        for i in range(len(self.QNs)): 
-            if self.QNs[i]._val == qn._val: 
-                return i
     
     def expand_totdim(self, totdim): 
         qns = self.QNs
@@ -732,7 +623,6 @@ class QuantSpaceBase(object):
                     dims[i] += 1
         
         ratial = dims/float(self.totDim)
-        #print_vars(vars(),  ['ratial'])
         dims = totdim * ratial
         dims = dims.astype(np.int)
         diff = np.sum(dims)-totdim
@@ -744,6 +634,10 @@ class QuantSpaceBase(object):
         
         res= self.__class__.easy_init(qns, dims)
         return res 
+    
+    @classmethod
+    def qn_id(cls):
+        return cls.QnClass.qn_id()
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
@@ -754,16 +648,14 @@ class QspTravial(QuantSpaceBase):
         self._dims[:n] = dims[:n]
         #self._totDim = self._dims[0]
         self._totDim = None
-        self.QNs = [QnTravial()]
-        #self.RefQN = np.empty((2, 1))
-        #self.Addr=np.empty(self.MaxQNNum+1,"int")
-
+        #self.QNs = [QnTravial()]
+        self.QNs = qns
 
     @classmethod
     def set_base(cls, dim=None):
         if dim is None:
             dim = 2
-        qsp_base = QspTravial(n=1, qns=None, dims=[dim])
+        qsp_base = QspTravial(n=1, qns=[cls.qn_id()], dims=[dim])
         
         #qn_identity = QnTravial()
         qn_identity = cls.QnClass.qn_id()
@@ -773,16 +665,16 @@ class QspTravial(QuantSpaceBase):
     
     @classmethod
     def max(cls, trunc_dim, nqn=None):
-        #if trunc_dim%2 != 0:
-        #    raise ValueError("trunc_dim should be multipy of 2.  trunc_dim=%d"%trunc_dim)
         qsp_max = cls(n=1, qns=None, dims=[trunc_dim])
         if 1:
             qsp_max2 = cls(n=1, qns=None, dims=[trunc_dim])
-            #qsp_max2.RefQN[0,0:2] = [2,1]
-            #qsp_max2.RefQN[1,0:2] = [0,1]
-
-        #return qsp_max, qsp_max2 
         return qsp_max
+    
+    @classmethod
+    def easy_init(cls, qns=None, dims=None):
+        """ a slow but easy init """
+        assert len(dims)==1
+        return cls(n=1, qns=[QnTravial()], dims=dims) 
 
 class QspZ2(QuantSpaceBase):
     MaxQNNum = 2
@@ -792,7 +684,6 @@ class QspZ2(QuantSpaceBase):
 
         """
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
-        #self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
     
     def __div__(self, other): 
         """
@@ -963,11 +854,8 @@ class QspU1(QuantSpaceBase):
         qns1 = (0, 1, -1)
         qns = [QnU1(i) for i in qns1] 
         qsp_base = QspU1(n=3, qns=qns, dims=dims)
-        
-        
         if 1:
             qsp_null = QspU1.null()
-        
         return qn_identity, qsp_base, qsp_null
     
     @classmethod
@@ -977,7 +865,6 @@ class QspU1(QuantSpaceBase):
         qns1 = (1, -1)
         qns = [QnU1(i) for i in qns1] 
         qsp_base = QspU1(n=2, qns=qns, dims=dims)
-        
         qsp_null = QspU1.null()
         
         return qn_identity, qsp_base, qsp_null
@@ -1034,17 +921,11 @@ class QspU1_half(QuantSpaceBase):
     pass
 
 
-#class QuantSpace(QspZ2, QspU1):  pass
-
-class QuantSpace(QuantSpaceBase):  pass
-
-
 def symmetry_to_Qn(symmetry):
     temp = {"Travial":QnTravial, "Z2":QnZ2, "Z3":QnZ3, "U1":QnU1}
     return temp[symmetry]
 
 def symmetry_to_Qsp(symmetry):
-    
     return {"Travial":QspTravial, "Z2":QspZ2, "Z3":QspZ3, "U1":QspU1}[symmetry]
 
 symmetry_to_QspClass= symmetry_to_Qsp
@@ -1066,175 +947,6 @@ def qn_factory(symmetry, val):
 
 qn_any = qn_factory
 
-#mapper = {"Z2":QspZ2, "Z3":QspZ3, "U1":QspU1, "Travial":QspTravial, "Trav":QspTravial}
-
-def init_System_QSp(symmetry="Z2", dim=None, combine_2site=True):
-    try:
-        #cls = mapper[symmetry]
-        cls= symmetry_to_Qsp(symmetry)
-    except:
-        raise KeyError(symmetry)
-    
-    QuantumNum.SYMMETRY = symmetry
-    qn_identity, qsp_base, qsp_null = cls.set_base(dim=dim)
-    
-    #if symmetry == "Travial" and combine_2site:
-    if symmetry in ["Travial", 'Z2'] and combine_2site:
-        #qn_identity, qsp_base, qsp_null = QspTravial.set_base(dim=4)
-        qn_identity, qsp_base, qsp_null = cls.set_base(dim=4)
-
-    if symmetry == "U1" and not combine_2site:
-        qn_identity, qsp_base, qsp_null = QspU1.set_base_1site(dim=dim)
-
-    
-    return qn_identity, qsp_base, qsp_null
-
-
-def reset_System_QSp(symmetry):
-    #global QN_idendity, QSp_base, QSp_null
-    warnings.warn("QuantSpace has set base class %s"%symmetry)
-    try:
-        cls= mapper[symmetry]
-    except:
-        raise KeyError(symmetry)
-    
-    QuantSpace.__bases__ = (cls, )
-
-    #QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=symmetry)
-    #this dont work, because after assignment,  they become local,  although they are assumed global
-    return init_System_QSp(symmetry=symmetry)
-
-
-
-
-
-class test_qn(object):
-    def __init__(self, symmetry):
-        self.symmetry = symmetry
-        self.qn_identity, self.qsp_base,  self.qsp_null = init_System_QSp(symmetry)
-
-        pass
-    def add_to_quant_space(self):
-        qb= self.qsp_base.copy()
-        qn = self.qn_identity.copy()
-        qb.add_to_quant_space(qn, 3)
-        print(qb)
-    
-    def reverse(self):
-        qn = self.qn_identity.copy()
-        QSp_base = self.qsp_base
-        qn.val = -1
-        qn.reverse()
-        print(qn)
-
-        qs= QSp_base.copy()
-        qs.reverse()
-        print(qs)
-    
-    def has_quant_num(self):
-        QSp_base = self.qsp_base.copy()
-        print("\ntest of has_quant_num: ", QSp_base.has_quant_num(QSp_base.QNs[0])) #QSp_null.QNs[0])
-        
-    def add(self):
-        print("\ntest of self.add(): ")
-        
-        QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=self.symmetry) 
-        #print QSp_base
-        temp= QSp_base.add(QSp_base) #.add(QSp_base)
-        #print QSp_base
-        print(temp)
-    
-    def update(self):
-        print("uuuuu"*10)
-        #QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=self.symmetry, combine_2site=False) 
-        
-        if self.symmetry == "U1" :
-            QSp_base = QspU1.easy_init((1, -1), (1, 1))
-            print(QSp_base)
-            temp= QSp_base.add(QSp_base).add(QSp_base)
-            print(temp)
-            ##print QSp_base.__class__.max(4)
-            qsp_max = QspU1.easy_init((1, -1, 3, -3), (2, 2, 1, 1))
-            print("max", qsp_max)
-            temp.update(qsp_max)
-            print(temp)
-    
-    def update_2(self):
-        print("uuuuu"*10)
-        #QN_idendity, QSp_base , QSp_null= init_System_QSp(symmetry=self.symmetry, combine_2site=False) 
-        
-        if self.symmetry == "U1" :
-            QSp_base = QspU1.easy_init((1, -1, 3, -3), (2, 2, 1, 1)) 
-            print(QSp_base)
-            temp= QSp_base.add(QSp_base).add(QSp_base)
-            print(temp)
-            ##print QSp_base.__class__.max(4)
-            qsp_max = QspU1.easy_init((1, -1, 3, -3), (2, 2, 1, 1))
-            print("max", qsp_max)
-            temp.update(qsp_max)
-            print(temp)
-
-    @staticmethod
-    def add_u1():
-        QN_idendity, QSp_base=init_System_QSp("U1")
-        qsp_max=QspU1()
-        qsp_max.nQN = 3
-        temp=[0,1,-1,2,-2]
-        for i in range(5):
-            qsp_max.QNs[i].val[0] = temp[i] 
-        qsp_max._dims[0:5] = [2,1,1,1,1]
-
-        qsp_max.update()
-        qsp_max2=qsp_max.copy()  # not used
-        
-        a=QSp_base.add(QSp_base).add(QSp_base)
-        print(QSp_base)
-        print(a)
-        a.update(qsp_max=qsp_max)
-        print(a)
-    
-    def property(self):
-        print("property not work at present")
-        #qsp_base = self.qsp_base.copy()
-        qn = QnU1(1)
-        qn._val = -2
-        assert qn.val  == -2
-        if 0:
-            qn = QnU1(0)
-            qn.val = -2
-            print(qn._val)
-            assert qn._val == -2, "qn._val = %d"%qn._val
-            #assert qn._val == -2 
-
-    def pickle(self):
-        #import pickle as cPickle
-        import pickle
-        QN_idendity = QnU1(0)
-        out = open("/tmp/test", "wb")
-        pickle.dump(QN_idendity, out)
-        out.close()
-        #exit()
-
-        qq = QspU1()
-
-        out = open("/tmp/test", "wb")
-        pickle.dump(qq, out)
-        out.close()
-        #exit()
-
-    def le(self):
-        a = QspU1.max_1((3, 4))
-        b = QspU1.max_1((5, 14))
-        print(a <= b)
-        exit()
-
-    def eq(self):
-        pass
-        a = QspU1.max(12, 3)
-        b = QspU1.max(12, 3)
-        c = a.copy()
-        print(a == b)
-        
 class _performence(object):
     @classmethod
     def copy_qn(cls):
@@ -1265,12 +977,6 @@ class TestIt(unittest.TestCase):
     def setUp(self): 
         pass
     
-    def test_temp(self): 
-        q = QspU1.easy_init(None, [2, 1, 1])
-        print(q)
-        print(q.QNs)
-        q.shift_qn(q.QNs[0])
-        print(q.QNs)
     
     def test_shift_qn(self): 
         q = QspU1.easy_init(None, [2, 1, 1])
@@ -1288,10 +994,7 @@ class TestIt(unittest.TestCase):
             print(symm*10)
             tq=test_qn(symmetry=symm)
             print(tq.qsp_base)
-            print(tq.qsp_base.key_property())
             pf=_performence
-            #reset_System_QSp(symmetry="Trav")
-            tq.has_quant_num()
             tq.add()
             print("1"*100)
             tq.update()
@@ -1360,11 +1063,19 @@ class TestIt(unittest.TestCase):
             a = QspU1.easy_init([0, 1, 2], [1, 1, 1])
             print_vars(vars(), ['a', 'a**2', 'a**3'])
             print(a.QNs , type(a.QNs), a.QNs.index(QnU1(2)))
-        if 1:
+        if 0:
             a = QspU1.easy_init([1, -1], [2, 4])
             b = QspU1.easy_init([1, -1], [4, 2])
             c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
             print_vars(vars(), ['a*b*c', 'a*(b*c)'])
+            
+        if 1:
+            a = qsp_any('Travial', qns=[1], dims=[2])
+            b = qsp_any('Travial', qns=[1], dims=[2])
+            c = a.tensor_prod(b)
+            c1 = qsp_any('Travial', qns=[1], dims=[4])
+            self.assertTrue(c==c1)
+            
             
     def test_expand_totdim(self): 
         if 1: 
@@ -1377,8 +1088,11 @@ class TestIt(unittest.TestCase):
         qe = q.expand_totdim(26)
         print_vars(vars(),  ['qe'])
         self.assertTrue(qe==QspU1.easy_init([0, 1, -1], [12, 6, 8]))
-        
-    
+
+    def test_temp(self): 
+        qn, qsp, symm = QspTravial.set_base()
+        print_vars(vars(),  ['qsp'])
+
 if __name__ == "__main__":
         
     if 0:
@@ -1387,13 +1101,13 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           #'test_temp', 
-           'test_shift_qn', 
+           #'test_shift_qn', 
            #'test_old_all', 
            #'test_compare', 
            #'test_power', 
            #'test_tensor_prod', 
            #'test_expand_totdim', 
+           'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
