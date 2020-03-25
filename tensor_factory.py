@@ -515,7 +515,7 @@ class iTensorFactory(object):
         
         elif symmetry  == "U1":
             #qns1 = [1, -1]
-            qsp_base = QspU1.easy_init(qns=(1, -1), dims=(1, 1))
+            qsp_base = QspU1.easy_init(qns=(1, -1), dims=[1, 1])
             qn_identity = QnU1.qn_id()
         
             def temp():
@@ -566,7 +566,7 @@ class iTensorFactory(object):
             
         return res 
     
-    pauli_mat = pauli_mat_1site 
+    pauli_mat = pauli_mat_1site  #def pauli_mat
     
     @staticmethod
     def spin_one_mat( symmetry='U1'): 

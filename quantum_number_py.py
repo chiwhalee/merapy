@@ -331,6 +331,17 @@ class QuantSpaceBase(object):
         issue:
             method may be slow:
                 __eq__, Dims , update, tensor_prod
+        discuss:
+            to define self._dims as a list of np.ndarray ?
+            It appears that the former is better, reason:
+                1. The number of qn is not limited now,  
+                    Then no need let all qn cetered around qn_id which
+                    reqire me must shift qn when defining a mps with nontrival
+                    totqn. I can now expand range of qn as wide as I want. This is quite critical for a  simpler code. 
+                    so it is much more flexible and convenient. 
+                2. may be even faster, as the tests show! Because no need to allocate memory when construct a qsp!
+                3. save memory
+            
     """
     def __init__(self, n, qns, dims):
         """
@@ -345,9 +356,9 @@ class QuantSpaceBase(object):
  
         """
         self.nQN = n
-        self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
-        self._dims[:n] = dims[:n]
-        #self.totDim = np.sum(self._dims[:n])  #for performance, this is not pre
+        #self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
+        #self._dims[:n] = dims[:n]
+        self._dims = dims
         self._totDim = None
         self.QNs = qns
     
@@ -482,6 +493,7 @@ class QuantSpaceBase(object):
         else:
             qns1 = [cls.QnClass(i) for i in qns]
         n = len(qns1)
+        dims = list(dims)
         return cls(n=n, qns=qns1, dims=dims) 
 
     def reverse(self):
@@ -550,7 +562,7 @@ class QuantSpaceBase(object):
         except:
             return -1 
 
-    def add_to_quant_space(self, qn, d):
+    def add_to_quant_space_bac(self, qn, d):
         """
             this is in fact direct sum of vector spaces subject to symmetry
             note that direct sum is not a commutable operation
@@ -564,7 +576,22 @@ class QuantSpaceBase(object):
         else:  # when qn in self.QNs 
             self._dims[i] += d  
         self._totDim = self.totDim  + d
-   
+
+    def add_to_quant_space(self, qn, d):
+        """
+            this is in fact direct sum of vector spaces subject to symmetry
+            note that direct sum is not a commutable operation
+        """
+        i = self.has_quant_num(qn)
+        assert i<self.MaxQNNum 
+        if i<0:  #when qn not in self.QNs
+            self.QNs.append(qn)
+            self._dims.append(d)
+            self.nQN += 1
+        else:  # when qn in self.QNs 
+            self._dims[i] += d  
+        self._totDim = self.totDim  + d
+
     def tensor_prod(self, other):
         """ 
              although named add, acturally tensorprod of self and other
@@ -643,13 +670,12 @@ class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
     QnClass= QnTravial
     def __init__(self, n, qns, dims):
-        self.nQN = n
-        self._dims = np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
-        self._dims[:n] = dims[:n]
-        #self._totDim = self._dims[0]
-        self._totDim = None
-        #self.QNs = [QnTravial()]
-        self.QNs = qns
+        #self.nQN = n
+        #self._dims = np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
+        #self._dims[:n] = dims[:n]
+        #self._totDim = None
+        #self.QNs = qns
+        QuantSpaceBase.__init__(self, n, qns, dims)
 
     @classmethod
     def set_base(cls, dim=None):
@@ -831,6 +857,7 @@ class QspU1(QuantSpaceBase):
             assert len(qns)>= len(dims)
             qns = qns[: len(dims)]
         qns1 = [cls.QnClass(i) for i in qns]
+        dims = list(dims)
         return cls(n=n, qns=qns1, dims=dims)
 
     @classmethod
@@ -1090,8 +1117,15 @@ class TestIt(unittest.TestCase):
         self.assertTrue(qe==QspU1.easy_init([0, 1, -1], [12, 6, 8]))
 
     def test_temp(self): 
-        qn, qsp, symm = QspTravial.set_base()
-        print_vars(vars(),  ['qsp'])
+        if 1:
+            d = qsp_any('U1', [1, -1], [1, 1])
+            a = qsp_any('U1', (1, -1), (1, 1))
+            print_vars(vars(),  ['a==d'])
+        if 0:
+            a = [1, 2]
+            b = (1, 2)
+            #print(all(a==b))
+            
 
 if __name__ == "__main__":
         

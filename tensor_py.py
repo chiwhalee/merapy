@@ -1212,7 +1212,7 @@ class iTensor(TensorBase):
                 if temp.totDim < q.totDim :
                     leg_map[i] += (ii + j, )
                     count += 1  
-                elif temp  == q: 
+                elif temp == q: 
                     leg_map[i] += (ii + j, )
                     ii += count + 1  
                     #if len(leg_map[i])>1: 
