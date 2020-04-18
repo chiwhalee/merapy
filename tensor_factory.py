@@ -903,7 +903,7 @@ class iTensorFactory(object):
         return res 
     
     @staticmethod
-    def base_state(which, symmetry, nmax=None, shift_qn=True, **kwargs):
+    def base_state(which, symmetry, nmax=None, shift_qn=1, **kwargs):
         """
             params:
                 shift_qn: for fermions and bosons

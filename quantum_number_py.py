@@ -374,6 +374,21 @@ class QuantSpaceBase(object):
         else:
             self._totDim = np.sum(self._dims[:self.nQN])  
             return self._totDim
+
+    @property
+    def tot_dim(self):  # replace tot_Dim in future 
+        """
+            lazy evaluation
+        """
+        #if hasattr(self, "_totDim"):
+        #    return self._totDim
+        if self._totDim is not None:
+            return self._totDim
+        else:
+            self._totDim = np.sum(self._dims[:self.nQN])  
+            return self._totDim
+    
+
     
     @property
     def symmetry(self): 

@@ -203,7 +203,10 @@ class iTensor(TensorBase):
         if not np.allclose(self.data, other.data, atol=1e-14):
             return False
         return True
-     
+    
+    def __matmul__(self, other):
+        return self.contract(other, return_v3=False)
+    
     def buffer_assign(self, data_size, n=None):
         """
             see use_tBuffer in f90
@@ -373,7 +376,6 @@ class iTensor(TensorBase):
         else:
             sh = self.get_block_shape(i)
             return  self.data[p: p+size].reshape(sh, order=order)            
-            
     
     def get_block_shape(self, i):
         qn_id_tuple = self.Addr_idx[:, i]
@@ -460,7 +462,11 @@ class iTensor(TensorBase):
         @property  
         def shape(self): 
             return tuple(self.QSp)   #np.shape is a tuple so convert it 
-        
+
+        @property  #an even shorter name ！
+        def sh(self):   
+            return tuple(self.QSp)   #np.shape is a tuple so convert it 
+
         @property
         def size(self): 
             return self.totDim 
@@ -729,7 +735,7 @@ class iTensor(TensorBase):
 
     def get_position(self, qn_ind_tuple):
         """
-            map qn_ind_tuple to an int,  i.e. a rank-dim index to linear index 
+            map qn_ind_tuple to idx,  i.e. a rank-dim index to linear index 
             
             this func is used in following way: 
                 p3=T3.get_position(iQN3[:T3.rank])
@@ -744,9 +750,9 @@ class iTensor(TensorBase):
         """
         if len(qn_ind_tuple)==0: #this is for rank 0 tensor
             return 0
-        Dims=np.array([self.QSp[i].nQN for i in range(self.rank)], int)
-        #attention: this Dims is not self.Dims
+        Dims=np.array([self.QSp[i].nQN for i in range(self.rank)], int)  #attention: this Dims is not self.Dims
         p=common_util.matrix_get_position(qn_ind_tuple, Dims)
+        #assert p<self.idx_dim, (p, self.idx_dim)
         return p
 
     def get_position_rev(self, index_linear):
@@ -785,7 +791,7 @@ class iTensor(TensorBase):
         pi = pi+sub_ind[0]
         temp = self.idx[pq]
         if temp >= self.idx_dim:
-            raise ValueError("error, qn_id_tuple values not permited. qn_id_tuple=%s"%qn_id_tuple)
+            raise ValueError("error, qn_id_tuple values not permited. qn_id_tuple=%s"%(qn_id_tuple, ))
         pidx = self.Block_idx[0, temp]
         block_len = self.Block_idx[1, temp]
         if pi>= block_len:
@@ -797,7 +803,16 @@ class iTensor(TensorBase):
 
     def get_element(self, qn_id_tuple, sub_ind):
         """
-            see iTensor_GetElement in f90
+            params:
+                qn_id_tuple: a tuple of length self.rank 
+                    block coordinate
+                    for each i, qn_id_tuple[i] in xrange(self.Qsp[i].nQN),  
+                    对于Z2 symm 即 [0, 1] 
+                    note 这不是量子数的val,  but numbering  
+                    并且这些量子数fuse到一起后 = self.totQN
+                sub_ind：data coodinate in the block,  len(sub_ind)=self.rank
+                    for each i, sub_ind[i] in range(self.Qsp[i].Dims), 
+                    对于Z2 symm 也是[0, 1] for any i
         """
         pq = 0; pi=0
         for i in range(self.rank - 1, 0, -1):
@@ -806,13 +821,15 @@ class iTensor(TensorBase):
         
         pq = pq+qn_id_tuple[0]
         pi = pi+sub_ind[0]  
-        pidx = self.Block_idx[0,self.idx[pq]]
-        temp = self.idx[pq]
-        if temp >= self.idx_dim:
+        idx = self.idx[pq]
+        #print_vars(vars(),  ['idx'])
+        pidx = self.Block_idx[0, idx]
+        idx = self.idx[pq]
+        if idx >= self.idx_dim:
             print("error, qn_id_tuple values not permited")
             return 
-        pidx = self.Block_idx[0, temp]
-        block_len = self.Block_idx[1, temp]
+        pidx = self.Block_idx[0, idx]
+        block_len = self.Block_idx[1, idx]
         if pi>= block_len:
             print("error,  sub_ind values not permited")
             return 
@@ -1885,28 +1902,19 @@ class iTensor(TensorBase):
                 buffer: use buffer to save data of T3
         """
 
-        rank1 = self.rank
-        rank2 = T2.rank
+        rank1, rank2 = self.rank, T2.rank 
         rank3 = rank1+rank2-div-div
         tQN = self.totQN+T2.totQN
         shift = rank1-div
-        #copy is needless conceptially
-        #copy is more robust, while no copy is faster
-        #QSp = [self.QSp[i].copy() for i in range(shift)]
-        #QSp.extend([T2.QSp[i].copy() for i in range(div, rank2)])
-        QSp = self.QSp[:shift]
+        QSp = self.QSp[:shift]  #copy qsp is more robust, while no copy is faster
         QSp.extend(T2.QSp[div:rank2])
 
         if rank3==0:
-            #QSp = [self.QSp[0].null()]
-            QSp = []
+            QSp = []  #QSp = [self.QSp[0].null()]
         
         dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-        #print_vars(vars(),  ['QSp'])
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
-        T3.data[:]=0.0
-        
-        #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
+        T3.data[:]=0.0   #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
         
         nidx3 = 0
         alpha = 1.0; beta=1.0
@@ -1916,57 +1924,45 @@ class iTensor(TensorBase):
 
         for idx2 in range(T2.nidx):
             iQN2[0] = 0  #!for rank=0
-            iQN2[0:rank2]=T2.Addr_idx[0:rank2,idx2]
+            iQN2[0:rank2] = T2.Addr_idx[0:rank2, idx2]
             p2 = T2.Block_idx[0,idx2]
-            
-            Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
             if div == rank2: 
                 Dim2 = 1 
+            else:
+                Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
             Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=np.int)  # np.prod([])=1.0, so use dtype=np.int 
+            
+            data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
                 
             for idx1 in range(self.nidx):
                 iQN1[0] = 1 #!for rank=0
                 iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
                 p1 = self.Block_idx[0, idx1]
-                #注意这里写得不适当，准确地，如果是
-                #U1 symm 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定....写不清楚啊
-                iseq = np.all(iQN1[shift:shift+div] == iQN2[0:div])
-                if not iseq:
-                    #如果量子数组合相等则收缩
+                iseq = np.all(iQN1[shift:shift+div] == iQN2[0:div])  #注意这里写得不适当，准确地，如果是U1 symm 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定....写不清楚啊
+                if not iseq:  #如果量子数组合相等则收缩
                     continue
                 Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)])
                 if shift == 0: 
                     Dim1 = 1   #when shift = 1.0,  np.prod yields 1.0, should be converted to int 
-                
-                #iQN3[0] = 1 #!for rank=1
-                iQN3[0:shift] = iQN1[0:shift]
-                iQN3[shift:rank3] = iQN2[div:rank2]
-                p3=T3.get_position(iQN3[:T3.rank])
-                #print 'tttt', T3.rank, p3, iQN3[:T3.rank] , T3.get_position([])
-                #raise 
-                idx3 = T3.idx[p3]
-                
-                #one frequent error is the IndexError: index (9) out of xrange (0<=index<9) in dimension 1
-                #print_vars(vars(),  ['idx3'])
-                
-                p3 = T3.Block_idx[0,idx3]
                 data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
-                data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
                 
                 #T3.data[p3] = self.data[p1].dot(T2.data[p2])
                 #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
                 #attention_may_be_not_efficient  这里学要为data3分配内存，能否直接在T3.data上操作？
                 data3=iTensor.mul_temp(data1, data2, alpha, beta, dtype=dtype)
-
-                #T3.data[p3:p3+Dim1*Dim2]=data3.ravel()[:]
+                
+                iQN3[0:shift] = iQN1[0:shift]  #iQN3[0] = 1 #!for rank=1
+                iQN3[shift:rank3] = iQN2[div:rank2]
+                p3=T3.get_position(iQN3[:T3.rank])
+                idx3 = T3.idx[p3]
+                
+                p3 = T3.Block_idx[0,idx3]
                 T3.data[p3:p3+Dim1*Dim2] += data3.ravel('F')[:]   #attention_here  fortran order
                 
                 #t3data = T3.data[p3:p3+Dim1*Dim2] 
                 #data3 = data3.ravel("F")
                 #t3data  += data3   #attention_here  fortran order
                 #t3data = numexpr.evaluate("t3data + data3")
-                #print "iii",p3, data3, idx2, idx1,iQN1[:4],iQN2[:4],iQN3[:4] #,T3.data[:5].round(4)
-                #print "iii",p3, data3, idx2, idx1,iQN1[:4],iQN2[:4],iQN3[:4] #,T3.data[:5].round(4)
         
         return T3
 
@@ -2142,7 +2138,6 @@ class iTensor(TensorBase):
             issue: todo: in future not return_v3 by default 
             V1,2,3 are arrays (maps) 张量指标 —> 自然数。用自然数来标记所有张量的指标
             在V1,V2中可能有相同的元素，存在s_1n2中，
-            
             T1, T2 contract yielding T3
             Args:
                 Vi: of type np.ndarray(,"int")
@@ -2150,30 +2145,16 @@ class iTensor(TensorBase):
                 Vp1,先记录了T1的外腿，后记录内腿指标； Vp2先记录了内腿，后记录了外腿指标
         """
         
-        #issue: when self contract with self but with different ind_labels, this cause problem
-        if V1 is None: 
-            V1 = self.ind_labels 
-        if V2 is None: 
-            V2 = T2.ind_labels
+        V1 = self.ind_labels if V1 is None else V1   #issue: when self contract with self but with different ind_labels, this cause problem
+        V2 = T2.ind_labels if V2 is None else V2
         
         V_1n2, Vp1, Vp2, V3 = self.prepare_leg(T2, V1, V2)        
         T1=self
-        
         try:
-            nT1=T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排
-            nT2=T2.permutation(Vp2, use_buf=use_buf)
+            nT1 = T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排
+            nT2 = T2.permutation(Vp2, use_buf=use_buf)
             T3 = nT1.contract_core(nT2, V_1n2.size, data=data, use_buf=use_buf)
-            
-        #except IndexError as err:
-        #IndexError: index 4 is out of bounds for axis 1 with size 4 
         except Exception as err:
-            #msg = """ \n additional err info:  
-            #V_1n2:%s
-            #V1:%s\t  V2:%s
-            #Vp1:%s\t Vp2:%s
-            #"""%(V_1n2, V1[:self.rank], V2[:T2.rank], Vp1[:self.rank], Vp2[:T2.rank])
-            #msg += """dims: {0.Dims}\t{1.Dims}""".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank])
-            #msg += """\nself.QSp: {0.QSp}\nother.QSp: {1.QSp}""".format(self, T2) 
             V1 = tuple(V1)
             V2 = tuple(V2)
             msg = '\n\t'.join([
@@ -2187,15 +2168,11 @@ class iTensor(TensorBase):
                 ])
             #msg +=  "\n%s\t %s"%(self.__repr__(keys=['QNs', 'Dims'], fewer=True), 
             #        T2.__repr__(keys=['QNs', 'Dims'],fewer=True))
-            
-            #raise Exception(msg)
-            
             if not err.args: 
                        err.args=('',)
             err.args = (str(err.args[0]) + "\n"*2 + msg,)+err.args[1:]
             raise 
         
-        #if track_name: 
         if info>0: 
             T3.type_name = str(self.type_name) + "-" + str(T2.type_name)
         T3.ind_labels= V3
@@ -3317,20 +3294,7 @@ if 0:
                 pos=w.get_position_rev(i)
                 print(pos)
         
-        def test_get_element_and_set_element():
-            #print w.__repr__()  #['Addr_idx']
-            #这么做不对
-            #w244 = w.copy()
-            #w244.QSp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
-            #print "w244", w244.QSp
-            qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
-            w244 = iTensor(3, qsp, totQN)
             
-            qDims= [1, 0, 1]
-            w244.set_element(qDims, [0, 1, 1], 5.)
-            x = w244.get_element(qDims, [0, 1, 1])
-            print(x)
-            print(w244.__repr__(["data"]))
         #test_get_element_and_set_element()
         def test_to_ntensor():
             """ ---pass   """
@@ -3367,7 +3331,6 @@ if 0:
             print(a.data)
             print(iTensor.T_BUFFER[0].T[0])
             print(a.data.base is iTensor.T_BUFFER[0].T[0])
-
 
         @classmethod
         def contract_core1(cls):
@@ -3732,6 +3695,103 @@ if 0:
                 #print t, t1
                 print(t.data, t1.data)
 
+class performance_iTensor(object):
+    def __init__(self, symmetry):
+        self.symmetry = symmetry
+        pass
+    
+    def _permute(self, symmetry="U1", rank=8, dim=4, nqn=None,  NUM_OF_THREADS=8, iter_times=1000):
+        import os
+        os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
+        os.environ["OMP_SCHEDULE"] = "static"#"dynamic" 
+        import time
+        t = iTensorFactory.simple(rank=rank, dim=[dim]*rank, symmetry=symmetry, nqn=nqn)
+        buf = np.ndarray(t.data.size)
+        t.data[:] = np.arange(t.data.size)
+        r = rank//2
+        tensor_player.STATE = "record"
+        t1=t.permutation(list(range(r,rank)) + range(r), buffer=buf) 
+        tensor_player.STATE = "play"
+        def func(which):
+            array_permutation.permute_player_fort = \
+                    array_permutation.__getattribute__("permute_player_fort" + which)
+            #print "do schedule dynamic"
+            t0 = time.clock(); ta = time.time()
+            for i in range(iter_times):
+                t1=t.permutation(list(range(r,rank)) + range(r), buffer=buf)
+            tb = time.time(); t1 = time.clock()
+            if which == "_parallel_runtime":
+                #print os.environ["OMP_SCHEDULE"] 
+                which  = which +  "  " + os.environ["OMP_SCHEDULE"] 
+            print(which, "\t", t1-t0, tb-ta)
+
+
+        
+        import common_64_ifort as c64
+        c64.set_num_of_threads(NUM_OF_THREADS)
+
+        #func("")
+        #func("_parallel")        
+        func("_parallel_dynamic")
+        #func("_parallel_guided")
+        #func("_parallel_runtime")
+
+    def permute(self):
+        """
+            report:
+                for all trunc_dim parallel_dynamic is always faster than non-parallel
+                for trunc_dim <= 8,  parallel faster than non-parallel
+        """
+        for n in range(1, 8):
+            self._permute(symmetry="U1", rank=8, dim=13, nqn=5, NUM_OF_THREADS=n, iter_times=10)
+
+
+    def _contract(self, symmetry="U1", rank1=4, rank2=4, dim=4, 
+            nqn=None,  NUM_OF_THREADS=4, iter_times=1000):
+        import os
+        import common_64_ifort as c64
+        import time
+        os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
+        #c64.set_num_of_threads(NUM_OF_THREADS)
+        os.environ["OMP_SCHEDULE"] = "static"#"dynamic"#"dynamic" 
+        
+        T1 = iTensorFactory.simple(rank=rank1, dim=[dim]*rank1, symmetry=symmetry, nqn=nqn)
+        T2 = iTensorFactory.simple(rank=rank2, dim=[dim]*rank2, reverse=[0, 1], symmetry=symmetry, nqn=nqn)
+        #T2.QSp[0].reverse()
+        #T2.QSp[1].reverse()
+        #buf = np.ndarray(t.data.size)
+        #t.data[:] = np.arange(t.data.size)
+        tensor_player.STATE = "record"
+        T3=T1.contract_core(T2, 2)
+        tensor_player.STATE = "play"
+        #print "eeee"; exit()
+        buff = T3.data
+        
+        def func(which):
+            if which != "":
+                common_util.contract_core_player_fort = \
+                        c64.__getattribute__("contract_core_player_fort" + which)
+            #print "do schedule dynamic"
+            t0 = time.clock(); ta = time.time()
+            for i in range(iter_times):
+                T1.contract_core(T2, 2, data=buff)
+            tb = time.time(); t1 = time.clock()
+            if which == "_parallel_runtime":
+                #print os.environ["OMP_SCHEDULE"] 
+                which  = which +  "  " + os.environ["OMP_SCHEDULE"] 
+            print(which, "\t", t1-t0, tb-ta)
+
+        func("")
+        #func("_paralell_ordered")
+        #func("_paralell_critical")
+        func("_paralell_test")
+        #func("_paralell_reduction")
+        #func("_paralell_reduction_1")
+    
+    def contract(self):
+        self._contract(symmetry="U1", rank1=8, rank2=4, dim=16, nqn=3,  
+                NUM_OF_THREADS=6, iter_times=10)
+
 class Test_iTensor(unittest.TestCase): 
     def setUp(self): 
         pass
@@ -3818,7 +3878,20 @@ class Test_iTensor(unittest.TestCase):
         #status = iTensor.get_player_status()
         #print_vars(vars(),  ['status'])
         
-        
+        def test_get_element_and_set_element():
+            #print w.__repr__()  #['Addr_idx']
+            #这么做不对
+            #w244 = w.copy()
+            #w244.QSp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
+            #print "w244", w244.QSp
+            qsp = [QSbase(), QSbase().add(QSbase()), QSbase().add(QSbase())]
+            w244 = iTensor(3, qsp, totQN)
+            
+            qDims= [1, 0, 1]
+            w244.set_element(qDims, [0, 1, 1], 5.)
+            x = w244.get_element(qDims, [0, 1, 1])
+            print(x)
+            print(w244.__repr__(["data"]))
            
     def test_permutation(self): 
         t = iTensor.example()
@@ -4250,145 +4323,16 @@ class Test_iTensor(unittest.TestCase):
         #    t3.permutation([0, 2, 3, 1, 4, 5])
         
         if 1:
-            q0 = qsp_any('U1', [0], [14])
-            q1 = qsp_any('U1', [0], [4])
-            t2 = iTensor(QSp=[q0, q1])
-            t2.data[: ] = np.arange(t2.size)
-            q1a = qsp_any('U1', [1, 2, 3],    [1, 2, 3])
-            q1b = qsp_any('U1', [-1, -2, -3], [1, 2, 3])
-            #print_vars(vars(),  ['t2.matrix_view()'])
-            t3 = t2.split_2to3(0, [q1a, q1b])            
-            res_old=np.asarray([ 0., 14., 28., 42.,  1.,  2.,  3.,  4., 15., 16., 17., 18., 29., 30., 31., 32., 43., 44., 45., 46.,  5.,  6.,  7.,  8.,  9., 10., 11., 12., 13., 19., 20., 21., 22., 23., 24., 25., 26., 27., 33., 34., 35., 36., 37., 38., 39., 40., 41., 47., 48., 49., 50., 51., 52., 53., 54., 55.])               
-            self.assertTrue(np.all(t3.data==res_old))
-            print_vars(vars(),  ['t2.QSp'])
-            print_vars(vars(),  ['t3.QSp'])
-            #t2m = t3.merge_qsp((0, 1))
-            t2m = t3.merge_3to2((0, 1))
-            print_vars(vars(),  ['t2m.QSp', 't2m.size', 't2.size', 
-                't2m.nidx', 't2.nidx'])
-            print_vars(vars(),  ['t2m.data'])
-            print_vars(vars(),  ['t2m.Addr_idx'])
-            print_vars(vars(),  ['t2m.Block_idx'])
-            raise  
-        
-        
-                
-               
-        if 0:  
-            for i in range(1):
-                q0 = QspZ2.easy_init([1, -1], [8, 8])
-                q1 = QspZ2.easy_init([1, -1], [4, 2])
-                t2 = iTensor(QSp=[q0, q1])
-                t2.data[: ] = np.arange(t2.size)
-                #t2.show_data()
-                c2, _= t2.contract(t2, [0, 1], [0, 2])
-                
-                qa = QspZ2.easy_init([1, -1], [2, 2])
-                qb = QspZ2.easy_init([1, -1], [2, 2])
-                
-                t3 = t2.split_2to3(0, [qa, qb])
-                c3, _ = t3.contract(t3, [0, 1, 2], [0, 1, 3])
-                #c3.show_data()
-                self.assertTrue(np.all(c2.data==c3.data))
-       
+            q0 = qsp_any('U1', [1, 0, -1], [2, 2, 2])
+            q1 = qsp_any('U1', [-1, 0, 1], [2, 2, 2])
+            t = iTensor(QSp=[q0, q1])
+            t.data = np.arange(t.size)
+            print_vars(vars(),  ['t'])
+            for i in range(3):
+                a = t.get_element((i, i), (0, 0))
+                print_vars(vars(),  ['a'])
+            
 
-
-class performance_iTensor(object):
-    def __init__(self, symmetry):
-        self.symmetry = symmetry
-        pass
-    
-    def _permute(self, symmetry="U1", rank=8, dim=4, nqn=None,  NUM_OF_THREADS=8, iter_times=1000):
-        import os
-        os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
-        os.environ["OMP_SCHEDULE"] = "static"#"dynamic" 
-        import time
-        t = iTensorFactory.simple(rank=rank, dim=[dim]*rank, symmetry=symmetry, nqn=nqn)
-        buf = np.ndarray(t.data.size)
-        t.data[:] = np.arange(t.data.size)
-        r = rank//2
-        tensor_player.STATE = "record"
-        t1=t.permutation(list(range(r,rank)) + range(r), buffer=buf) 
-        tensor_player.STATE = "play"
-        def func(which):
-            array_permutation.permute_player_fort = \
-                    array_permutation.__getattribute__("permute_player_fort" + which)
-            #print "do schedule dynamic"
-            t0 = time.clock(); ta = time.time()
-            for i in range(iter_times):
-                t1=t.permutation(list(range(r,rank)) + range(r), buffer=buf)
-            tb = time.time(); t1 = time.clock()
-            if which == "_parallel_runtime":
-                #print os.environ["OMP_SCHEDULE"] 
-                which  = which +  "  " + os.environ["OMP_SCHEDULE"] 
-            print(which, "\t", t1-t0, tb-ta)
-
-
-        
-        import common_64_ifort as c64
-        c64.set_num_of_threads(NUM_OF_THREADS)
-
-        #func("")
-        #func("_parallel")        
-        func("_parallel_dynamic")
-        #func("_parallel_guided")
-        #func("_parallel_runtime")
-
-    def permute(self):
-        """
-            report:
-                for all trunc_dim parallel_dynamic is always faster than non-parallel
-                for trunc_dim <= 8,  parallel faster than non-parallel
-        """
-        for n in range(1, 8):
-            self._permute(symmetry="U1", rank=8, dim=13, nqn=5, NUM_OF_THREADS=n, iter_times=10)
-
-
-    def _contract(self, symmetry="U1", rank1=4, rank2=4, dim=4, 
-            nqn=None,  NUM_OF_THREADS=4, iter_times=1000):
-        import os
-        import common_64_ifort as c64
-        import time
-        os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
-        #c64.set_num_of_threads(NUM_OF_THREADS)
-        os.environ["OMP_SCHEDULE"] = "static"#"dynamic"#"dynamic" 
-        
-        T1 = iTensorFactory.simple(rank=rank1, dim=[dim]*rank1, symmetry=symmetry, nqn=nqn)
-        T2 = iTensorFactory.simple(rank=rank2, dim=[dim]*rank2, reverse=[0, 1], symmetry=symmetry, nqn=nqn)
-        #T2.QSp[0].reverse()
-        #T2.QSp[1].reverse()
-        #buf = np.ndarray(t.data.size)
-        #t.data[:] = np.arange(t.data.size)
-        tensor_player.STATE = "record"
-        T3=T1.contract_core(T2, 2)
-        tensor_player.STATE = "play"
-        #print "eeee"; exit()
-        buff = T3.data
-        
-        def func(which):
-            if which != "":
-                common_util.contract_core_player_fort = \
-                        c64.__getattribute__("contract_core_player_fort" + which)
-            #print "do schedule dynamic"
-            t0 = time.clock(); ta = time.time()
-            for i in range(iter_times):
-                T1.contract_core(T2, 2, data=buff)
-            tb = time.time(); t1 = time.clock()
-            if which == "_parallel_runtime":
-                #print os.environ["OMP_SCHEDULE"] 
-                which  = which +  "  " + os.environ["OMP_SCHEDULE"] 
-            print(which, "\t", t1-t0, tb-ta)
-
-        func("")
-        #func("_paralell_ordered")
-        #func("_paralell_critical")
-        func("_paralell_test")
-        #func("_paralell_reduction")
-        #func("_paralell_reduction_1")
-    
-    def contract(self):
-        self._contract(symmetry="U1", rank1=8, rank2=4, dim=16, nqn=3,  
-                NUM_OF_THREADS=6, iter_times=10)
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
@@ -4421,8 +4365,8 @@ if __name__ == "__main__":
            #'test_conj_new', 
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
-           'test_tensor_player_multiple', 
-           #'test_temp', 
+           #'test_tensor_player_multiple', 
+           'test_temp', 
         ]
         
         
