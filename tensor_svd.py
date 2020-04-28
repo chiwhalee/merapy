@@ -47,6 +47,7 @@ class iTensor_rank2_operation(object):
     
     @staticmethod
     def qr_rank2(tensor, totqn_on_which='q'):
+        
         """
             ref: schollwock 2010 p. 108
             M = QR
@@ -96,7 +97,7 @@ class iTensor_rank2_operation(object):
             ref: schollwock 2010 p. 108
             M = QR
         """
-        
+        raise NotImplemented
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
         
@@ -127,7 +128,6 @@ class iTensor_rank2_operation(object):
             Q.shift_qn(totqn, 1)
         else:
             R.shift_qn(totqn, 0)
-        
         for i in range(Q.nidx): 
             Q.set_block(i, qq[i].ravel(order='F'))
             R.set_block(i, rr[i].ravel(order='F'))
@@ -508,6 +508,44 @@ class iTensor_rank2_operation(object):
             mat_exp=mat_exp.ravel(order='F')
             tt.set_block(i, mat_exp)
         return res 
+
+    def polar_rank2(itensor):
+        """
+            polar decomposition 
+            Used in e.g. UVMPS algorithm. 
+        
+           
+        """
+        num_blocks = itensor.nidx 
+        tt = itensor  # a shorter name 
+        
+        uu = {}
+        pp = {}
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            mat = tt.get_block(i, linear=False)
+            
+            uu[i], pp[i] = scipy.linalg.polar(mat)
+            dim_list[i] = min(mat.shape)
+            
+            q0, q1 = tt.Addr_idx[:, i]
+            qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
+            qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
+        
+        totqn = tt.totQN.copy()
+        qsp_l = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
+        qsp_r = tt.qsp_class(tt.nidx, qn_list_l, dim_list)
+        U = iTensor(QSp=[tt.shape[0], qsp_l], dtype=tt.dtype)
+        P = iTensor(QSp=[qsp_r, tt.shape[1]], dtype=tt.dtype)
+        
+        for i in range(U.nidx): 
+            U.set_block(i, uu[i].ravel(order='F'))
+            P.set_block(i, pp[i].ravel(order='F'))
+                
+        return U, P        
 
     @classmethod
     def diagonal_rank2(cls, itensor, totQN=None):
@@ -1532,31 +1570,25 @@ class TestIt(unittest.TestCase):
                 self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
                 self.assertTrue(qr==t)
 
+
     def test_temp(self): 
         if 1:  #totqn ! =  qn_id 
             if 1:
                 np.random.seed(1234)
                 q = QspU1.easy_init([ 1, -1, ], [2, 1])
-                qsp = q.copy_many(5)
-                totqn = QspU1.QnClass(1)
-                t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
-                t = t.merge_qsp((0, 1), (2, 3, 4))
+                qsp = q.copy_many(4, reverse=(2, 3))
+                t = iTensor.example(qsp=qsp, totqn=None, symmetry='U1')
+                t = t.merge_qsp((0, 1), (2, 3))
                 #t = t.merge_qsp((0, 1, 2), (3, 4))
                 
-                
             if 1: 
-                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='q')
-                qr = q.dot(r)
-                self.assertTrue(qr.totQN==t.totQN and r.totQN._val==0)
-                self.assertTrue(qr==t)
+                u, p =Tensor_svd.polar_rank2(t)
+                up = u.dot(p)
+                self.assertTrue(up == t)
+                print_vars(vars(),  ['u'])
+                print_vars(vars(),  ['p'])
                 
-                print_vars(vars(),  ['t.shape', 'q.shape', 'r.shape'])
             
-            if 0: 
-                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='r')
-                qr = q.dot(r)
-                self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
-                self.assertTrue(qr==t)
     
 if __name__ == "__main__":
     if 0: #examine
@@ -1568,7 +1600,7 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           'test_eig', 
+           #'test_eig', 
            #'test_svd', 
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
@@ -1580,7 +1612,7 @@ if __name__ == "__main__":
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
            #'test_qr_rank2', 
-           #'test_temp', 
+           'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

@@ -525,7 +525,6 @@ class QuantSpaceBase(object):
         res.reverse()
         return res 
     
-    
     #@tensor_player(which="Qsp_copy")
     def copy(self, reverse=False):
         qns= [q.copy() for q in self.QNs[:self.nQN]]

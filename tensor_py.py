@@ -367,8 +367,11 @@ class iTensor(TensorBase):
     
     def get_block(self, i, linear=True, order='F'): 
         """
-        
+            params:
+                i: can either be an int or qn_id_tuple 
         """
+        if not isinstance(i, int):
+            i = self.get_idx(i)
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
         if linear:
@@ -562,7 +565,7 @@ class iTensor(TensorBase):
                 
                 if data_format == 'ndarray' and self.size<1000:
                     t = self.to_ndarray()
-                    temp = '(in matrix view)\n' + str(t)
+                    temp = '(in matrix view(only real part))\n' + str(t.round(5).real)
                 #elif data_format == 'none' :
                 #    temp = "...."
                 else:
@@ -682,10 +685,12 @@ class iTensor(TensorBase):
         print(self.__repr__(keys=['data'], fewer=0, show_frame=0))
     
     def show_struct(self): 
-        print_vars(vars(), ['self.Addr_idx[:,:self.nidx].T', 'self.Block_idx[:,:self.nidx].T', ], key_val_sep='=\n')
+        print_vars(vars(), ['self.Addr_idx[:,:self.nidx].T', 'self.Block_idx[:,:self.nidx].T', ], 
+                sep = '\n', head = 'result of show_struct:\n', 
+                key_val_sep='=')
         
     @staticmethod
-    def unit_tensor(rank, QSp, totQN=None):
+    def unit_tensor(rank, QSp, totQN=None, dtype=float):
         """
             Q:  注意区分几种情况，
             
@@ -703,10 +708,9 @@ class iTensor(TensorBase):
         
         """
         totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
-        
         if rank%2 != 0:
             raise ValueError("rank shold be even, rank=%s"%(rank, ))
-        t = iTensor(rank, QSp, totQN) 
+        t = iTensor(rank, QSp, totQN, dtype=dtype) 
         pTot = 1
         
         rank1 =t.rank//2 #use t.rank/2 would yeild a float 2.0
@@ -730,12 +734,14 @@ class iTensor(TensorBase):
         return t
     
     @staticmethod
-    def identity(qsp):
-        return iTensor.unit_tensor(2, qsp)
+    def identity(qsp, dtype=float):
+        if hasattr(qsp, 'QNs'):
+            qsp = qsp.copy_many(2, reverse=[1])
+        return iTensor.unit_tensor(2, qsp, dtype=dtype)
 
     def get_position(self, qn_ind_tuple):
         """
-            map qn_ind_tuple to idx,  i.e. a rank-dim index to linear index 
+            map a rank-dim index to linear index 
             
             this func is used in following way: 
                 p3=T3.get_position(iQN3[:T3.rank])
@@ -754,7 +760,10 @@ class iTensor(TensorBase):
         p=common_util.matrix_get_position(qn_ind_tuple, Dims)
         #assert p<self.idx_dim, (p, self.idx_dim)
         return p
-
+    
+    def get_idx(self, qn_id_tuple):
+        return self.idx[self.get_position(qn_id_tuple)]
+    
     def get_position_rev(self, index_linear):
         """ map a ind_linear to a tuple 
             see iTensor_GetPosition_rev
@@ -2100,19 +2109,15 @@ class iTensor(TensorBase):
 
         #for i in range(len(V_1n2)):  #这一段程序做了两件事：1.验证内线上维数相等，2.计算了totDim3
         for v12 in V_1n2:
-            pos1 = np.where(V1==v12)[0]
-            pos2 = np.where(V2==v12)[0]
+            pos1 = np.where(V1==v12)[0][0]
+            pos2 = np.where(V2==v12)[0][0]
             Vp1[k] = pos1
             k = k+1  #注意这里k接着上面的值了
             Vp2[j] = pos2
             j += 1   
             
-            if self.Dims[pos1[0]] != T2.Dims[pos2[0]]:
-                #raise Exception("Error, size of contract tensor does not match, V1=%s, V2=%s\nself=%s\nT2=%s"%(V1, V2, self, T2))
-                #msg ="""error, dim of index to be contracted not equal: %s, %s, 
-                #\n V1=%s, V2=%s, self.Dims=%s, T2.Dims=%s"""%(
-                #        self.type_name, T2.type_name, V1, V2, self.Dims, T2.Dims)
-                #msg ="""error, dim of index to be contracted not equal: {pos}""".format(locals())
+            if self.Dims[pos1] != T2.Dims[pos2]:  #note this checking is still not complete. One should check qsp1 == qsp2.conj() instead  
+            #if self.QSp[pos1] != T2.QSp[pos2].conj():
                 msg ="""error, dim of index to be contracted not equal: 
                     {0.type_name}, {1.type_name}
                     ind_label_1={V1}, ind_label_2={V2}, ind_label_1n2={V_1n2}
