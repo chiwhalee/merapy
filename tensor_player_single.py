@@ -1025,8 +1025,8 @@ class TestIt(unittest.TestCase):
         def func():
             t1 = iTensor.example(rank=4)
             t2 = iTensor.example(rank=4)
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3 = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3 = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
         
         for i in range(5):
             set_player_state_auto(iter=i, record_at=0, info=1)    

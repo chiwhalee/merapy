@@ -220,7 +220,7 @@ class TensorNetwork(object):
                 #合并出的tensor的序号为 nLeft
                 v1 = TNet.edges_left[:, nLeft-1]
                 v2 = G.edges[:, ord1[1]]
-                temp, legs= TNet.tlink[ord1[0]].contract(TNet.tlink[ord1[1]], V1=v1, V2=v2, out_Vc=False, use_buf= use_buf, info=info-1)
+                temp, legs= TNet.tlink[ord1[0]].contract(TNet.tlink[ord1[1]], V1=v1, V2=v2, return_v3=True, out_Vc=False, use_buf= use_buf, info=info-1)
                 TNet.tlink_left[nLeft]=temp 
                 rank = TNet.tlink_left[nLeft].rank
                 TNet.edges_left[0:rank, nLeft] = legs[0:rank]

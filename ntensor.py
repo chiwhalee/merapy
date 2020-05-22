@@ -181,6 +181,19 @@ class TensorBase(object):
         #res.data *= scalar  
         return res 
     
+    def __truediv__(self, scalar):
+        res = self.copy()
+        res.data /= scalar 
+        return res 
+    
+    def __itruediv__(self, scalar):
+        self.data /= scalar 
+        return self
+    
+    def __div__(self, scalar):
+        res = self.copy()
+        res.data /= scalar 
+        return res 
     
     def __imul__(self, scalar):
         self.data *= scalar
@@ -1152,7 +1165,7 @@ def contract_tensors_new(X, Y, indX, indY, use_buff=False):
         a = - np.arange(1, 1 + len(indX))
         V1[indX] = a
         V2[indY] = a
-        return X.contract(Y, V1, V2, use_buf=use_buff)[0]
+        return X.contract(Y, V1, V2, return_v3=True, use_buf=use_buff)[0]
 
 class nTensor(np.ndarray, TensorBase):
     def __new__(cls, shape, dtype=float, buffer=None, offset=0,

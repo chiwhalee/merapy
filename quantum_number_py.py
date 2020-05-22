@@ -610,6 +610,8 @@ class QuantSpaceBase(object):
         """ 
              although named add, acturally tensorprod of self and other
             todo: change the name to prod in future 
+            note:
+                after tensor prod, the value of the qn in the qsp is not ordered. 
         """
         if self.nQN==0:
             return other.copy()    #need copy here?

@@ -44,15 +44,17 @@ from merapy.utilities import print_vars, save
 """
 
 class iTensor_rank2_operation(object):
-    
     @staticmethod
-    def qr_rank2(tensor, totqn_on_which='q'):
-        
+    def qr_rank2(tensor, which='left', r_unique=False, totqn_on_which='q'):
         """
+            params:
+                which: 
             ref: schollwock 2010 p. 108
             M = QR
         """
-        
+        if which  == 'right': 
+            tensor = tensor.T.conj()
+            #issue: this can be improved for performance
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
         
@@ -65,7 +67,13 @@ class iTensor_rank2_operation(object):
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
             
-            qq[i], rr[i] = linalg.qr(mat)
+            q, r = linalg.qr(mat)
+            if r_unique:
+                sign = np.sign(np.diag(r))
+                q = q * sign[np.newaxis,  :] #multiply on cols of q 
+                r = r * sign[:, np.newaxis]  #multiply on rows of r
+            qq[i], rr[i]  = q, r
+            
             dim_list[i] = min(mat.shape)
             
             q0, q1 = tt.Addr_idx[:, i]
@@ -88,12 +96,18 @@ class iTensor_rank2_operation(object):
         for i in range(Q.nidx): 
             Q.set_block(i, qq[i].ravel(order='F'))
             R.set_block(i, rr[i].ravel(order='F'))
-                
+        
+        if which == 'right':
+            Q = Q.T.conj()
+            R = R.T.conj()
+            return R, Q
         return Q, R        
 
     @staticmethod
     def qr_rank2_new(tensor, totqn_on_which='q'):
         """
+            I want to use shift_qn in this version, instead of complicated construction of the qsp for the common leg.
+            not completed yet. 
             ref: schollwock 2010 p. 108
             M = QR
         """
@@ -140,6 +154,8 @@ class iTensor_rank2_operation(object):
             return_trunc_err=False, totqn_on_which='s', 
         normalize_singular_val=True):  
         """
+            tensor = u*s*v
+            
             itensor should be prepare into a rank 2 tensor 
             
             this func also support the case when tensor.totqn not identity.
@@ -509,12 +525,27 @@ class iTensor_rank2_operation(object):
             tt.set_block(i, mat_exp)
         return res 
 
-    def polar_rank2(itensor):
+    def inverse_rank2(itensor):
+        """
+            the tensor is required to be square matrix
+        """
+        tt = itensor  # a shorter name 
+        res = tt.copy()
+        for i in range(tt.nidx):   # 遍历非零blocks
+            data = tt.get_block(i, linear=False, order='F')
+            data_inv = scipy.linalg.inv(data)
+            data_inv = data_inv.ravel(order='F')
+            res.set_block(i, data_inv)
+        return res 
+
+
+    def polar_rank2(itensor, side='right'):
         """
             polar decomposition 
             Used in e.g. UVMPS algorithm. 
-        
-           
+            note:
+                1. Although a rank-2 tensor, the left and right qsp need not to be reverse of each other.
+                2. the order of qn in the common leg of U and P can be changed so that U*P still equals the itensor. 
         """
         num_blocks = itensor.nidx 
         tt = itensor  # a shorter name 
@@ -528,12 +559,17 @@ class iTensor_rank2_operation(object):
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
             
-            uu[i], pp[i] = scipy.linalg.polar(mat)
-            dim_list[i] = min(mat.shape)
+            uu[i], pp[i] = scipy.linalg.polar(mat, side)
+            if side == 'right' :
+                dim_list[i] = uu[i].shape[1]
+            else:
+                uu[i], pp[i] = pp[i], uu[i]
+                dim_list[i] = uu[i].shape[0]
             
             q0, q1 = tt.Addr_idx[:, i]
             qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
             qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
+            #print_vars(vars(),  ['i', 'q0', 'q1', 'mat.shape', 'uu[i].shape', 'pp[i].shape'])
         
         totqn = tt.totQN.copy()
         qsp_l = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
@@ -541,14 +577,17 @@ class iTensor_rank2_operation(object):
         U = iTensor(QSp=[tt.shape[0], qsp_l], dtype=tt.dtype)
         P = iTensor(QSp=[qsp_r, tt.shape[1]], dtype=tt.dtype)
         
+        
         for i in range(U.nidx): 
+        #for i in range(tt.nidx): 
+            #print_vars(vars(),  ['i'])
             U.set_block(i, uu[i].ravel(order='F'))
             P.set_block(i, pp[i].ravel(order='F'))
                 
         return U, P        
 
     @classmethod
-    def diagonal_rank2(cls, itensor, totQN=None):
+    def diag_rank2(cls, itensor, totQN=None):
         """
             store all diagonal elements of M in a 1D array
         
@@ -575,6 +614,7 @@ class iTensor_rank2_operation(object):
             data = itensor.get_block(i, linear=False)
             res += data.trace()
         return res 
+    
 
 class Tensor_svd(iTensor_rank2_operation):
     """
@@ -989,7 +1029,9 @@ class Tensor_svd(iTensor_rank2_operation):
                 common_util.matrix_eigen_vector(V_buf, E[: esize])
             else:
                 V_buf = V_buf.T  #this may be not needed as V_buf should be hermit, but, I do some tests in which it is not hernmit
+                warnings.warn('I changed here')
                 E, V_buf = np.linalg.eigh(V_buf)
+                #E, V_buf = np.linalg.eig(V_buf)
                 
             V_buf = V_buf.ravel(order="F")
 
@@ -1332,7 +1374,7 @@ class TestIt(unittest.TestCase):
                 #print_vars(vars(), ['a.to_ndarray().shape', 't.to_ndarray().shape'])
                 #print_vars(vars(), ['a.to_ndarray()[:3][:3]', 't.to_ndarray()[:3][:3]'])
                 #self.assertTrue(np.allclose(a.to_ndarray(), t.to_ndarray(), 1e-14)) 
-                overlap = t.contract(a, [0, 1], [0, 1])[0].data[0]
+                overlap = t.contract(a, [0, 1], [0, 1]).data[0]
                 #print_vars(vars(), ['t.norm()', 't.to_ndarray().shape', 'overlap'])
                 old = {0:0.96904496136089668, 1: 0.99202622859714307}[ii]
                 self.assertAlmostEquals(overlap, old, 12)
@@ -1468,7 +1510,7 @@ class TestIt(unittest.TestCase):
                 #tt.show_data()
                 print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
                 print_vars(vars(),  ['tt.shape'])
-                c, _ = tt.contract(tt.conj(), [0, 1], [0, 2])
+                c = tt.contract(tt.conj(), [0, 1], [0, 2])
                 self.assertTrue(c.is_close_to(1))
                 
     def test_exp_rank2(self): 
@@ -1505,7 +1547,7 @@ class TestIt(unittest.TestCase):
             tr2 = Tensor_svd.trace_rank2(t)
             self.assertAlmostEqual(tr1, tr2, 10)
     
-    def test_diagonal_rank2(self): 
+    def test_diag_rank2(self): 
         if 1: 
             np.random.seed(1234)
             q1= QspU1.easy_init([0, 1, -1], [4, 2, 5])
@@ -1516,7 +1558,7 @@ class TestIt(unittest.TestCase):
             t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
             tm = t.matrix_view()
             tr1 = tm.diagonal()
-            tr2 = Tensor_svd.diagonal_rank2(t)
+            tr2 = Tensor_svd.diag_rank2(t)
             self.assertTrue(np.allclose(tr1, tr2, 1e-10))
 
 
@@ -1570,8 +1612,7 @@ class TestIt(unittest.TestCase):
                 self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
                 self.assertTrue(qr==t)
 
-
-    def test_temp(self): 
+    def test_polar_rank2(self): 
         if 1:  #totqn ! =  qn_id 
             if 1:
                 np.random.seed(1234)
@@ -1581,12 +1622,64 @@ class TestIt(unittest.TestCase):
                 t = t.merge_qsp((0, 1), (2, 3))
                 #t = t.merge_qsp((0, 1, 2), (3, 4))
                 
-            if 1: 
+            if 1: #side = right 
                 u, p =Tensor_svd.polar_rank2(t)
                 up = u.dot(p)
                 self.assertTrue(up == t)
-                print_vars(vars(),  ['u'])
-                print_vars(vars(),  ['p'])
+                #print_vars(vars(),  ['u'])
+                #print_vars(vars(),  ['p'])
+                #print_vars(vars(),  ['u.dot(u.T.conj())'])
+            
+            if 1: #side = left
+                p, u =Tensor_svd.polar_rank2(t, side='left')
+                pu = p.dot(u)
+                self.assertTrue(pu == t)
+                #print_vars(vars(),  ['u.dot(u.T.conj())'])
+    
+    def test_inverse_rank2(self): 
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspU1.easy_init([0, 1, -1, ] , [2, 2, 3])
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t1 = Tensor_svd.inverse_rank2(t)
+            tt1 = t.dot(t1)
+            diag = Tensor_svd.diag_rank2(tt1)
+            self.assertTrue(np.allclose(diag, 1))
+
+    def test_temp(self): 
+        if 0:  #totqn ! =  qn_id 
+            if 1:
+                np.random.seed(1234)
+                q = QspU1.easy_init([ 1, -1, ], [2, 1])
+                qsp = q.copy_many(4, reverse=(2, 3))
+                t = iTensor.example(qsp=qsp, totqn=None, symmetry='U1')
+                t = t.merge_qsp((0, 1), (2, 3))
+                #t = t.merge_qsp((0, 1, 2), (3, 4))
+                
+            if 1: #side = right 
+                u, p =Tensor_svd.polar_rank2(t)
+                up = u.dot(p)
+                self.assertTrue(up == t)
+                #print_vars(vars(),  ['u'])
+                #print_vars(vars(),  ['p'])
+                #print_vars(vars(),  ['u.dot(u.T.conj())'])
+            
+            if 1: #side = left
+                p, u =Tensor_svd.polar_rank2(t, side='left')
+                pu = p.dot(u)
+                self.assertTrue(pu == t)
+                #print_vars(vars(),  ['u.dot(u.T.conj())'])
+        if 0: 
+            t = iTensor.load('/tmp/aaa')
+            print_vars(vars(),  ['t.sh'])
+            print_vars(vars(),  ['t'])
+            u, p =Tensor_svd.polar_rank2(t)
+            up = u.dot(p)
+            self.assertTrue(up == t)
+        np.set_printoptions(5)
                 
             
     
@@ -1608,10 +1701,11 @@ if __name__ == "__main__":
            #'test_eig_rank2', 
            #'test_exp_rank2', 
            #'test_trace_rank2', 
-           #'test_diagonal_rank2', 
+           #'test_diag_rank2', 
            #'test_group_legs', 
            #'test_svd_rank2_totqn_not_id', 
            #'test_qr_rank2', 
+           #'test_polar_rank2', 
            'test_temp', 
         ]
         for a in add_list: 

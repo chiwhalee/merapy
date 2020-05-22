@@ -928,6 +928,9 @@ def set_player_state_manual(state, tape_id=None, info=0):
     if info>0:
         print('set state of tape %d to %s'%(tape_id, state))
 
+def use_tensor_player(func):   #a decorator 
+    #to implement 
+    pass
 
 def get_player_state(tape_id=None):
     tape_id = tape_id if tape_id is not None else 0
@@ -972,8 +975,8 @@ class TestIt(unittest.TestCase):
             set_player_state_auto(iter=i, record_at=1, info=1)    
             t1 = iTensor.example(rank=4)
             t2 = iTensor.example(rank=4)
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-            t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3 = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
+            t3 = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
             t3.permutation([0, 2, 3, 1, 4, 5])
             t3.permutation([0, 2, 3, 1, 4, 5])
         #tensor_player.STATE = 'stop'
