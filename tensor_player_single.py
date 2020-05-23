@@ -130,13 +130,13 @@ def tensor_player(which):
 
         if 1:   #define recorder and player
             def init_recorder(self, rank,  QSp, totQN, order="F",  
-                    buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, ):
                 """
                     这种做法有些过于激进, 更安全的是下面的 data_entrance_recorder/player 
                 
                 """
                 func(self, rank,  QSp, totQN, order="F",  
-                    buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, shallow=shallow)
+                    buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, )
                 
                 struct_dict = self.__dict__.copy()
                 if has_data:
@@ -146,7 +146,7 @@ def tensor_player(which):
             
             #@profile
             def init_player(self, rank,  QSp, totQN, order="F",  
-                    buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, ):
     
                 #following is wrong,  because change self wold affect inner.tape,  e.g. append data attr
                 #self.__dict__ = inner.tape[inner.calls]     

@@ -120,7 +120,8 @@ class iTensor(TensorBase):
     #BUFFER_ON = False
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
-            buffer=None, use_buf=False, index_data=True, has_data=True, shallow=False):
+            buffer=None, use_buf=False, index_data=True, has_data=True, init_data=None, 
+            ):
         """
             params: 
                 totQN : 
@@ -129,8 +130,6 @@ class iTensor(TensorBase):
 
                 attention_here here the default ordering of quantum number combination is changed from fortran to C 
                 
-                shallow: 
-                    only structure or with data
                 self.Dims[i]:  
                     在leg i 对应的空间维数
                 buf_ref: 
@@ -385,6 +384,8 @@ class iTensor(TensorBase):
         return [self.QSp[i].Dims[qn_id_tuple[i]] for i in range(self.rank)]
     
     def set_block(self, i, data): 
+        if not isinstance(i, int):
+            i = self.get_idx(i)
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
         #self.data[p: p + size] = data

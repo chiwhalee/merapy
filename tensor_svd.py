@@ -45,7 +45,7 @@ from merapy.utilities import print_vars, save
 
 class iTensor_rank2_operation(object):
     @staticmethod
-    def qr_rank2(tensor, which='left', r_unique=False, totqn_on_which='q'):
+    def qr_rank2(tensor, which='left', r_unique=False, mode='reduced', totqn_on_which='q'):
         """
             params:
                 which: 
@@ -67,14 +67,16 @@ class iTensor_rank2_operation(object):
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
             
-            q, r = linalg.qr(mat)
+            q, r = linalg.qr(mat, mode=mode)
             if r_unique:
                 sign = np.sign(np.diag(r))
                 q = q * sign[np.newaxis,  :] #multiply on cols of q 
                 r = r * sign[:, np.newaxis]  #multiply on rows of r
             qq[i], rr[i]  = q, r
-            
-            dim_list[i] = min(mat.shape)
+            if mode == 'reduced':
+                dim_list[i] = min(mat.shape)
+            else:
+                dim_list[i] = mat.shape[0]
             
             q0, q1 = tt.Addr_idx[:, i]
             qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 

@@ -145,14 +145,13 @@ def tensor_player(which):
     def inner(func):
         if 1:   #define recorder and player
             def init_recorder(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
-                    buffer=None, use_buf=False, index_data=True, has_data=True, 
-                    shallow=False):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, ):
                 """
                     这种做法有些过于激进, 更安全的是下面的 data_entrance_recorder/player 
                 
                 """
                 func(self, rank=rank,  QSp=QSp, totQN=totQN, order="F",  dtype=dtype, 
-                    buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, shallow=shallow)
+                    buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, )
                 #struct_dict = self.__dict__.copy()
                 struct_dict = self.__dict__
                 
@@ -164,8 +163,7 @@ def tensor_player(which):
             
             #@profile
             def init_player(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
-                    buffer=None, use_buf=False, index_data=True, has_data=True, 
-                    shallow=False):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, ):
 
                 #following is not deepcopy, self and tape share same value, but NOT share key
                 #self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()
