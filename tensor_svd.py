@@ -52,6 +52,9 @@ class iTensor_rank2_operation(object):
             ref: schollwock 2010 p. 108
             M = QR
         """
+        if mode != 'reduced':
+            return iTensor_rank2_operation._qr_rank2_complete(
+                    tensor, which, r_unique, 'complete', totqn_on_which)
         if which  == 'right': 
             tensor = tensor.T.conj()
             #issue: this can be improved for performance
@@ -67,23 +70,20 @@ class iTensor_rank2_operation(object):
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
             
-            q, r = linalg.qr(mat, mode=mode)
+            #q, r = linalg.qr(mat, mode=mode)
+            q, r = linalg.qr(mat)
             if r_unique:
                 sign = np.sign(np.diag(r))
                 q = q * sign[np.newaxis,  :] #multiply on cols of q 
                 r = r * sign[:, np.newaxis]  #multiply on rows of r
             qq[i], rr[i]  = q, r
-            if mode == 'reduced':
-                dim_list[i] = min(mat.shape)
-            else:
-                dim_list[i] = mat.shape[0]
+            dim_list[i] = min(mat.shape)
             
             q0, q1 = tt.Addr_idx[:, i]
             qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
             qn_list_r[i] = tt.QSp[1].QNs[q1].copy()
             
         totqn = tt.totQN.copy()
-        
         if totqn_on_which == 'q':
             qsp_q = tt.qsp_class(tt.nidx, qn_list_r, dim_list)
             qsp_r = qsp_q.copy(reverse=True)
@@ -92,8 +92,10 @@ class iTensor_rank2_operation(object):
             qsp_r = tt.qsp_class(tt.nidx, qn_list_l, dim_list)
             qsp_q = qsp_r.copy(reverse=True)
             totqn_q, totqn_r = None, totqn
+            
         Q = iTensor(QSp=[tt.QSp[0], qsp_q], dtype=tt.dtype, totQN=totqn_q)
         R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype, totQN=totqn_r)
+
         
         for i in range(Q.nidx): 
             Q.set_block(i, qq[i].ravel(order='F'))
@@ -104,7 +106,70 @@ class iTensor_rank2_operation(object):
             R = R.T.conj()
             return R, Q
         return Q, R        
-
+    
+    def _qr_rank2_complete(tensor, which='left', r_unique=False, mode='reduced', totqn_on_which='q'):
+        """
+            params:
+                which: 
+            ref: schollwock 2010 p. 108
+            M = QR
+        """
+        if which  == 'right': 
+            tensor = tensor.T.conj()
+            #issue: this can be improved for performance
+        num_blocks = tensor.nidx 
+        tt = tensor  # a shorter name 
+        
+        qq = {}
+        rr = {}
+        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        
+        for i in range(tt.nidx):   # 遍历非零blocks
+            mat = tt.get_block(i, linear=False)
+            q0, q1 = tt.Addr_idx[:, i]
+            q0 = tt.QSp[0].QNs[q0].val 
+            q1 = tt.QSp[1].QNs[q1].val 
+            M, N = mat.shape
+            if M<N:
+                raise  # M must not smaller than N 
+            #q, r = linalg.qr(mat, mode=mode)
+            q, r = linalg.qr(mat, mode='reduced')
+            if r_unique:
+                sign = np.sign(np.diag(r))
+                q = q * sign[np.newaxis,  :] #multiply on cols of q 
+                r = r * sign[:, np.newaxis]  #multiply on rows of r
+            qq[q0], rr[q1] = q, r 
+            
+        totqn = tt.totQN.copy()
+        qsp_q = tt.QSp[1].copy(reverse=0)
+        qsp_r = qsp_q.copy(reverse=1)
+        if totqn_on_which == 'q':
+            totqn_q, totqn_r = totqn, None
+        else:
+            totqn_q, totqn_r = None, totqn
+            
+        Q = iTensor(QSp=[tt.QSp[0], qsp_q], dtype=tt.dtype, totQN=totqn_q)
+        Q.data[:] = 0
+        R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype, totQN=totqn_r)
+        R.data[:] = 0
+        #print_vars(vars(),  ['tt.sh', 'Q.sh', 'R.sh'])
+        for i in range(Q.nidx):
+            q0, q1 = Q.Addr_idx[:, i] 
+            q0 = Q.QSp[0].QNs[q0].val 
+            if q0 in qq:
+                Q.set_block(i, qq[q0].ravel(order='F'))
+        for i in range(R.nidx):
+            q0, q1 = R.Addr_idx[:, i] 
+            q1 = R.QSp[1].QNs[q1].val 
+            if q1 in rr:
+                R.set_block(i, rr[q1].ravel(order='F'))
+            
+        if which == 'right':
+            Q = Q.T.conj()
+            R = R.T.conj()
+            return R, Q
+        return Q, R        
+    
     @staticmethod
     def qr_rank2_new(tensor, totqn_on_which='q'):
         """
@@ -1563,7 +1628,6 @@ class TestIt(unittest.TestCase):
             tr2 = Tensor_svd.diag_rank2(t)
             self.assertTrue(np.allclose(tr1, tr2, 1e-10))
 
-
     def test_qr_rank2(self): 
         np.set_printoptions(5)
         if 1: 
@@ -1652,37 +1716,71 @@ class TestIt(unittest.TestCase):
             self.assertTrue(np.allclose(diag, 1))
 
     def test_temp(self): 
+        pass
+        np.set_printoptions(5)
+        if 1: 
+            np.random.seed(1234)
+            q1 = QspU1.easy_init([0, 1, -1], [3, 2, 4])
+            q2 = QspU1.easy_init([0, -1, 1], [3, 2, 2])
+            qsp = [q1, q2]
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
+            print_vars(vars(),  ['t'])
+            q, r= Tensor_svd.qr_rank2(t, mode='complete')
+            qr = q.dot(r)
+            print_vars(vars(),  ['qr==t'])
+            self.assertTrue(qr==t)
+            print_vars(vars(),  ['qr.shape', 't.shape'])
+            #print_vars(vars(),  ['q.dot(q)'])
+            #print_vars(vars(),  ['q.shape'])
+            #qq = q.dot(q.T.conj())
+            qq = q.T.conj().dot(q)
+            print_vars(vars(),  ['qq'])
+            
         if 0:  #totqn ! =  qn_id 
             if 1:
                 np.random.seed(1234)
                 q = QspU1.easy_init([ 1, -1, ], [2, 1])
-                qsp = q.copy_many(4, reverse=(2, 3))
-                t = iTensor.example(qsp=qsp, totqn=None, symmetry='U1')
-                t = t.merge_qsp((0, 1), (2, 3))
+                qsp = q.copy_many(5)
+                totqn = QspU1.QnClass(1)
+                t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
+                t = t.merge_qsp((0, 1), (2, 3, 4))
                 #t = t.merge_qsp((0, 1, 2), (3, 4))
                 
-            if 1: #side = right 
-                u, p =Tensor_svd.polar_rank2(t)
-                up = u.dot(p)
-                self.assertTrue(up == t)
-                #print_vars(vars(),  ['u'])
-                #print_vars(vars(),  ['p'])
-                #print_vars(vars(),  ['u.dot(u.T.conj())'])
-            
-            if 1: #side = left
-                p, u =Tensor_svd.polar_rank2(t, side='left')
-                pu = p.dot(u)
-                self.assertTrue(pu == t)
-                #print_vars(vars(),  ['u.dot(u.T.conj())'])
-        if 0: 
-            t = iTensor.load('/tmp/aaa')
-            print_vars(vars(),  ['t.sh'])
-            print_vars(vars(),  ['t'])
-            u, p =Tensor_svd.polar_rank2(t)
-            up = u.dot(p)
-            self.assertTrue(up == t)
-        np.set_printoptions(5)
+            if 0:
+                q1 = QspU1.easy_init([0, 1, -1], [5, 1, 4])
+                q2 = QspU1.easy_init([1, 0, 2], [3, 2, 6])
+                totqn = QspU1.QnClass(1)
+                qsp = [q1, q2]
+                t = iTensor.example(qsp=qsp, rank=2, totqn=totqn,  symmetry='U1')
                 
+            if 1: 
+                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='q')
+                qr = q.dot(r)
+                self.assertTrue(qr.totQN==t.totQN and r.totQN._val==0)
+                self.assertTrue(qr==t)
+            
+            if 1: 
+                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='r')
+                qr = q.dot(r)
+                self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
+                self.assertTrue(qr==t)
+        
+        if 1:
+            from merapy import qsp_any
+            symm = 'U1'
+            #D=qsp_any(symm, [0, 1, -1, 2, -2], [2, 1, 1, 1, 1])
+            D=qsp_any(symm, [0, 1, -1], [4, 4, 4])
+            Dr = D.copy(reverse=1)
+            d = qsp_any(symm, [1, -1], [1, 1])
+            A = iTensor(QSp=[D, Dr, d])
+            print_vars(vars(),  ['A.sh'])
+            A.data = np.random.random(A.size)
+            #Al, _ = MPS.normalize_1site(A, 'left', 'qr', full_matrices=1)
+            A = A.permutation([0, 2, 1]).merge_qsp((0, 1))
+            print_vars(vars(),  ['A.sh'])
+            q, r = Tensor_svd.qr_rank2(A, mode='complete')
+            print_vars(vars(),  ['q.sh', 'r.sh'])
+            
             
     
 if __name__ == "__main__":
