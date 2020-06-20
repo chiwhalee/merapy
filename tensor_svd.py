@@ -16,6 +16,7 @@ import numpy as np
 import numpy.linalg as linalg
 import scipy 
 import scipy.linalg 
+from scipy.linalg import null_space
 from scipy.sparse.linalg import eigs, eigsh 
 from collections import OrderedDict 
 import warnings 
@@ -605,7 +606,6 @@ class iTensor_rank2_operation(object):
             res.set_block(i, data_inv)
         return res 
 
-
     def polar_rank2(itensor, side='right'):
         """
             polar decomposition 
@@ -646,8 +646,6 @@ class iTensor_rank2_operation(object):
         
         
         for i in range(U.nidx): 
-        #for i in range(tt.nidx): 
-            #print_vars(vars(),  ['i'])
             U.set_block(i, uu[i].ravel(order='F'))
             P.set_block(i, pp[i].ravel(order='F'))
                 
@@ -682,6 +680,49 @@ class iTensor_rank2_operation(object):
             res += data.trace()
         return res 
     
+    def null_space_rank2(itensor):
+        """
+            used in VUMPS algorithm to expand dim 
+        """
+        tt = itensor  # a shorter name 
+        res = tt.copy()
+        #dim = 
+        #print_vars(vars(),  ['q0', 'q1'])
+        dim_dict = OrderedDict()
+        data_dict = {}
+        for i in range(tt.nidx):   # 遍历非零blocks
+            qi0, qi1 = tt.Addr_idx[:, i]
+            data = tt.get_block(i, linear=False, order='F')
+            assert data.shape[0] <= data.shape[1], (qi0, qi1, data.shape)
+            null = scipy.linalg.null_space(data)
+            #print_vars(vars(),  ['data.shape', 'null.shape'])
+            qn1_conj  = tt.QSp[1].QNs[qi1].conj()._val 
+            dim_dict[qn1_conj ] = null.shape[1]
+            data_dict[qn1_conj] = null
+        #print_vars(vars(),  ['dim_dict'])
+        
+        qsp0 = tt.shape[1].conj()
+        #qns = [q.conj() for q in qsp0.QNs]
+        qncls = tt.qsp_class.QnClass 
+        #qns = [q.conj() for q in qsp0.QNs if q.conj()._val in dim_dict]
+        qns= [qncls(i) for i in dim_dict]
+        #dims = [dim_dict[qi] for qi in range(qsp0.nQN)]
+        dims = [dim_dict.get(q.conj()._val, 0) for q in qns]
+        qsp1 = qsp0.__class__(len(qns), qns, dims)
+        #print_vars(vars(),  ['qsp1'])
+        res = iTensor(QSp=[qsp0, qsp1], dtype=tt.dtype)
+        for i in range(res.nidx):
+            qi0, qi1 = res.Addr_idx[:, i]
+            qn0 = res.shape[0].QNs[qi0]._val 
+            #dim  =  res.Block_idx[1, i]
+            #if dim == 0:
+            #    continue 
+            data = data_dict[qn0]
+            #print_vars(vars(),  ['res.get_block_shape(i)'])
+            #print_vars(vars(),  ['qi0', 'qi1', 'qn0', 'data.shape'])
+            res.set_block(i, data.ravel(order='F'))
+        return res 
+
 
 class Tensor_svd(iTensor_rank2_operation):
     """
@@ -1715,71 +1756,55 @@ class TestIt(unittest.TestCase):
             diag = Tensor_svd.diag_rank2(tt1)
             self.assertTrue(np.allclose(diag, 1))
 
-    def test_temp(self): 
-        pass
+    def test_null_space_rank2(self): 
         np.set_printoptions(5)
-        if 1: 
-            np.random.seed(1234)
-            q1 = QspU1.easy_init([0, 1, -1], [3, 2, 4])
-            q2 = QspU1.easy_init([0, -1, 1], [3, 2, 2])
-            qsp = [q1, q2]
-            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
-            print_vars(vars(),  ['t'])
-            q, r= Tensor_svd.qr_rank2(t, mode='complete')
-            qr = q.dot(r)
-            print_vars(vars(),  ['qr==t'])
-            self.assertTrue(qr==t)
-            print_vars(vars(),  ['qr.shape', 't.shape'])
-            #print_vars(vars(),  ['q.dot(q)'])
-            #print_vars(vars(),  ['q.shape'])
-            #qq = q.dot(q.T.conj())
-            qq = q.T.conj().dot(q)
-            print_vars(vars(),  ['qq'])
-            
-        if 0:  #totqn ! =  qn_id 
-            if 1:
-                np.random.seed(1234)
-                q = QspU1.easy_init([ 1, -1, ], [2, 1])
-                qsp = q.copy_many(5)
-                totqn = QspU1.QnClass(1)
-                t = iTensor.example(qsp=qsp, totqn=totqn, symmetry='U1')
-                t = t.merge_qsp((0, 1), (2, 3, 4))
-                #t = t.merge_qsp((0, 1, 2), (3, 4))
-                
-            if 0:
-                q1 = QspU1.easy_init([0, 1, -1], [5, 1, 4])
-                q2 = QspU1.easy_init([1, 0, 2], [3, 2, 6])
-                totqn = QspU1.QnClass(1)
-                qsp = [q1, q2]
-                t = iTensor.example(qsp=qsp, rank=2, totqn=totqn,  symmetry='U1')
-                
-            if 1: 
-                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='q')
-                qr = q.dot(r)
-                self.assertTrue(qr.totQN==t.totQN and r.totQN._val==0)
-                self.assertTrue(qr==t)
-            
-            if 1: 
-                q, r =Tensor_svd.qr_rank2(t, totqn_on_which='r')
-                qr = q.dot(r)
-                self.assertTrue(qr.totQN==t.totQN and q.totQN._val==0)
-                self.assertTrue(qr==t)
-        
+        if 0:
+            A = np.random.random((3, 5))
+            print_vars(vars(),  ['A'])
+            b = null_space(A)
+            print_vars(vars(),  ['b.shape'])
+            print_vars(vars(),  ['b'])
         if 1:
-            from merapy import qsp_any
-            symm = 'U1'
-            #D=qsp_any(symm, [0, 1, -1, 2, -2], [2, 1, 1, 1, 1])
-            D=qsp_any(symm, [0, 1, -1], [4, 4, 4])
-            Dr = D.copy(reverse=1)
-            d = qsp_any(symm, [1, -1], [1, 1])
-            A = iTensor(QSp=[D, Dr, d])
-            print_vars(vars(),  ['A.sh'])
-            A.data = np.random.random(A.size)
-            #Al, _ = MPS.normalize_1site(A, 'left', 'qr', full_matrices=1)
-            A = A.permutation([0, 2, 1]).merge_qsp((0, 1))
-            print_vars(vars(),  ['A.sh'])
-            q, r = Tensor_svd.qr_rank2(A, mode='complete')
-            print_vars(vars(),  ['q.sh', 'r.sh'])
+            #np.random.seed(1234)
+            q0 = QspU1.easy_init([0, 1, -1, ] , [2, 2, 3])
+            q1 = QspU1.easy_init([0, 1, -1, 2] , [4, 4, 5, 3])
+            t = iTensor.example(qsp=[q0, q1], rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t1 = Tensor_svd.null_space_rank2(t)
+            temp = t.dot(t1)
+            self.assertTrue(np.allclose(temp.data, 0))
+            
+    def test_temp(self): 
+        np.set_printoptions(5)
+        if 0:
+            A = np.random.random((3, 5))
+            print_vars(vars(),  ['A'])
+            b = null_space(A)
+            print_vars(vars(),  ['b.shape'])
+            print_vars(vars(),  ['b'])
+        if 0:
+            #np.random.seed(1234)
+            q0 = QspU1.easy_init([0, 1] ,  [2,  2, ])
+            q1 = QspU1.easy_init([0, -1] , [4,  0, ])
+            t = iTensor.example(qsp=[q0, q1], rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = np.arange(t.size)
+            print_vars(vars(),  ['t.size'])
+            print_vars(vars(),  ['t'])
+            raise  
+            
+        if 1:
+            #np.random.seed(1234)
+            q0 = QspU1.easy_init([0, 1, -1, ] , [2, 2, 3])
+            q1 = QspU1.easy_init([0, 1, -1, 2] , [4, 4, 5, 4])
+            t = iTensor.example(qsp=[q0, q1], rank=2, symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+            t1 = Tensor_svd.null_space_rank2(t)
+            temp = t.dot(t1)
+            self.assertTrue(np.allclose(temp.data, 0))
+            
             
             
     
@@ -1806,6 +1831,7 @@ if __name__ == "__main__":
            #'test_svd_rank2_totqn_not_id', 
            #'test_qr_rank2', 
            #'test_polar_rank2', 
+           #'test_null_space_rank2', 
            'test_temp', 
         ]
         for a in add_list: 
