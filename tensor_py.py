@@ -264,11 +264,12 @@ class iTensor(TensorBase):
             temp *= QSp[i].nQN
         self.idx_dim = temp   # 量子数组合 总数目 
 
-        self.idx=np.ndarray((self.idx_dim, ), int)   #-1                
+        self.idx = np.ndarray((self.idx_dim, ), int)   #-1                
         self.idx[: ] = self.idx_dim
-        self.Block_idx=np.ndarray((3, self.idx_dim),dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
+        #self.idx[: ] = -1 
+        self.Block_idx = np.ndarray((3, self.idx_dim), dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
         # 实际使用的addr_inx的长度为 self.nidx
-        self.Addr_idx=np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')        
+        self.Addr_idx = np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')        
         
         #iQN[i]用作leg i 上的量子数 计数
         iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
@@ -288,7 +289,7 @@ class iTensor(TensorBase):
                 d = 1
                 for i in range(rank):  #计算某一block的data size 
                     d = d*QSp[i].Dims[iQN[i]]
-
+                
                 self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
                 
                 self.Block_idx[0, nidx] = totDim  #data block在self.data中的position
@@ -298,12 +299,11 @@ class iTensor(TensorBase):
                 #记录不为0的量子数组合，在所有量子数组合中的位置 Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对每一个iTensor都定义了这个函数 Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
                 self.Addr_idx[0, nidx] = 0 #for rank=0
                 self.Addr_idx[0:rank, nidx] = iQN[0:rank]
-                nidx  += 1 
-                totDim   += d   #最终得到self.data 的总长度
-                
+                nidx += 1 
+                totDim += d   #最终得到self.data 的总长度
             
             #遍历所有的量子数组合
-            if order == "F": 
+            if order == 'F': 
                 inc = 1
                 i = 0
                 #attention_please  这里实际上意味着按照 fortran order 对量子数组合排序的
@@ -314,7 +314,7 @@ class iTensor(TensorBase):
                     else:
                         iQN[i] = 0
                         i = i+1
-            elif order == "C":
+            elif order == 'C':
                 inc = True
                 i = rank-1
                 while inc==True and i>= 0:
@@ -324,7 +324,9 @@ class iTensor(TensorBase):
                     else:
                         iQN[i] = 0
                         i = i-1
-
+        
+        self.Addr_idx = self.Addr_idx[:, :nidx]
+        self.Block_idx = self.Block_idx[:, :nidx]
         self.nidx = nidx
         self.totDim = totDim
     
@@ -444,6 +446,10 @@ class iTensor(TensorBase):
         return self.QSp[0].__class__
     
     @property
+    def name(self):
+        return self.type_name
+    
+    @property
     def symmetry(self): 
         return self.qsp_class.QnClass.SYMMETRY 
     
@@ -486,8 +492,7 @@ class iTensor(TensorBase):
         @property
         def T(self): 
             #assert self.rank == 2 
-            return self.transpose([1, 0])
-        
+            return self.permutation([1, 0])
         
     @classmethod
     def buff_free(cls):
@@ -767,7 +772,11 @@ class iTensor(TensorBase):
         return p
     
     def get_idx(self, qn_id_tuple):
-        return self.idx[self.get_position(qn_id_tuple)]
+        p = self.get_position(qn_id_tuple)
+        if p >= self.idx_dim:  # wrong qn_id_tuple
+            return -1 
+        i = self.idx[p]
+        return int(i)   #convert np.int64 to int 
     
     def get_position_rev(self, index_linear):
         """ map a ind_linear to a tuple 
@@ -2371,7 +2380,15 @@ class iTensor(TensorBase):
         A.reverse_qsp()
         np.conj(A.data, out=A.data)  #A_conj.data = A.data.conj()
         return A 
-
+    
+    def dag(self):
+        """
+            only for self.rank = 2
+            hermite conjugate of self
+        
+        """
+        return self.T.conj()
+    
     @staticmethod
     def diagonal_tensor_rank2(qsp): 
         """

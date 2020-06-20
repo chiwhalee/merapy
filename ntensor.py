@@ -1018,7 +1018,7 @@ about __new__:
     T.__new__(S, ...) -> a new object with type S, a subtype of T
 """
 
-def generalized_matrix_multiply(A, B, mul, A_nzb=None, B_nzb=None): 
+def generalized_matrix_multiply(A, B, mul, null=0.0,  A_nzb=None, B_nzb=None): 
     """
     """
     M = A.shape[0] 
@@ -1028,7 +1028,7 @@ def generalized_matrix_multiply(A, B, mul, A_nzb=None, B_nzb=None):
     if A_nzb is None: 
         for i in range(M): 
             for j in range(N): 
-                t = 0.0
+                t = null 
                 for k in range(K): 
                     a = A[i, k]; b = B[k, j]
                     if isinstance(a, float) or isinstance(b, float): 

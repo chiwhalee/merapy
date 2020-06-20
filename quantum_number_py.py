@@ -528,7 +528,8 @@ class QuantSpaceBase(object):
     #@tensor_player(which="Qsp_copy")
     def copy(self, reverse=False):
         qns= [q.copy() for q in self.QNs[:self.nQN]]
-        other = self.__class__(n=self.nQN, qns=qns, dims=self._dims)
+        #other = self.__class__(n=self.nQN, qns=qns, dims=self._dims)
+        other = self.__class__(n=self.nQN, qns=qns, dims=self._dims.copy())
         other._totDim = self.totDim
         if reverse: 
             other.reverse()
@@ -575,21 +576,6 @@ class QuantSpaceBase(object):
             return self.QNs.index(qn)
         except:
             return -1 
-
-    def add_to_quant_space_bac(self, qn, d):
-        """
-            this is in fact direct sum of vector spaces subject to symmetry
-            note that direct sum is not a commutable operation
-        """
-        i = self.has_quant_num(qn)
-        assert i<self.MaxQNNum 
-        if i<0:  #when qn not in self.QNs
-            self.QNs.append(qn)
-            self._dims[self.nQN] = d
-            self.nQN += 1
-        else:  # when qn in self.QNs 
-            self._dims[i] += d  
-        self._totDim = self.totDim  + d
 
     def add_to_quant_space(self, qn, d):
         """
@@ -677,6 +663,12 @@ class QuantSpaceBase(object):
         
         res= self.__class__.easy_init(qns, dims)
         return res 
+    
+    def expand(self, other):
+        for i in range(other.nQN):
+            qn = other.QNs[i]
+            dim = other.Dims[i]
+            self.add_to_quant_space(qn, dim)
     
     @classmethod
     def qn_id(cls):
@@ -1134,13 +1126,10 @@ class TestIt(unittest.TestCase):
 
     def test_temp(self): 
         if 1:
-            d = qsp_any('U1', [1, -1], [1, 1])
-            a = qsp_any('U1', (1, -1), (1, 1))
-            print_vars(vars(),  ['a==d'])
-        if 0:
-            a = [1, 2]
-            b = (1, 2)
-            #print(all(a==b))
+            a = qsp_any('U1', [1, -1], [2, 2])
+            b = qsp_any('U1', (1, -1, 0), (1, 1, 5))
+            a.expand(b)
+            raise  
             
 
 if __name__ == "__main__":
