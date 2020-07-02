@@ -119,7 +119,8 @@ class TensorBase(object):
         """
         see Tensor_Add_WithScale
         """
-        reason= self.is_same_shape(T2)
+        #reason= self.is_same_shape(T2)
+        reason = 1
         if  reason<0:  
             print('Error in Tensor_Add_WithScale, self,other different shape:', reason)
             #print 'self.' + reason + ":", 
@@ -204,7 +205,9 @@ class TensorBase(object):
         bug in it
         see Tensor_Add_WithScale
         """
-        same, reason= self.is_same_shape(T2)
+        #same, reason= self.is_same_shape(T2)
+        same = 1
+        
         if  not same:  
             print('Error in Tensor_Add_WithScale, self,other different shape:', reason)
             print('self.' + reason + ":", end=' ') 

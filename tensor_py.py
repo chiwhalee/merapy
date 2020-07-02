@@ -778,6 +778,19 @@ class iTensor(TensorBase):
         i = self.idx[p]
         return int(i)   #convert np.int64 to int 
     
+    def get_qnid_from_qn(self, qn_tuple):
+        """
+            map a tuple of qns to a tuple of their ids
+        """
+        try:
+            return tuple(self.QSp[i].QNs.index(qn_tuple[i]) for i in range(self.rank))
+        except ValueError:
+            return None
+    
+    def get_qn_from_qnid(self, qn_id_tuple):
+        return tuple(self.QSp[i].QNs[qn_id_tuple[i]] for i in range(3))
+        
+    
     def get_position_rev(self, index_linear):
         """ map a ind_linear to a tuple 
             see iTensor_GetPosition_rev
@@ -860,94 +873,12 @@ class iTensor(TensorBase):
         X = self.data[pidx+pi]
         return X
 
-    def is_same_shape(self, other):
-        """
-        status_1_verified
-        see iTensor_SameShape in f90
-        """
-
-        S = self.rank == other.rank
-        if  not S:
-            reason = -9
-            return reason
-        
-        rank = self.rank
-        for i in range( rank):
-            S = self.QSp[i] == other.QSp[i]
-            S= self.QSp[i]
-            if  not S:
-                print('error, QSp[i]',i)
-                print(self.QSp[i])
-                print(other.QSp[i])
-                reason = -1
-                return reason
-        
-        S = self.nidx  ==  other.nidx
-        if  not S:
-            reason = -2
-            return reason
-        
-        S = self.totDim  ==  other.totDim
-        if  not S:
-            reason = -3
-            return reason
-        
-        S = self.idx_dim  ==  other.idx_dim
-        if  not S:
-            reason = -4
-            return reason
-        
-        for i in range( self.idx_dim):
-            S = self.idx[i] == other.idx[i]
-            if  not S:
-                reason = -5
-                return reason
-        
-        for i in range( self.nidx):
-            S = self.Block_idx[0,i] == other.Block_idx[0,i]
-            if  not S:
-                reason = -6
-                return reason
-            
-            S = self.Block_idx[1,i] == other.Block_idx[1,i]
-            if  not S:
-                reason = -7
-
-                return reason
-        reason = 1
-        return reason
-    
     class ShapeError(Exception):
         """
         only a tiny test of exception
         """
         pass
 
-    def is_same_shape_new(self, other):
-        """
-        there is bug in it
-        see iTensor_SameShape in f90
-        """
-        temp = ['rank', 'QSp', "nidx", "totDim", "idx_dim","idx", "Block_idx"]
-        for k in temp:
-            a = self.__getattribute__(k)
-            b = other.__getattribute__(k)
-            if isinstance(a, np.ndarray):
-                if k == "idx":
-                    end = self.idx_dim
-                    res= np.all(a[:end]==b[:end])
-                elif k == "Block_idx":
-                    end == self.nidx 
-                    #end == 1 
-                    res= np.all(a[:2, :end]==b[:2, :end])
-            else: 
-                res = a == b 
-
-            if not res:
-                return False, k
-
-        return True, None
-    
     @staticmethod 
     def is_match(qq2, dd2, qq1, dd1, info=1): 
         """
@@ -3308,13 +3239,6 @@ if 0:
             return u
 
        
-        @classmethod
-        def is_same_shape(cls):
-            """  ---pass """
-            u = cls.u.copy()
-            w = cls.w.copy()
-            a = u.is_same_shape(u)
-            print(a)
         
         def test_get_position_and_rev() :
             """ --- pass """

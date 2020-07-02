@@ -64,7 +64,8 @@ class iTensor_rank2_operation(object):
         
         qq = {}
         rr = {}
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        #dim_list = np.ndarray(num_blocks, dtype=np.int)
+        dim_list = []
         qn_list_l = np.ndarray(num_blocks, dtype=np.object)
         qn_list_r = np.ndarray(num_blocks, dtype=np.object)
         
@@ -78,7 +79,8 @@ class iTensor_rank2_operation(object):
                 q = q * sign[np.newaxis,  :] #multiply on cols of q 
                 r = r * sign[:, np.newaxis]  #multiply on rows of r
             qq[i], rr[i]  = q, r
-            dim_list[i] = min(mat.shape)
+            #dim_list[i] = min(mat.shape)
+            dim_list.append(min(mat.shape) )
             
             q0, q1 = tt.Addr_idx[:, i]
             qn_list_l[i] = tt.QSp[0].QNs[q0].copy()  #when tensor.totqn is not qn_id, both qn left and right are needed,  as they are not simply conjugate 
