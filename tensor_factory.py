@@ -902,16 +902,42 @@ class iTensorFactory(object):
         
         return res 
     
+    any_op = common_op  #def any_op
+    
     @staticmethod
     def base_state(which, symmetry, nmax=None, shift_qn=1, **kwargs):
         """
             params:
                 shift_qn: for fermions and bosons
+            notes:
+                1: here is a convention. the states |u> and |d> are the right states. 
+                    Because the qsp of sigma_z  was not properly defined, here I let |u>
+                    have a totqn of -1 将错就错了. 
             
         """
         vec = OrderedDict()
         if which == 'spin':
-            raise NotImplemented
+            names = ['u', 'd']    # eigenstats of sigma_z: |u> and |d>
+            if symmetry ==  "Travial":
+                q = QspTravial.easy_init([1], [2])
+                for i, n in enumerate(names) :
+                    vec[n] = iTensor(QSp=[q.copy()])
+                    vec[n].data[:] = 0.0
+                    vec[n].data[i] = 1.0
+            elif symmetry == 'U1' :
+                #totqn_dic = {'u':1, 'd':-1}  # pay attention at here! #note1
+                totqn_dic = {'u':-1, 'd':1}  
+                #q = make_qsp(symmetry, [1, -1], [1, 1])  # pay attention at here!
+                q = make_qsp(symmetry, [-1, 1], [1, 1])
+                for i, n in enumerate(names) :
+                    totqn = QnU1(totqn_dic[n])
+                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
+                    vec[n].data[:] = 0.0
+                vec['u'].data[:] = [1.0]
+                vec['d'].data[:] = [1.0]
+            elif symmetry == 'Z2':
+                raise NotImplemented
+        
         elif which == 'fermion':
             names = ['0', 'u', 'd', 'ud']
             if symmetry ==  "Travial":
@@ -1065,10 +1091,40 @@ class TestIt(unittest.TestCase):
             print_vars(vars(),  ['n_i'])
             self.assertTrue(np.all(n_i==np.arange(0, nmax + 1, 1.0)))
         
+    def test_base_states(self):
+        
+        symm = 'Travial'
+        symm = 'U1'
+        sz = iTensorFactory.any_op('sigma_z', symmetry=symm)
+        s = iTensorFactory.base_state('spin', symmetry=symm)
+        u = s['u']
+        print_vars(vars(),  ['u'])
+        d = s['d']
+        print_vars(vars(),  ['d'])
+        
+        sz_u = sz.contract(u, [0, 1], [0])
+        print_vars(vars(),  ['sz_u'])
+        sz_d = sz.contract(d, [0, 1], [0])
+        print_vars(vars(),  ['sz_d'])
+        #print_vars(vars(),  ['sz.sh'])
+        
     def test_temp(self):
         
-        t = iTensorFactory.common_op('sigma_x', symmetry='Z2', nmax=4)
-        print_vars(vars(),  ['t'])
+        symm = 'Travial'
+        symm = 'U1'
+        sz = iTensorFactory.any_op('sigma_z', symmetry=symm)
+        s = iTensorFactory.base_state('spin', symmetry=symm)
+        u = s['u']
+        print_vars(vars(),  ['u'])
+        d = s['d']
+        print_vars(vars(),  ['d'])
+        
+        sz_u = sz.contract(u, [0, 1], [0])
+        print_vars(vars(),  ['sz_u'])
+        sz_d = sz.contract(d, [0, 1], [0])
+        print_vars(vars(),  ['sz_d'])
+        #print_vars(vars(),  ['sz.sh'])
+        
             
         
 
@@ -1087,6 +1143,7 @@ if __name__ == "__main__":
         #'test_spin_one_mat', 
         #'test_fermion_op', 
         #'test_boson_op', 
+        #'test_base_states', 
         'test_temp', 
         
             ]

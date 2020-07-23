@@ -2997,8 +2997,7 @@ class iTensor(TensorBase):
             performance issue: 
                 see that under reduce_1d_qsp 
             params:
-                i: 
-                    insert the qsp before index i 
+                i: insert the qsp before index i 
         """
         qn = qn if qn is not None else self.qsp_class.QnClass.qn_id()
         if isinstance(qn, int): 

@@ -388,8 +388,6 @@ class QuantSpaceBase(object):
             self._totDim = np.sum(self._dims[:self.nQN])  
             return self._totDim
     
-
-    
     @property
     def symmetry(self): 
         return self.QnClass.SYMMETRY
@@ -709,7 +707,13 @@ class QspTravial(QuantSpaceBase):
         """ a slow but easy init """
         assert len(dims)==1
         return cls(n=1, qns=[QnTravial()], dims=dims) 
-
+    
+    def shift_qn(self, qn=None):
+        """
+            just do nothing 
+        """
+        pass
+    
 class QspZ2(QuantSpaceBase):
     MaxQNNum = 2
     QnClass = QnZ2
@@ -969,6 +973,9 @@ def make_qsp(symmetry, qns=None, dims=None):
     """
         inefficient, not for production use 
     """
+    if qns is not None:
+        if hasattr(qns[0], '_val'):
+            qns= [q._val for q in qns]
     cls= symmetry_to_Qsp(symmetry)
     return cls.easy_init(qns, dims)
 
