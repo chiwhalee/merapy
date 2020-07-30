@@ -75,7 +75,7 @@ class Tape(dict):
         
 #TapeList = [Tape()]   # at least one tape 
 TapeList = OrderedDict()
-TapeList[0] = Tape()
+TapeList[0] = Tape()   #construct a default tape
         
 
 def decorate_methods(decorator, meth_names):

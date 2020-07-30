@@ -862,13 +862,15 @@ class iTensorFactory(object):
                 nmax: max num of bosons. required by boson op
         """
         if op_type == 'spin':
-            if spin == 'one_half': 
+            if spin in ['one_half', 0.5]: 
                 mapping = iTensorFactory.pauli_mat(symmetry) if symmetry is not None else pauli_mat()
             elif spin == 'one':
                 if symmetry is None: 
                     mapping = TensorFactory.spin_mat(1)
                 else: 
-                    raise  NotImplemented 
+                    raise  NotImplemented
+            else:
+                raise  
         elif op_type == 'fermion':
             mapping = iTensorFactory.fermion_op(symmetry)
         elif op_type == 'boson' :

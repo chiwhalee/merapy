@@ -323,6 +323,10 @@ def measure_S(S=None, parpath=None, path=None,
             #mps= S 
             mps= S['mps']
             N, D = mps.N, mps.D
+            if algorithm == 'tdvp' and mps.is_purification_state == True:
+                assert N%2  == 0  
+                N = N//2 
+                print('N is divided by 2 due to purification')
             if hasattr(mps, 'symmetry'):  
                 D = mps.bond_dim_max 
             fn = "N=%d-D=%d.pickle"%(N, D)
