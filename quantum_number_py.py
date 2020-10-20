@@ -68,6 +68,7 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
     """
         abstract base class, not meant for direct use
     """
+    IS_Abelian = True
     #def __init__(self, value):
     #    pass
     def __getstate__1(self):
@@ -102,6 +103,8 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
             res= ("(" + "%5d"")")  % self.val
             #res=("(" + "%5d"*self.val.shape[0]+")")  % tuple(self.val)
             #res=("(" + "%5d"*self.NUM_OF_SYMM+")")  % tuple(self.val)
+        elif isinstance(self, QnSU2):
+            res = '({}, {})'.format(self._val[0], self._val[1])
         else:
             raise ValueError(self.val)
         return res
@@ -322,6 +325,19 @@ class QnU1(QnBase):
     def conj(self): 
         return QnU1(-self._val)
 
+class QnSU2(QnBase):
+    IS_Abelian = False
+    SYMMETRY = "SU2"
+    NUM_OF_SYMM = 1
+    QnId = (0, 0)    # (j, m)
+    def __init__(self, value):
+        """
+        """
+        self._val = value
+    def conj(self):
+        return QnSU2((self._val[0], -self._val[1]))
+
+
 #meth_names= ["copy"]
 #@decorate_methods(tensor_player, meth_names)
 class QuantSpaceBase(object):
@@ -343,6 +359,7 @@ class QuantSpaceBase(object):
                 3. save memory
             
     """
+    IS_Abelian = True
     def __init__(self, n, qns, dims):
         """
             QSp真正有用的只有 QNs, _dims 两个属性
@@ -472,7 +489,7 @@ class QuantSpaceBase(object):
         for i in range(n): 
             val = self.QNs[i]._val
             dim = self._dims[i]
-            s= '[%d]%d'%(val,dim)
+            s= '[%s]%d'%(val,dim)
             temp.append(s)
         res = '+'.join(temp)
 
@@ -671,6 +688,13 @@ class QuantSpaceBase(object):
     @classmethod
     def qn_id(cls):
         return cls.QnClass.qn_id()
+    
+    def get_dim_for_qn(self, qn):
+        i = self.has_quant_num(qn)
+        if i != -1:
+            return self.Dims[i]
+        else:
+            return 0 
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
@@ -959,13 +983,36 @@ class QspU1_half(QuantSpaceBase):
     """
     pass
 
+class QspSU2(QuantSpaceBase):
+    IS_Abelian = False
+    MaxQNNum = 20 
+    QnClass = QnSU2
+    def __init__(self, n, qns, dims, RefQN=None):
+        """
+        """
+        QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
+    
+    @classmethod
+    def easy_init(cls, qns=None, dims=None):
+        """ a slow but easy init """
+        n = len(dims)
+        assert dims is not None 
+        if qns is None: 
+            qns = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6, 7, -7, -8, 8, -9, 9, -10, 10]
+            assert len(qns)>= len(dims)
+            qns = qns[: len(dims)]
+        qns1 = [cls.QnClass(i) for i in qns]
+        dims = list(dims)
+        return cls(n=n, qns=qns1, dims=dims)
+    
 
 def symmetry_to_Qn(symmetry):
     temp = {"Travial":QnTravial, "Z2":QnZ2, "Z3":QnZ3, "U1":QnU1}
     return temp[symmetry]
 
 def symmetry_to_Qsp(symmetry):
-    return {"Travial":QspTravial, "Z2":QspZ2, "Z3":QspZ3, "U1":QspU1}[symmetry]
+    dic = {"Travial":QspTravial, "Z2":QspZ2, "Z3":QspZ3, "U1":QspU1, 'SU2':QspSU2}
+    return  dic[symmetry]
 
 symmetry_to_QspClass= symmetry_to_Qsp
 
@@ -979,7 +1026,7 @@ def make_qsp(symmetry, qns=None, dims=None):
     cls= symmetry_to_Qsp(symmetry)
     return cls.easy_init(qns, dims)
 
-qsp_any = make_qsp  #def qsp_any 
+qsp_any  = any_qsp = make_qsp  #def qsp_any   def any_qsp
 
 def qn_factory(symmetry, val):
     if symmetry == "Travial":
@@ -1132,11 +1179,14 @@ class TestIt(unittest.TestCase):
         self.assertTrue(qe==QspU1.easy_init([0, 1, -1], [12, 6, 8]))
 
     def test_temp(self): 
-        if 1:
-            a = qsp_any('U1', [1, -1], [2, 2])
-            b = qsp_any('U1', (1, -1, 0), (1, 1, 5))
-            a.expand(b)
-            raise  
+        
+        qn = QnSU2((1, 1))
+        qn1 = qn.conj()
+        print_vars(vars(),  ['qn', 'qn1'])
+        
+        q = QspSU2.easy_init(qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[4, 4, 4, 4])
+        print_vars(vars(),  ['q'])
+        q = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[4, 4, 4, 4])
             
 
 if __name__ == "__main__":

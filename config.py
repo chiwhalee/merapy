@@ -416,6 +416,7 @@ class Config(dict):
             msg.insert(2, 'td=%d'%(trunc_dim, ))
             sh = (N, trunc_dim)
             the_time = db.fetch_easy('the_time', sh, default=0)
+            #print(the_time, db['the_time'])
             if abs(the_time ) >=  the_time_lim:
                 allow = False 
             else:

@@ -833,8 +833,7 @@ def tensor_player(which):
                     as a normal walkman player. 
                 
                 tensor_player can have foure states:
-                    ['play', 'record', 'stop']
-                    I may add a 'pause'
+                    ['play', 'record', 'stop', 'pause']
             
             """
             the_tape = tensor_player.the_tape
@@ -873,6 +872,10 @@ def tensor_player(which):
                     the_tape.need_reset = False #issue: this can only reset one method 
                     
                 return func(*args, **kargs)
+            elif the_tape.STATE == 'pause':
+                return func(*args, **kargs)
+            else:
+                raise  
         return wrapper
     return inner
 
@@ -921,6 +924,10 @@ def set_player_state_auto(iter, record_at, tape_id=0, stop_at=10000000, verbose=
             print("the_tape is stopped")
 
 def set_player_state_manual(state, tape_id=None, info=0):
+    """
+        params:
+            state: in ['record', 'play', 'stop', 'pause']
+    """
     tape_id = tape_id if tape_id is not None else 0
     TapeList[tape_id].STATE  = state
     if info>0:

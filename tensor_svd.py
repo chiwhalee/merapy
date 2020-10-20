@@ -599,14 +599,15 @@ class iTensor_rank2_operation(object):
         """
             the tensor is required to be square matrix
         """
-        tt = itensor  # a shorter name 
-        res = tt.copy()
-        for i in range(tt.nidx):   # 遍历非零blocks
-            data = tt.get_block(i, linear=False, order='F')
-            data_inv = scipy.linalg.inv(data)
-            data_inv = data_inv.ravel(order='F')
-            res.set_block(i, data_inv)
-        return res 
+        return itensor.inv()
+        #tt = itensor  # a shorter name 
+        #res = tt.copy()
+        #for i in range(tt.nidx):   # 遍历非零blocks
+        #    data = tt.get_block(i, linear=False, order='F')
+        #    data_inv = scipy.linalg.inv(data)
+        #    data_inv = data_inv.ravel(order='F')
+        #    res.set_block(i, data_inv)
+        #return res 
 
     def polar_rank2(itensor, side='right'):
         """
@@ -1099,7 +1100,7 @@ class Tensor_svd(iTensor_rank2_operation):
         cls.svd(itensor, ndiv=d)
     
     @classmethod
-    def eig(cls, itensor, totQN=None):
+    def eig(cls, itensor,  totQN=None, return_rank2=True):
         """
             the name of the func should be eigh, as it calc eigen value for symmetric tensors
             
@@ -1122,10 +1123,14 @@ class Tensor_svd(iTensor_rank2_operation):
         QSp = [itensor.QSp[i].copy() for i in range(div)]
         if totQN is None:
             totQN = QSp[0].QnClass.qn_id()
-        QSp.append(QSp[0].null())
+        if return_rank2:
+            QSp.append(QSp[0].null())
+            pos = np.empty(div+1, int)
+        else:
+            pos = np.empty(div, int)
+        
         tQN = QSp[0].QNs[0].qn_id()
 
-        pos = np.empty(div+1, int)
  
         for gidx  in range(cls.QSp_Group1.nQN):
             #print_vars(vars(),  ['cls.QSp_Group1.QNs[gidx]', 'totQN', 'gidx'])
@@ -1146,9 +1151,16 @@ class Tensor_svd(iTensor_rank2_operation):
             V_buf = V_buf.ravel(order="F")
 
             Eg = E[0]
-            QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
-            QSp[div].reverse()
-            Vg = iTensor(div+1, QSp, tQN, dtype=itensor.dtype)
+            if return_rank2:
+                QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
+                QSp[div].reverse()
+                Vg = iTensor(div+1, QSp, tQN, dtype=itensor.dtype)
+            else:
+                #QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
+                #QSp[div].reverse()
+                Vg = iTensor(div, QSp, tQN, dtype=itensor.dtype)
+                
+                pass
             Vg.data[:] = 0.0
             
             for idx in range(itensor.nidx):
@@ -1158,7 +1170,8 @@ class Tensor_svd(iTensor_rank2_operation):
                 nT = cls.QNG_Addr1[2,p1]; mT = cls.QNG_Addr2[2,p2]
                 x = cls.QNG_Addr1[1,p1]; y = cls.QNG_Addr2[1,p2]
                 pos[0:div] = itensor.Addr_idx[0:div,idx]
-                pos[div] = 0
+                if return_rank2:
+                    pos[div] = 0
 
                 pV = Vg.get_position(pos)
                 p = Vg.Block_idx[0, Vg.idx[pV]]

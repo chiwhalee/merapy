@@ -498,20 +498,21 @@ class iTensorFactory(object):
                 sigma_m.data[:] = [0.0, 1.0, 0.0, 0.0]
 
             order = "F"  # this order has no effect
-            spm = sigma_p.tensor_prod(sigma_m, order)
-            smp = sigma_m.tensor_prod(sigma_p, order)
+            if 1:
+                spm = sigma_p.tensor_prod(sigma_m, order)
+                smp = sigma_m.tensor_prod(sigma_p, order)
 
-            sxx = sigma_x.tensor_prod(sigma_x, order)
-            syy = sigma_y.tensor_prod(sigma_y, order)
-            szz = sigma_z.tensor_prod(sigma_z, order)
-            
-            ii = i.direct_product(i)
-            sigma_z1 = z.direct_product(i)
-            sigma_z2 = i.direct_product(z)
-            sigma_p1 = p.direct_product(i)
-            sigma_p2 = i.direct_product(p)
-            sigma_m1 = m.direct_product(i)
-            sigma_m2 = i.direct_product(m)
+                sxx = sigma_x.tensor_prod(sigma_x, order)
+                syy = sigma_y.tensor_prod(sigma_y, order)
+                szz = sigma_z.tensor_prod(sigma_z, order)
+                
+                ii = i.direct_product(i)
+                sigma_z1 = z.direct_product(i)
+                sigma_z2 = i.direct_product(z)
+                sigma_p1 = p.direct_product(i)
+                sigma_p2 = i.direct_product(p)
+                sigma_m1 = m.direct_product(i)
+                sigma_m2 = i.direct_product(m)
         
         elif symmetry  == "U1":
             #qns1 = [1, -1]
@@ -543,9 +544,10 @@ class iTensorFactory(object):
             sigma_p.data[0] = 1.0
             sigma_m = sigma_p.conjugate(1)
             
-            szz = sigma_z.tensor_prod(sigma_z)
-            spm = sigma_p.tensor_prod(sigma_m)
-            smp = sigma_m.tensor_prod(sigma_p)
+            if 1:
+                szz = sigma_z.tensor_prod(sigma_z)
+                spm = sigma_p.tensor_prod(sigma_m)
+                smp = sigma_m.tensor_prod(sigma_p)
             
             I, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
             #I, X, Y, Z = sigma_0, sigma_x, sigma_y, sigma_z    
@@ -554,6 +556,17 @@ class iTensorFactory(object):
             
             #spin_z = 0.5*sigma_z
         F = -sigma_z   # this used in jordan-wigner trans
+        
+        
+        if 1: # spin operaters!
+            Sz = 0.5*sigma_z
+            if symmetry in ['Travial', 'U1']:
+                Sp = sigma_p
+                Sm = sigma_m
+            elif symmetry in ['Z2']:
+                Sx = 0.5*sigma_x
+                Sy = 0.5*sigma_y
+        
         temp = vars()
         res= {k: v for k, v in temp.items() if isinstance(v, iTensor)}
         for i in res: 
@@ -896,7 +909,7 @@ class iTensorFactory(object):
         
         if which == 'boson' or 'b' in op_name:
             temp = cls.lattice_op('boson', symmetry=symmetry, nmax=nmax)
-        elif 'sigma' in op_name:
+        elif which == 'spin' or  'sigma' in op_name:
             temp = cls.lattice_op('spin', symmetry=symmetry, spin='one_half')
         else:
             raise NotImplemented  
@@ -1042,7 +1055,16 @@ class iTensorFactory(object):
         else:  #complex type,  if not doing this, numpy would warn
             res.data[0] = 1.0 + 0j 
         return res 
+
+    def merger(qsp):
+        """
+            a rank-3 tensor 
+        """
+        pass
     
+    def spliter(qsp):
+        pass
+
 class TestIt(unittest.TestCase): 
     def test_diagonal_tensor_rank2(self): 
         qsp = QspU1.easy_init([0, 1, -1], [4, 2, 2])

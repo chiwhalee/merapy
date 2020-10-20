@@ -513,6 +513,10 @@ class Main(object):
                 if p is not None and c.get('job_description') is None: 
                     fn = os.path.basename(p)
                     c['job_description'] = (fn, c.get('N'), c.get('schedule'))
+                    if c.get('algorithm')=='tdvp':
+                        sh = c.get('N'), c.get('trunc_dim')
+                        c['job_description'] = (fn, sh, c.get('the_time_lim'))
+                        
                 status=submit_one(cls.run_one, 
                         args=(c, ),
                         server=task_center_server, 

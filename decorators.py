@@ -52,11 +52,11 @@ if 1:
         if hasattr(func, '__name__'): 
             func_name = func.__name__
         def wraper(*args, **kargs):
-            t1=time.clock()
+            t1=time.process_time()
             ta = time.time()
 
             res= func(*args, **kargs)
-            t2=time.clock()
+            t2=time.process_time()
             tb = time.time()
             q_iter = 1
             print("cpu time", old_div((t2-t1),q_iter),  "\t wall time", old_div((tb-ta),q_iter), "\t", func_name)

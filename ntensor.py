@@ -1023,6 +1023,13 @@ about __new__:
 
 def generalized_matrix_multiply(A, B, mul, null=0.0,  A_nzb=None, B_nzb=None): 
     """
+        used to multiply two mpo's which are block_wise
+        params:
+            mul: a generalized 'multiply' operation, which can be defined to be any 
+                two element operations!
+        returns: 
+            C = A*B 
+    
     """
     M = A.shape[0] 
     K = A.shape[1]
@@ -1037,7 +1044,6 @@ def generalized_matrix_multiply(A, B, mul, null=0.0,  A_nzb=None, B_nzb=None):
                     if isinstance(a, float) or isinstance(b, float): 
                         pass
                     else: 
-                        #t  += updateCleft_new(self.Cl[0, j], A1.conj(), mpo4[1][j, i], A1)
                         t += mul(a, b) 
                 res[i, j] = t 
     else: 
