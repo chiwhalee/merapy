@@ -319,16 +319,18 @@ def measure_S(S=None, parpath=None, path=None,
             
         elif algorithm in ['mps', 'tdvp']: 
             
-            #S = S['mps']  #fuck, this is bad, but I like bad!
-            #mps= S 
             mps= S['mps']
-            N, D = mps.N, mps.D
-            if algorithm == 'tdvp' and mps.is_purification_state == True:
-                assert N%2  == 0  
-                N = N//2 
-                print('N is divided by 2 due to purification')
+            #N, D = mps.N, mps.D
+            #if algorithm == 'tdvp' and mps.is_purification_state == True:
+            #    assert N%2  == 0  
+            #    N = N//2 
+            #    print('N is divided by 2 due to purification')
+            N, D = mps.phys_size, mps.D
+            
             if hasattr(mps, 'symmetry'):  
                 D = mps.bond_dim_max 
+            if algorithm == 'tdvp' and 'trunc_dim' in S:
+                D = S['trunc_dim']
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
             shape =  N,  D
