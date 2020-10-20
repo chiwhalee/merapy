@@ -46,6 +46,10 @@ import numpy as np
 import itertools 
 import math 
 from collections import OrderedDict
+from py3nj import (clebsch_gordan, wigner3j, wigner6j, wigner9j)
+
+
+import scipy
 
 
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
@@ -120,8 +124,7 @@ class iTensor(TensorBase):
     #BUFFER_ON = False
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
-            buffer=None, use_buf=False, index_data=True, has_data=True, init_data=None, 
-            ):
+            buffer=None, use_buf=False, index_data=True, has_data=True, init_data=None, ):
         """
             params: 
                 totQN : 
@@ -164,7 +167,7 @@ class iTensor(TensorBase):
         """
         #TensorBase.__init__(self, rank, None)  #comment this only for a little faster
         rank = len(QSp)
-        self.rank = rank 
+        self.rank = rank
         self.QSp = QSp  #NO COPYING CONVENTION 
         self.ind_labels = None 
         self.totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
@@ -180,7 +183,10 @@ class iTensor(TensorBase):
             self.Dims = [QSp[i].totDim for i in range(rank)]
 
         if index_data:  #this sets idx, nidx, idx_dim, totDim, Addr_idx, Block_idx 
-            self.set_data_entrance(order=order )
+            if rank == 0 or QSp[0].IS_Abelian:
+                self.set_data_entrance(order=order )
+            else:
+                self.set_data_entrance_non_Abelian(order=order )
 
         if has_data:
             if buffer is None and use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
@@ -235,7 +241,7 @@ class iTensor(TensorBase):
                 return iTensor.T_BUFFER[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.T_BUFFER[0].in_use[:100], )))
     
-    def set_data_entrance(self, order="F"):
+    def set_data_entrance_bac(self, order="F"):
         """
             实现1维稀疏存储, 对应于下式的第二个->号
             T->(D, S)->(dat, Block_ind, Addr_ind)
@@ -257,29 +263,23 @@ class iTensor(TensorBase):
         if rank == 0: 
             QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
        
-        #self.Dims= [QSp[i].totDim for  i in xrange(rank_1)]
-            
         temp = 1   
         for i in range(rank_1):
             temp *= QSp[i].nQN
         self.idx_dim = temp   # 量子数组合 总数目 
 
-        self.idx = np.ndarray((self.idx_dim, ), int)   #-1                
-        self.idx[: ] = self.idx_dim
-        #self.idx[: ] = -1 
+        self.idx = np.ndarray(self.idx_dim, int)   #-1                
+        self.idx[: ] = self.idx_dim   #self.idx[: ] = -1 
         self.Block_idx = np.ndarray((3, self.idx_dim), dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
-        # 实际使用的addr_inx的长度为 self.nidx
-        self.Addr_idx = np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')        
+        self.Addr_idx = np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')  # 实际使用的addr_inx的长度为 self.nidx        
         
-        #iQN[i]用作leg i 上的量子数 计数
-        iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号
-            
+        iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
         nidx=0
         totDim=0
-        
         totqn = self.totQN 
 
         for p in range(self.idx_dim):
+            #print_vars(vars(),  ['p', 'iQN'])
             
             tqn = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
             for i in range(1, rank):
@@ -307,7 +307,7 @@ class iTensor(TensorBase):
                 inc = 1
                 i = 0
                 #attention_please  这里实际上意味着按照 fortran order 对量子数组合排序的
-                while inc==1 and i<rank:
+                while inc and i<rank:
                     iQN[i] = iQN[i]+1
                     if iQN[i]<QSp[i].nQN :
                         inc = 0
@@ -329,6 +329,216 @@ class iTensor(TensorBase):
         self.Block_idx = self.Block_idx[:, :nidx]
         self.nidx = nidx
         self.totDim = totDim
+
+    def set_data_entrance(self, order="F"):
+        """
+            实现1维稀疏存储, 对应于下式的第二个->号
+            T->(D, S)->(dat, Block_ind, Addr_ind)
+            this step is in effect 把Qsp 中的信息提取出来，变成更容易读取操作的信息，故
+            Qsp 中包含的信息和 Block_idx, Addr_idx 等是等价的(不完全等价, 差一个对称性限制条件)，不同在存储顺序和方式
+            Block_idx: is a map from idx to block info
+            
+            note1: 
+                at 2015-8-31, I changed the def of iTensor. The previous weng's treatment
+                let sum(qn of each leg) = reverse(totqn),  now change to 
+                    sum(qn of each leg) = totqn
+                前者其实绕了个弯，把totqn理解成了一个dummy leg 并且是conj的，完全没有必要这么做
+                它会造成一定概念上的混乱。后者更加 well defined 
+                
+            # I removed the following code,  use np.nditer instead 
+                #遍历所有的量子数组合
+                if order == 'F':   #这里实际上意味着按照 fortran order 对量子数组合排序的
+                    inc = True
+                    i = 0
+                    while inc and i<rank:
+                        iQN[i] = iQN[i]+1
+                        if iQN[i]<QSp[i].nQN :
+                            inc = False
+                        else:
+                            iQN[i] = 0
+                            i = i+1
+                            
+                elif order == 'C':
+                    inc = True
+                    i = rank-1
+                    while inc==True and i>= 0:
+                        iQN[i] = iQN[i]+1
+                        if iQN[i]<self.QSp[i].nQN :
+                            inc = False
+                        else:
+                            iQN[i] = 0
+                            i = i-1
+        
+        """
+        rank, QSp, totQN = self.rank, self.QSp, self.totQN
+        rank_1 = rank if rank != 0 else 1 
+       
+        if rank == 0: 
+            QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
+        
+        arg = list((QSp[i].nQN for i in range(rank_1)))
+        iqn = np.ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+        self.idx_dim = np.prod(arg, dtype=int)
+
+        self.idx = np.ndarray(self.idx_dim, int)   #-1                
+        self.idx[: ] = self.idx_dim   #self.idx[: ] = -1 
+        self.Block_idx = np.ndarray((3, self.idx_dim), dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
+        self.Addr_idx = np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')  # 实际使用的addr_inx的长度为 self.nidx        
+        
+        nidx=0
+        totDim=0
+        totqn = self.totQN 
+
+        p = -1
+        for iQN in iqn:
+            p += 1 
+            
+            tqn = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
+            for i in range(1, rank):
+                tqn = tqn + QSp[i].QNs[iQN[i]]  
+            
+            if tqn == totqn:
+                d = 1
+                for i in range(rank):  #计算某一block的data size 
+                    d = d*QSp[i].Dims[iQN[i]]
+                #d = np.prod([QSp[i].Dims[iQN[i]] for i in range(rank)], dtype=int)
+                
+                self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
+                
+                self.Block_idx[0, nidx] = totDim  #data block在self.data中的position
+                self.Block_idx[1, nidx] = d   #data block变成1d数组的长度
+                self.Block_idx[2, nidx] = p   #position in quantum number combinations
+                
+                #记录不为0的量子数组合，在所有量子数组合中的位置 Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对每一个iTensor都定义了这个函数 Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
+                self.Addr_idx[0, nidx] = 0 #for rank=0
+                self.Addr_idx[0:rank, nidx] = iQN[0:rank]
+                nidx += 1 
+                totDim += d   #最终得到self.data 的总长度
+            
+            
+        self.Addr_idx = self.Addr_idx[:, :nidx]
+        self.Block_idx = self.Block_idx[:, :nidx]
+        self.nidx = nidx
+        self.totDim = totDim
+
+    def set_data_entrance_non_Abelian(self, order="F"):
+        """
+            ref:
+                mculloch 2007 
+                singh 2012
+        
+        """
+        rank, QSp = self.rank, self.QSp
+        rank_1 = rank if rank != 0 else 1 
+        temp = 1   
+        for i in range(rank_1):
+            temp *= QSp[i].nQN
+        self.idx_dim = temp   # 量子数组合 总数目 
+        
+        self.idx = np.ndarray(self.idx_dim, int)   #-1                
+        self.idx[: ] = self.idx_dim   #self.idx[: ] = -1 
+        self.Block_idx = np.ndarray((3, self.idx_dim), dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
+        self.Addr_idx = np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')  # 实际使用的addr_inx的长度为 self.nidx        
+        
+        self.cg_coeff = np.ndarray(self.idx_dim, float)  
+        
+        iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+        nidx=0
+        totDim=0
+        totqn = self.totQN 
+        
+        
+        for p in range(self.idx_dim):
+            match = False
+            if rank == 2: 
+                if QSp[0].QNs[iQN[0]]  == QSp[1].QNs[iQN[1]].conj():
+                    match = True 
+            elif rank == 3:
+                j0, m0 = QSp[0].QNs[iQN[0]].val 
+                j1, m1 = QSp[1].QNs[iQN[1]].val 
+                j2, m2 = QSp[2].QNs[iQN[2]].val 
+                
+                #print_vars(vars(),  ['j0, j1, m0, m1', 'j2, m2'])
+                try:
+                    cg = clebsch_gordan(j0, j1, j2, m0, m1, -m2)
+                except:
+                    cg = 0
+                match = True if cg else False
+             
+            elif rank == 4:
+                j0, m0 = QSp[0].QNs[iQN[0]].val 
+                j1, m1 = QSp[1].QNs[iQN[1]].val 
+                j2, m2 = QSp[2].QNs[iQN[2]].val 
+                j3, m3 = QSp[3].QNs[iQN[3]].val 
+                
+                j01 = j0 + j1
+                cg = 0
+                for m01 in range(-j01, j01+1):
+                    try:
+                        cg_01 =  clebsch_gordan(j0,  j1, j01, m0,  m1, -m01)
+                        cg_02 =  clebsch_gordan(j01, j2, j3,  m01, m2, -m3)
+                        cg += cg_01 * cg_02
+                    except:
+                        pass
+                match = True if cg else False
+                
+            else:
+                raise NotImplemented 
+            if match:
+                print_vars(vars(),  ['cg'])
+                d = 1
+                for i in range(rank):  #计算某一block的data size 
+                    d = d*QSp[i].Dims[iQN[i]]
+                
+                self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
+                self.Block_idx[0, nidx] = totDim  #data block在self.data中的position
+                self.Block_idx[1, nidx] = d   #data block变成1d数组的长度
+                self.Block_idx[2, nidx] = p   #position in quantum number combinations
+                
+                #记录不为0的量子数组合，在所有量子数组合中的位置 Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对每一个iTensor都定义了这个函数 Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
+                self.Addr_idx[0, nidx] = 0 #for rank=0
+                self.Addr_idx[0:rank, nidx] = iQN[0:rank]
+                nidx += 1 
+                totDim += d   #最终得到self.data 的总长度
+                
+                #print_vars(vars(),  ['d'])
+                
+                
+                self.cg_coeff[nidx] = cg
+            self.transvers_qn_group(iQN,  order)
+       
+        self.Addr_idx = self.Addr_idx[:, :nidx]
+        self.Block_idx = self.Block_idx[:, :nidx]
+        self.nidx = nidx
+        self.totDim = totDim
+        
+        self.cg_coeff = self.cg_coeff[:nidx]
+            
+    def transvers_qn_group(self, iQN, order):
+        """
+            遍历所有的量子数组合
+        
+        """
+        if order == 'F': 
+            inc = True
+            i = 0
+            while inc and i<self.rank:  #这里实际上意味着按照 fortran order 对量子数组合排序的
+                iQN[i] = iQN[i]+1
+                if iQN[i]<self.QSp[i].nQN :
+                    inc = 0
+                else:
+                    iQN[i] = 0
+                    i = i+1
+        elif order == 'C':
+            inc = True
+            i = self.rank-1
+            while inc and i>= 0:
+                iQN[i] = iQN[i]+1
+                if iQN[i]<self.QSp[i].nQN :
+                    inc = False
+                else:
+                    iQN[i] = 0
+                    i = i-1
     
     def __getitem__(self, qn_id_tuple): 
         """
@@ -376,6 +586,7 @@ class iTensor(TensorBase):
         p = self.Block_idx[0, i]
         size = self.Block_idx[1, i]
         if linear:
+            #print_vars(vars(),  ['type(self.data)'])
             return self.data[p: p + size] 
         else:
             sh = self.get_block_shape(i)
@@ -493,7 +704,8 @@ class iTensor(TensorBase):
         def T(self): 
             #assert self.rank == 2 
             return self.permutation([1, 0])
-        
+
+
     @classmethod
     def buff_free(cls):
         for i in range(3):
@@ -748,7 +960,12 @@ class iTensor(TensorBase):
         if hasattr(qsp, 'QNs'):
             qsp = qsp.copy_many(2, reverse=[1])
         return iTensor.unit_tensor(2, qsp, dtype=dtype)
-
+    
+    def zeros(qsp, dtype=float, totQN=None):
+        res = iTensor(QSp=qsp, dtype=dtype, totQN=totQN)
+        res.data[:] = 0.0
+        return res 
+    
     def get_position(self, qn_ind_tuple):
         """
             map a rank-dim index to linear index 
@@ -788,7 +1005,7 @@ class iTensor(TensorBase):
             return None
     
     def get_qn_from_qnid(self, qn_id_tuple):
-        return tuple(self.QSp[i].QNs[qn_id_tuple[i]] for i in range(3))
+        return tuple(self.QSp[i].QNs[qn_id_tuple[i]] for i in range(self.rank))
         
     
     def get_position_rev(self, index_linear):
@@ -2108,15 +2325,20 @@ class iTensor(TensorBase):
             V2 = tuple(V2)
             msg = '\n\t'.join([
                 'additional err info:  ', 
+                'If the exception is like: IndexError:index 4 is out of bounds for axis 1 with size 4,it is', 
+                'most likely the qsp of legs to be contracted not match,  espcially lack a reverse of qsp', 
                 'names: {0.type_name}\t{1.type_name}'.format(self, T2), 
                 'ind labels: {}, \t{}'.format(V1, V2) , 
-                'ind to contract:%s'%(tuple(V_1n2), ), ] + ['\t'+str((i, self.shape[V1.index(i)], T2.shape[V2.index(i)])) for i in V_1n2] + [
-                #"dims: {0.Dims}\t{1.Dims}".format(self, T2, V1=V1[:self.rank], V2=V2[:T2.rank]), 
-                #"self.QSp: {0.QSp}\n\tother.QSp: {1.QSp}".format(self, T2) ,  
-                "If the exception is like: IndexError: index 4 is out of bounds for axis 1 with size 4,  it is most likely the qsp of legs to be contracted not match,  espcially lack a reverse of qsp", 
-                ])
-            #msg +=  "\n%s\t %s"%(self.__repr__(keys=['QNs', 'Dims'], fewer=True), 
-            #        T2.__repr__(keys=['QNs', 'Dims'],fewer=True))
+                'ind to contract:%s'%(tuple(V_1n2), )] 
+                #+ [ '\t'+str((i, self.shape[V1.index(i)], T2.shape[V2.index(i)])) for i in V_1n2] 
+                )
+            if 1:
+                for i in V_1n2:
+                    sh1, sh2 = self.shape[V1.index(i)],  T2.shape[V2.index(i)]
+                    if sh1.conj() != sh2:
+                        msg  += '\t\n\t -***-> : {}, {}, {}'.format(i, sh1, sh2)
+            
+           
             if not err.args: 
                        err.args=('',)
             err.args = (str(err.args[0]) + "\n"*2 + msg,)+err.args[1:]
@@ -2145,7 +2367,7 @@ class iTensor(TensorBase):
         """
             requires each t.ind_labels is not None 
             params:
-                tlist can be a nested list! like [t1, t2, [t3, t4]]
+                tlist can be a nested list, still it is efficient! like [t1, t2, [t3, t4]]
         """
         head = tlist[0]
         if isinstance(head, list):
@@ -2154,9 +2376,7 @@ class iTensor(TensorBase):
             for t in tlist[1: ]:
                 if isinstance(t, list):
                     t = iTensor.contract_tensor_list(t)
-                #head, _= head.contract(t)
                 head = head.contract(t)
-                #print_vars(vars(),  ['head.ind_labels', 'head.shape'])
         except Exception:
             raise  
         if final_ind_labels is not None:
@@ -2319,6 +2539,19 @@ class iTensor(TensorBase):
         
         """
         return self.T.conj()
+    
+    def inv(self):   #def inverse 
+        """
+            the tensor is required to be square matrix
+        """
+        assert self.rank == 2 
+        res = self.copy()
+        for i in range(self.nidx):   # 遍历非零blocks
+            data = self.get_block(i, linear=False, order='F')
+            data_inv = scipy.linalg.inv(data)
+            data_inv = data_inv.ravel(order='F')
+            res.set_block(i, data_inv)
+        return res 
     
     @staticmethod
     def diagonal_tensor_rank2(qsp): 
@@ -2748,6 +2981,14 @@ class iTensor(TensorBase):
 
         return T3
 
+    def direct_sum(self, other):
+        """
+            intro:
+               
+        """
+        raise NotImplemented
+        pass
+
     def tensor_prod(self, T2, order="F"):
         return self.direct_product(T2, order)
 
@@ -2997,7 +3238,8 @@ class iTensor(TensorBase):
             performance issue: 
                 see that under reduce_1d_qsp 
             params:
-                i: insert the qsp before index i 
+                i: insert the qsp before index i. 
+                    if i>= self.rank, then the 1d qsp is appended as the last leg.  
         """
         qn = qn if qn is not None else self.qsp_class.QnClass.qn_id()
         if isinstance(qn, int): 
@@ -3011,7 +3253,7 @@ class iTensor(TensorBase):
         res = self.contract(leg, list(range(self.rank)), [self.rank])
         order = list(range(self.rank))
         order.insert(i, self.rank)
-        res= res.transpose(order)
+        res= res.permutation(order)
         return res 
         
         insert_travial_ind = insert_1d_qsp
@@ -4259,32 +4501,53 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
-        #from tensor_player_multiple import set_player_state_auto
-        
-        #for i in range(1, 5):
-        #    set_player_state_auto(iter=i, record_at=1, info=-1)    
-        #    #print_vars(globals(),  ['tensor_player.the_tape.STATE'])
-        #    
-        #    t1 = iTensor.example(rank=4)
-        #    t2 = iTensor.example(rank=4)
-        #    t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-        #    t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-        #    
-        #    #print(tensor_player.the_tape.keys())
-        #    #t3, _ = t1.contract(t2, [0, 1, 2, 3], [4, 2, 5, 6])
-        #    t3.permutation([0, 2, 3, 1, 4, 5])
-        #    t3.permutation([0, 2, 3, 1, 4, 5])
-        
-        if 1:
-            q0 = qsp_any('U1', [1, 0, -1], [2, 2, 2])
-            q1 = qsp_any('U1', [-1, 0, 1], [2, 2, 2])
+        if 0:
+
+            q0 = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[2, 2, 2, 2])
+            q1 = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[2, 2, 2, 2])
+
             t = iTensor(QSp=[q0, q1])
-            t.data = np.arange(t.size)
             print_vars(vars(),  ['t'])
-            for i in range(3):
-                a = t.get_element((i, i), (0, 0))
-                print_vars(vars(),  ['a'])
-            t.save('/tmp/aaa')
+            
+        if 0:  #rank-3
+
+            q0 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
+            q1 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
+            q2 = qsp_any('SU2', qns=[(0, 0), (2, 0),  (2, 2)], dims=[2, 2, 1])
+            if 0:
+                j0, j1, m0, m1 = 2, 0, -2, 0
+                j2, m2 = 2, -2 
+                cg = clebsch_gordan(j0, j1, j2, m0, m1, m2)
+                print_vars(vars(),  ['cg'])
+                raise  
+
+            t = iTensor(QSp=[q0, q1, q2])
+            print_vars(vars(),  ['t'])
+            print_vars(vars(),  ['t.cg_coeff'])
+            
+            
+        if 0:  #rank-4
+
+            q0 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
+            q1 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
+            q2 = qsp_any('SU2', qns=[(0, 0), (2, 0),  (2, 2)], dims=[2, 2, 1])
+            q3 = qsp_any('SU2', qns=[(0, 0), (2, 0),  (2, 2)], dims=[2, 2, 1])
+
+            t = iTensor(QSp=[q0, q1, q2, q3])
+            #print_vars(vars(),  ['t'])
+            print_vars(vars(),  ['t.cg_coeff'])
+        if 1:
+            import time
+            q0 = QspZ2.easy_init([0, 1, -1, 2, -2], [4, 3, 2, 1, 1])
+            q1 = QspZ2.easy_init([0, -1, 1, 2, -1], [4, 3, 2, 1, 1] )
+            q2 = QspZ2.easy_init([1, -1], [3, 2])
+            t0 = time.process_time()
+            for i in range(50000):
+                #set_player_state_auto(iter=i, record_at=0, info=0)    
+                t3 = iTensor(QSp=[q0, q1, q2])
+                
+            t1 = time.process_time()
+            print_vars(vars(),  ['t1-t0'])
             
             
 
