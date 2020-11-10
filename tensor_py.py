@@ -1,5 +1,5 @@
-#!/usr/bin/env python
 #coding=utf8
+#!/usr/bin/env python
 
 """  
     tensor.f90
@@ -46,6 +46,13 @@ import numpy as np
 import itertools 
 import math 
 from collections import OrderedDict
+from multiprocessing import Pool 
+#from common_util import get_num_of_threads
+#import common_util
+
+from numpy.lib.stride_tricks import as_strided
+import numpy.core.numeric as _nx
+        
 from py3nj import (clebsch_gordan, wigner3j, wigner6j, wigner9j)
 
 
@@ -103,6 +110,72 @@ class tBuffer(object):
         self.in_use[:] = False
         sef.size = 0
         self.T = []
+
+
+class ndindex:
+    """
+    An N-dimensional iterator object to index arrays.
+
+    Given the shape of an array, an `ndindex` instance iterates over
+    the N-dimensional index of the array. At each iteration a tuple
+    of indices is returned, the last dimension is iterated over first.
+
+    Parameters
+    ----------
+    `*args` : ints
+      The size of each dimension of the array.
+
+    See Also
+    --------
+    ndenumerate, flatiter
+
+    Examples
+    --------
+    >>> for index in np.ndindex(3, 2, 1):
+    ...     print(index)
+    (0, 0, 0)
+    (0, 1, 0)
+    (1, 0, 0)
+    (1, 1, 0)
+    (2, 0, 0)
+    (2, 1, 0)
+
+    """
+
+    def __init__(self, *shape, order='C'):
+        if len(shape) == 1 and isinstance(shape[0], tuple):
+            shape = shape[0]
+        x = as_strided(_nx.zeros(1), shape=shape,
+                       strides=_nx.zeros_like(shape))
+        self._it = _nx.nditer(x, flags=['multi_index', 'zerosize_ok'],
+                              order=order)
+
+    def __iter__(self):
+        return self
+
+    def ndincr(self):
+        """
+        Increment the multi-dimensional index by one.
+
+        This method is for backward compatibility only: do not use.
+        """
+        next(self)
+
+    def __next__(self):
+        """
+        Standard iterator method, updates the index and returns the index
+        tuple.
+
+        Returns
+        -------
+        val : tuple of ints
+            Returns a tuple containing the indices of the current
+            iteration.
+
+        """
+        next(self._it)
+        return self._it.multi_index
+
 
 #meth_names= ["__init__", "set_data_entrance", "contract_core", "permutation"]
 #meth_names.pop(0)
@@ -241,95 +314,6 @@ class iTensor(TensorBase):
                 return iTensor.T_BUFFER[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.T_BUFFER[0].in_use[:100], )))
     
-    def set_data_entrance_bac(self, order="F"):
-        """
-            实现1维稀疏存储, 对应于下式的第二个->号
-            T->(D, S)->(dat, Block_ind, Addr_ind)
-            this step is in effect 把Qsp 中的信息提取出来，变成更容易读取操作的信息，故
-            Qsp 中包含的信息和 Block_idx, Addr_idx 等是等价的(不完全等价, 差一个对称性限制条件)，不同在存储顺序和方式
-            Block_idx: is a map from idx to block info
-            
-            note1: 
-                at 2015-8-31, I changed the def of iTensor. The previous weng's treatment
-                let sum(qn of each leg) = reverse(totqn),  now change to 
-                    sum(qn of each leg) = totqn
-                前者其实绕了个弯，把totqn理解成了一个dummy leg 并且是conj的，完全没有必要这么做
-                它会造成一定概念上的混乱。后者更加 well defined 
-        
-        """
-        rank, QSp, totQN = self.rank, self.QSp, self.totQN
-        rank_1 = rank if rank != 0 else 1 
-       
-        if rank == 0: 
-            QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
-       
-        temp = 1   
-        for i in range(rank_1):
-            temp *= QSp[i].nQN
-        self.idx_dim = temp   # 量子数组合 总数目 
-
-        self.idx = np.ndarray(self.idx_dim, int)   #-1                
-        self.idx[: ] = self.idx_dim   #self.idx[: ] = -1 
-        self.Block_idx = np.ndarray((3, self.idx_dim), dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
-        self.Addr_idx = np.ndarray((rank_1, self.idx_dim), dtype=int, order='F')  # 实际使用的addr_inx的长度为 self.nidx        
-        
-        iQN = np.zeros(rank_1, dtype=int)   #iQN 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
-        nidx=0
-        totDim=0
-        totqn = self.totQN 
-
-        for p in range(self.idx_dim):
-            #print_vars(vars(),  ['p', 'iQN'])
-            
-            tqn = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
-            for i in range(1, rank):
-                tqn = tqn + QSp[i].QNs[iQN[i]]  
-            
-            if tqn == totqn:
-                d = 1
-                for i in range(rank):  #计算某一block的data size 
-                    d = d*QSp[i].Dims[iQN[i]]
-                
-                self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
-                
-                self.Block_idx[0, nidx] = totDim  #data block在self.data中的position
-                self.Block_idx[1, nidx] = d   #data block变成1d数组的长度
-                self.Block_idx[2, nidx] = p   #position in quantum number combinations
-                
-                #记录不为0的量子数组合，在所有量子数组合中的位置 Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对每一个iTensor都定义了这个函数 Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
-                self.Addr_idx[0, nidx] = 0 #for rank=0
-                self.Addr_idx[0:rank, nidx] = iQN[0:rank]
-                nidx += 1 
-                totDim += d   #最终得到self.data 的总长度
-            
-            #遍历所有的量子数组合
-            if order == 'F': 
-                inc = 1
-                i = 0
-                #attention_please  这里实际上意味着按照 fortran order 对量子数组合排序的
-                while inc and i<rank:
-                    iQN[i] = iQN[i]+1
-                    if iQN[i]<QSp[i].nQN :
-                        inc = 0
-                    else:
-                        iQN[i] = 0
-                        i = i+1
-            elif order == 'C':
-                inc = True
-                i = rank-1
-                while inc==True and i>= 0:
-                    iQN[i] = iQN[i]+1
-                    if iQN[i]<self.QSp[i].nQN :
-                        inc = False
-                    else:
-                        iQN[i] = 0
-                        i = i-1
-        
-        self.Addr_idx = self.Addr_idx[:, :nidx]
-        self.Block_idx = self.Block_idx[:, :nidx]
-        self.nidx = nidx
-        self.totDim = totDim
-
     def set_data_entrance(self, order="F"):
         """
             实现1维稀疏存储, 对应于下式的第二个->号
@@ -375,9 +359,11 @@ class iTensor(TensorBase):
        
         if rank == 0: 
             QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
+            
         
-        arg = list((QSp[i].nQN for i in range(rank_1)))
-        iqn = np.ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+        arg = [QSp[i].nQN for i in range(rank_1)]
+        #iqn = np.ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+        iqn = ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
         self.idx_dim = np.prod(arg, dtype=int)
 
         self.idx = np.ndarray(self.idx_dim, int)   #-1                
@@ -388,11 +374,11 @@ class iTensor(TensorBase):
         nidx=0
         totDim=0
         totqn = self.totQN 
-
+        
+        #todo: this loop can be made to be paralell 
         p = -1
         for iQN in iqn:
             p += 1 
-            
             tqn = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
             for i in range(1, rank):
                 tqn = tqn + QSp[i].QNs[iQN[i]]  
@@ -401,7 +387,6 @@ class iTensor(TensorBase):
                 d = 1
                 for i in range(rank):  #计算某一block的data size 
                     d = d*QSp[i].Dims[iQN[i]]
-                #d = np.prod([QSp[i].Dims[iQN[i]] for i in range(rank)], dtype=int)
                 
                 self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
                 
@@ -415,11 +400,105 @@ class iTensor(TensorBase):
                 nidx += 1 
                 totDim += d   #最终得到self.data 的总长度
             
-            
         self.Addr_idx = self.Addr_idx[:, :nidx]
         self.Block_idx = self.Block_idx[:, :nidx]
         self.nidx = nidx
         self.totDim = totDim
+
+    def set_data_entrance_parallel(self, order="F"):
+        """
+            实现1维稀疏存储, 对应于下式的第二个->号
+            T->(D, S)->(dat, Block_ind, Addr_ind)
+            this step is in effect 把Qsp 中的信息提取出来，变成更容易读取操作的信息，故
+            Qsp 中包含的信息和 Block_idx, Addr_idx 等是等价的(不完全等价, 差一个对称性限制条件)，不同在存储顺序和方式
+            Block_idx: is a map from idx to block info
+            
+            note1: 
+                at 2015-8-31, I changed the def of iTensor. The previous weng's treatment
+                let sum(qn of each leg) = reverse(totqn),  now change to 
+                    sum(qn of each leg) = totqn
+                前者其实绕了个弯，把totqn理解成了一个dummy leg 并且是conj的，完全没有必要这么做
+                它会造成一定概念上的混乱。后者更加 well defined 
+                
+            # I removed the following code,  use np.nditer instead 
+                #遍历所有的量子数组合
+                if order == 'F':   #这里实际上意味着按照 fortran order 对量子数组合排序的
+                    inc = True
+                    i = 0
+                    while inc and i<rank:
+                        iQN[i] = iQN[i]+1
+                        if iQN[i]<QSp[i].nQN :
+                            inc = False
+                        else:
+                            iQN[i] = 0
+                            i = i+1
+                            
+                elif order == 'C':
+                    inc = True
+                    i = rank-1
+                    while inc==True and i>= 0:
+                        iQN[i] = iQN[i]+1
+                        if iQN[i]<self.QSp[i].nQN :
+                            inc = False
+                        else:
+                            iQN[i] = 0
+                            i = i-1
+        
+        """
+        rank, QSp, totQN = self.rank, self.QSp, self.totQN
+        rank_1 = rank if rank != 0 else 1 
+       
+        if rank == 0: 
+            QSp = [totQN.qsp_class().null()]   # only use it temporarilly to generate idx
+        arg = [QSp[i].nQN for i in range(rank_1)]
+        iqn = np.ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+        self.idx_dim = np.prod(arg, dtype=int)
+        
+        n = 1
+        pool = Pool(processes=n, initializer=None)
+        temp = pool.map(self.helper, iqn)
+        temp = [t for t in enumerate(temp)if t[1]]
+        size = len(temp)
+        
+        self.idx = np.ndarray(self.idx_dim, int)   #-1                
+        self.idx[: ] = self.idx_dim   #self.idx[: ] = -1 
+        self.Block_idx = np.ndarray((3, size), dtype=int, order='F')  #here use F order such that access in mem is much faster. todo: transpose Block_idx and use C order 
+        self.Addr_idx = np.ndarray((rank_1, size), dtype=int, order='F')  # 实际使用的addr_inx的长度为 self.nidx        
+        
+        nidx=0
+        totDim=0
+        
+        for t in temp:
+            p, (iQN, d) = t
+            self.idx[p] = nidx  #给出了0量子数组合与所有量子数组合的序号间的关系 self.idx 和 self.Block_idx[2]互为反函数 如果总量子数为0，则idx[p] =- 1(默认值) 在self.block中都是记录不为0的量子数组合
+            
+            self.Block_idx[0, nidx] = totDim  #data block在self.data中的position
+            self.Block_idx[1, nidx] = d   #data block变成1d数组的长度
+            self.Block_idx[2, nidx] = p   #position in quantum number combinations
+            
+            #记录不为0的量子数组合，在所有量子数组合中的位置 Addr实为将（QN1, ..., QNn)-> ind 的映射, 将n个指标拉直了, 对每一个iTensor都定义了这个函数 Addr_idx这个二维数组的每一列实际上是所有非零block的量子数的编号(而不是量子数点值！)的组合
+            self.Addr_idx[0, nidx] = 0 #for rank=0
+            self.Addr_idx[0:rank, nidx] = iQN#[0:rank]
+            nidx += 1 
+            totDim += d   #最终得到self.data 的总长度
+        
+        self.nidx = nidx
+        self.totDim = totDim
+    
+        
+
+    def helper(self, iQN):
+        pass
+        tqn = self.QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
+        for i in range(1, self.rank):
+            tqn = tqn + self.QSp[i].QNs[iQN[i]]  
+        if tqn == self.totQN:
+            d = 1
+            for i in range(self.rank):  #计算某一block的data size 
+                d = d*self.QSp[i].Dims[iQN[i]]
+            return (iQN, d)
+        else:
+            return False
 
     def set_data_entrance_non_Abelian(self, order="F"):
         """
@@ -460,7 +539,8 @@ class iTensor(TensorBase):
                 
                 #print_vars(vars(),  ['j0, j1, m0, m1', 'j2, m2'])
                 try:
-                    cg = clebsch_gordan(j0, j1, j2, m0, m1, -m2)
+                    #cg = clebsch_gordan(j0, j1, j2, m0, m1, -m2)
+                    cg = clebsch_gordan(j0, j1, j2, m0, m1, m2)
                 except:
                     cg = 0
                 match = True if cg else False
@@ -485,7 +565,7 @@ class iTensor(TensorBase):
             else:
                 raise NotImplemented 
             if match:
-                print_vars(vars(),  ['cg'])
+                #print_vars(vars(),  ['cg'])
                 d = 1
                 for i in range(rank):  #计算某一block的data size 
                     d = d*QSp[i].Dims[iQN[i]]
@@ -1999,20 +2079,13 @@ class iTensor(TensorBase):
                 
         """
         rank = self.rank
-        #first is more efficient; second is more robust
-        if 0:       #copy is more robust, while no copy is faster
-            QSp=[self.QSp[P[i]].copy() for i in range(rank)]
-            totQN = self.totQN.copy()
-        else:
-            #print_vars(vars(),  ['repr(P)',  'rank'])
-            QSp=[self.QSp[P[i]] for i in range(rank)]
-            totQN = self.totQN
+        QSp=[self.QSp[P[i]] for i in range(rank)]   #no copy, faster
+        totQN = self.totQN
 
         Tp=iTensor(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
-        #Tp.data[:] = 0.0
 
-        pos=np.empty(self.rank, "int")
-        Dims=np.empty(self.rank, "int")
+        pos=np.empty(self.rank, int)
+        Dims=np.empty(self.rank, int)
         
         #permute each block
         #找到原来的block的位置与新的位置间的转换pidx<-->qidx
@@ -4501,6 +4574,15 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
+        if 1:
+            q0 = QspU1.easy_init([1, -1], [2, 4])
+            q1 = QspU1.easy_init([1, -1], [2, 3])
+            #q2 = QspU1.easy_init([1, -1], [3, 2])
+            q2 = q0*q1; q2.reverse()
+            
+            t3 = iTensor(QSp=[q0, q1, q2])
+            raise  
+            
         if 0:
 
             q0 = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[2, 2, 2, 2])
@@ -4536,25 +4618,27 @@ class Test_iTensor(unittest.TestCase):
             t = iTensor(QSp=[q0, q1, q2, q3])
             #print_vars(vars(),  ['t'])
             print_vars(vars(),  ['t.cg_coeff'])
-        if 1:
+        if 0:
             import time
             q0 = QspZ2.easy_init([0, 1, -1, 2, -2], [4, 3, 2, 1, 1])
             q1 = QspZ2.easy_init([0, -1, 1, 2, -1], [4, 3, 2, 1, 1] )
             q2 = QspZ2.easy_init([1, -1], [3, 2])
-            t0 = time.process_time()
-            for i in range(50000):
+            t0 = time.time()
+            for i in range(5000):
                 #set_player_state_auto(iter=i, record_at=0, info=0)    
                 t3 = iTensor(QSp=[q0, q1, q2])
                 
-            t1 = time.process_time()
+            t1 = time.time()
             print_vars(vars(),  ['t1-t0'])
-            
+        if 1:
+            tqn = QspU1.qn_id()
+            t3 = iTensor(rank=0, QSp=[], totQN=tqn)
             
 
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
-    if 0: 
+    if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
