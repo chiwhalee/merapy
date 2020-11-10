@@ -33,27 +33,29 @@
     as for Z2 (parity) symmetry, there is no difference between a vector and its dual, 
     that is to say need not distinguish upper and lower legs
 """
-from __future__ import division
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
-from builtins import range
-from builtins import *
-from past.utils import old_div
+#from __future__ import division
+#from __future__ import unicode_literals
+#from __future__ import print_function
+#from __future__ import absolute_import
+#from future import standard_library
+#standard_library.install_aliases()
+#from builtins import str
+#from builtins import range
+#from builtins import *
+
+#from past.utils import old_div
 from builtins import object
 import unittest 
 import numpy as np
 import warnings
-from abc import ABCMeta 
+from abc import (ABCMeta, ABC)
 
 
+#from py3nj import (clebsch_gordan, wigner, wigner3j, wigner6j, wigner9j)
 
-from merapy.utilities import print_vars
-from merapy.decorators import decorate_methods, tensor_player 
-from merapy.utilities import print_vars 
+
+#from merapy.utilities import print_vars
+#from merapy.decorators import decorate_methods, tensor_player 
 
 __all__=[  "QuantSpaceBase",  
     "QnU1", "QnZ2", "QnZ3", "QnTravial", 
@@ -62,12 +64,16 @@ __all__=[  "QuantSpaceBase",
 
 GROUP_NAMES = ["Travial", "Z2", "Z3", "U1"]
 
+
+
 #class QnBase(object):
-class QnBase():   #with object new python cannot load old pickled files,  I dont know why 
+class QnBase(ABC):   #with object new python cannot load old pickled files,  I dont know why 
     #__metaclass__ = ABCMeta
     """
         abstract base class, not meant for direct use
     """
+    #def __init__(self):
+    #    pass
     IS_Abelian = True
     #def __init__(self, value):
     #    pass
@@ -109,26 +115,10 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
             raise ValueError(self.val)
         return res
     
-    def set_val_del(self,val):
-        """
-        newly added, assign val to self.val
-        val: an instance of QuantumNum  or   an integer or an iterable
-        """
-        if val.__class__ == self.__class__:
-            self.val[:]=val.val[:]
-            return 
-        if type(val)==int:
-            self.val=np.array([val])  #(val,)
-            return
-        print("vvv", type(val), self.__class__)
-        print("self", type(self.val), "other", type(val))
-        self.val[:]=val[:]
-    
     def __eq__(self, other):
         return self._val == other._val 
     
     def __ne__(self, other):
-        #return np.all(self.val != other.val)
         return self._val != other._val 
 
     def set_val(self,val):
@@ -163,6 +153,9 @@ class QnBase():   #with object new python cannot load old pickled files,  I dont
         res.reverse()
         return res 
     
+    def copy(self):
+        return self.__class__(self._val)
+    
 class QnTravial(QnBase):
     SYMMETRY = "Travial"
     NUM_OF_SYMM = 1  #this may be an issue NUM_OF_SYMM should be 0?
@@ -172,7 +165,6 @@ class QnTravial(QnBase):
         """
             the param value is just for consistency with other QnClass 
         """
-        #self._val = np.array([1], np.int)
         self._val = 1
 
     def set_val(self, val):
@@ -226,7 +218,7 @@ class QnZ2(QnBase):
     QNS = (1, -1)   #all the elements in the algebra, 
     QnId = 1   # identity in the algebra
     
-    def __init__(self, value):
+    def __init__(self, value:int):
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
@@ -257,7 +249,7 @@ class QnZ3(QnBase):
     #QNS = (1, -1)
     QNS = (0, 1, 2)
     QnId = 0
-    def __init__(self, value):
+    def __init__(self, value:int):
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
@@ -294,7 +286,7 @@ class QnU1(QnBase):
     NUM_OF_SYMM = 1
     QNS = tuple(range(-10, 11))
     QnId = 0
-    def __init__(self, value):
+    def __init__(self, value:int):
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
@@ -336,7 +328,18 @@ class QnSU2(QnBase):
         self._val = value
     def conj(self):
         return QnSU2((self._val[0], -self._val[1]))
+    
+    def __add__(self, other):
+        """
+        """
+        return QnSU2((self._val[0] + other._val[0], self._val[1] + other._val[1]))
 
+    def reverse(self):
+        self._val = (self._val[0], -self._val[1])
+    
+    def cg_coeff(qn0, qn1, qn2):
+        return clebsch_gordan(qn0._val[0],  qn1._val[0], qn2._val[0], 
+                qn0._val[1],  qn1._val[1], qn2._val[1])
 
 #meth_names= ["copy"]
 #@decorate_methods(tensor_player, meth_names)
@@ -389,7 +392,8 @@ class QuantSpaceBase(object):
         if self._totDim is not None:
             return self._totDim
         else:
-            self._totDim = np.sum(self._dims[:self.nQN])  
+            #self._totDim = np.sum(self._dims[:self.nQN])  
+            self._totDim = sum(self._dims[:self.nQN])     #np.sum is no faster than builtin sum when acting on normal list of ints
             return self._totDim
 
     @property
@@ -402,7 +406,8 @@ class QuantSpaceBase(object):
         if self._totDim is not None:
             return self._totDim
         else:
-            self._totDim = np.sum(self._dims[:self.nQN])  
+            #self._totDim = np.sum(self._dims[:self.nQN])  
+            self._totDim = sum(self._dims[:self.nQN])     #np.sum is no faster than builtin sum when acting on normal list of ints
             return self._totDim
     
     @property
@@ -432,7 +437,8 @@ class QuantSpaceBase(object):
         if not self.nQN <= other.nQN:
             if info>0: print('__le__ reason: ', 2)
             return False
-        if not np.all(self._dims[:self.nQN]<=other._dims[:self.nQN]):
+        #if not np.all(self._dims[:self.nQN]<=other._dims[:self.nQN]):
+        if not all(self._dims[i]<=other._dims[i] for i in range(self.nQN)):
             if info>0: print('__le__ reason: ', 3, self._dims[:self.nQN], other._dims[:self.nQN])
             
             return False
@@ -466,9 +472,11 @@ class QuantSpaceBase(object):
             return False
             
         nQN = self.nQN
-        if not np.all(self.QNs[:nQN]==other.QNs[:nQN]):
+        #if not np.all(self.QNs[:nQN]==other.QNs[:nQN]):
+        if not all([self.QNs[i] == other.QNs[i] for i in range(nQN)]):
             return False 
-        if not np.all(self._dims[:nQN]==other._dims[:nQN]):
+        #if not np.all(self._dims[:nQN]==other._dims[:nQN]):
+        if not all([self._dims[i] == other._dims[i] for i in range(nQN)]):
             return False 
         return True
 
@@ -650,7 +658,7 @@ class QuantSpaceBase(object):
     def empty(cls):
         return cls(n=0, qns=[], dims=[])
     
-    def expand_totdim(self, totdim): 
+    def expand_totdim_del(self, totdim): 
         qns = self.QNs
         qns = [q.val for q in qns]
         dims = self.Dims[:self.nQN].copy() 
@@ -669,7 +677,7 @@ class QuantSpaceBase(object):
         ratial = dims/float(self.totDim)
         dims = totdim * ratial
         dims = dims.astype(np.int)
-        diff = np.sum(dims)-totdim
+        diff = sum(dims)-totdim
         if diff >0 or diff >self.nQN: 
             raise
         else: 
@@ -1004,7 +1012,44 @@ class QspSU2(QuantSpaceBase):
         qns1 = [cls.QnClass(i) for i in qns]
         dims = list(dims)
         return cls(n=n, qns=qns1, dims=dims)
+
+    def tensor_prod_test(self, other):
+        """ 
+            refs:
+                singh and vidal 2012 
+            
+            todo: change the name to prod in future 
+            note:
+                after tensor prod, the value of the qn in the qsp is not ordered. 
+        """
+        if self.nQN==0:
+            return other.copy()    #need copy here?
+        if other.nQN==0:
+            return self.copy()     #need copy here?
     
+        res = self.__class__(n=0, qns=[], dims=[])
+        res._totDim = 0
+
+        for i in range(self.nQN):
+            for j in range(other.nQN):
+                d0, d1 = self._dims[i], other._dims[j]
+                if 0:
+                    j0, m0 = self.QNs[i].val 
+                    j1, m1 = other.QNs[j].val 
+                    
+                    m = m0 + m1
+                    j = j0 + j1 
+                    
+                    jj, val = wigner.drc3jj(j0, j1, m0, m1)
+                    arg = np.where(val)
+                    print_vars(vars(),  ['j0, j1', 'm0, m1', 'd0, d1'])
+                    print_vars(vars(),  ['val', 'arg'])
+                
+                #res.add_to_quant_space(qn, d)
+        return res
+
+
+
 
 def symmetry_to_Qn(symmetry):
     temp = {"Travial":QnTravial, "Z2":QnZ2, "Z3":QnZ3, "U1":QnU1}
@@ -1077,23 +1122,6 @@ class TestIt(unittest.TestCase):
       
     
     def test_old_all(self): 
-        for symm in GROUP_NAMES:
-        #for symm in ["U1"]:
-        #for symm in []:
-            print(symm*10)
-            tq=test_qn(symmetry=symm)
-            print(tq.qsp_base)
-            pf=_performence
-            tq.add()
-            print("1"*100)
-            tq.update()
-            tq.reverse()
-            #tq.add_to_quant_space()
-            #tq.property()
-            #tq.pickle()
-            tq.eq()
-            #pf.copy_qn()
-            #pf.copy_qsp()
         if 1: 
             q1 = QspU1.max(16, 3)
             q2 = QspU1.max(17, 5)
@@ -1166,32 +1194,57 @@ class TestIt(unittest.TestCase):
             self.assertTrue(c==c1)
             
             
-    def test_expand_totdim(self): 
+    def xtest_expand_totdim(self): 
         if 1: 
             q=QspZ2.easy_init([1, -1], [2, 3])
-            qe = q.expand_totdim(11)
+            qe = q.expand_totdim_del(11)
             print_vars(vars(),  ['qe'])
             self.assertTrue(qe==QspZ2.easy_init([1, -1], [5, 6]))
 
         q=QspU1.easy_init([0, 1, -1], [4, 2, 3])
-        qe = q.expand_totdim(26)
+        qe = q.expand_totdim_del(26)
         print_vars(vars(),  ['qe'])
         self.assertTrue(qe==QspU1.easy_init([0, 1, -1], [12, 6, 8]))
 
     def test_temp(self): 
-        
-        qn = QnSU2((1, 1))
-        qn1 = qn.conj()
-        print_vars(vars(),  ['qn', 'qn1'])
-        
-        q = QspSU2.easy_init(qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[4, 4, 4, 4])
-        print_vars(vars(),  ['q'])
-        q = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[4, 4, 4, 4])
+        if 0:
+            j0, j1, m0, m1 = 10, 10, -2, 2
+            jj, val = wigner.drc3jj(j0, j1, m0, m1)
+            arg = np.where(val)
+            print_vars(vars(),  ['j0, j1', 'm0, m1', 'd0, d1'])
+            print_vars(vars(),  ['val', 'arg'])
             
+        if 1:
+            q0 = QnSU2((1, -1))
+            q1 = QnSU2((1, 1))
+            q2 = QnSU2((2, 0))
+            print_vars(vars(),  ['q0.cg_coeff(q1, q2)'])
+            print(clebsch_gordan(2, 2, 0 , -2, 2, 0))
+            
+        if 0:
+            qn = QnSU2((1, 1))
+            qn1 = qn.conj()
+            print_vars(vars(),  ['qn', 'qn1'])
+            
+            q = QspSU2.easy_init(qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[4, 4, 4, 4])
+            print_vars(vars(),  ['q'])
+            q = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[4, 4, 4, 4])
+            
+            qq = q.tensor_prod(q)
+            print_vars(vars(),  ['qq.totDim', 'q.totDim'])
+            print_vars(vars(),  ['qq'])
+
+        if 1:
+            q = QspSU2.easy_init(qns=[(1, 1), (1, -1)], dims=[1, 1])
+            q = QspSU2.easy_init(qns=[(1, 1), (1, -1)], dims=[1, 1])
+            qq = q.tensor_prod(q)
+            print_vars(vars(),  ['qq.totDim', 'q.totDim'])
+            print_vars(vars(),  ['qq'])
+
 
 if __name__ == "__main__":
         
-    if 0:
+    if 1:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     else: 
