@@ -20,7 +20,11 @@ if hostname == 'VirtualBox-Lab':
 else:
     if os1 == 'Linux':
         if is_py3:
-            from merapy.lib.linux_py3.random2 import mrandom
+            try:
+                from merapy.lib.linux_py3.random2 import mrandom
+            except:
+                from merapy.lib.linux_py3.random2_gfort import mrandom
+                
         else:
             from merapy.lib.linux_py2.random_64_ifort import mrandom
             

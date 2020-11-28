@@ -35,7 +35,10 @@ IS_PY3 = sys.version_info.major>2
 if os1 == 'Linux':
     if IS_PY3:
         #from merapy.lib.linux_py3.common_64_ifort import *
-        from merapy.lib.linux_py3.common import *
+        try:
+            from merapy.lib.linux_py3.common import *
+        except ImportError:
+            from merapy.lib.linux_py3.common_gfort import *
     else:
         from merapy.lib.linux_py2.common_64_ifort import *
     #from merapy.lib.common_64_ifort import *
