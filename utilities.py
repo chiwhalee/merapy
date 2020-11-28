@@ -217,13 +217,16 @@ def load(path, as_str=False, decompress=True, info=0):
         if as_str: 
             res= s
         else:
-            #print('sssssss', type(s), s[:200].decode('latin1'))
-            if IS_PY3:
-                #res = pickle.loads(s, encoding='utf8')
-                res = pickle.loads(s, encoding='latin1')
-                #res= pickle.loads(s, encoding='bytes')
-            else:
-                res = pickle.loads(s)
+            try:
+                #print('sssssss', type(s), s[:200].decode('latin1'))
+                if IS_PY3:
+                    #res = pickle.loads(s, encoding='utf8')
+                    res = pickle.loads(s, encoding='latin1')
+                    #res= pickle.loads(s, encoding='bytes')
+                else:
+                    res = pickle.loads(s)
+            except Exception:
+                raise  
         #res= pickle_any.loads(s)
     return res
 

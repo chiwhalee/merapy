@@ -35,7 +35,7 @@ from merapy.tensor_factory import iTensorFactory
 from merapy.config import gen_backup_base_dir
 from merapy.decorators import (tensor_player, get_player_state,  set_player_state_manual, set_player_state_auto)
 from merapy.utilities import print_vars
-import merapy.crandom as crandom 
+#import merapy.crandom as crandom 
 from merapy.models import *
 from merapy.context_util import rpyc_conn_local, rpyc_conn_local_zerodeploy, rpyc_load
 from merapy.mera import Mera

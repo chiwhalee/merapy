@@ -69,7 +69,7 @@ from merapy import common_util
 
 from merapy import array_permutation
 from merapy.set1 import *
-from merapy import crandom
+#from merapy import crandom
 from merapy.utilities import get_local
 from merapy import make_qsp
 from merapy.decorators import (tensor_player, decorate_methods, set_player_state_manual, set_player_state_auto)
@@ -381,7 +381,8 @@ class iTensor(TensorBase):
             p += 1 
             tqn = QSp[0].QNs[iQN[0]]  #这里计算了总量子数 tqni, 用于判断量子数组合是否满足指定的对称性要求, 这个不其眼的一步实际上是核心——实现了稀疏存储
             for i in range(1, rank):
-                tqn = tqn + QSp[i].QNs[iQN[i]]  
+                #tqn = tqn + QSp[i].QNs[iQN[i]]  
+                tqn = tqn.__add__(QSp[i].QNs[iQN[i]]) 
             
             if tqn == totqn:
                 d = 1
@@ -1476,7 +1477,8 @@ class iTensor(TensorBase):
             count = 0
             for j, p in enumerate(qsp3[ii: ]): 
                 
-                temp = temp*p 
+                #temp = temp*p 
+                temp = temp.__mul__(p)
                 if temp.totDim < q.totDim :
                     leg_map[i] += (ii + j, )
                     count += 1  
@@ -2148,7 +2150,8 @@ class iTensor(TensorBase):
 
         rank1, rank2 = self.rank, T2.rank 
         rank3 = rank1+rank2-div-div
-        tQN = self.totQN+T2.totQN
+        #tQN = self.totQN+T2.totQN
+        tQN = self.totQN.__add__(T2.totQN)
         shift = rank1-div
         QSp = self.QSp[:shift]  #copy qsp is more robust, while no copy is faster
         QSp.extend(T2.QSp[div:rank2])
@@ -3014,7 +3017,8 @@ class iTensor(TensorBase):
             QSp[i+rank1+rank3] = T2.QSp[i+rank2].copy()
         
         #这里暗含了一个张量积标识fusion的过程
-        totQN = T1.totQN+T2.totQN
+        #totQN = T1.totQN+T2.totQN
+        totQN = T1.totQN.__add__(T2.totQN)
         T3= iTensor(T1.rank+T2.rank, QSp, totQN, use_buf=use_buf)
         #print 'ttt', totQN.val, T1.totQN.val, T2.totQN.val
         
@@ -3344,7 +3348,8 @@ class iTensor(TensorBase):
         #qsp_delta = self.qsp_class(1, [qn_delta], [1])
         #self.QSp[qsp_id] = self.QSp[qsp_id]*qsp_delta 
         self.QSp[qsp_id].shift_qn(qn_delta)
-        self.totQN = self.totQN + qn_delta
+        #self.totQN = self.totQN + qn_delta
+        self.totQN = self.totQN.__add__(qn_delta) 
     
     @staticmethod 
     def get_player_status():
@@ -4575,6 +4580,32 @@ class Test_iTensor(unittest.TestCase):
     
     def test_temp(self): 
         if 1:
+            from quantum_number_py import A
+            a = A(1)
+            a + a
+            raise  
+            
+            print(QspU1.MaxQNNum, type(QspU1.QnClass))
+            qn = QnU1(1)
+            
+           
+            #a = qn.__add__(qn)
+            print_vars(vars(),  ['a'])
+            
+            print_vars(vars(),  ['qn'])
+            QspU1.QnClass.qn_id()
+            print(QnU1.SYMMETRY)
+            
+            qsp = QspU1(1, [qn], [1])
+            print_vars(vars(),  ['qsp'])
+           
+            print(qsp.QnClass.qn_id())
+            print(type(QspU1.null()))
+            print_vars(vars(),  ['QspZ2.null()'])
+            raise  
+            
+            raise  
+            #raise  
             q0 = QspU1.easy_init([1, -1], [2, 4])
             q1 = QspU1.easy_init([1, -1], [2, 3])
             #q2 = QspU1.easy_init([1, -1], [3, 2])
@@ -4638,7 +4669,7 @@ class Test_iTensor(unittest.TestCase):
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
-    if 1: 
+    if 0: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()

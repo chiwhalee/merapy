@@ -21,7 +21,7 @@ import numbers
 from numbers import Number
 import pickle as pickle 
 
-from merapy import crandom
+#from merapy import crandom
 from merapy.utilities import print_vars
 
 class TensorBase(object):
@@ -95,7 +95,8 @@ class TensorBase(object):
             #attention_this_may_be_wrong  rand does not support dtype
             #self.data[:self.totDim] = np.random.random(self.totDim)
 
-        self.data[:self.totDim] = [crandom.rand()-0.5 for i in range(self.totDim)]
+        #self.data[:self.totDim] = [crandom.rand()-0.5 for i in range(self.totDim)]
+        self.data[:self.totDim] = [np.random.random()-0.5 for i in range(self.totDim)]
 
         #except: print "error, self.data is not materialized"
 

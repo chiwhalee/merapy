@@ -378,7 +378,8 @@ def tensor_player(which):
                 rank1 = self.rank
                 rank2=T2.rank
                 rank3=rank1+rank2-div-div
-                tQN = self.totQN+T2.totQN
+                #tQN = self.totQN+T2.totQN
+                tQN = self.totQN.__add__(T2.totQN)
                 shift = rank1-div
                 if 1:
                     QSp = [self.QSp[i].copy() for i in range(shift)]
@@ -462,7 +463,8 @@ def tensor_player(which):
                 rank1 = self.rank
                 rank2 = T2.rank
                 rank3 = rank1+rank2-div-div
-                tQN = self.totQN+T2.totQN
+                #tQN = self.totQN+T2.totQN
+                tQN = self.totQN.__add__(T2.totQN)
                 shift = rank1-div
                 
                 QSp = self.QSp[:shift]

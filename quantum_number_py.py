@@ -33,23 +33,16 @@
     as for Z2 (parity) symmetry, there is no difference between a vector and its dual, 
     that is to say need not distinguish upper and lower legs
 """
-#from __future__ import division
-#from __future__ import unicode_literals
-#from __future__ import print_function
-#from __future__ import absolute_import
-#from future import standard_library
-#standard_library.install_aliases()
-#from builtins import str
-#from builtins import range
-#from builtins import *
 
 #from past.utils import old_div
 from builtins import object
 import unittest 
-import numpy as np
+#import numpy as np
 import warnings
-from abc import (ABCMeta, ABC)
-
+from abc import (ABCMeta, ABC, abstractmethod)
+from collections.abc import Iterable, Sized
+from typing import (Any, Tuple, List, Type, Callable,  Generic, TypeVar, Callable, get_type_hints, 
+        Optional, ClassVar, no_type_check, overload, Union)
 
 #from py3nj import (clebsch_gordan, wigner, wigner3j, wigner6j, wigner9j)
 
@@ -65,6 +58,18 @@ __all__=[  "QuantSpaceBase",
 GROUP_NAMES = ["Travial", "Z2", "Z3", "U1"]
 
 
+Ta = TypeVar('Ta', bound='A') 
+class A:
+    def __init__(self, i:int)->None:
+        self.i = i
+    
+    def __add__(self:Ta, other:Ta)->int:
+        return self.i + other.i
+
+
+Tqn = TypeVar('Tqn', bound='QnBase') 
+
+#Q = TypeVar('Q', bound=QnBase)
 
 #class QnBase(object):
 class QnBase(ABC):   #with object new python cannot load old pickled files,  I dont know why 
@@ -72,47 +77,48 @@ class QnBase(ABC):   #with object new python cannot load old pickled files,  I d
     """
         abstract base class, not meant for direct use
     """
+    
+    #SYMMETRY:ClassVar[str] = "NaN"   #add this line only for passing compile of mypyc
+    IS_Abelian = True
+    QnId:ClassVar[Union[int, None]] = None
+    SYMMETRY:ClassVar[Union[str, None]] = None
     #def __init__(self):
     #    pass
-    IS_Abelian = True
     #def __init__(self, value):
     #    pass
-    def __getstate__1(self):
-        """ not workable"""
-        #print "pickled"
-        return self._val
-    def __setstate__1(self, state):
-        self._val = state["_val"]
+    #def __getstate__1(self) -> int:
+    #    """ not workable"""
+    #    return self._val
+    #def __setstate__1(self, state) -> int:
+    #    self._val = state["_val"]
         
     @property
-    def val(self):
+    def val(self) -> int:
         return self._val
 
-    @val.setter #it seems that setter effects only when QnBase inherite from object
-    def val(self, new_val):
-        #print 
-        raise NotImplemented("this don't work, because of olb-style class")
-        self._val = new_val
+    #@val.setter #it seems that setter effects only when QnBase inherite from object
+    #def val(self, new_val):
+    #    #print 
+    #    raise NotImplemented("this don't work, because of olb-style class")
+    #    self._val = new_val
     
-    def __repr__(self):
+    def __repr__(self)->str:
         """
         newly added
         """
         #res= repr(self.val)
         #res="(" + "%5d"*self.num_of_symm +")"  % tuple(self.val)
-        if isinstance(self.val, np.ndarray):
-            #res=("(" + "%5d"*QuantumNum.NUM_OF_SYMM+")")  % tuple(self.val)
-            res=("(" + "%5d"*self.val.shape[0]+")")  % tuple(self.val)
-            #print "in __repr______"
-            #res= str(self.val)
-        elif isinstance(self.val, int):
-            res= ("(" + "%5d"")")  % self.val
-            #res=("(" + "%5d"*self.val.shape[0]+")")  % tuple(self.val)
-            #res=("(" + "%5d"*self.NUM_OF_SYMM+")")  % tuple(self.val)
+        #if isinstance(self.val, np.ndarray):
+        #if isinstance(self._val, Iterable):
+        #    res=("(" + "%5d"*len(self._val)+")")  % tuple(self._val)
+        if 0:
+            pass
+        elif isinstance(self._val, int):
+            res= ("(" + "%5d"")")  % self._val
         elif isinstance(self, QnSU2):
             res = '({}, {})'.format(self._val[0], self._val[1])
         else:
-            raise ValueError(self.val)
+            raise ValueError(type(self._val))
         return res
     
     def __eq__(self, other):
@@ -142,7 +148,8 @@ class QnBase(ABC):   #with object new python cannot load old pickled files,  I d
     def sum(cls, qn_list): 
         res = qn_list[0]
         for i in qn_list[1: ]: 
-            res= res + i
+            #res= res + i
+            res= res.__add__(i)
         return res
     
     def qsp_class(self): 
@@ -153,15 +160,15 @@ class QnBase(ABC):   #with object new python cannot load old pickled files,  I d
         res.reverse()
         return res 
     
-    def copy(self):
+    def copy(self):   
         return self.__class__(self._val)
     
 class QnTravial(QnBase):
-    SYMMETRY = "Travial"
+    SYMMETRY:ClassVar[str] = "Travial"
     NUM_OF_SYMM = 1  #this may be an issue NUM_OF_SYMM should be 0?
     QNS = (1, )
-    QnId = 1
-    def __init__(self, value=None):
+    QnId:ClassVar[int] = 1
+    def __init__(self, value=1) -> None:
         """
             the param value is just for consistency with other QnClass 
         """
@@ -179,7 +186,7 @@ class QnTravial(QnBase):
     def reverse(self):
         pass # do nothing
     
-    def __add__(self, other):
+    def __add__(self, other:'QnTravial')->'QnTravial':
         return self 
     
     def __eq__(self, other):
@@ -213,12 +220,12 @@ class QnZ2(QnBase):
             对于单个自旋,1, -1 分别对应于朝上和朝下
             
     """
-    SYMMETRY = "Z2"   #precisely, this is used for spin-parity symm
+    SYMMETRY:ClassVar[str] = "Z2"   #precisely, this is used for spin-parity symm
     NUM_OF_SYMM = 1
     QNS = (1, -1)   #all the elements in the algebra, 
-    QnId = 1   # identity in the algebra
+    QnId:ClassVar[int] = 1 # identity in the algebra
     
-    def __init__(self, value:int):
+    def __init__(self, value:int) -> None:
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
@@ -235,7 +242,8 @@ class QnZ2(QnBase):
         """
         pass
 
-    def __add__(self, other):
+
+    def __add__(self, other:'QnZ2')->'QnZ2':
         """
             see QN_Add in f90
             q: 所谓 add 应该是该对称算子乘积的特征值, 因为是Abelian群，
@@ -243,13 +251,18 @@ class QnZ2(QnBase):
         """
         return QnZ2(self._val*other._val)
 
+    @classmethod
+    def qn_id(cls):
+        return QnZ2(1)
+
 class QnZ3(QnBase):
-    SYMMETRY = "Z3"
+    SYMMETRY:ClassVar[str] = "Z3"
     NUM_OF_SYMM = 1
     #QNS = (1, -1)
     QNS = (0, 1, 2)
-    QnId = 0
-    def __init__(self, value:int):
+    QnId:ClassVar[int] = 0 # identity in the algebra
+    
+    def __init__(self, value:int) -> None:
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
@@ -270,7 +283,7 @@ class QnZ3(QnBase):
         pass
         self._val = (3-self._val)%3
 
-    def __add__(self, other):
+    def __add__(self, other:'QnZ3')->'QnZ3':
         """
             see QN_Add in f90
             q: 所谓 add 应该是该对称算子乘积的特征值, 因为是Abelian群，
@@ -282,21 +295,22 @@ class QnZ3(QnBase):
         return QnZ3(self.val*other.val)
 
 class QnU1(QnBase):
-    SYMMETRY = "U1"
+    SYMMETRY:ClassVar[str]= "U1"
     NUM_OF_SYMM = 1
     QNS = tuple(range(-10, 11))
-    QnId = 0
-    def __init__(self, value:int):
+    QnId:ClassVar[int] = 0 # identity in the algebra
+    
+    def __init__(self, value:int) -> None:
         """
             把val统一写成np.ndarray类型, 这样有利有弊: 利在可用array的各种运算，比如*法；弊在赋值麻烦些
             num_of_symm: newly added atribute by lzh, 
         """
         self._val = value
     
-    def __new__x(cls, value):
-        self = super(QnU1, cls).__new__(cls, value)
-        self._val = value
-        return value
+    #def __new__x(cls, value):
+    #    self = super(QnU1, cls).__new__(cls, value)
+    #    self._val = value
+    #    return value
     
     def copy(self):
         return  QnU1(self._val)
@@ -306,23 +320,39 @@ class QnU1(QnBase):
             reverse refers to conjugate repr. of a group
         """
         self._val = -self._val
-
-    def __add__(self, other):
+    
+    
+    def __add__(self, other:'QnU1')->'QnU1':   #def __add__(self, other:'QnU1')->Type['QnU1']:
         """
             所谓 add 应该是该对称算子乘积的特征值, 因为是Abelian群，
             故变成加法
         """
         return QnU1(self._val + other._val)
+
+    def add(self, other:'QnU1')->'QnU1':
+        """
+            所谓 add 应该是该对称算子乘积的特征值, 因为是Abelian群，
+            故变成加法
+        """
+        return QnU1(self._val + other._val)
+
     
+
     def conj(self): 
         return QnU1(-self._val)
+    
+    @classmethod
+    def qn_id(cls):
+        return QnU1(0)
 
 class QnSU2(QnBase):
-    IS_Abelian = False
-    SYMMETRY = "SU2"
+    SYMMETRY:ClassVar[str] = 'SU2'
     NUM_OF_SYMM = 1
-    QnId = (0, 0)    # (j, m)
-    def __init__(self, value):
+    QnId:ClassVar = (0, 0)    # (j, m)
+    
+    IS_Abelian = False
+    #def __init__(self, value):
+    def __init__(self, value:Tuple[int, int]) -> None:
         """
         """
         self._val = value
@@ -337,9 +367,15 @@ class QnSU2(QnBase):
     def reverse(self):
         self._val = (self._val[0], -self._val[1])
     
-    def cg_coeff(qn0, qn1, qn2):
-        return clebsch_gordan(qn0._val[0],  qn1._val[0], qn2._val[0], 
-                qn0._val[1],  qn1._val[1], qn2._val[1])
+    #commented only for debuging mypy
+    #def cg_coeff(qn0, qn1, qn2):
+    #    return clebsch_gordan(qn0._val[0],  qn1._val[0], qn2._val[0], 
+    #            qn0._val[1],  qn1._val[1], qn2._val[1])
+
+type_QnU1 = TypeVar('type_QnU1', bound=QnU1)
+
+T = TypeVar('T', bound='QuantSpaceBase')
+
 
 #meth_names= ["copy"]
 #@decorate_methods(tensor_player, meth_names)
@@ -362,8 +398,12 @@ class QuantSpaceBase(object):
                 3. save memory
             
     """
-    IS_Abelian = True
-    def __init__(self, n, qns, dims):
+    IS_Abelian:ClassVar[bool] = True
+    #QnClass:Type = QnBase
+    #QnClass:ClassVar[Type['QnBase']] = QnBase
+    QnClass:ClassVar
+    #def __init__(self, n, qns, dims) -> None:
+    def __init__(self, n:int, qns:List, dims:List[int])->None:
         """
             QSp真正有用的只有 QNs, _dims 两个属性
             _dims: 每个量子数对应子空间的维数
@@ -379,17 +419,17 @@ class QuantSpaceBase(object):
         #self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
         #self._dims[:n] = dims[:n]
         self._dims = dims
-        self._totDim = None
+        self._totDim = -1 
         self.QNs = qns
     
     @property
-    def totDim(self):
+    def totDim(self) -> int:
         """
             lazy evaluation
         """
         #if hasattr(self, "_totDim"):
         #    return self._totDim
-        if self._totDim is not None:
+        if self._totDim != -1 :
             return self._totDim
         else:
             #self._totDim = np.sum(self._dims[:self.nQN])  
@@ -397,7 +437,7 @@ class QuantSpaceBase(object):
             return self._totDim
 
     @property
-    def tot_dim(self):  # replace tot_Dim in future 
+    def tot_dim(self) -> int:  # replace tot_Dim in future 
         """
             lazy evaluation
         """
@@ -411,11 +451,12 @@ class QuantSpaceBase(object):
             return self._totDim
     
     @property
-    def symmetry(self): 
+    @abstractmethod
+    def symmetry(self) -> Optional[str]: 
         return self.QnClass.SYMMETRY
     
     @property
-    def Dims(self):
+    def Dims(self) -> List[int]:
         return self._dims
     
     @Dims.setter
@@ -423,14 +464,15 @@ class QuantSpaceBase(object):
         self._dims[:len(new_dims)] = new_dims
         self._totDim = sum(self._dims)
 
-    def __ge__(self, other): 
+    def __ge__(self, other) -> bool: 
         if self.QnClass != other.QnClass: 
             return False
         if self.nQN < other.nQN: 
             return False
         return not self < other
         
-    def __le__(self, other, info=0):
+    def __le__(self, other) -> bool:
+        info=0  #mypyc not allow pass 3 args to __le__
         if self.QnClass != other.QnClass: 
             if info>0: print('__le__ reason: ', 1)
             return False
@@ -463,7 +505,7 @@ class QuantSpaceBase(object):
             return False
         return True
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         """
         """
         if self.nQN != other.nQN:
@@ -480,17 +522,14 @@ class QuantSpaceBase(object):
             return False 
         return True
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not self.__eq__(other)
 
-    def __repr__(self,exclude=["RefQN"]):
+    def __repr__(self) -> str:
         """ 
        
         """
-        keys= ["class", 'nQN', 'QNs', '_dims', 'RefQN']
-        if exclude:
-            for k in exclude:
-                keys.remove(k)
+        keys= ["class", 'nQN', 'QNs', '_dims', ]
         res= ""
         n = self.nQN
         temp = []
@@ -504,7 +543,8 @@ class QuantSpaceBase(object):
         return res
     
     def __mul__(self, other): 
-        return self.add(other)
+        #return self.add(other)
+        return self.tensor_prod(other)
     
     def __div__(self, other): 
         """
@@ -516,10 +556,10 @@ class QuantSpaceBase(object):
         msg = 'divide of qsp cant be defined,  as it is not unique. see doc string'
         raise NotImplemented(msg)
     
-    def __pow__(self, n): 
+    def __pow__(self, n:int): 
         res= self.__class__.null()
         for i in range(n): 
-            res= res*self
+            res= res.__mul__(self)
         return res 
     
     @classmethod
@@ -549,7 +589,7 @@ class QuantSpaceBase(object):
         return res 
     
     #@tensor_player(which="Qsp_copy")
-    def copy(self, reverse=False):
+    def copy(self:T, reverse=False)->T:  # see here for the neccisity of type hint T https://www.python.org/dev/peps/pep-0484/#id34
         qns= [q.copy() for q in self.QNs[:self.nQN]]
         #other = self.__class__(n=self.nQN, qns=qns, dims=self._dims)
         other = self.__class__(n=self.nQN, qns=qns, dims=self._dims.copy())
@@ -573,7 +613,8 @@ class QuantSpaceBase(object):
         if qsp_max is not None:
             nqn = 0
             QNs= []
-            _dims= np.empty(self.MaxQNNum, np.int)
+            #_dims= np.empty(self.MaxQNNum, np.int)
+            _dims= [0 for i in range(self.MaxQNNum)]
             for n in range(self.nQN):
                 i= qsp_max.has_quant_num(self.QNs[n])
                 if i>=0:
@@ -589,7 +630,6 @@ class QuantSpaceBase(object):
             for i in reverse:
                 res[i].reverse()
         return res
-
 
     def has_quant_num(self, qn):
         """
@@ -615,7 +655,7 @@ class QuantSpaceBase(object):
             self._dims[i] += d  
         self._totDim = self.totDim  + d
 
-    def tensor_prod(self, other):
+    def tensor_prod(self:T, other:T)->T:
         """ 
              although named add, acturally tensorprod of self and other
             todo: change the name to prod in future 
@@ -632,12 +672,13 @@ class QuantSpaceBase(object):
 
         for i in range(self.nQN):
             for j in range(other.nQN):
-                qn = self.QNs[i] + other.QNs[j]
+                #qn = self.QNs[i] + other.QNs[j]
+                qn = self.QNs[i].__add__(other.QNs[j])
                 d = self._dims[i] * other._dims[j]
                 res.add_to_quant_space(qn, d)
         return res
     
-    add = tensor_prod  #def add
+    #add = tensor_prod  #def add
     
     @staticmethod
     def prod_many( qsp_list): 
@@ -647,7 +688,10 @@ class QuantSpaceBase(object):
         return q 
     
     @classmethod
-    def null(cls):
+    #def null(cls) ->Type[QuantSpaceBase]:
+    #def null(cls)->Union['QspZ2', 'QspU1', 'QspTravial', 'QuantSpaceBase']:  #invaled
+    #def null(cls) -> 'QuantSpaceBase':
+    def null(cls:Type[T]) -> T:
         """
             a trivial (1D) vector space
         """
@@ -658,25 +702,16 @@ class QuantSpaceBase(object):
     def empty(cls):
         return cls(n=0, qns=[], dims=[])
     
-    def expand_totdim_del(self, totdim): 
+    def expand_totdim(self, totdim): 
         qns = self.QNs
         qns = [q.val for q in qns]
         dims = self.Dims[:self.nQN].copy() 
-        if 0: 
-            n = old_div(totdim,self.totDim)
-            residual = totdim%self.totDim 
-            print_vars(vars(),  ['qns', 'dims', 'self.totDim', 'n'])
-            dims *= n 
-            #residual = totdim-()
-            if residual>0: 
-                #for i, j in enumerate(xrange(totdim-dim.size)): 
-                for i in range(residual):
-                    print_vars(vars(),  ['residual', 'i'])
-                    dims[i] += 1
         
-        ratial = dims/float(self.totDim)
-        dims = totdim * ratial
-        dims = dims.astype(np.int)
+        #ratial = dims/float(self.totDim)
+        ratial = [d/float(self.totDim) for d in dims ]
+        #dims = totdim * ratial
+        dims= [totdim*d for d in ratial]
+        dims = [int(i) for i in dims]
         diff = sum(dims)-totdim
         if diff >0 or diff >self.nQN: 
             raise
@@ -694,7 +729,7 @@ class QuantSpaceBase(object):
             self.add_to_quant_space(qn, dim)
     
     @classmethod
-    def qn_id(cls):
+    def qn_id(cls:Type[T])->Tqn:
         return cls.QnClass.qn_id()
     
     def get_dim_for_qn(self, qn):
@@ -706,8 +741,9 @@ class QuantSpaceBase(object):
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
-    QnClass= QnTravial
-    def __init__(self, n, qns, dims):
+    #QnClass:Type[QnBase]= QnTravial
+    QnClass:ClassVar = QnTravial
+    def __init__(self, n, qns, dims) -> None:
         #self.nQN = n
         #self._dims = np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
         #self._dims[:n] = dims[:n]
@@ -719,7 +755,7 @@ class QspTravial(QuantSpaceBase):
     def set_base(cls, dim=None):
         if dim is None:
             dim = 2
-        qsp_base = QspTravial(n=1, qns=[cls.qn_id()], dims=[dim])
+        qsp_base = QspTravial(n=1, qns=[cls.QnClass.qn_id()], dims=[dim])
         
         #qn_identity = QnTravial()
         qn_identity = cls.QnClass.qn_id()
@@ -747,9 +783,11 @@ class QspTravial(QuantSpaceBase):
         pass
     
 class QspZ2(QuantSpaceBase):
+#class QspZ2(Generic[T]):
     MaxQNNum = 2
-    QnClass = QnZ2
-    def __init__(self, n, qns, dims,  RefQN=None):
+    #QnClass:Type = QnZ2
+    QnClass:ClassVar[Type['QnZ2']] = QnZ2
+    def __init__(self, n, qns, dims) -> None:
         """
 
         """
@@ -772,13 +810,13 @@ class QspZ2(QuantSpaceBase):
         """
         raise NotImplemented
         
-        b0 = other._dims[0]
-        b1 = other._dims[1]
+        #b0 = other._dims[0]
+        #b1 = other._dims[1]
+        #
+        #c0 = self._dims[0]
+        #c1 = self._dims[1]
+        #res= self.__class__.easy_init([1, -1], [d0, d1])
         
-        c0 = self._dims[0]
-        c1 = self._dims[1]
-        res= self.__class__.easy_init([1, -1], [d0, d1])
-        return res 
     
     @classmethod
     def easy_init(cls, qns=None, dims=None):
@@ -834,11 +872,23 @@ class QspZ2(QuantSpaceBase):
             qsp_max2.update()
         #return qsp_max, qsp_max2
         return qsp_max
+   
+    #@classmethod
+    #def qn_id(cls)->QnZ2:
+    #    return QnZ2(1)
     
+    #@classmethod
+    #def null(cls) -> 'QspZ2': #def null(cls) ->Type[QuantSpaceBase]:  #def null(cls)->Union['QspZ2', 'QspU1', 'QspTravial', 'QuantSpaceBase']:  #invaled
+    #    """
+    #        a trivial (1D) vector space
+    #    """
+    #    qn = QnZ2.qn_id()
+    #    return  cls(n=1, qns=[qn], dims=[1])
+   
 class QspZ3(QuantSpaceBase):
     MaxQNNum = 3
-    QnClass = QnZ3
-    def __init__(self, n, qns, dims,  RefQN=None):
+    QnClass:ClassVar = QnZ3
+    def __init__(self, n, qns, dims) -> None:
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
         #self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
 
@@ -869,14 +919,7 @@ class QspZ3(QuantSpaceBase):
         qns=[QnZ3(i) for i in qns1]
         qsp_max = QspZ3(n=3, qns=qns, dims=dims)
 
-        if 0:
-            dims= [3, 3]
-            qns=[QnZ3(i) for i in qns1]
-            qsp_max2 = QspZ3(n=3, qns=qns, dims=dims)
-            #qsp_max2.RefQN[0,0:2] = [2,1]
-            #qsp_max2.RefQN[1,0:2] = [0,1]
-            qsp_max2.update()
-        #return qsp_max, qsp_max2
+        
         return qsp_max
 
 class QspU1(QuantSpaceBase):
@@ -884,12 +927,26 @@ class QspU1(QuantSpaceBase):
     #issue: 数目太多慢，太少不够，需要改进
     #MaxQNNum = 30 
     #MaxQNNum = 15
-    MaxQNNum = 20 #for fermion hubbard model, if nu=0.1, it requeres this number larger
-    QnClass = QnU1
-    def __init__(self, n, qns, dims, RefQN=None):
+    #for fermion hubbard model, if nu=0.1, it requeres this number larger
+    #MaxQNNum:ClassVar = 20  
+    MaxQNNum:ClassVar[int] = 20  
+    
+    #QnClass:Type[QnBase] = QnU1
+    #QnClass:Type = QnU1
+    #QnClass:type = QnU1
+    QnClass:ClassVar = QnU1
+    def __init__(self, n:int, qns:List, dims:List[int])->None:
         """
         """
-        QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
+        #QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
+        
+        self.nQN = n
+        #self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
+        #self._dims[:n] = dims[:n]
+        self._dims = dims
+        self._totDim:int = -1 
+        self.QNs = qns
+        
     
     @classmethod
     def easy_init(cls, qns=None, dims=None):
@@ -919,9 +976,9 @@ class QspU1(QuantSpaceBase):
             0b <-->    <du|
         """
 
-        #qn_identity = QnU1(0)
-        qn_identity = cls.QnClass.qn_id()
-        dims= (2, 1, 1)
+        qn_identity = QnU1(0)
+        #qn_identity = cls.QnClass.qn_id()
+        dims= [2, 1, 1]
         qns1 = (0, 1, -1)
         qns = [QnU1(i) for i in qns1] 
         qsp_base = QspU1(n=3, qns=qns, dims=dims)
@@ -946,27 +1003,25 @@ class QspU1(QuantSpaceBase):
 
         qsp_max = {}
         for i in range(1, 10):
-            qsp_max[(3, i*4)] = QspU1.easy_init((0, 1, -1), i*np.array((2, 1, 1)))
+            qsp_max[(3, i*4)] = QspU1.easy_init((0, 1, -1), [2*i, 1*i, 1*i])
             #qsp_max[(5, i*4  + 2)] = QspU1.easy_init((0, 1, -1, 2, -2), i*np.array((2, 1, 1, 1, 1)))
         
         #qsp_max[(3, 14)] = QspU1.easy_init((0, 1, -1), np.array((8, 3, 3)))
         
         qn5 = (0, 1, -1, 2, -2)
-        qsp_max[(5, 6)] = QspU1.easy_init( qn5, np.array((2, 1, 1, 1, 1)))
-        qsp_max[(5, 10)] = QspU1.easy_init(qn5, np.array((4, 2, 2, 1, 1)))
-        qsp_max[(5, 13)] = QspU1.easy_init(qn5, np.array((5, 3, 3, 1, 1)))
-        qsp_max[(5, 14)] = QspU1.easy_init(qn5, np.array((6, 3, 3, 1, 1)))
-        #qsp_max[(5, 16)] = QspU1.easy_init(qn5, np.array((8, 3, 3, 1, 1)))
-        qsp_max[(5, 16)] = QspU1.easy_init(qn5, np.array((6, 4, 4, 1, 1)))
-        qsp_max[(5, 17)] = QspU1.easy_init(qn5, np.array((7, 4, 4, 1, 1)))
-        qsp_max[(5, 18)] = QspU1.easy_init(qn5, np.array((8, 4, 4, 1, 1)))
-        #qsp_max[(5, 20)] = QspU1.easy_init(qn5, np.array((8, 4, 4, 2, 2)))
-        qsp_max[(5, 21)] = QspU1.easy_init(qn5, np.array((9, 5, 5, 1, 1)))
-        qsp_max[(5, 24)] = QspU1.easy_init(qn5, np.array((10, 5, 5, 2, 2)))
-        qsp_max[(5, 27)] = QspU1.easy_init(qn5, np.array((11, 6, 6, 2, 2)))
-        qsp_max[(5, 30)] = QspU1.easy_init(qn5, np.array((12, 7, 7, 2, 2)))
-        qsp_max[(5, 40)] = QspU1.easy_init(qn5, np.array((16, 9, 9, 3, 3)))
-        qsp_max[(5, 50)] = QspU1.easy_init(qn5, np.array((20, 11, 11, 4, 4)))
+        qsp_max[(5, 6)] = QspU1.easy_init( qn5, [2, 1, 1, 1, 1])
+        qsp_max[(5, 10)] = QspU1.easy_init(qn5, [4, 2, 2, 1, 1])
+        qsp_max[(5, 13)] = QspU1.easy_init(qn5, [5, 3, 3, 1, 1])
+        qsp_max[(5, 14)] = QspU1.easy_init(qn5, [6, 3, 3, 1, 1])
+        qsp_max[(5, 16)] = QspU1.easy_init(qn5, [6, 4, 4, 1, 1])
+        qsp_max[(5, 17)] = QspU1.easy_init(qn5, [7, 4, 4, 1, 1])
+        qsp_max[(5, 18)] = QspU1.easy_init(qn5, [8, 4, 4, 1, 1])
+        qsp_max[(5, 21)] = QspU1.easy_init(qn5, [9, 5, 5, 1, 1])
+        qsp_max[(5, 24)] = QspU1.easy_init(qn5, [10, 5, 5, 2, 2])
+        qsp_max[(5, 27)] = QspU1.easy_init(qn5, [11, 6, 6, 2, 2])
+        qsp_max[(5, 30)] = QspU1.easy_init(qn5, [12, 7, 7, 2, 2])
+        qsp_max[(5, 40)] = QspU1.easy_init(qn5, [16, 9, 9, 3, 3])
+        qsp_max[(5, 50)] = QspU1.easy_init(qn5, [20, 11, 11, 4, 4])
         try:
             return qsp_max[(nqn, trunc_dim)]
         except KeyError as err:
@@ -985,6 +1040,12 @@ class QspU1(QuantSpaceBase):
         for i in range(n):
             self.QNs[i]._val += qn_delta 
     
+    def __mul__(self, other:'QspU1')->'QspU1': 
+        #return self.add(other)
+        return self.tensor_prod(other)
+   
+        
+   
 class QspU1_half(QuantSpaceBase):
     """
         half integer or odd U1 qn
@@ -992,10 +1053,10 @@ class QspU1_half(QuantSpaceBase):
     pass
 
 class QspSU2(QuantSpaceBase):
-    IS_Abelian = False
     MaxQNNum = 20 
     QnClass = QnSU2
-    def __init__(self, n, qns, dims, RefQN=None):
+    IS_Abelian = False
+    def __init__(self, n, qns, dims, ) -> None:
         """
         """
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
@@ -1040,10 +1101,12 @@ class QspSU2(QuantSpaceBase):
                     m = m0 + m1
                     j = j0 + j1 
                     
-                    jj, val = wigner.drc3jj(j0, j1, m0, m1)
-                    arg = np.where(val)
-                    print_vars(vars(),  ['j0, j1', 'm0, m1', 'd0, d1'])
-                    print_vars(vars(),  ['val', 'arg'])
+                    #these 2 lines are comment temprarily when debug mypy 
+                    #jj, val = wigner.drc3jj(j0, j1, m0, m1)
+                    #arg = np.where(val)
+                    
+                    #print_vars(vars(),  ['j0, j1', 'm0, m1', 'd0, d1'])
+                    #print_vars(vars(),  ['val', 'arg'])
                 
                 #res.add_to_quant_space(qn, d)
         return res
@@ -1080,32 +1143,6 @@ def qn_factory(symmetry, val):
         return symmetry_to_Qn(symmetry)(val)
 
 qn_any = qn_factory
-
-class _performence(object):
-    @classmethod
-    def copy_qn(cls):
-        import time
-        t1=time.clock()
-        for i in range(20000):
-            a=QN_idendity.copy()
-        t2=time.time()
-        for i in range(20000):
-            a=QN_idendity.copy1()
-        t3=time.clock()
-        print(t2-t1)
-        print(t3-t2)
-    @classmethod      
-    def copy_qsp(cls):
-        import time
-        t1=time.clock()
-        for i in range(100):
-            QSp_base.copy()
-        t2=time.clock()
-        for i in range(100):
-            QSp_base.copy_old()
-        t3=time.clock()
-        print("copy",t2-t1)
-        print("copy1",t3-t2)
 
 class TestIt(unittest.TestCase): 
     def setUp(self): 
@@ -1167,24 +1204,24 @@ class TestIt(unittest.TestCase):
             a = QspU1.easy_init([1, -1], [2, 4])
             b = QspU1.easy_init([1, -1], [4, 2])
             c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
-            print_vars(vars(), ['a', 'b', 'c'])
-            print_vars(vars(), ['a*b', 'b*a', 'a*c', 'c*a'])
-            print_vars(vars(), ['(a*b).QNs', '(b*a).QNs', '(a*c).QNs', '(c*a).QNs'])
+            #print_vars(vars(), ['a', 'b', 'c'])
+            #print_vars(vars(), ['a*b', 'b*a', 'a*c', 'c*a'])
+            #print_vars(vars(), ['(a*b).QNs', '(b*a).QNs', '(a*c).QNs', '(c*a).QNs'])
         if 0:
             a = QspU1.easy_init([1, -1], [2, 4])
             c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
-            print_vars(vars(), ['a', 'b', 'c'])
-            print_vars(vars(), ['(a*b).QNs', '(b*a).QNs', '(a*c).QNs', '(c*a).QNs'])
+            #print_vars(vars(), ['a', 'b', 'c'])
+            #print_vars(vars(), ['(a*b).QNs', '(b*a).QNs', '(a*c).QNs', '(c*a).QNs'])
 
         if 0:
             a = QspU1.easy_init([0, 1, 2], [1, 1, 1])
-            print_vars(vars(), ['a', 'a**2', 'a**3'])
+            #print_vars(vars(), ['a', 'a**2', 'a**3'])
             print(a.QNs , type(a.QNs), a.QNs.index(QnU1(2)))
         if 0:
             a = QspU1.easy_init([1, -1], [2, 4])
             b = QspU1.easy_init([1, -1], [4, 2])
             c = QspU1.easy_init([1, 0, -1], [4, 3, 2])
-            print_vars(vars(), ['a*b*c', 'a*(b*c)'])
+            #print_vars(vars(), ['a*b*c', 'a*(b*c)'])
             
         if 1:
             a = qsp_any('Travial', qns=[1], dims=[2])
@@ -1197,55 +1234,66 @@ class TestIt(unittest.TestCase):
     def xtest_expand_totdim(self): 
         if 1: 
             q=QspZ2.easy_init([1, -1], [2, 3])
-            qe = q.expand_totdim_del(11)
-            print_vars(vars(),  ['qe'])
+            qe = q.expand_totdim(11)
+            #print_vars(vars(),  ['qe'])
             self.assertTrue(qe==QspZ2.easy_init([1, -1], [5, 6]))
 
         q=QspU1.easy_init([0, 1, -1], [4, 2, 3])
-        qe = q.expand_totdim_del(26)
-        print_vars(vars(),  ['qe'])
+        qe = q.expand_totdim(26)
+        #print_vars(vars(),  ['qe'])
         self.assertTrue(qe==QspU1.easy_init([0, 1, -1], [12, 6, 8]))
 
     def test_temp(self): 
-        if 0:
-            j0, j1, m0, m1 = 10, 10, -2, 2
-            jj, val = wigner.drc3jj(j0, j1, m0, m1)
-            arg = np.where(val)
-            print_vars(vars(),  ['j0, j1', 'm0, m1', 'd0, d1'])
-            print_vars(vars(),  ['val', 'arg'])
-            
-        if 1:
-            q0 = QnSU2((1, -1))
-            q1 = QnSU2((1, 1))
-            q2 = QnSU2((2, 0))
-            print_vars(vars(),  ['q0.cg_coeff(q1, q2)'])
-            print(clebsch_gordan(2, 2, 0 , -2, 2, 0))
-            
-        if 0:
-            qn = QnSU2((1, 1))
-            qn1 = qn.conj()
-            print_vars(vars(),  ['qn', 'qn1'])
-            
-            q = QspSU2.easy_init(qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[4, 4, 4, 4])
-            print_vars(vars(),  ['q'])
-            q = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[4, 4, 4, 4])
-            
-            qq = q.tensor_prod(q)
-            print_vars(vars(),  ['qq.totDim', 'q.totDim'])
-            print_vars(vars(),  ['qq'])
+        
+        #a = A(1)
+        #b = A(2)
+        #c = a + b
+        #print(c.i)
+        
+        a = QnU1(1)
+        print(a)
+        print(QspU1.MaxQNNum)
+        pass
+        #if 0:
+        #    j0, j1, m0, m1 = 10, 10, -2, 2
+        #    jj, val = wigner.drc3jj(j0, j1, m0, m1)
+        #    arg = np.where(val)
+        #    print_vars(vars(),  ['j0, j1', 'm0, m1', 'd0, d1'])
+        #    print_vars(vars(),  ['val', 'arg'])
+        #    
+        #if 1:
+        #    q0 = QnSU2((1, -1))
+        #    q1 = QnSU2((1, 1))
+        #    q2 = QnSU2((2, 0))
+        #    print_vars(vars(),  ['q0.cg_coeff(q1, q2)'])
+        #    print(clebsch_gordan(2, 2, 0 , -2, 2, 0))
+        #    
+        #if 0:
+        #    qn = QnSU2((1, 1))
+        #    qn1 = qn.conj()
+        #    print_vars(vars(),  ['qn', 'qn1'])
+        #    
+        #    q = QspSU2.easy_init(qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[4, 4, 4, 4])
+        #    print_vars(vars(),  ['q'])
+        #    q = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[4, 4, 4, 4])
+        #    
+        #    qq = q.tensor_prod(q)
+        #    print_vars(vars(),  ['qq.totDim', 'q.totDim'])
+        #    print_vars(vars(),  ['qq'])
 
-        if 1:
-            q = QspSU2.easy_init(qns=[(1, 1), (1, -1)], dims=[1, 1])
-            q = QspSU2.easy_init(qns=[(1, 1), (1, -1)], dims=[1, 1])
-            qq = q.tensor_prod(q)
-            print_vars(vars(),  ['qq.totDim', 'q.totDim'])
-            print_vars(vars(),  ['qq'])
+        #if 1:
+        #    q = QspSU2.easy_init(qns=[(1, 1), (1, -1)], dims=[1, 1])
+        #    q = QspSU2.easy_init(qns=[(1, 1), (1, -1)], dims=[1, 1])
+        #    qq = q.tensor_prod(q)
+        #    print_vars(vars(),  ['qq.totDim', 'q.totDim'])
+        #    print_vars(vars(),  ['qq'])
 
 
 if __name__ == "__main__":
         
-    if 1:
-        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+    if 0:
+        #TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        del TestIt.test_temp
         unittest.main()
     else: 
         suite = unittest.TestSuite()
@@ -1257,7 +1305,7 @@ if __name__ == "__main__":
            #'test_tensor_prod', 
            #'test_expand_totdim', 
            'test_temp', 
-        ]
+            ]
         for a in add_list: 
             suite.addTest(TestIt(a))
         unittest.TextTestRunner().run(suite)
