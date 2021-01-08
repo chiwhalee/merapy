@@ -516,9 +516,10 @@ class Main(object):
                     if c.get('algorithm')=='tdvp':
                         sh = c.get('N'), c.get('trunc_dim')
                         c['job_description'] = (fn, sh, c.get('the_time_lim'))
-                        
+                num_of_threads = c['NUM_OF_THREADS'] 
                 status=submit_one(cls.run_one, 
                         args=(c, ),
+                        num_of_threads=num_of_threads, 
                         server=task_center_server, 
                         job_info=job_info, 
                         querry_timeout=kwargs.get('querry_timeout', 10))

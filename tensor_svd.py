@@ -327,7 +327,6 @@ class iTensor_rank2_operation(object):
             is_trunc = False
             trunc_err = 0.0
         
-        
         if is_trunc:
             prepare_trunc = True 
             temp = np.zeros((3, totdim), dtype=float)
@@ -340,14 +339,16 @@ class iTensor_rank2_operation(object):
             ind_sorted = temp[0].argsort() 
             ind_sorted = ind_sorted[: : -1]
             
-            norm_orig = np.sum(temp[0]**2)**0.5
+            norm_orig = np.linalg.norm(temp[0])   # this also equals norm of psi 
+            #print('ssss', sorted(temp[0], reverse=1))
                 
             if trunc_err_tol is not None:
                 s_sorted = temp[0][ind_sorted]
                 if 1:  #here enforce normalization of singular values, even if psi was not normalized 
-                    s_sorted  =  s_sorted/norm_orig
+                    s_sorted_normalized  =  s_sorted/norm_orig
+                #print('uuuuu', totdim,  norm_orig,  s_sorted_normalized)
                     
-                s2_cumsum = np.cumsum(s_sorted**2)
+                s2_cumsum = np.cumsum(s_sorted_normalized**2)
                 #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
                 arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
                 try: 
@@ -358,10 +359,12 @@ class iTensor_rank2_operation(object):
                 #if dim <= trunc_dim:  trunc_dim = dim   # trunc_dim is overided 
                 trunc_dim = min(trunc_dim, dim)
                 
+                #print_vars(vars(),  ['s_sorted_normalized**2'], round=58)
+                #print_vars(vars(),  ['totdim', 'trunc_dim', 's2_cumsum'], round=58)
                 
                 #norm_trunced = math.sqrt(s2_cumsum[trunc_dim-1])
                 prepare_trunc = False 
-        
+            
             if trunc_dim_min is not None:
                 trunc_dim = max(trunc_dim, trunc_dim_min)
             #print_vars(vars(),  ['trunc_dim']) 
