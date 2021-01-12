@@ -43,6 +43,7 @@ import datetime
 import itertools 
 import socket 
 import types
+from numpy import inf
 
 from merapy.utilities import print_vars, OrderedSet 
 from merapy.hamiltonian import System
@@ -60,8 +61,12 @@ from  merapy.measure_and_analysis.result_db import (  MARKER_CYCLE,
         AnalysisTools, AnalyticFormular
         )
 
+
 import matplotlib as mpl
+
+
 mpl.rcParams.update(MATPLOTLIBRC)
+
 
 IS_PY3 = sys.version_info.major>2
 
@@ -73,20 +78,24 @@ class OrderedDictLazy(OrderedDict):
         a walk around for efficiency  
         lazy loading of each ResultDB, 
     """
-    def __init__(self, alpha_parpath_dict, result_db_class=ResultDB, result_db_args={}): 
+    def __init__(self, alpha_parpath_dict, result_db_class=ResultDB, result_db_args={}, param_list=None, Alpha=None): 
         OrderedDict.__init__(self)
         self.alpha_parpath_dict = alpha_parpath_dict
         self.result_db_class= result_db_class
         self.result_db_args= result_db_args
+        self.param_list = param_list if param_list is not None else []
+        self.Alpha = Alpha 
     
     def __getitem__(self, a, fault_tol=True): 
         if isinstance(a, float): 
             a = (a, )
         if a[-1] == '' : 
             a = a[: -1]
-        #if isinstance(a,  namedtuple):
-        if hasattr(a, '_fields'): 
-            a = tuple(a)
+        if len(a)<len(self.param_list) and self.Alpha is not None:
+            a = self.Alpha(*a)
+        #if hasattr(a, '_fields'):   #if isinstance(a,  namedtuple):
+        #    a = tuple(a)
+            
         if a not in self: 
             try: 
                 p = self.alpha_parpath_dict[a]
@@ -167,8 +176,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 msg = 'path created'
             else:
                 raise  
-        self.param_list= param_list
         self.Alpha = Alpha 
+        self.param_list = Alpha._fields if Alpha is not None else param_list 
+        
         self.default_resolution = default_resolution 
         self.result_db_class = result_db_class if result_db_class is not None else ResultDB
         self.result_db_args = {'analysis_class':self}
@@ -179,8 +189,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         self.name = ''  # a name to describe self 
         
         self.alpha_parpath_dict = OrderedDict()   #this attr should always be updated, while not replaced, or else, it affects the next line
-        self.alpha_rdb_dict = OrderedDictLazy( self.alpha_parpath_dict, 
-                result_db_class=self.result_db_class, result_db_args= self.result_db_args)
+        self.alpha_rdb_dict = OrderedDictLazy( self.alpha_parpath_dict, result_db_class=self.result_db_class, 
+                result_db_args=self.result_db_args, param_list=self.param_list, Alpha=self.Alpha)
+                
         self.rdb_dict = self.alpha_rdb_dict
         
         self.sh_list_max = None 
@@ -193,7 +204,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             self.invert_alpha_order = 0
     
     def __getitem__(self, k): 
-        #if isinstance(k, float): 
+        #if isinstance(k, floa0w): 
         #    k = (k, )
         return self.alpha_rdb_dict[k]
     
@@ -534,6 +545,12 @@ class Analysis(AnalysisTools, AnalyticFormular):
         return db
     
     def add_sub_analysis(self,  hook_list='auto'): 
+        """
+            pass
+            example:
+                an_main.add_sub_analysis(hook_list=[{'sub_dir':dir_name}])
+        
+        """
         if hook_list is None: 
             hook_list = []
         elif hook_list == 'auto': 
@@ -542,6 +559,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         for h in hook_list: 
             #sub_dir = h if isinstance(h, str) else h['sub_dir']   #h may be a dir name or in the old format {'sub_dir': dir_name_str}
             sub_dir = h['sub_dir']
+            Alpha = h.get('Alpha', self.Alpha)
+            
             sub_root = '/'.join([self.local_root, sub_dir])
             if 'name' in h: 
                 name = 'an_' +  h['name']
@@ -552,7 +571,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             antemp = self.__class__(local_root=sub_root, 
                     result_db_class= self.result_db_class, 
                     default_resolution=self.default_resolution, 
-                    Alpha=self.Alpha, 
+                    Alpha=Alpha, 
                     param_list=self.param_list)
             antemp.name = name
             setattr(self, name, antemp)
@@ -623,8 +642,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
             print(msg)
         
         alpha_list = list(dic.keys())
-        
-        alpha_list.sort()
+        try:
+            alpha_list.sort()  #some times it can not be sorted,  due to not different format of alpha in the list
+        except TypeError as err:
+            warnings.warn(str(err))
         self.alpha_list = list(alpha_list)
     
     def reset(self, aa=None, root=None):
@@ -1328,7 +1349,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             cb = ax.contourf(X, Y, Z, zdir='z', offset=0, 
                     levels=kwargs.get('levels', None), 
                     cmap=plt.cm.coolwarm, aspect=1 )
-            fig.colorbar(cb, ax=ax)
+            fig.colorbar(cb,   ax=ax)
             clim = kwargs.get('clim')
             if clim is not None : 
                 cb.set_clim(clim)
@@ -1340,7 +1361,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 style_dic['extent'] = [min(xx), max(xx)+dx, min(yy), max(yy)+dy]
             im = ax.imshow(Z,  origin='lower', **style_dic) 
                     
-            cb=fig.colorbar(im, ax=ax)
+            #cb=fig.colorbar(im,  orientation="horizontal", ax=ax)
+            cb=fig.colorbar(im,   ax=ax)
             clim = kwargs.get('clim')
             if clim is not None : 
                 cb.set_clim(clim)
@@ -2594,7 +2616,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         module_name =self.__class__.__module__
         #print module_name
         module=importlib.import_module(module_name)
-        reload(module)
+        importlib.reload(module)
         name = self.__class__.__name__
         self.__class__=getattr(module, name)
         if info>0: 
@@ -2619,7 +2641,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         #print 'old 11', id(result_db_module)
         module_name = self.result_db_class.__module__
         module = importlib.import_module(module_name)
-        reload(module)
+        #reload(module)
+        importlib.reload(module)
         class_name = self.result_db_class.__name__
         new_class = module.__getattribute__(class_name)
         self.result_db_class = new_class 
