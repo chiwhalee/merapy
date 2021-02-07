@@ -229,7 +229,58 @@ class Analysis(AnalysisTools, AnalyticFormular):
         res= 'instance of %s\n'%(self.__class__.__name__, )
         res += 'local_root = %s\n'%(self.local_root, )  
         return res 
-
+    
+    def def__call__(self):
+        Alpha = self.Alpha
+        keys = list(Alpha._fields)
+        temp = Alpha._field_defaults
+        vals= [temp[k] for k in keys]
+        #print_vars(vars(),  ['keys', 'vals'])
+        n = len(keys)
+        arg_str= ','.join([' {}={}'.format(keys[i], vals[i]) for i in range(n)]) 
+        #print_vars(vars(),  ['arg_str'])
+        code = """def   __call__(self, {}):
+            """.format(arg_str, )
+        code +=   """
+                    if 'surfix' in kwargs:
+                        sur = kwargs['surfix']
+                        kwargs.pop('surfix')
+                    else:
+                        sur = None
+                    alpha = self.Alpha(*args, **kwargs)
+                    if None in alpha:
+                        raise ValueError('arg missing in {}'.format(alpha)) 
+                    if sur:
+                        alpha = alpha + (sur, )
+                    return self[alpha]
+        """
+        #print(arg_str)
+        exec(code, globals())
+        
+        setattr(self, '__call__', __call__)
+        
+    
+    def __call__(self, *args, **kwargs):
+        """
+            I had tried to define __call__ dynamically using def__call__ above
+            in __init__ to take use of self.Alpha. However this is not
+            supported by python, the reason see:
+            https://stackoverflow.com/questions/33824228/why-wont-dynamically-adding-a-call-method-to-an-instance-work
+        
+        """
+        if 'surfix' in kwargs:
+            sur = kwargs['surfix']
+            kwargs.pop('surfix')
+        else:
+            sur = None
+        
+        alpha = self.Alpha(*args, **kwargs)
+        if None in alpha:
+            raise ValueError('arg missing in {}'.format(alpha)) 
+        if sur:
+            alpha = alpha + (sur, )
+        return self[alpha]
+    
     @property
     def last_modify_time(self):
         return os.path.getmtime(self.local_root)
@@ -429,7 +480,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         x2 = list(set(x2)); x2.sort(); x2=np.array(x2)
         return x1, x2
     
-    def scan_backup_dir(self, root='./'): 
+    def scan_backup_dir_del(self, root='./'): 
         """     
             automatically scan and identify folders that store mera tensors
         """
@@ -509,6 +560,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 alpha_parpath_dict[alpha] =  '/'.join([root, name])
         
         return alpha_parpath_dict
+    
+    def parse_fn(self, fn):
+        pass
     
     def scan_sub_analysis_top(self): 
         temp = os.listdir(self.local_root)
@@ -1048,7 +1102,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
             self.surfix_list = surfix_list
             return surfix_list 
         
-    
     def get_fn_list_del(self):
         nlist = os.listdir(self.parpath)
         #print nlist
@@ -1333,15 +1386,15 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if kwargs.get('zmax'): 
             zmax= kwargs['zmax']
             Z[Z>zmax] = np.nan 
-        cb = None 
+        cb, cs = None, None
         if which_plot == 'contour': 
-            pass
-            cb = ax.contour(X, Y, Z, 
-                   colors=kwargs.get('colors', None), 
-                   levels=kwargs.get('levels', None), 
-                   linestyles=kwargs.get('linestyles', None), 
-                    )
-            ax.clabel(cb, inline=kwargs.get('inline', True), fontsize=10)
+            
+            temp = ['colors', 'levels', 'linestyles', 'linewidths']
+            temp = {k:kwargs.get(k) for k in temp}
+            
+            cs = ax.contour(X, Y, Z, **temp)   # cs refers to contour set
+            #clabel contols numbers appear in the levels
+            #ax.clabel(cs, levels=cs.levels,  inline=kwargs.get('inline', True), fontsize=10)
             
         elif which_plot == 'contourf': 
             #levels control intersection at where 
@@ -1387,9 +1440,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     ax.__getattribute__('set_' + t)(tt)
       
         ax.grid(1)
-        #ax.invert_yaxis()
+        
         #res={'data':data.T, 'alpha':XX,'g':YY, 'cb':cb}
-        res= {'fig': fig, 'ax': ax, 'cb': cb}
+        #cb: color bar,  cs: contour set
+        res= {'fig': fig, 'ax': ax, 'cb': cb,  'cs':cs}
         return res 
     
 
@@ -2927,8 +2981,36 @@ class TestAnalsysis(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        Alpha = namedtuple('Alpha', ['t', 'alpha', 'V', 'W'], 
-                defaults = [None, None, None, None])
+        from merapy.run_heisbg.analysis import an_tdvp 
+        from mps_wigner_crystal.analysis import an_tdvp 
+        if 0:
+            Alpha = namedtuple('Alpha', ['t', 'alpha', 'V', 'W'], 
+                    defaults = [None, None, None, None])
+            print(dir(Alpha))
+            print_vars(vars(),  ['type(Alpha._fields_defaults)'])
+            raise 
+        
+        xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
+        if 0:
+            xx.def__call__()
+            raise  
+            xx.outline()
+            db = xx[0.5, 1.0, 1.0, 0.01]
+            print_vars(vars(), ['db.parpath'])
+            s = db.load_S(sh=(128, 40))
+            print_vars(vars(), ['s'])
+            raise  
+            db = xx( mu=0.01)
+        arg = (0.0, )
+        kwargs = {'mu':0.01}
+        a = xx.Alpha(*arg, **kwargs)
+        db = xx(*arg, **kwargs)
+        
+        print_vars(vars(),  ['a'])
+        print_vars(vars(),  ['db'])
+        raise  
+        
+        
         
         an_bose_long_tdvp = Analysis_tdvp(
                 local_root='/'.join([RESULTDB_ROOT, 'run-bose-long', 'tdvp', ]), 
