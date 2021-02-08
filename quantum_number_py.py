@@ -417,7 +417,6 @@ class QuantSpaceBase(object):
         """
         self.nQN = n
         #self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
-        #self._dims[:n] = dims[:n]
         self._dims = dims
         self._totDim = -1 
         self.QNs = qns
@@ -613,8 +612,8 @@ class QuantSpaceBase(object):
         if qsp_max is not None:
             nqn = 0
             QNs= []
-            #_dims= np.empty(self.MaxQNNum, np.int)
             _dims= [0 for i in range(self.MaxQNNum)]
+            
             for n in range(self.nQN):
                 i= qsp_max.has_quant_num(self.QNs[n])
                 if i>=0:
@@ -646,7 +645,7 @@ class QuantSpaceBase(object):
             note that direct sum is not a commutable operation
         """
         i = self.has_quant_num(qn)
-        assert i<self.MaxQNNum 
+        assert i<self.MaxQNNum, self.MaxQNNum
         if i<0:  #when qn not in self.QNs
             self.QNs.append(qn)
             self._dims.append(d)
@@ -732,12 +731,6 @@ class QuantSpaceBase(object):
     def qn_id(cls:Type[T])->Tqn:
         return cls.QnClass.qn_id()
     
-    def get_dim_for_qn(self, qn):
-        i = self.has_quant_num(qn)
-        if i != -1:
-            return self.Dims[i]
-        else:
-            return 0 
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1
@@ -745,7 +738,6 @@ class QspTravial(QuantSpaceBase):
     QnClass:ClassVar = QnTravial
     def __init__(self, n, qns, dims) -> None:
         #self.nQN = n
-        #self._dims = np.empty(self.MaxQNNum, np.int) #MaxQNNum only defined in subclassed
         #self._dims[:n] = dims[:n]
         #self._totDim = None
         #self.QNs = qns
@@ -890,7 +882,6 @@ class QspZ3(QuantSpaceBase):
     QnClass:ClassVar = QnZ3
     def __init__(self, n, qns, dims) -> None:
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
-        #self.RefQN=np.ndarray((2, self.MaxQNNum), np.int)
 
     @classmethod
     def set_base(cls, dim=None):
@@ -926,10 +917,9 @@ class QspU1(QuantSpaceBase):
     #MaxQNNum shouldn't to small, because two qn can fuse into a new qn so that nQN can increase MaxQNNum is related to max rank of tensors in the tensor net
     #issue: 数目太多慢，太少不够，需要改进
     #MaxQNNum = 30 
-    #MaxQNNum = 15
     #for fermion hubbard model, if nu=0.1, it requeres this number larger
     #MaxQNNum:ClassVar = 20  
-    MaxQNNum:ClassVar[int] = 20  
+    MaxQNNum:ClassVar[int] = 100
     
     #QnClass:Type[QnBase] = QnU1
     #QnClass:Type = QnU1
@@ -941,8 +931,6 @@ class QspU1(QuantSpaceBase):
         #QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
         
         self.nQN = n
-        #self._dims = np.empty(self.MaxQNNum, int) #MaxQNNum only defined in subclassed
-        #self._dims[:n] = dims[:n]
         self._dims = dims
         self._totDim:int = -1 
         self.QNs = qns
