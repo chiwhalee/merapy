@@ -340,16 +340,13 @@ class Config(dict):
             
      
     @staticmethod 
-    def filter(cfg,  strict=False,  db_class=None, 
-            from_energy_rec=True, info=0):
+    def filter(cfg, an=None,  db_class=None, 
+            from_energy_rec=True, strict=False, info=0):
         if db_class is None:
-            from merapy.measure_and_analysis.result_db import (ResultDB_idmrg, 
+            from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_idmrg, 
                     ResultDB_vmps, ResultDB_tdvp)
             alg = cfg['algorithm']
-            db_class = {'idmrg':ResultDB_idmrg, 
-                    'vmps':ResultDB_vmps, 
-                    'tdvp':ResultDB_tdvp, 
-                    }[alg]
+            db_class = ResultDB.algorithm_name_to_rdb(alg)
         if cfg['parpath_relative'] is None:
              return True
         parpath = '/'.join([ BACKUP_BASE_DIR, cfg['parpath_relative']])
@@ -357,8 +354,21 @@ class Config(dict):
             parpath = parpath.replace('backup_tensor_dir', 'resultdb_dir')
         else:
             parpath = parpath.replace('backup_tensor_dir', 'Dropbox/resultdb_dir')
-        
-        db=db_class(parpath)
+        if an is None:
+            db=db_class(parpath)
+        else:
+            dir_name = os.path.basename(parpath)
+            alpha = an.parse_dir_name(dir_name)
+            if alpha in an.alpha_parpath_dict:
+                db = an[alpha]
+                if dir_name !=  os.path.basename(db.parpath):
+                    a = os.path.dirname(cfg['parpath_relative'])
+                    b = os.path.basename(db.parpath)
+                    parpath_relative_new = '/'.join([a, b])
+                    print('\tchanged parpath_relative from "{}" to identicle \n\tone "{}"'.format(dir_name, b))
+                    cfg['parpath_relative'] = parpath_relative_new
+            else:
+                return True 
         allow = True 
         N = 0 if alg == 'idmrg' else cfg['N']
         
