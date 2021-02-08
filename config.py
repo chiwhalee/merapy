@@ -368,7 +368,8 @@ class Config(dict):
                     print('\tchanged parpath_relative from "{}" to identicle \n\tone "{}"'.format(dir_name, b))
                     cfg['parpath_relative'] = parpath_relative_new
             else:
-                return True 
+                db=db_class(parpath)
+                
         allow = True 
         N = 0 if alg == 'idmrg' else cfg['N']
         
