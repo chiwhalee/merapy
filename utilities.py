@@ -220,9 +220,11 @@ def load(path, as_str=False, decompress=True, info=0):
             try:
                 #print('sssssss', type(s), s[:200].decode('latin1'))
                 if IS_PY3:
+                    #print_vars(vars(),  ['s[:200]'])
                     #res = pickle.loads(s, encoding='utf8')
-                    res = pickle.loads(s, encoding='latin1')
                     #res= pickle.loads(s, encoding='bytes')
+                    #res = pickle_any.loads(s)
+                    res = pickle.loads(s, encoding='latin1')
                 else:
                     res = pickle.loads(s)
             except Exception:
@@ -242,8 +244,8 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
                 
     """
     #issue: in futre use HIGHEST_PROTOCOL when fully porting to py3 
-    #protocol = pickle.HIGHEST_PROTOCOL
-    protocol = 2
+    protocol = pickle.HIGHEST_PROTOCOL
+    #protocol = 2
     if not compress: 
         if not as_str: 
             out = open(path, "wb")

@@ -923,6 +923,7 @@ class iTensorFactory(object):
     def base_state(which, symmetry, nmax=None, shift_qn=1, **kwargs):
         """
             params:
+                which: in ['spin', 'boson', 'fermion']
                 shift_qn: for fermions and bosons
             notes:
                 1: here is a convention. the states |u> and |d> are the right states. 
@@ -1060,7 +1061,75 @@ class iTensorFactory(object):
         """
             a rank-3 tensor 
         """
-        pass
+        res= iTensor(QSp=qsp)
+        #res.data[:] = 0
+        
+        t3 = res 
+        jj = list(range(t3.nidx))
+
+        for i in range(qsp[2].nQN):
+            qn = qsp[2].QNs[i]
+            dim = qsp[2].Dims[i]
+            I_mat = np.identity(dim)
+            print_vars(vars(),  ['qn', 'dim'])
+            
+            p = 0
+            temp = []
+            for j in jj: 
+                qn_id_tuple_3 = t3.Addr_idx[:, j]
+                q0, q1, q2 = (t3.QSp[i1].QNs[q] for i1, q in enumerate(qn_id_tuple_3) )                                           
+                d0, d1, d2 = (t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) )                                           
+                
+                print_vars(vars(),  ['q0.cg_coeff(q1, q2)'])
+                
+                if qn != q2:  #they match 
+                    continue 
+                print_vars(vars(),  ['q0, q1, q2'])
+                data = I_mat[p:p+d0*d1, :].ravel(order='F')  #issue: here can be improved, need not fill data with entire matrix I; fill diagonal instead 
+                #p += d0*d1  
+                p += d0.__mul__(d1)
+                t3.set_block(j, data)
+                temp.append(j)
+            for t in temp:
+                jj.remove(t)
+        return t3 
+    
+    def merger_su2(qsp):
+        """
+            a rank-3 tensor 
+        """
+        res= iTensor(QSp=qsp)
+        #res.data[:] = 0
+        
+        t3 = res 
+        jj = list(range(t3.nidx))
+
+        temp = []
+        for i in range(qsp[2].nQN):
+            qn = qsp[2].QNs[i]
+            dim = qsp[2].Dims[i]
+            I = np.identity(dim)
+            
+            p = 0
+            temp = []
+            for j in jj: 
+                qn_id_tuple_3 = t3.Addr_idx[:, j]
+                q0, q1, q2 = (t3.QSp[i1].QNs[q] for i1, q in enumerate(qn_id_tuple_3) )                                           
+                
+                d0, d1, d2 = (t3.QSp[i1].Dims[q] for i1, q in enumerate(qn_id_tuple_3) )                                           
+                
+                if qn != q2:  #they match 
+                    continue 
+                #print_vars(vars(),  ['q0, q1, q2', 'd0, d1, d2'])
+                data = I[p:p+d0*d1, :].ravel(order='F')  #issue: here can be improved, need not fill data with entire matrix I; fill diagonal instead 
+                p += d0*d1  
+                t3.set_block(j, data)
+                temp.append(j)
+            for t in temp:
+                jj.remove(t)
+        return t3 
+    
+    
     
     def spliter(qsp):
         pass
@@ -1132,25 +1201,81 @@ class TestIt(unittest.TestCase):
         print_vars(vars(),  ['sz_d'])
         #print_vars(vars(),  ['sz.sh'])
         
-    def test_temp(self):
-        
+    def test_merger(self):
+        from merapy import qsp_any, QspZ2, Tensor_svd
         symm = 'Travial'
         symm = 'U1'
-        sz = iTensorFactory.any_op('sigma_z', symmetry=symm)
-        s = iTensorFactory.base_state('spin', symmetry=symm)
-        u = s['u']
-        print_vars(vars(),  ['u'])
-        d = s['d']
-        print_vars(vars(),  ['d'])
-        
-        sz_u = sz.contract(u, [0, 1], [0])
-        print_vars(vars(),  ['sz_u'])
-        sz_d = sz.contract(d, [0, 1], [0])
-        print_vars(vars(),  ['sz_d'])
-        #print_vars(vars(),  ['sz.sh'])
-        
+        if 0:
+            q0 = QspZ2.easy_init([1, -1], [2, 4])
+            q1 = QspZ2.easy_init([1, -1], [2, 3])
+            q2 = QspZ2.easy_init([1, -1], [3, 2])
             
+            t3 = iTensor(QSp=[q0, q1, q2])
+            t3.data[: ] = np.arange(t3.size)
+            t2 = t3.merge_3to2((0, 1))
+            print_vars(vars(),  ['q0*q1'])
+            print_vars(vars(),  ['t2.sh'])
         
+        if 1:  #U1 symm
+            symm = 'U1'
+            q0 = qsp_any(symm, qns=[0, 1, -1], dims=[1, 2, 1])
+            q1 = qsp_any(symm, qns=[0, 1, -1], dims=[2, 1, 1])
+            q2 = q0*q1
+            q2 = q2.conj()
+            qq = [q0, q1, q2]
+            print_vars(vars(),  ['qq'])
+            
+            m = iTensorFactory.merger(qq)
+            m_conj = m.conj()
+            mm = m.contract(m_conj, (0, 1, 2), (0, 1, 3))
+            print_vars(vars(),  ['mm'])
+            diag = Tensor_svd.diag_rank2(mm)
+            self.assertTrue(np.all(diag==1.0))
+            
+            m2 = m.merge_qsp((0, 1))
+            diag = Tensor_svd.diag_rank2(m2)
+            self.assertTrue(np.all(diag==1.0))
+            #print_vars(vars(),  ['m2.matrix_view()'])
+
+    def test_temp(self):
+        from merapy import qsp_any, QspZ2, Tensor_svd
+        symm = 'Travial'
+        symm = 'U1'
+        if 0:
+            q0 = QspZ2.easy_init([1, -1], [2, 4])
+            q1 = QspZ2.easy_init([1, -1], [2, 3])
+            q2 = QspZ2.easy_init([1, -1], [3, 2])
+            
+            t3 = iTensor(QSp=[q0, q1, q2])
+            t3.data[: ] = np.arange(t3.size)
+            t2 = t3.merge_3to2((0, 1))
+            print_vars(vars(),  ['q0*q1'])
+            print_vars(vars(),  ['t2.sh'])
+        for i in ['U1', 'Z2', 'Travial']:
+            iTensorFactory.pauli_mat_1site(i)
+        raise  
+        if 0:  #SU2 symm
+            symm = 'SU2'
+            q0 = qsp_any(symm, qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 1, 2])
+            q1 = qsp_any(symm, qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 1, 2])
+            q2 = q0*q1
+            q2 = q2.conj()
+            qq = [q0, q1, q2]
+            print_vars(vars(),  ['qq'])
+            
+            
+            m = iTensorFactory.merger(qq)
+            raise  
+            m_conj = m.conj()
+            mm = m.contract(m_conj, (0, 1, 2), (0, 1, 3))
+            print_vars(vars(),  ['mm'])
+            diag = Tensor_svd.diag_rank2(mm)
+            self.assertTrue(np.all(diag==1.0))
+            
+            m2 = m.merge_qsp((0, 1))
+            diag = Tensor_svd.diag_rank2(m2)
+            self.assertTrue(np.all(diag==1.0))
+            #print_vars(vars(),  ['m2.matrix_view()'])
 
 
 if __name__ == "__main__":
