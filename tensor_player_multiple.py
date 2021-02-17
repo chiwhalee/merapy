@@ -877,7 +877,9 @@ def tensor_player(which):
             elif the_tape.STATE == 'pause':
                 return func(*args, **kargs)
             else:
-                raise ValueError(the_tape.STATE)  
+                print('ttttttttttttt', type(the_tape.STATE))
+                print(the_tape.STATE)
+                raise ValueError
         return wrapper
     return inner
 
