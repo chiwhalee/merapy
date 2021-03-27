@@ -94,13 +94,14 @@ class OrderedDictLazy(OrderedDict):
             a = a[: -1]
         if len(a)<len(self.param_list) and self.Alpha is not None:
             a = self.Alpha(*a)
+            
         #if hasattr(a, '_fields'):   #if isinstance(a,  namedtuple):
         #    a = tuple(a)
             
         if a not in self: 
             try: 
                 p = self.alpha_parpath_dict[a]
-                db =self.result_db_class(parpath=p,  
+                db =self.result_db_class(parpath=p,  model_param=a, 
                         create_empty_db=False, **self.result_db_args) 
                 self[a] = db
             except KeyError:  
@@ -179,7 +180,13 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 local_root = tempfile.mkdtemp()
                 print('make temp local_root {}'.format(local_root))
                 self.local_root = local_root
-                
+        
+        #if Alpha is not None and 'surfix' not in Alpha._fields: 
+        #    fields = Alpha._fields  + ('surfix', )
+        #    defaults = [Alpha._fields_defaults[i] for i in Alpha._fields]
+        #    defaults.append('')
+        #    Alpha = namedtuple('Alpha', fields, defaults=defaults)
+            
         self.Alpha = Alpha 
         self.param_list = Alpha._fields if Alpha is not None else param_list 
         
@@ -526,7 +533,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     val = val
                 return (key, val)
             else: 
-                return ('surfix', term)# term is surfix 
+                return ('surfix', term) # term is surfix 
         def parse2(xx): 
             if '=' in xx: 
                 xx = xx.split('=')[1]
@@ -545,13 +552,17 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if self.Alpha is not None:  
             nn = fn.split('-')
             temp = [parse1(a) for a in nn]
-            if temp[-1][0] != 'surfix' :  #no surfix
+            if 1:
+                if temp[-1][0] != 'surfix' :  #no surfix
+                    alpha = self.Alpha(** dict(temp))
+                    alpha = tuple(alpha)
+                else:
+                    surfix = temp[-1][1]
+                    alpha = self.Alpha(** dict(temp[:-1]))
+                    alpha += (surfix, ) 
+            if 0:
                 alpha = self.Alpha(** dict(temp))
-                alpha = tuple(alpha)
-            else:
-                surfix = temp[-1][1]
-                alpha = self.Alpha(** dict(temp[:-1]))
-                alpha += (surfix, ) 
+                
         else:
             aa = fn.split('-')
             alpha = tuple([parse2(a) for a in aa])   #no mater one or many param,  use tuple as key uniformly 
@@ -2975,32 +2986,42 @@ class TestAnalsysis(unittest.TestCase):
     
     def test_temp(self): 
         from merapy.run_heisbg.analysis import an_tdvp 
-        from mps_wigner_crystal.analysis import an_tdvp 
-        if 0:
-            Alpha = namedtuple('Alpha', ['t', 'alpha', 'V', 'W'], 
-                    defaults = [None, None, None, None])
-            print(dir(Alpha))
-            print_vars(vars(),  ['type(Alpha._fields_defaults)'])
-            raise 
-        
+        #from mps_wigner_crystal.analysis import an_tdvp 
+        Jzz = 2.0
+        sh = 128, 'max'
         xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
-        if 0:
-            xx.def__call__()
-            raise  
-            xx.outline()
-            db = xx[0.5, 1.0, 1.0, 0.01]
-            print_vars(vars(), ['db.parpath'])
-            s = db.load_S(sh=(128, 40))
-            print_vars(vars(), ['s'])
-            raise  
-            db = xx( mu=0.01)
-        arg = (0.0, )
-        kwargs = {'mu':0.01}
+        print_vars(vars(),  ['xx.alpha_parpath_dict.keys()'])
+        xx.reset()
+        print_vars(vars(),  ['xx.rdb_dict.keys()'])
+        #db=xx(Jzz=Jzz, mu=0.01, dt=0.5, surfix='fix_err_1em12')
+        raise  
+        db=xx(Jzz, mu=0.01, dt=0.04, )
+        print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
+        print_vars(vars(),  ['db.model_param.mu'])
+        
+        
+        
+        
+        
+        raise  
+        
+        #tt, yy = db.get_t_vs_field('EE_middle', sh, force=0)        
+        tt = np.arange(20, 80, 4)
+        tt = 3
+        #print_vars(vars(),  ['type(db.model_param)'])
+        
+        arg = (0.5, 2.0, )
+        kwargs = {}
         a = xx.Alpha(*arg, **kwargs)
         db = xx(*arg, **kwargs)
-        
-        print_vars(vars(),  ['a'])
+        print_vars(vars(),  ['a', 'a._fields', 'a._fields_defaults'])
+        raise  
         print_vars(vars(),  ['db'])
+        sh = (128, 'max')
+        print_vars(vars(),  ['db["dim_max"]'])
+        res=db.get_dim_max(sh)
+        print_vars(vars(),  ['res'])
+        
         raise  
         
         

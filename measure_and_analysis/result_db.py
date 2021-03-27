@@ -27,6 +27,7 @@ import pickle as pickle
 from collections import (OrderedDict, namedtuple)
 from operator import itemgetter
 import time
+import scipy.integrate
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -49,8 +50,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.special import sici
 import unittest
-
-
+from numpy import inf
 
 from IPython.display import display
 
@@ -94,7 +94,6 @@ def html_border(s, fontsize=20):
     """%vars() 
     return sss
 
-
 def set_matplotlib_style():
     mpl.rcParams['figure.figsize'] = (4, 3)
     mpl.rcParams['axes.labelsize'] = 16
@@ -123,7 +122,8 @@ def set_matplotlib_style():
             u'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
             u'figure.facecolor': 'white', 
             
-            u'axes.titlesize':'x-large',
+            #u'axes.titlesize':'x-large',
+            u'axes.titlesize':'20',
             
             }
         #MATPLOTLIBRC.pop('legend.alpha')
@@ -184,6 +184,7 @@ def set_matplotlib_style():
     return MARKER_LIST, MARKER_CYCLE, MATPLOTLIBRC
     
 MARKER_LIST, MARKER_CYCLE, MATPLOTLIBRC = set_matplotlib_style()
+
 
 class AnalysisTools(object): 
     """
@@ -252,7 +253,7 @@ class AnalysisTools(object):
         return res
     
     def fit_line(self, line, func=None, data=None, x_min=None, x_max=None, 
-            x_extra=None, period=None, x1=None, p0=None, method='lm'):
+            x_extra=None, plot_range=None,  period=None, x1=None, p0=None, method='lm'):
         if isinstance(func, str): 
             if func == 'EE_vs_L' : 
                 func = lambda x, c, a: c/6.*np.log(x) + a
@@ -275,6 +276,8 @@ class AnalysisTools(object):
         arg = self.filter_array(x, x_min, x_max, period, x1)
         x = x[arg]
         y = y[arg]
+        if len(x) ==0 or len(y)==0:
+            return None
         temp = self.__class__.fit_curve(x, y, func, p0=p0, method=method)
         if temp is None:
             return None
@@ -294,13 +297,19 @@ class AnalysisTools(object):
                     x = np.append(x, x_extra)
             else: 
                 raise ValueError((1./x, min(x), max(x)))
+        if plot_range is not None:
+            a, b = plot_range
+            if a is not None and a < min(x):
+                x = np.insert(x, 0, a)
+            if b is not None and  b > max(x):
+                x = np.append(x, b)
         
         y_fit = func_(x, *param)
         res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
         return res 
     
     def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
-            add_text=False, return_all_params=False, x_extra=None, rounding=4, fault_tol=True,  **kwargs): 
+            add_text=False, return_all_params=False, x_extra=None, plot_range=None,  rounding=4, fault_tol=True,  **kwargs): 
         """
             return:
                 line_lable, param[0]
@@ -312,7 +321,7 @@ class AnalysisTools(object):
         temp = []
         fit_line_args= {a: kwargs.get(a) for a in 
                 ['x_min', 'x_max', 'x_extra', 'period', 'x1'] }
-        fit_line_args.update(x_extra=x_extra)
+        fit_line_args.update(x_extra=x_extra, plot_range=plot_range)
         for i, l in enumerate(ll): 
             if not i in which_lines: 
                 continue 
@@ -481,7 +490,10 @@ class AnalysisTools(object):
             y_diff = np.diff(y)
             x_diff = np.diff(x)
             y = y_diff/x_diff 
-            self._plot(x[:-1], y, **kwargs)
+            label = l.get_label()
+            self._plot(x[:-1], y, label=label,  **kwargs)
+        
+    plot_diff = plot_derivative #def plot_diff
 
     def find_lines_extreme(self, ax, which='max', add_text=True, 
             find_range=None, 
@@ -770,6 +782,21 @@ class AnalyticFormular(object):
         res = np.pi/(2* np.arccos(-Jzz))
         return res
 
+    def kac_rescale(N, alpha):
+        """
+            Kac rescaling for LR models with power law interaction 
+        
+        """
+        if 0:
+            temp = [abs(i-j) for i in range(N)  for j in range(N) if i<j]
+            temp = np.asarray(temp)
+            res = np.sum(temp**(-alpha)) / (N-1)
+        else:
+            rr = np.arange(1, N, 1)
+            temp = rr**(-alpha)
+            res= np.sum(temp)
+            
+        return res 
 
 class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools): 
     """
@@ -800,18 +827,20 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     AUTO_UPDATE = True 
     VERSION = 1.2 
     ALL_FIELD_NAMES = ['energy', 'magnetization', 'concurrence', 'concurrence_2']
-    def __init__(self, parpath, dbname=None, version=None, algorithm=None, 
+    def __init__(self, parpath, dbname=None, version=None, algorithm=None, model_param=None,  
             use_local_storage=False, create_empty_db=False,  upgrade=0, 
             analysis_class=None):
         """
             params: 
-                algorithm is necessary, or else it is difficult to determine which alg
+                algorithm: algorithm is necessary, or else it is difficult to determine which alg
+                param: model_param 
         """
         self.use_local_storage = use_local_storage
         self.parpath = parpath
         self.analysis_class = analysis_class
         dbname = dbname if dbname is not None else self.DBNAME
         self.dbname = dbname
+        self.model_param = model_param
         self.path = '/'.join([parpath , dbname])
         
         #self.inited = False  
@@ -863,7 +892,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 self.update_db_structure()
     
     
-    @staticmethod
+    #@staticmethod  del this line
     def algorithm_name_to_rdb(alg_name):
         mapping = {'mera':ResultDB_mera, 
                 'mps':ResultDB_vmps, 
@@ -881,8 +910,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     def parpath_map(self, dir):
         if 'C:' in dir:
-            #xxx = [('C:', '/home/%s/dropbox/'%(LOCAL_USERNAME, )), 
-            #        ('Users', ''), ('zhihua', ''),  ('Dropbox', '')]
             xxx = [ ('C:', ''), 
                     ('Users', 'home'), 
                     ('zhihua', LOCAL_USERNAME),  
@@ -1104,7 +1131,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if not os.path.exists(dir):
             return []
         nlist = os.listdir(dir) 
-        pickle_files = [i for i in nlist if "pickle" == i.split('.')[-1]]
+        pickle_files = [i for i in nlist if "pickle" == i.split('.')[-1] and '=' in i]
         #if not self.get('algorithm')=='mps': 
         #    pickle_files= [i for i in pickle_files if 'trans' not in i]
         
@@ -1130,7 +1157,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 self['time_serials'][sh] = ts 
         res = ts 
         if attr_name is not None: 
-            res = ts['attr_name']
+            res= [ts[i][attr_name] for i in ts]
+            #res = ts[attr_name]
         return res 
     
     def parse_fn(self, fn):
@@ -1141,8 +1169,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         return N, D 
 
     def get_shape_list(self, N=None, D=None, sh_max=None, sh_min=None, 
-            from_energy_rec=True, field='energy',  only_return_max=False, only_return_N=False, only_return_D=False, 
-            ): 
+            from_energy_rec=True, field='energy',  only_return_max=False, only_return_N=False, only_return_D=False, ): 
         if socket.gethostname()==LOCAL_HOSTNAME and not from_energy_rec: 
             fn = self.get_fn_list()
             sh = [self.parse_fn(f) for f in fn]
@@ -1182,13 +1209,27 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     get_mera_shape_list = get_shape_list 
     
-    def get_dim_max_for_N(self, N, update_db=False, force=False, info=0): 
+    def get_dim_max_for_N(self, N, return_N=False, update_db=False, 
+            from_energy_rec=True, 
+            force=False, info=0): 
+        """
+            params:
+                N: can be integer N or tuple (N, D)
+        
+        """
+        
+        if isinstance(N, tuple):  
+            N = N[0] 
+            return_N = True
         try: 
             if force: 
                 raise KeyError 
-            return self['dim_max'][N]
+            if not return_N:
+                return self['dim_max'][N]
+            else:
+                return N, self['dim_max'][N]
         except KeyError: 
-            temp=self.get_shape_list(N=N,from_energy_rec=1)
+            temp=self.get_shape_list(N=N, from_energy_rec=from_energy_rec)
             if len(temp)>0:  
                 D = max(temp)[1] 
             else: 
@@ -1198,8 +1239,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     self['dim_max'] = {}
                 self['dim_max'][N] = D
                 self.commit(info=info)
-            return D 
+            if not return_N:
+                return D 
+            else:
+                return N, D 
     
+    get_dim_max = get_dim_max_for_N  #def get_dim_max a shorter name 
     
     def get_energy_fluc_count(self, sh, bins=None): 
         if bins is None: 
@@ -2184,6 +2229,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         fig = kwargs.get('fig', None)
         ax = kwargs.get('ax', None)
         fig_type = kwargs.get('fig_type')
+        if x is None or y is None:
+            warnings.warn('input array x or y is None')
+            if kwargs.get('return_ax', False): 
+                return fig, ax
+            else: 
+                return ax.figure
         
         if fig is None and ax is None: 
             fig=plt.figure(figsize=figsize)
@@ -4574,7 +4625,211 @@ class ResultDB_tdvp(ResultDB):
         kwargs['version'] = 1.0
         kwargs.update(algorithm='tdvp')
         ResultDB.__init__(self, parpath,  **kwargs)
+    
+    def get_shape_list(self,  N=None, D=None, field='the_time', **kwargs):
+        return super(ResultDB_tdvp, self).get_shape_list(N=N, D=D, field=field, **kwargs)
+    
+    def get_t_vs_field(self, field_name, sh, tlim=None, integrate=False,  kac_rescale=None,  force=False):
+        """
+             
+        """
+        ts=self.get_time_serials(sh, force=force)
+        if ts is None:
+            return None, None
+        temp = ts.values()
+        tt = [i['the_time'] for i in temp]
+        #val = [i[field_name] for i in temp]
+        val = [i.get(field_name, None) for i in temp]
+        tt = np.asarray(tt)
+        val = np.asarray(val)
+        if integrate:
+            val = scipy.integrate.cumtrapz(val, tt, initial=0)
+        
+        if tlim is not None:
+            arg = np.where(tt<tlim)
+            tt = tt[arg]
+            val = val[arg]
+            
+        if kac_rescale is not None:
+            tt = tt/kac_rescale
+            
+        
+        return tt, val 
+    
+    def get_current_from_mag(self, sh, mu=None, integrate=False, offset=True, force=False):
+        """
+            An indirect measure of current. 
+            
+            Note that the current is AVERAGED over interval of dt. Its value
+            may be not completely concide with direct measure of current,  as
+            the later is INSTANEOUS.  The descrypency is larger when the
+            current changes with time faster. 
+            
+        """
+        #tt, current_aver = self.fetch_easy('current_aver', sh)
+        
+        tt, mm = self.get_t_vs_field('magnetization',  sh,  force=force)
+        if tt is None:
+            return None
+        
+        N_half = sh[0]//2
+        
+        temp = [mm[i]['z'].values() for i in range(len(tt))]
+        temp = [list(t) for t in temp]
+        temp = np.asarray(temp, dtype=float)
+        
+        temp_l = temp[:, :N_half]
+        mag_l = np.sum(temp_l, axis=1)
+        mag_l *= 0.5  # magnetization was measure with sigma_z. Here multiply 0.5 to match with the def of the current 
+        mag_diff = np.diff(mag_l)
+        t_diff = np.diff(tt)
+        current_aver = mag_diff/t_diff
+        if offset: # use midpoint of t + 0.5dt as the time for the current 
+            tt = tt[:-1]
+            tt += 0.5*t_diff
+            current_aver = np.insert(current_aver, 0, 0)  # I assume at t=0 the current_aver=0
+            tt = np.insert(tt, 0, 0)
+        else:
+            current_aver = np.insert(current_aver, 0, 0)
+        
+        if integrate:
+            current_aver = scipy.integrate.cumtrapz(current_aver, tt, initial=0)
+        
+        return tt, current_aver
+    
+    def convert_t_to_temperature(self, time_list):
+        res = [1/(-i.imag*2) for i in time_list]
+        return res 
+    T  =  convert_t_to_temperature
 
+    def get_imbalance(self, sh):
+        db = self
+        #s=db.load_S(sh)
+        #if s is None:
+        #    return None, None
+        #ts=s['time_serials']
+        ts=db.get_time_serials(sh)
+        if ts is None:
+            return None, None
+        temp = ts.values()
+        tt = [i['the_time'] for i in temp]
+        mag=[list(i['magnetization']['z'].values()) for i in temp]
+        mag=np.asarray(mag).real
+        L=mag.shape[1]
+        ii = [(-1)**(i+1) for i in range(L)]
+        ii = np.asarray(ii)
+        mag=mag*ii
+        imb = np.sum(mag, axis=1)/L 
+        return tt, imb
+
+    def get_ee(self, sh):
+        db = self
+        ts=db.get_time_serials(sh)
+        if ts is None:
+            return None
+        temp = ts.values()
+        tt = [i['the_time'] for i in temp]
+        ee=[i['EE_middle'] for i in temp]
+        #mag=np.asarray(mag).real
+        if 0:
+            L=mag.shape[1]
+            ii = [(-1)**(i+1) for i in range(L)]
+            ii = np.asarray(ii)
+            mag=mag*ii
+            imb = np.sum(mag, axis=1)/L 
+        return tt, ee
+
+    def calc_diffuse_const(db, sh, tlim=None, force=False):
+        """
+            calc diffuse const through measure integrate of j(t)
+            ref:
+               Ljubotina, Prosen 2017  eq.4 and Fig. 2
+        
+        """
+        tt, yy = db.get_t_vs_field('current', sh, tlim=tlim, force=force)
+        if tt is None:
+            return None, None
+        yy = scipy.integrate.cumtrapz(yy, tt, initial=0)
+
+        tt_log=np.log(tt)
+        yy=np.log(np.abs(yy))
+
+        tt_diff= np.diff(tt_log)
+        yy_diff=np.diff(yy)
+        yt_diff= yy_diff/tt_diff
+        return tt[:-1], yt_diff
+    
+    def calc_diffuse_coeff(self, sh, tlist, force=False):
+        """
+            params:
+                tlist: can either float or list of float
+            ref:
+                Ljubotina 2017 inset of Fig.2 
+            
+        """
+        pass
+        tt, jj = self.get_t_vs_field('current', sh, force=force)
+        if tt is None:
+            return None
+        tt1, mm = self.get_t_vs_field('magnetization',  sh)
+        if tt1 is None:
+            return None
+        N = sh[0]
+        i = N//2-1 
+        DD = []
+        if isinstance(tlist,  float) or isinstance(tlist, int):
+            tlist = [tlist]
+        for t in tlist:
+            ind = np.where(tt==t)[0]
+            if not ind:
+                D = None 
+            else:
+                mag=mm[ind][0]['z']
+                    
+                j = jj[ind][0]
+                j = j.real 
+                m_diff = mag[i+1] - mag[i]
+                D = j/m_diff
+            DD.append(D)
+            
+        DD = np.asarray(DD)
+        if len(DD)==1:
+            DD = DD[0]
+            
+        return DD
+
+    def get_magnetization(self, sh, tlist, return_t=False):
+        """
+            tince magnetization is frequently used. I write this function. 
+        """
+        tt, mm = self.get_t_vs_field('magnetization',  sh)
+        if tt is None:
+            return None
+        tmax = abs(max(tt))
+        #if isinstance(tlist,  float) :
+        if isinstance(tlist,  float) or isinstance(tlist, int):
+            tlist = [tlist]
+        tlist = [t for t in tlist if t < tmax]
+        ii = []
+        for t in tlist:
+            ind = np.where(tt==t)[0]
+            assert len(ind) == 1, (t, tt)
+            ii.append(ind)
+        
+        tt = [tt[i][0].real for i in ii]
+        tt = np.asarray(tt)
+        
+        temp = [mm[i][0]['z'].values() for i in ii]
+        temp = [list(t) for t in temp]
+        temp = np.asarray(temp, dtype=float)
+        if len(tlist)==1:
+            temp = temp[0]
+        if return_t:
+            return tt, temp
+        else:
+            return temp
+
+        
 
 class ResultDB_proj_qmc(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -4676,59 +4931,28 @@ class TestResultDB(unittest.TestCase):
             self.db = ResultDB(parpath)
         
     def test_temp(self): 
-        if 0:
-            from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-            xx = an_vmps.an_main_alt 
-            db=xx[0.5, 2.0, 0.0]
-            db.load_S((40, 'max'))
-            raise  
-            #print( db.get_shape_list())
-            sh=(40, 'max')   # N, D
-            
-            aa = xx.filter_alpha(nu=0.5, alpha=2.0)
-            delta=1.0
-            data=[]
-            for a in aa:
-                db=xx[a]
-                v=a[2]
-                other = (0.5, 2.0, v + delta)
-                f = db.calc_fidelity(sh, other)
-                data.append((v, f))
-            
-            raise  
-            data = [a for a in data if a[1] is not None]
-            x, y = zip(*data)
-            y = [abs(i) for i in y]
+        N = 128
         
-        if 1:
-            from mps_wigner_crystal.analysis import an_vmps, an_idmrg_psi
-            
-            
-            xx=an_vmps.an_main_pbc 
-            a = tuple(xx.Alpha(nu=0.5, phi=round(-pi/20*8, 6),  alpha=10.0, V=1.0))
-            #aa = xx.filter_alpha(nu=0.5,  alpha=10.0, V=1.0)
-            print_vars(vars(),  ['aa'])
-            db = xx[a]
-            if 0:
-                db.calc_current((26, 'max'))
-                print_vars(vars(),  ['db["energy"]'])
-                print_vars(vars(),  ['db["current"]'])
-            sh = (26, 'max')
-            res= db._get_current(sh, dphi=pi/20)
-            print_vars(vars(),  ['res'])
-            xx=an_vmps.an_main_pbc
-            fig, ax=xx.fig_layout()
-            for rho in [2.0, 1.0, 0.5]:
-                aa=xx.filter_alpha(nu=0.5, alpha=10.0, rho=rho, v=1.0)
-                xx.plot_field_vs_alpha('', aa, [(26,'max')], param_name='phi', empty_to_nan=0, 
-                                    rec_getter=xx.result_db_class._get_current, 
-                                    rec_getter_args={'dphi':pi/20},                            
-                                       label=rho, 
-                                       yfunc=lambda x:x*26, 
-                              ax=ax)            
-            
-            xx.show_fig()
-            
+        from merapy.run_heisbg.analysis import an_tdvp 
+        #from mps_wigner_crystal.analysis import an_tdvp 
+        Jzz = 2.0
+        sh = 128, 'max'
+        xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
+        #db=xx(Jzz=Jzz, mu=0.01, dt=0.5, surfix='fix_err_1em12')
+        db=xx(Jzz, mu=0.01, dt=0.04, )
+        print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
+        print_vars(vars(),  ['db.model_param.mu'])
+        tt, current = db.get_current_from_mag(sh)
+        current = np.abs(current)
+        #print_vars(vars(),  ['mag[80:88, 100:105]'])
+        
+        tt1, current1 = db.get_t_vs_field('current', sh, force=0)
+        current1 = np.abs(current1)
+        print_vars(vars(),  ['np.max(np.abs(tt-tt1))'])
+        print_vars(vars(),  ['np.max(np.abs(current - current1))'])
+        #print_vars(vars(),  ['current[:10] - current1[:10]'])
+        #print_vars(vars(),  ['current[2:12] - current1[:10]'])
+       
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -4862,10 +5086,10 @@ if __name__ == '__main__':
         else: 
             suite = unittest.TestSuite()
             add_list = [
-               'test_temp', 
                #'test_insert_and_fetch', 
                #'test_add_key_list', 
                #'test_idmrg_get_EE', 
+               'test_temp', 
   
             ]
             for a in add_list: 
