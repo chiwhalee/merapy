@@ -90,7 +90,7 @@ class OrderedDictLazy(OrderedDict):
     def __getitem__(self, a, fault_tol=True): 
         if isinstance(a, float): 
             a = (a, )
-        if a[-1] == '' : 
+        if self.Alpha is None and a[-1] == '': 
             a = a[: -1]
         if len(a)<len(self.param_list) and self.Alpha is not None:
             a = self.Alpha(*a)
@@ -98,7 +98,7 @@ class OrderedDictLazy(OrderedDict):
         #if hasattr(a, '_fields'):   #if isinstance(a,  namedtuple):
         #    a = tuple(a)
             
-        if a not in self: 
+        if a not in self:
             try: 
                 p = self.alpha_parpath_dict[a]
                 db =self.result_db_class(parpath=p,  model_param=a, 
@@ -181,11 +181,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 print('make temp local_root {}'.format(local_root))
                 self.local_root = local_root
         
-        #if Alpha is not None and 'surfix' not in Alpha._fields: 
-        #    fields = Alpha._fields  + ('surfix', )
-        #    defaults = [Alpha._fields_defaults[i] for i in Alpha._fields]
-        #    defaults.append('')
-        #    Alpha = namedtuple('Alpha', fields, defaults=defaults)
+        if Alpha is not None and 'surfix' not in Alpha._fields: 
+            fields = Alpha._fields  + ('surfix', )
+            defaults = [Alpha._fields_defaults[i] for i in Alpha._fields]
+            defaults.append('')
+            Alpha = namedtuple('Alpha', fields, defaults=defaults)
             
         self.Alpha = Alpha 
         self.param_list = Alpha._fields if Alpha is not None else param_list 
@@ -279,17 +279,17 @@ class Analysis(AnalysisTools, AnalyticFormular):
             https://stackoverflow.com/questions/33824228/why-wont-dynamically-adding-a-call-method-to-an-instance-work
         
         """
-        if 'surfix' in kwargs:
-            sur = kwargs['surfix']
-            kwargs.pop('surfix')
-        else:
-            sur = None
+        #if 'surfix' in kwargs:
+        #    sur = kwargs['surfix']
+        #    kwargs.pop('surfix')
+        #else:
+        #    sur = None
         
         alpha = self.Alpha(*args, **kwargs)
         if None in alpha:
             raise ValueError('arg missing in {}'.format(alpha)) 
-        if sur:
-            alpha = alpha + (sur, )
+        #if sur:
+        #    alpha = alpha + (sur, )
         return self[alpha]
     
     @property
@@ -517,7 +517,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             alpha_parpath_dict[alpha] =  '/'.join([root, name])
         return alpha_parpath_dict
 
-    def parse_dir_name(self, fn, surfix=''):
+    def parse_dir_name_bac(self, fn, surfix=''):
         """
             parpath name to alpha 
         
@@ -534,6 +534,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 return (key, val)
             else: 
                 return ('surfix', term) # term is surfix 
+            
         def parse2(xx): 
             if '=' in xx: 
                 xx = xx.split('=')[1]
@@ -569,7 +570,62 @@ class Analysis(AnalysisTools, AnalyticFormular):
             if surfix != '': 
                 alpha = str(alpha) + '-' +  surfix
         return alpha 
-    
+
+    def parse_dir_name(self, fn, surfix=''):
+        """
+            parpath name to alpha 
+        
+        """
+        def parse1(term): 
+            if '=' in term: 
+                key, val = term.split('=')
+                if 'm' == val[0]:  #change 'm' to minus sign
+                    val = '-'  + val[1: ]
+                try: 
+                    val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
+                except: 
+                    val = val
+                return (key, val)
+            else: 
+                return ('surfix', term) # term is surfix 
+            
+        def parse2(xx): 
+            if '=' in xx: 
+                xx = xx.split('=')[1]
+                if 'm' == xx[0]:  #change 'm' to minus sign
+                    xx = '-'  + xx[1: ]
+            else: 
+                return xx   # xx is surfix 
+            try: 
+                res=float(xx)
+                #res=(float(xx), )   #todo:  make alpha always a tuple 
+            except: 
+                res= xx
+            return res
+        
+        if self.Alpha is not None:  
+            nn = fn.split('-')
+            temp = [parse1(a) for a in nn]
+            #if 0:  #use tuple for alpha 
+            #    if temp[-1][0] != 'surfix' :  #no surfix
+            #        alpha = self.Alpha(** dict(temp))
+            #        alpha = tuple(alpha)
+            #    else:  #with surfix 
+            #        surfix = temp[-1][1]
+            #        alpha = self.Alpha(** dict(temp[:-1]))
+            #        alpha += (surfix, ) 
+            
+            # if Alpha is provided, always  use namedtupe as key for the dicts
+            alpha = self.Alpha(** dict(temp))
+                
+        else:
+            aa = fn.split('-')
+            alpha = tuple([parse2(a) for a in aa])   #no mater one or many param,  use tuple as key uniformly 
+            if surfix != '': 
+                alpha = str(alpha) + '-' +  surfix
+        return alpha 
+
+
     def scan_sub_analysis_top(self): 
         temp = os.listdir(self.local_root)
         temp = [x for x in temp if '=' not in x]
@@ -2986,22 +3042,19 @@ class TestAnalsysis(unittest.TestCase):
     
     def test_temp(self): 
         from merapy.run_heisbg.analysis import an_tdvp 
-        #from mps_wigner_crystal.analysis import an_tdvp 
-        Jzz = 2.0
+        from merapy.run_heisbg.analysis import an_vmps
+        Jzz = 0.0
         sh = 128, 'max'
         xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
-        print_vars(vars(),  ['xx.alpha_parpath_dict.keys()'])
-        xx.reset()
-        print_vars(vars(),  ['xx.rdb_dict.keys()'])
+        db=xx(Jzz=Jzz, mu=0.01, dt=0.04, surfix='')
         #db=xx(Jzz=Jzz, mu=0.01, dt=0.5, surfix='fix_err_1em12')
+        #db = xx[0.0, 0.01]
+        print_vars(vars(),  ['db'])
+        print_vars(vars(),  ['db.model_param.surfix'])
         raise  
         db=xx(Jzz, mu=0.01, dt=0.04, )
         print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
         print_vars(vars(),  ['db.model_param.mu'])
-        
-        
-        
-        
         
         raise  
         

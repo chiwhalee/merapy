@@ -841,6 +841,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         dbname = dbname if dbname is not None else self.DBNAME
         self.dbname = dbname
         self.model_param = model_param
+        self.param = model_param # a shorter name 
         self.path = '/'.join([parpath , dbname])
         
         #self.inited = False  
@@ -4941,7 +4942,8 @@ class TestResultDB(unittest.TestCase):
         #db=xx(Jzz=Jzz, mu=0.01, dt=0.5, surfix='fix_err_1em12')
         db=xx(Jzz, mu=0.01, dt=0.04, )
         print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
-        print_vars(vars(),  ['db.model_param.mu'])
+        print_vars(vars(),  ['db.model_param'])
+        raise  
         tt, current = db.get_current_from_mag(sh)
         current = np.abs(current)
         #print_vars(vars(),  ['mag[80:88, 100:105]'])
