@@ -22,7 +22,7 @@ from collections import OrderedDict
 
 from merapy.utilities import print_vars
 from merapy.tensor_py import iTensor
-from merapy.quantum_number_py import  (QspU1, QspZ2, 
+from merapy.quantum_number import  (QspU1, QspZ2, 
         QspTravial, symmetry_to_Qsp, symmetry_to_QspClass, make_qsp, QnU1, QnZ2)
 
    

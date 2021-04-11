@@ -7,7 +7,7 @@ from future import standard_library
 standard_library.install_aliases()
 from builtins import *
 
-from merapy.quantum_number_py import (QspZ2, QspU1, QspTravial, QnZ2, QnU1, make_qsp, qsp_any, 
+from merapy.quantum_number import (QspZ2, QspU1, QspTravial, QnZ2, QnU1, make_qsp, qsp_any, 
         symmetry_to_Qn, symmetry_to_Qsp)
 from merapy.tensor_py import iTensor
 from merapy.tensor_factory import iTensorFactory 

@@ -26,8 +26,6 @@ from merapy import array_permutation
 from merapy.context_util import redirect
 
 #import tensor_py
-#from quantum_number_py_new import QN_idendity, QSp_null
-#from merapy.quantum_number_py import symmetry_to_Qsp  
 if 0:
     from merapy.tensor_player_single import (decorate_methods, tensor_player, 
             set_STATE_end_1, set_STATE_end_simple, set_player_state_auto, 

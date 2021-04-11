@@ -26,9 +26,6 @@ import merapy.common_util as common_util
 from merapy import array_permutation
 from merapy.context_util import redirect
 
-#import tensor_py
-#from quantum_number_py_new import QN_idendity, QSp_null
-#from merapy.quantum_number_py import symmetry_to_Qsp  
 
 num_of_instance = 0
 
