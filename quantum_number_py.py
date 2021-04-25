@@ -52,7 +52,7 @@ from typing import (Any, Tuple, List, Type, Callable,  Generic, TypeVar, Callabl
 
 __all__=[  "QuantSpaceBase",  
     "QnU1", "QnZ2", "QnZ3", "QnTravial", 
-    "QspU1", "QspZ2", "QspZ3", "QspTravial", 
+    "QspU1", "QspZ2", "QspZ3", "QspTravial", 'make_qsp', 'qsp_any',
      "symmetry_to_Qn", "symmetry_to_Qsp", 'symmetry_to_QspClass', "qn_factory"]
 
 GROUP_NAMES = ["Travial", "Z2", "Z3", "U1"]
@@ -541,28 +541,29 @@ class QuantSpaceBase(object):
 
         return res
     
-    def __mul__(self, other): 
+    def __mul__(self, other):    #not supported by mypyc, so I comment it
         #return self.add(other)
         return self.tensor_prod(other)
     
-    def __div__(self, other): 
-        """
-            q1=QspZ2.easy_init([1, -1], [2, 2])
-            q2=QspZ2.easy_init([1, -1], [1, 3])
-            print  q1*q2   == q1*q1 
-            #they are equal 
-        """
-        msg = 'divide of qsp cant be defined,  as it is not unique. see doc string'
-        raise NotImplemented(msg)
+    #def __div__(self, other): 
+    #    """
+    #        q1=QspZ2.easy_init([1, -1], [2, 2])
+    #        q2=QspZ2.easy_init([1, -1], [1, 3])
+    #        print  q1*q2   == q1*q1 
+    #        #they are equal 
+    #    """
+    #    msg = 'divide of qsp cant be defined,  as it is not unique. see doc string'
+    #    raise NotImplemented(msg)
     
-    def __pow__(self, n:int): 
+    def __pow__(self, n:int):  #not supported by mypyc, so I comment it
         res= self.__class__.null()
         for i in range(n): 
             res= res.__mul__(self)
         return res 
     
     @classmethod
-    def easy_init(cls, qns=None, dims=None):
+    #def easy_init(cls:Type[T], qns=None, dims=None)->T:
+    def easy_init(cls:Type[T], qns=Optional[List[Tqn]], dims=Optional[List[int]])->T:
         """ a slow but easy init """
         symm =  cls.QnClass.SYMMETRY 
         if symm== 'Travial':
@@ -573,7 +574,7 @@ class QuantSpaceBase(object):
         dims = list(dims)
         return cls(n=n, qns=qns1, dims=dims) 
 
-    def reverse(self):
+    def reverse(self)->None:
         """
         """
         for i in range(self.nQN):
@@ -785,30 +786,30 @@ class QspZ2(QuantSpaceBase):
         """
         QuantSpaceBase.__init__(self, n=n, qns=qns, dims=dims)
     
-    def __div__(self, other): 
-        """
-            solve this linear eqn of (d0, d1): 
-                d0*b0 + d1*b1 = c0
-                d0*b1 + d1*b0 = c1
-            -->
-                d0*b0*b1 + d1*b1^2 = c0*b1
-                d0*b1*b0 + d1*b0^2 = c1*b0
-            -->
-                d1 = (c0*b1 - c1*b0)/(b1^2 - b0^2)
-                d0 = (c1*b0 - c0*b1)/(b1^2 - b0^2)
-                
-                d0, d1 may be not unique 
-                
-        """
-        raise NotImplemented
-        
-        #b0 = other._dims[0]
-        #b1 = other._dims[1]
-        #
-        #c0 = self._dims[0]
-        #c1 = self._dims[1]
-        #res= self.__class__.easy_init([1, -1], [d0, d1])
-        
+    #def __div__(self, other): 
+    #    """
+    #        solve this linear eqn of (d0, d1): 
+    #            d0*b0 + d1*b1 = c0
+    #            d0*b1 + d1*b0 = c1
+    #        -->
+    #            d0*b0*b1 + d1*b1^2 = c0*b1
+    #            d0*b1*b0 + d1*b0^2 = c1*b0
+    #        -->
+    #            d1 = (c0*b1 - c1*b0)/(b1^2 - b0^2)
+    #            d0 = (c1*b0 - c0*b1)/(b1^2 - b0^2)
+    #            
+    #            d0, d1 may be not unique 
+    #            
+    #    """
+    #    raise NotImplemented
+    #    
+    #    #b0 = other._dims[0]
+    #    #b1 = other._dims[1]
+    #    #
+    #    #c0 = self._dims[0]
+    #    #c1 = self._dims[1]
+    #    #res= self.__class__.easy_init([1, -1], [d0, d1])
+    #    
     
     @classmethod
     def easy_init(cls, qns=None, dims=None):

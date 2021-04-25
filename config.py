@@ -221,7 +221,6 @@ if 1:
 
     def _cfg_quaternary():
         from merapy.diagrams.V41 import graph_quaternary 
-        #merapy.quantum_number_py.QspU1.MaxQNNum = 30   #increase this because legs of V increases
         #print "set QspU1.MaxQNNum to 30"
         tensor_defs = {
                 "V":{"type":(4, 1)}, 
@@ -258,8 +257,6 @@ if 1:
     cfg_septenary = _cfg_septenary()
     
 def cfg_graph(which):
-    #merapy.quantum_number_py.QspU1.MaxQNNum = 30   #increase this because legs of V increases
-    #print "set QspU1.MaxQNNum to 30"
     
     dic = {
             'binary':         { 'parpath':'V21',                }, 
