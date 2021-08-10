@@ -639,6 +639,7 @@ class QuantSpaceBase(object):
             return self.QNs.index(qn)
         except:
             return -1 
+    has_qn = has_quant_num   #def has_qn
 
     def add_to_quant_space(self, qn, d):
         """

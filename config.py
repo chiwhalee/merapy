@@ -24,7 +24,9 @@ except:
 #LOCAL_USERNAME = 'zhli' 
 #LOCAL_HOSTNAME = 'qtgc30'
 
-LOCAL_IP = '222.25.29.116'
+#LOCAL_IP = '222.25.29.116'
+LOCAL_IP = '202.200.98.237'
+
 LOCAL_USERNAME = 'ws' 
 LOCAL_HOSTNAME = 'ws-Precision-Tower-7910'
 
@@ -420,11 +422,10 @@ class Config(dict):
             if db.has_shape(sh, from_energy_rec=from_energy_rec):
                 allow = False
         elif alg == 'tdvp' :
-            trunc_dim, the_time_lim = cfg['trunc_dim'], cfg['the_time_lim']
-            msg.insert(2, 'td=%d'%(trunc_dim, ))
+            trunc_dim, the_time_lim, tlim = cfg['trunc_dim'], cfg['the_time_lim'], cfg['the_time_lim']
+            msg.insert(2, 'td=%d, tlim=%s'%(trunc_dim, tlim))
             sh = (N, trunc_dim)
             the_time = db.fetch_easy('the_time', sh, default=0)
-            #print(the_time, db['the_time'])
             if abs(the_time ) >=  the_time_lim:
                 allow = False 
             else:
@@ -434,6 +435,8 @@ class Config(dict):
         
         
         if not cfg.get('auto_resume', True):
+            allow = True
+        if cfg.get('test_run', False):
             allow = True
             
         if not allow:

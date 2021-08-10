@@ -506,7 +506,7 @@ class Main(object):
             #    if kwargs.has_key(t): 
             #        job_info[t] = kwargs[t]
             #raise  #modify job_info !!
-            task_center_server = (LOCAL_IP, 90999) if task_center_server is None else task_center_server
+            task_center_server = (LOCAL_IP, 6780) if task_center_server is None else task_center_server
             for c in config_group:
                 #p = c.get('backup_parpath_local')
                 p = c.get('parpath_relative')

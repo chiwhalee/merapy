@@ -30,13 +30,9 @@ import zlib
 
 IS_PY3 = sys.version_info.major>2
 
-#try: 
-#    #import cloud 
-#    #pickle_any = cloud.serialization.cloudpickle
-#    import cloudpickle as pickle_any 
-#except ImportError as err: 
-#    warnings.warn(str(err))
+
 import cloudpickle as pickle_any 
+#import dill as pickle_any
 
 #__all__=["getch"]
 
@@ -223,13 +219,12 @@ def load(path, as_str=False, decompress=True, info=0):
                     #print_vars(vars(),  ['s[:200]'])
                     #res = pickle.loads(s, encoding='utf8')
                     #res= pickle.loads(s, encoding='bytes')
-                    #res = pickle_any.loads(s)
                     res = pickle.loads(s, encoding='latin1')
+                    #res = pickle_any.loads(s, encoding='latin1')
                 else:
                     res = pickle.loads(s)
             except Exception:
                 raise  
-        #res= pickle_any.loads(s)
     return res
 
 #@timer
@@ -284,8 +279,6 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
             print(msg) 
         if not as_str: 
             with open(path, 'wb') as f:  
-                #pickle.dump(obj, f)
-                #s= pickle.dumps(obj, pickle.HIGHEST_PROTOCOL)
                 f.write(z)
         else: 
             return z 
