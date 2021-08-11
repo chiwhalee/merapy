@@ -7,13 +7,14 @@ subroutine Array_Permutation_fort_parallel(rank, Dims, order_, totDim, A,B)
     !totDim是总维度(各条腿维度之积，fortran子程序需要指定array的长度）
 
        implicit none
-       integer:: rank, Dims(32), order_(32), totDim
+       integer rank, totDim
+       integer:: Dims(rank), order_(rank)
        real*8,intent(IN):: A(totDim)
        real*8,intent(inout)::B(totDim)
 !f2py intent(inout) :: B
-       integer p, q, idx(32), order(32), rorder(32)
-       integer nDims(32), nidx(32)
-       integer strides(32), rstrides(32)
+       integer p, q, idx(rank), order(rank), rorder(rank)
+       integer nDims(rank), nidx(rank)
+       integer strides(rank), rstrides(rank)
        integer ntotDim, inc
        integer i,j, np, p1,p2, pp, res
        integer nths, nth
@@ -99,15 +100,15 @@ subroutine Array_Permutation_fort_parallel_complex(rank, Dims, order_, totDim, A
     !totDim是总维度(各条腿维度之积，fortran子程序需要指定array的长度）
 
        implicit none
-       integer:: rank, Dims(32), order_(32), totDim
+       integer:: rank, Dims(rank), order_(rank), totDim
        !!real*8,intent(IN):: A(totDim)
        !!real*8,intent(inout)::B(totDim)
        complex*16,intent(IN):: A(totDim)
        complex*16,intent(inout)::B(totDim)
 !f2py intent(inout) :: B
-       integer p, q, idx(32), order(32), rorder(32)
-       integer nDims(32), nidx(32)
-       integer strides(32), rstrides(32)
+       integer p, q, idx(rank), order(rank), rorder(rank)
+       integer nDims(rank), nidx(rank)
+       integer strides(rank), rstrides(rank)
        integer ntotDim, inc
        integer i,j, np, p1,p2, pp, res
        integer nths, nth
@@ -188,13 +189,13 @@ end subroutine Array_Permutation_fort_parallel_complex
 
 subroutine Array_Permutation_fort(rank, Dims, order_, totDim, A,B)
        implicit none
-       integer,intent(IN):: rank, Dims(32), order_(32), totDim
+       integer,intent(IN):: rank, Dims(rank), order_(rank), totDim
        real*8,intent(IN):: A(totDim)
        real*8,intent(inout)::B(totDim)
 !f2py intent(inout) :: B
-       integer p, q, idx(32), rorder(32), order(32)
-       integer nDims(32), nidx(32)
-       integer strides(32), rstrides(32)
+       integer p, q, idx(rank), rorder(rank), order(rank)
+       integer nDims(rank), nidx(rank)
+       integer strides(rank), rstrides(rank)
        integer ntotDim, inc
        integer i,j, np, p1, p2, pp, res
        character*128 fmt
@@ -255,13 +256,13 @@ end subroutine Array_Permutation_fort
 
 subroutine Array_Permutation_fort_complex(rank, Dims, order_, totDim, A,B)
        implicit none
-       integer,intent(IN):: rank, Dims(32), order_(32), totDim
+       integer,intent(IN):: rank, Dims(rank), order_(rank), totDim
        complex*16,intent(IN):: A(totDim)
        complex*16,intent(inout)::B(totDim)
 !f2py intent(inout) :: B
-       integer p, q, idx(32), rorder(32), order(32)
-       integer nDims(32), nidx(32)
-       integer strides(32), rstrides(32)
+       integer p, q, idx(rank), rorder(rank), order(rank)
+       integer nDims(rank), nidx(rank)
+       integer strides(rank), rstrides(rank)
        integer ntotDim, inc
        integer i,j, np, p1, p2, pp, res
        character*128 fmt
@@ -328,9 +329,9 @@ subroutine Array_Permutation_fort_test(rank, Dims, order_, totDim, A,B)
        real*8,intent(inout)::B(totDim)
 !f2py intent(inout) :: B
        integer, intent(IN):: Dims(rank), order_(rank)
-       integer p, q, idx(32), rorder(32), order(32)
-       integer nDims(32), nidx(32)
-       integer strides(32), rstrides(32)
+       integer p, q, idx(rank), rorder(rank), order(rank)
+       integer nDims(rank), nidx(rank)
+       integer strides(rank), rstrides(rank)
        integer ntotDim, inc
        integer i,j, np, p1, p2, pp, res
        character*128 fmt
@@ -393,7 +394,7 @@ end subroutine Array_Permutation_fort_test
 subroutine permute_player_fort(rank, nidx, tape_ind, tape_dim, tape_ord, totDim, data1, data2)
        integer:: rank, nidx, totDim
        integer:: pidx, qidx, length
-       integer:: tape_ind(nidx, 3), tape_dim(nidx, 32), tape_ord(nidx, 32)
+       integer:: tape_ind(nidx, 3), tape_dim(nidx, rank), tape_ord(nidx, rank)
        real*8,intent(IN):: data1(totDim)
        real*8,intent(inout)::data2(totDim)
 !f2py intent(inout)::data2
@@ -401,8 +402,8 @@ subroutine permute_player_fort(rank, nidx, tape_ind, tape_dim, tape_ord, totDim,
         pidx = tape_ind(i, 1) + 1
         qidx = tape_ind(i, 2) + 1
         length = tape_ind(i, 3)
-        call Array_Permutation_fort_parallel(rank, tape_dim(i, 1:32),&
-            tape_ord(i, 1:32), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
+        call Array_Permutation_fort_parallel(rank, tape_dim(i, 1:rank),&
+            tape_ord(i, 1:rank), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
     end do
 end subroutine permute_player_fort
 
@@ -412,7 +413,7 @@ end subroutine permute_player_fort
 subroutine permute_player_fort_parallel(rank, nidx, tape_ind, tape_dim, tape_ord, totDim, data1, data2)
        integer:: rank, nidx, totDim
        integer:: pidx, qidx, length
-       integer:: tape_ind(nidx, 3), tape_dim(nidx, 32), tape_ord(nidx, 32)
+       integer:: tape_ind(nidx, 3), tape_dim(nidx, rank), tape_ord(nidx, rank)
        real*8,intent(IN):: data1(totDim)
        real*8,intent(inout)::data2(totDim)
 !f2py intent(inout)::data2
@@ -423,8 +424,8 @@ subroutine permute_player_fort_parallel(rank, nidx, tape_ind, tape_dim, tape_ord
         pidx = tape_ind(i, 1) + 1
         qidx = tape_ind(i, 2) + 1
         length = tape_ind(i, 3)
-        call Array_Permutation_fort(rank, tape_dim(i, 1:32),&
-            tape_ord(i, 1:32), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
+        call Array_Permutation_fort(rank, tape_dim(i, 1:rank),&
+            tape_ord(i, 1:rank), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
     end do
 !$OMP END do nowait
 !$OMP END PARALLEL
@@ -435,7 +436,7 @@ end subroutine permute_player_fort_parallel
 subroutine permute_player_fort_parallel_dynamic(rank, nidx, tape_ind, tape_dim, tape_ord, totDim, data1, data2)
        integer:: rank, nidx, totDim
        integer:: pidx, qidx, length
-       integer:: tape_ind(nidx, 3), tape_dim(nidx, 32), tape_ord(nidx, 32)
+       integer:: tape_ind(nidx, 3), tape_dim(nidx, rank), tape_ord(nidx, rank)
        real*8,intent(IN):: data1(totDim)
        real*8,intent(inout)::data2(totDim)
 !f2py intent(inout)::data2
@@ -446,8 +447,8 @@ subroutine permute_player_fort_parallel_dynamic(rank, nidx, tape_ind, tape_dim, 
         pidx = tape_ind(i, 1) + 1
         qidx = tape_ind(i, 2) + 1
         length = tape_ind(i, 3)
-        call Array_Permutation_fort(rank, tape_dim(i, 1:32),&
-            tape_ord(i, 1:32), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
+        call Array_Permutation_fort(rank, tape_dim(i, 1:rank),&
+            tape_ord(i, 1:rank), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
     end do
 !$OMP END do 
 !$OMP END PARALLEL
@@ -457,7 +458,7 @@ end subroutine permute_player_fort_parallel_dynamic
 subroutine complex_permute_player_fort_parallel_dynamic(rank, nidx, tape_ind, tape_dim, tape_ord, totDim, data1, data2)
        integer:: rank, nidx, totDim
        integer:: pidx, qidx, length
-       integer:: tape_ind(nidx, 3), tape_dim(nidx, 32), tape_ord(nidx, 32)
+       integer:: tape_ind(nidx, 3), tape_dim(nidx, rank), tape_ord(nidx, rank)
        complex*16,intent(IN):: data1(totDim)
        complex*16,intent(inout)::data2(totDim)
 !f2py intent(inout)::data2
@@ -468,8 +469,8 @@ subroutine complex_permute_player_fort_parallel_dynamic(rank, nidx, tape_ind, ta
         pidx = tape_ind(i, 1) + 1
         qidx = tape_ind(i, 2) + 1
         length = tape_ind(i, 3)
-        call Array_Permutation_fort_complex(rank, tape_dim(i, 1:32),&
-            tape_ord(i, 1:32), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
+        call Array_Permutation_fort_complex(rank, tape_dim(i, 1:rank),&
+            tape_ord(i, 1:rank), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
     end do
 !$OMP END do 
 !$OMP END PARALLEL
@@ -480,7 +481,7 @@ end subroutine complex_permute_player_fort_parallel_dynamic
 subroutine permute_player_fort_parallel_guided(rank, nidx, tape_ind, tape_dim, tape_ord, totDim, data1, data2)
        integer:: rank, nidx, totDim
        integer:: pidx, qidx, length
-       integer:: tape_ind(nidx, 3), tape_dim(nidx, 32), tape_ord(nidx, 32)
+       integer:: tape_ind(nidx, 3), tape_dim(nidx, rank), tape_ord(nidx, rank)
        real*8,intent(IN):: data1(totDim)
        real*8,intent(inout)::data2(totDim)
 !f2py intent(inout)::data2
@@ -491,8 +492,8 @@ subroutine permute_player_fort_parallel_guided(rank, nidx, tape_ind, tape_dim, t
         pidx = tape_ind(i, 1) + 1
         qidx = tape_ind(i, 2) + 1
         length = tape_ind(i, 3)
-        call Array_Permutation_fort(rank, tape_dim(i, 1:32),&
-            tape_ord(i, 1:32), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
+        call Array_Permutation_fort(rank, tape_dim(i, 1:rank),&
+            tape_ord(i, 1:rank), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
     end do
 !$OMP END do nowait
 !$OMP END PARALLEL
@@ -502,7 +503,7 @@ end subroutine permute_player_fort_parallel_guided
 subroutine permute_player_fort_parallel_runtime(rank, nidx, tape_ind, tape_dim, tape_ord, totDim, data1, data2)
        integer:: rank, nidx, totDim
        integer:: pidx, qidx, length
-       integer:: tape_ind(nidx, 3), tape_dim(nidx, 32), tape_ord(nidx, 32)
+       integer:: tape_ind(nidx, 3), tape_dim(nidx, rank), tape_ord(nidx, rank)
        real*8,intent(IN):: data1(totDim)
        real*8,intent(inout)::data2(totDim)
 !f2py intent(inout)::data2
@@ -513,8 +514,8 @@ subroutine permute_player_fort_parallel_runtime(rank, nidx, tape_ind, tape_dim, 
         pidx = tape_ind(i, 1) + 1
         qidx = tape_ind(i, 2) + 1
         length = tape_ind(i, 3)
-        call Array_Permutation_fort(rank, tape_dim(i, 1:32),&
-            tape_ord(i, 1:32), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
+        call Array_Permutation_fort(rank, tape_dim(i, 1:rank),&
+            tape_ord(i, 1:rank), length, data1(pidx:pidx + length), data2(qidx:qidx + length))
     end do
 !$OMP END do 
 !$OMP END PARALLEL

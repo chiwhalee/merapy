@@ -69,6 +69,15 @@ class Tape(dict):
         self.calls_tot = 0   #total num of 'songs' recorded 
         self.reach_tape_end = False 
         self.tape_cleared = False
+    
+    def show(self):
+        res= '\ncontent of the tape:\n'
+        res += '\tcalls_tot={0.calls_tot}\n'.format(self)
+        res +=  '\t' + super(dict, self).__str__()[:1500]
+        print(res)
+
+        return res 
+        
         
 #TapeList = [Tape()]   # at least one tape 
 TapeList = OrderedDict()
@@ -145,34 +154,46 @@ def tensor_player(which):
                     buffer=None, use_buf=False, index_data=True, has_data=True, ):
                 """
                     这种做法有些过于激进, 更安全的是下面的 data_entrance_recorder/player 
+                    note1:
+                        one may pop out 'data' or not. Both can run. The draw back of the later 
+                        is that it will use much more memory,  so I use the former. 
                 
                 """
                 func(self, rank=rank,  QSp=QSp, totQN=totQN, order="F",  dtype=dtype, 
                     buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, )
-                #struct_dict = self.__dict__.copy()
-                struct_dict = self.__dict__
-                
-                if 0:
+                if 1:  #note1
+                    struct_dict = self.__dict__.copy()   #here copy is NEED, or else self will lost data after pop 
                     if has_data:
                         struct_dict.pop('data')
                     #struct_dict.pop("buf_ref")
+                else:
+                    struct_dict = self.__dict__
+                    
                 tensor_player.the_tape[tensor_player.the_tape.calls] = struct_dict
             
             #@profile
             def init_player(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
                     buffer=None, use_buf=False, index_data=True, has_data=True, ):
+                """
+                    note1:
+                        following is not deepcopy, self and tape share same
+                        value, but NOT share key. If this copy was removed, the
+                        program will not raise. Wowever 'data' will set to the
+                        tape, which would use much memory.
+                """
 
-                #following is not deepcopy, self and tape share same value, but NOT share key
-                #self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()
-                self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls]
-                #self.buf_ref = np.array([-1, -1], np.int)
-                if self.dtype != dtype:   # It could happen that dtype change in later iterations, e.g. in TDVP algrithom
-                    self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered               
-                if 0:                
+                if 1:                
+                    self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()  #note1 
+                    self.buf_ref = np.array([-1, -1], np.int)
                     if has_data:
                         if buffer is None and use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
                             buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2)  #else complex 
                         self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
+                else:
+                    self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls]
+                    if self.dtype != dtype:   # It could happen that dtype change in later iterations, e.g. in TDVP algrithom
+                        self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered               
+                    
 
             def data_entrance_recorder(self, order="F"):
                 rank, QSp, totQN = self.rank, self.QSp, self.totQN
@@ -284,8 +305,10 @@ def tensor_player(which):
                 Dims=np.empty(self.rank,"int")
 
                 tape_ind = np.ndarray((self.nidx, 3), np.int32)
-                tape_dim = np.ndarray((self.nidx, 32), np.int32)
-                tape_ord = np.ndarray((self.nidx, 32), np.int32)
+                #tape_dim = np.ndarray((self.nidx, 32), np.int32)
+                #tape_ord = np.ndarray((self.nidx, 32), np.int32)
+                tape_dim = np.ndarray((self.nidx, rank), np.int32)
+                tape_ord = np.ndarray((self.nidx, rank), np.int32)
                 
                 for n  in range(self.nidx):
                     pidx = self.Block_idx[0,n]
@@ -309,22 +332,18 @@ def tensor_player(which):
                     
                     #record[n] = (qidx, pidx, totDim, Dims.copy())
                     tape_ind[n][0:3] = [pidx, qidx, totDim]
-                    tape_dim[n][:rank] = Dims[:rank]
-                    tape_ord[n][:rank] = P[:rank]
+                    tape_dim[n][:] = Dims[:rank]
+                    tape_ord[n][:] = P[:rank]
                 if 0:
-                    #I may implement this later, sort the tape according to totDim
-                    tape_sort = tape_ind[:, 2].argsort()
+                    tape_sort = tape_ind[:, 2].argsort()   ##I may implement this later, sort the tape according to totDim
                     #tape_sort.sort()
-                    tensor_player.the_tape[tensor_player.the_tape.calls] = (self.nidx, tape_ind[tape_sort], tape_dim[tape_sort], tape_ord[tape_sort])
-                    #tensor_player.the_tape[tensor_player.the_tape.calls] = (self.nidx, tape_ind[tape_sort[-1::-1]],tape_dim[tape_sort[-1::-1]], tape_ord[tape_sort[-1::-1]])
+                    tensor_player.the_tape[tensor_player.the_tape.calls] = ('permute', self.nidx, tape_ind[tape_sort], tape_dim[tape_sort], tape_ord[tape_sort])
                 else:
-                    tensor_player.the_tape[tensor_player.the_tape.calls] = (self.nidx, tape_ind, tape_dim, tape_ord)
-                
+                    tensor_player.the_tape[tensor_player.the_tape.calls] = ('permute', self.nidx, tape_ind, tape_dim, tape_ord)  #here I insert 'permute' for easier debuging
                     
                 return Tp
 
             def permute_player_bac(self, P, buffer=None, use_buf=False):
-                
                 rank = self.rank
                 #permute QSp, QNs
                 if 0:
@@ -337,14 +356,13 @@ def tensor_player(which):
                 #Tp=self.__class__(rank, QSp, totQN,  buffer=buffer, use_buf=use_buf)
                 Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
                 
-                nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
+                _, nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
                 if self.data.dtype == float: 
-                    #print('ppppp', self.data.size, Tp.data.size)
-                    array_permutation.permute_player_fort(self.rank, 
-                                tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
+                    array_permutation.permute_player_fort(
+                                tape_ind, tape_dim, tape_ord, self.data, Tp.data)
                 else:  #complex 
-                    array_permutation.complex_permute_player_fort(self.rank, 
-                                tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
+                    array_permutation.complex_permute_player_fort(
+                                tape_ind, tape_dim, tape_ord, self.data, Tp.data)
 
                 return Tp
 
@@ -438,7 +456,7 @@ def tensor_player(which):
                         data3=self.__class__.mul_temp(data1, data2, alpha, beta, dtype=dtype)
                         T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
                 
-                tensor_player.the_tape[tensor_player.the_tape.calls] = contract_record_1[:ind_count, :], ind_count
+                tensor_player.the_tape[tensor_player.the_tape.calls] = ('contract', contract_record_1[:ind_count, :], ind_count)
                 #print('xxxxxxxxxx contr', tensor_player.the_tape.calls)
                 return T3
         
@@ -446,13 +464,13 @@ def tensor_player(which):
                 """
                 """
                 res = func(self, T2, V1, V2, info)
-                tensor_player.the_tape[tensor_player.the_tape.calls] = res
+                tensor_player.the_tape[tensor_player.the_tape.calls] = ('prepare', res)
                 return res
 
             def prepare_leg_player(self,T2, V1, V2, info=0):
                 """
                 """
-                return tensor_player.the_tape[tensor_player.the_tape.calls] 
+                return tensor_player.the_tape[tensor_player.the_tape.calls][1] 
 
             def contract_core_player_bac(self, T2, div, data=None, use_buf=False):
                 """
@@ -472,7 +490,7 @@ def tensor_player(which):
                     
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
                 T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
-                rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
+                _, rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
                 if dtype == float:  
                     common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                 else: 

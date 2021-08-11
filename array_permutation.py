@@ -94,10 +94,8 @@ except ImportError:
 __all__ = ["array_permutation", "array_permutation_np"]
 
 #for better performance
-Dims_ = np.ndarray(32, np.int)
-order_ = np.ndarray(32, np.int)
-MaxSize = 22**4     #support at most 6-rank tensor 22dim for each index
-#out_buff = np.ndarray(MaxSize, np.float64)
+#Dims_ = np.ndarray(32, np.int)
+#order_ = np.ndarray(32, np.int)
 
 
 #@profile  #used for line_profiler
@@ -114,13 +112,12 @@ def array_permutation(a, rank, Dims, order, out=None):
         #    order=map(lambda x: x+1, order)    
         #把这一句话改成下面numpy的做法后，真个mera程序速度提高1倍!!
         
-        #在f90中，dims，order都是固定长度为32的array，so I make the following
-        #Dims_=np.ndarray(32,np.int)
-        #Dims_=np.ndarray(rank,np.int)
+    #在f90中，dims，order都是固定长度为32的array，so I make the following
+    Dims_=np.ndarray(rank, np.int)
     Dims_[:rank]=Dims[:rank]
     
-    #order_=np.ndarray(rank, np.int)
     #order_=np.ndarray(32, np.int)
+    order_=np.ndarray(rank, np.int)
     order_[:rank]=order[:rank]
     
     if out is None: 
@@ -128,9 +125,9 @@ def array_permutation(a, rank, Dims, order, out=None):
         out = np.ndarray(a.size, dtype=a.dtype)
         #out = np.ndarray(a.size,dtype=a.dtype, buffer=out_buff)
         if a.dtype == float: 
-            array_permutation_fort_parallel(rank, Dims_, order_, a, out)
+            array_permutation_fort_parallel(Dims_, order_, a, out)
         else: 
-            array_permutation_fort_parallel_complex(rank, Dims_, order_, a, out)
+            array_permutation_fort_parallel_complex(Dims_, order_, a, out)
             
         return out 
     else: 
@@ -156,20 +153,21 @@ def array_permutation_inplace(a, rank, Dims, order, b):
     
     #在f90中，dims，order都是固定长度为32的array，so I make the following
     #Dims_=np.ndarray(32,np.int)
-    #Dims_=np.ndarray(rank,np.int)
-    Dims_[:rank]=Dims[:rank]
+    Dims_ = np.ndarray(rank, int)
+    Dims_[:]=Dims[:rank]
     
-    #order_=np.ndarray(rank, np.int)
     #order_=np.ndarray(32, np.int)
-    order_[:rank]=order[:rank]
+    order_ = np.ndarray(rank, int)
+    order_[:]=order[:rank]
+    
 
     #b=np.ndarray(a.size, dtype=a.dtype)
     #b=np.ndarray(a.size,dtype=a.dtype, buffer=out_buff)
     #print_vars(vars(),  ['a.dtype', 'b.dtype'], sep=' ')
     if a.dtype == float:  
-        array_permutation_fort_parallel(rank, Dims_, order_, a, b)
-    else: 
-        array_permutation_fort_parallel_complex(rank, Dims_, order_, a, b)
+        array_permutation_fort_parallel(Dims_, order_,  a, b)
+    else:
+        array_permutation_fort_parallel_complex(Dims_, order_, a, b)
         
 def array_permutation_C(a, rank, Dims, order, index_start=0):
     """
@@ -316,26 +314,29 @@ def array_permutation_1(rank, Dims,order, totDim,A, B):
                 i = i+1                
 
 
-class Test_array_permute(unittest.TestCase): 
+class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass
     
-    def test_temp(self): 
-        pass 
     
     def test_array_permutation_inplace(self): 
         print(array_permutation_fort_parallel.__doc__) 
-        print(array_permutation_fort_parallel_complex.__doc__) 
         a = np.random.random((3, 4, 2, 3))
-        b = 1j*np.random.random((3, 4, 2, 3))
+        dims= np.asarray(a.shape)
         out = np.ndarray((3, 4, 2, 3), dtype=float, order='F').ravel()
-        array_permutation_inplace(a, 4, [3, 4, 2, 3], [0, 2, 1, 3], out)
+        order = np.asarray([1, 3, 2, 4], int) - 1 
+        #print_vars(vars(),  ['order', 'dims'])
+        #raise  
+        array_permutation_fort_parallel(dims, order, a, out)
+        
+        array_permutation_inplace(a, 4, [3, 4, 2, 3], order, out)
         
         #test complext dtype 
+        b = 1j*np.random.random((3, 4, 2, 3))
         ab = a + b 
         out_c = np.ndarray((3, 4, 2, 3), dtype=complex, order='F').ravel()
+        print(array_permutation_fort_parallel_complex.__doc__) 
         array_permutation_inplace(ab, 4, [3, 4, 2, 3], [0, 2, 1, 3], out_c)
-        
     
     def test_0(self):
         """
@@ -379,7 +380,7 @@ class Test_array_permute(unittest.TestCase):
         #b=np.ndarray((1,totDim),'d',order="FORTRAN")
         #b=np.ndarray(totDim,'d',order="FORTRAN")
         b=np.ndarray(totDim,'d',order="F")
-        b1=np.ndarray((1,totDim),'d',order="FORTRAN")
+        b1=np.ndarray((1,totDim),'d',order="F")
         
         b=array_permutation(a,rank, Dims, order)
         
@@ -581,8 +582,6 @@ class Test_array_permute(unittest.TestCase):
         """
         np.transpose is equivalent to array_permutation !!----pass
         """
-        from merapy.lib.array_permutation_64_ifort import array_permutation_fort
-        print(array_permutation_fort.__doc__)
         #print array_permutation_player_fort.__doc__
         dims= [5, 3, 4, 1]
         rank = len(dims)
@@ -597,22 +596,43 @@ class Test_array_permute(unittest.TestCase):
         print(b)
         print(c)
     
+    def test_temp(self): 
+        
+        print_vars(vars(),  ['complex_permute_player_fort.__doc__'])
+        
+        from merapy.lib.linux_py3.array_permutation import complex_permute_player_fort_parallel_dynamic 
+        print(complex_permute_player_fort_parallel_dynamic.__doc__
+                    
+        )
+        
+                    
+        pass 
 
 if __name__ == "__main__":
 
     
-    if 0: 
-        unittest.main()
+       
+    if 0:
+        TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
+        unittest.main(verbosity=-10)
     else: 
         suite = unittest.TestSuite()
         
-        suite.addTest(Test_array_permute('test_temp'))
-        #suite.addTest(Test_array_permute('test_0'))
-        #suite.addTest(Test_array_permute('test_1'))
-        #suite.addTest(Test_array_permute('test_2'))
-        #suite.addTest(Test_array_permute('test_3'))
-
-        unittest.TextTestRunner().run(suite)
+        add_list_vmps = [
+                #'test_0', 
+                #'test_1', 
+                #'test_2', 
+                #'test_3', 
+                #'test_array_permutation_inplace', 
+                
+                'test_temp'
+                
+                ]
+        
+        for a in add_list_vmps: 
+            suite.addTest(TestIt(a))
+        unittest.TextTestRunner(verbosity=0).run(suite)
+        
 
 
 
