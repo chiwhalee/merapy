@@ -210,6 +210,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if local_root is not None: 
             self._last_modify_time = os.path.getmtime(self.local_root)
             self.set_parpath_dict()   #scan disc
+            
+            
         if 1: #plotting configs
             self.invert_xaxis= 0
             self.invert_alpha_order = 0
@@ -380,7 +382,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if surfix is not None : 
             #surfix = None means all surfix; surfix = '' means empty surfix 
             if surfix == '' :
-                aa = [x for x in aa if not isinstance(x[-1], str)]
+                if self.Alpha is None:
+                    aa = [x for x in aa if not isinstance(x[-1], str)]
+                else:
+                    aa = [x for x in aa if x.surfix == '']
+                    
             elif '<' in surfix or '>' in surfix:
                 func = lambda x: eval(surfix.replace('surfix', x[-1]))
                 aa = list(filter(func, aa))
@@ -513,8 +519,18 @@ class Analysis(AnalysisTools, AnalyticFormular):
         alpha_parpath_dict = OrderedDict()
         
         for name in dir_list: 
-            alpha = self.parse_dir_name(name, surfix=surfix)
-            alpha_parpath_dict[alpha] =  '/'.join([root, name])
+            try:
+                alpha = self.parse_dir_name(name, surfix=surfix)
+                alpha_parpath_dict[alpha] =  '/'.join([root, name])
+            except TypeError as err:
+                msg = str(err)
+                msg  += '\nself.Alpha={} and file name={} not match. \nNeed to modify alpha and call self.set_parpath_dict again'.format(
+                        self.Alpha._fields, name)
+                #warnings.warn(msg)
+                raise  
+            except Exception:
+                raise  
+            
         return alpha_parpath_dict
 
     def parse_dir_name_bac(self, fn, surfix=''):
@@ -582,7 +598,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 if 'm' == val[0]:  #change 'm' to minus sign
                     val = '-'  + val[1: ]
                 try: 
-                    val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
+                    #val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
+                    val = float(val) if '.' in val else int(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
                 except: 
                     val = val
                 return (key, val)
@@ -615,8 +632,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             #        alpha = self.Alpha(** dict(temp[:-1]))
             #        alpha += (surfix, ) 
             
-            # if Alpha is provided, always  use namedtupe as key for the dicts
-            alpha = self.Alpha(** dict(temp))
+            alpha = self.Alpha(** dict(temp))  # if Alpha is provided, always  use namedtupe as key for the dicts
                 
         else:
             aa = fn.split('-')
@@ -747,7 +763,14 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if root is None: 
             root = self.local_root
         assert root is not None , 'param root reqired'
-        dic = self.scan_alpha(root=root, signiture=signiture)
+        try:
+            dic = self.scan_alpha(root=root, signiture=signiture)
+        except TypeError:
+            msg = 'scan_alpha failed: self.Alpha={} need change'.format(self.Alpha._fields)
+            warnings.warn(msg)
+            dic = {}
+            
+        
         self.alpha_parpath_dict.update(dic)
         
         if info>1: 
@@ -1478,7 +1501,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             cb=fig.colorbar(im,   ax=ax)
             clim = kwargs.get('clim')
             if clim is not None : 
-                cb.set_clim(clim)
+                im.set_clim(clim)
         elif which_plot == 'surface': 
             temp = ['interpolation', 'extent', 'aspect']  #these are not accepted by plot_surface 
             for t in temp: 
@@ -3045,7 +3068,12 @@ class TestAnalsysis(unittest.TestCase):
         from merapy.run_heisbg.analysis import an_vmps
         Jzz = 0.0
         sh = 128, 'max'
-        xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
+        xx = an_tdvp.an_finite_T.an_dynamics.an_szsz
+        aa = xx.filter_alpha(Jzz=2.0, T=inf)
+        for a in aa:
+            db = xx[a]
+            print_vars(vars(),  ['db.param'])
+        raise  
         db=xx(Jzz=Jzz, mu=0.01, dt=0.04, surfix='')
         #db=xx(Jzz=Jzz, mu=0.01, dt=0.5, surfix='fix_err_1em12')
         #db = xx[0.0, 0.01]
