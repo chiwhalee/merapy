@@ -990,6 +990,16 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
             todo: load 时，应该支持 update state 
         """
+        if sh[0] == 'max' :
+            N = sh[0]
+            temp = self.get_shape_list( only_return_max=1, from_energy_rec=0)
+            temp = [t[0] for t in temp]
+            if not temp:
+                N = -1
+            else:
+                N = max(temp)
+            sh = (N, sh[1])
+        
         if sh[1] ==  'max':
             if 0: # this is not precise 
                 sh = sh[0], self['dim_max'].get(sh[0], 0)
@@ -1222,6 +1232,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         if isinstance(N, tuple):  
             N = N[0] 
             return_N = True
+        if N == 'max' :
+            temp=self.get_shape_list(from_energy_rec=from_energy_rec, only_return_N=1)        
+            N = max(temp) if temp else -1
+            
         try: 
             if force: 
                 raise KeyError 
@@ -2091,6 +2105,32 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 raise  
         return K
     
+    def _get_momentum_distribution(self, sh, rdm_one_fermion=None):  # def _get_nk 
+        """
+            Calc n(k) for 1D spinless fermions. Sum n(k) for k in the brllion
+            zone shold equal tot particle number.
+            
+            note1: one can also use e.g. 
+                kk = [-n*pace for n in range(L//2)]  + [n*pace for n in range(1, L//2  + 1)]
+                It is simply a reordering.  Because they are identicle modulo 2*pi
+        """
+        if rdm_one_fermion is None:
+            rdm_one_fermion = self.fetch_easy('rdm_one_fermion', sh)
+        corr = rdm_one_fermion
+        L = sh[0]
+        exp = np.exp
+        Ck = lambda k: 1/L*np.sum([exp(-1j*k*(x-y))*corr[x, y]  
+            for x in range(L) for y in range(L)])
+        pace = 2*np.pi/L
+        kk = [n*pace for n in range(L)]  #note1
+        kk.sort()
+        kk = np.asarray(kk)
+        
+        nk = [Ck(k)  for k in kk]
+        nk = np.asarray(nk)
+        return kk, nk 
+    
+    
     def delete_rec(self, field_name_list, sh_list, dry_run=0, need_comfirm=0): 
         """
             params:
@@ -2224,7 +2264,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             #os.system('ls %s'%self.parpath)
             print('merge succeed')
     
-    def _plot(self, x, y, **kwargs): 
+    def _plot(self, x, y, show_nan=False, **kwargs): 
         figsize = kwargs.get('figsize')
         figsize = (4, 3) if figsize is None else figsize
         fig = kwargs.get('fig', None)
@@ -2236,6 +2276,18 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 return fig, ax
             else: 
                 return ax.figure
+        x = np.asarray(x)
+        y = np.asarray(y)
+        if not show_nan:
+            arg = ~np.isnan(y.astype(float))
+            if not all(arg):
+                x = x[arg]
+                y = y[arg]
+            if x.size<1:
+                if kwargs.get('return_ax', False): 
+                    return fig, ax
+                else: 
+                    return ax.figure
         
         if fig is None and ax is None: 
             fig=plt.figure(figsize=figsize)
@@ -4805,7 +4857,7 @@ class ResultDB_tdvp(ResultDB):
         """
         tt, mm = self.get_t_vs_field('magnetization',  sh)
         if tt is None:
-            return None
+            return None, None
         tmax = abs(max(tt))
         #if isinstance(tlist,  float) :
         if isinstance(tlist,  float) or isinstance(tlist, int):
@@ -4825,6 +4877,8 @@ class ResultDB_tdvp(ResultDB):
         temp = np.asarray(temp, dtype=float)
         if len(tlist)==1:
             temp = temp[0]
+        if len(temp)==0:
+            temp = None
         if return_t:
             return tt, temp
         else:
@@ -4934,15 +4988,20 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         N = 128
         
-        from merapy.run_heisbg.analysis import an_tdvp 
-        #from mps_wigner_crystal.analysis import an_tdvp 
-        Jzz = 2.0
-        sh = 128, 'max'
+        #from merapy.run_heisbg.analysis import an_tdvp 
+        from mps_wigner_crystal.analysis import an_tdvp 
+        
         xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
-        #db=xx(Jzz=Jzz, mu=0.01, dt=0.5, surfix='fix_err_1em12')
-        db=xx(Jzz, mu=0.01, dt=0.04, )
-        print_vars(vars(),  ['db.parpath', 'db.state_parpath'])
-        print_vars(vars(),  ['db.model_param'])
+
+        xx.set_parpath_dict()
+        fig, ax=xx.fig_layout()
+        aa=[ 1.0, 2.0, 4.0, 8.0, 24.0]
+        sh=('max', 'max')
+        for a in aa:
+            db=xx( alpha=0.5, V=a, mu=0.01, dt=0.5, surfix='fix_err_1em12')
+            tt, yy = db.get_t_vs_field('EE_middle', sh)        
+        
+        
         raise  
         tt, current = db.get_current_from_mag(sh)
         current = np.abs(current)
