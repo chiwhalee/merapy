@@ -835,6 +835,9 @@ class iTensorFactory(object):
                 After truncation of nmax [b, b^+1] no longer strictly equals 1 
             
         """
+        
+        #print('I turned of shift_qn')
+        
         vec = iTensorFactory.base_state(which='boson', nmax=nmax,  
                 symmetry=symmetry, shift_qn=shift_qn)
         def make_op(xx):
@@ -867,7 +870,7 @@ class iTensorFactory(object):
         
         return res 
     
-    @staticmethod
+    
     def lattice_op(op_type, symmetry, spin=None, nmax=None):
         """
             wrapper of spin, fermion, boson operators into one func
@@ -914,6 +917,13 @@ class iTensorFactory(object):
         else:
             raise NotImplemented  
         res = temp[op_name]
+        
+        #if 0:
+        #    sigma_p = temp['sigma_p']
+        #    sigma_m = temp['sigma_m']
+        #    print_vars(vars(),  ['op_name', 'res.matrix_view()', 'sigma_p.matrix_view()', 
+        #        'sigma_m.matrix_view()'])
+        #    raise  
         
         return res 
     
@@ -1240,7 +1250,11 @@ class TestIt(unittest.TestCase):
     def test_temp(self):
         from merapy import qsp_any, QspZ2, Tensor_svd
         symm = 'Travial'
-        symm = 'U1'
+        #symm = 'U1'
+        op =  iTensorFactory.any_op('sigma_p',  symmetry=symm, nmax=None)
+        print_vars(vars(),  ['op.matrix_view()'])
+        raise  
+        
         if 0:
             q0 = QspZ2.easy_init([1, -1], [2, 4])
             q1 = QspZ2.easy_init([1, -1], [2, 3])
@@ -1276,6 +1290,7 @@ class TestIt(unittest.TestCase):
             diag = Tensor_svd.diag_rank2(m2)
             self.assertTrue(np.all(diag==1.0))
             #print_vars(vars(),  ['m2.matrix_view()'])
+            
 
 
 if __name__ == "__main__":

@@ -32,6 +32,8 @@ from __future__ import print_function
 from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
+
+
 from builtins import str
 from builtins import map
 from builtins import range
@@ -62,16 +64,23 @@ import scipy
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy.utilities import (print_vars, save, load)
 from merapy.ntensor import TensorBase, nTensor 
-from merapy.quantum_number import *  #QuantumNum, QuantSpace, QN_idendity, QSp_null, QSp_base
-from merapy.quantum_number_py  import (QspU1, QspZ2, QspTravial, qsp_any, symmetry_to_Qsp)
+#from merapy.quantum_number import *  
+
+#from merapy.quantum_number_py  import (QspU1, QspZ2, QspTravial, qsp_any, symmetry_to_Qsp, make_qsp)
+#from merapy.quantum_number_py  import (QspU1, QspZ2, QspTravial, qsp_any, make_qsp)
+#from quantum_number_py import (QspU1, QspZ2, QspTravial, qsp_any, symmetry_to_Qsp, make_qsp)
+from merapy.quantum_number import *
+
+#from merapy import quantum_number_py
+
 from merapy import common_util
 #import merapy.common_util as common_util 
 
 from merapy import array_permutation
-from merapy.set1 import *
+#from merapy.set1 import *
 #from merapy import crandom
 from merapy.utilities import get_local
-from merapy import make_qsp
+
 from merapy.decorators import (tensor_player, decorate_methods, set_player_state_manual, set_player_state_auto)
 #from merapy.tensor_player_multiple import decorate_methods,  tensor_player, set_player_state_auto
 
@@ -938,11 +947,12 @@ class iTensor(TensorBase):
                     for i in range(self.nidx):
                         start = self.Block_idx[0, i]
                         d = self.Block_idx[1, i]
-                        qn_id_tuple= self.Addr_idx[:, i]
+                        qn_id_tuple = self.Addr_idx[:, i]
+                        qn_tuple = self.get_qn_from_qnid(qn_id_tuple)
+                        qn_tuple = np.asarray([i.val for i in qn_tuple])
                         qn_id_linear = self.Block_idx[0, i]
-                        #qn_id_linear = self.ravel_qn_id_tuple(qn_id_tuple)
-                        #temp += '%d '%i + str(qn_id_tuple) + ": "
-                        temp += ''.join(['%d '%i, str(qn_id_tuple), 
+                        #temp += ''.join(['%d '%i, str(qn_id_tuple), 
+                        temp += ''.join(['%d '%i, str(qn_tuple) + ' ', 
                             '*'.join(map(str, self.get_block_shape(i))), 
                             ':']) 
                         if np.all(self.data[start:start + d]==0.0):
@@ -3318,6 +3328,8 @@ class iTensor(TensorBase):
                 i: insert the qsp before index i. 
                     if i>= self.rank, then the 1d qsp is appended as the last leg.  
         """
+        if i == -1:
+            i = self.rank 
         qn = qn if qn is not None else self.qsp_class.QnClass.qn_id()
         if isinstance(qn, int): 
             qn = self.qsp_class.QnClass(qn)
@@ -4199,7 +4211,6 @@ class Test_iTensor(unittest.TestCase):
         
     def test_rank_zero(self): 
         print('aaaaaaaaaaaaaaaaaaaa')
-        #QSp=[QspU1.null()]
         QSp = []
         t0 = iTensor(rank=0,  QSp=QSp, totQN=QspU1.QnClass.qn_id())
         print(t0) #.data 
@@ -4579,40 +4590,61 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
+        
         if 1:
-            from quantum_number_py import A
-            a = A(1)
-            a + a
-            raise  
+            pass
+            if tensor_player.version == 'single':
+                return 
+            if 1:
+                print(iTensor.contract_core)
+                print(iTensor.__init__)
             
-            print(QspU1.MaxQNNum, type(QspU1.QnClass))
+            for i in range(10):
+                print_vars(vars(),  ['i'], '', ' ')
+                rank = 4
+                set_player_state_auto(iter=i, record_at=0, verbose=1, info=1)    
+                #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+                u = iTensor.example()
+                #u.contract_core(u, 2)
+                u.permutation([1, 3, 2, 0])
+                
+            #tensor_player.STATE = 'stop'
+            print((type(tensor_player.the_tape)))
+            print((tensor_player.the_tape))
+            raise  
+            print_vars(globals(),  ['tensor_player.the_tape.values()'])
+            print(tensor_player.the_tape.keys())
+            print(tensor_player.the_tape.get(1))
+            set_player_state_manual('stop')
+            
+        
+        if 1:
+            #from quantum_number import QnU1
+            from merapy.quantum_number import QnU1, QspU1
             qn = QnU1(1)
-            
            
-            #a = qn.__add__(qn)
-            print_vars(vars(),  ['a'])
-            
-            print_vars(vars(),  ['qn'])
-            QspU1.QnClass.qn_id()
-            print(QnU1.SYMMETRY)
-            
-            qsp = QspU1(1, [qn], [1])
-            print_vars(vars(),  ['qsp'])
-           
-            print(qsp.QnClass.qn_id())
-            print(type(QspU1.null()))
-            print_vars(vars(),  ['QspZ2.null()'])
-            raise  
-            
-            raise  
             #raise  
             q0 = QspU1.easy_init([1, -1], [2, 4])
             q1 = QspU1.easy_init([1, -1], [2, 3])
             #q2 = QspU1.easy_init([1, -1], [3, 2])
-            q2 = q0*q1; q2.reverse()
+            q2 = q0.tensor_prod(q1); q2.reverse()
             
             t3 = iTensor(QSp=[q0, q1, q2])
+            q = t3
+            
+            q = qn
+            
+            path = '/tmp/accbabca'
+            if 0:
+                save(q, path)
+                #rpyc_save(path, q)
+            else:
+                q1=load(path)
+                print_vars(vars(),  ['q1'])
+                print(q1.QSp[0].__class__.__module__)
             raise  
+
+
             
         if 0:
 

@@ -7,7 +7,10 @@
 #log 
     #2020.1.1 I remove '_64_gfort' in the module name 
 
-f2py -c -m array_permutation array_permutation4py.f90 --fcompiler=gfortran -lgomp  --f90flags="-openmp" 
+#f2py -c -m array_permutation array_permutation4py.f90 --fcompiler=gfortran -lgomp  --f90flags="-openmp" 
+
+f2py -c -m array_permutation_gfort array_permutation4py.f90 --fcompiler=gfortran -lgomp  --f90flags="-openmp" 
+
 #f2py -c -m common_64_gfort common4py.f90  -llapack -lblas  --fcompiler=gfortran
 f2py -c -m common common4py.f90  -llapack -lblas  -lgomp --f90flags="-openmp" --fcompiler=gfortran
 

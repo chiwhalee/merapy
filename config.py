@@ -24,8 +24,8 @@ except:
 #LOCAL_USERNAME = 'zhli' 
 #LOCAL_HOSTNAME = 'qtgc30'
 
-#LOCAL_IP = '222.25.29.116'
-LOCAL_IP = '202.200.98.237'
+LOCAL_IP = '192.168.50.1'
+#LOCAL_IP = '202.200.98.230'
 
 LOCAL_USERNAME = 'ws' 
 LOCAL_HOSTNAME = 'ws-Precision-Tower-7910'
@@ -426,6 +426,8 @@ class Config(dict):
             msg.insert(2, 'td=%d, tlim=%s'%(trunc_dim, tlim))
             sh = (N, trunc_dim)
             the_time = db.fetch_easy('the_time', sh, default=0)
+            if info>0:
+                print(the_time, db.get('the_time'))
             if abs(the_time ) >=  the_time_lim:
                 allow = False 
             else:
