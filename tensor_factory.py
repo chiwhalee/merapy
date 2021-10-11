@@ -752,8 +752,114 @@ class iTensorFactory(object):
             h3b = 2.0*(p.direct_product(i).direct_product(m) + m.direct_product(i).direct_product(p))
             print(np.all(h3a.data==h3b.data))
 
+    def base_state(which, symmetry, nmax=None, shift_base_qn=1, **kwargs):
+        """
+            params:
+                which: in ['spin', 'boson', 'fermion']
+                shift_base_qn: for fermions and bosons
+            notes:
+                1: here is a convention. the states |u> and |d> are the right states. 
+                    Because the qsp of sigma_z  was not properly defined, here I let |u>
+                    have a totqn of -1 将错就错了. 
+            
+        """
+        vec = OrderedDict()
+        if which == 'spin':
+            names = ['u', 'd']    # eigenstats of sigma_z: |u> and |d>
+            if symmetry ==  "Travial":
+                q = QspTravial.easy_init([1], [2])
+                for i, n in enumerate(names) :
+                    vec[n] = iTensor(QSp=[q.copy()])
+                    vec[n].data[:] = 0.0
+                    vec[n].data[i] = 1.0
+            elif symmetry == 'U1' :
+                #totqn_dic = {'u':1, 'd':-1}  # pay attention at here! #note1
+                totqn_dic = {'u':-1, 'd':1}  
+                #q = make_qsp(symmetry, [1, -1], [1, 1])  # pay attention at here!
+                q = make_qsp(symmetry, [-1, 1], [1, 1])
+                for i, n in enumerate(names) :
+                    totqn = QnU1(totqn_dic[n])
+                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
+                    vec[n].data[:] = 0.0
+                vec['u'].data[:] = [1.0]
+                vec['d'].data[:] = [1.0]
+            elif symmetry == 'Z2':
+                raise NotImplemented
+        
+        elif which == 'fermion':
+            names = ['0', 'u', 'd', 'ud']
+            if symmetry ==  "Travial":
+                q = QspTravial.easy_init([1], [4])
+                #e = QspTravial.easy_init([1], [1])
+                for i, n in enumerate(names) :
+                    #vec[n] = iTensor(QSp=[q.copy(), e.copy()])
+                    vec[n] = iTensor(QSp=[q.copy()])
+                    vec[n].data[:] = 0.0
+                    vec[n].data[i] = 1.0
+                    
+            elif symmetry == 'U1':  #charge symmetry
+                if not shift_base_qn:
+                    q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
+                    totqn_dic = {'0':0, 'u':1, 'd':1, 'ud':2}
+                else:  #I have tested with hubbard model, the following is correct in all cases
+                    q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
+                    totqn_dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
+                    
+                for i, n in enumerate(names) :
+                    totqn = QnU1(totqn_dic[n])
+                    #e = make_qsp(symmetry, [0], [1])
+                    #vec[n] = iTensor(QSp=[q.copy(), e.copy()], totQN=totqn)
+                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
+                    vec[n].data[:] = 0.0
+                
+                
+                vec['0'].data[:] = [1.0]
+                vec['u'].data[:] = [1.0, 0.0]
+                vec['d'].data[:] = [0.0, 1.0]
+                vec['ud'].data[:] = [1.0]
+            else:
+                raise ValueError
+        
+        elif which == 'boson':
+            assert nmax is not None 
+            #the dimension of the basis = nmax+1
+            names = ['%d'%i for i in range(nmax + 1)]
+            if symmetry == 'Travial':
+                q = QspTravial.easy_init([1], [nmax + 1])                
+                for i, n in enumerate(names) :
+                    vec[n] = iTensor(QSp=[q.copy()])
+                    vec[n].type_name = '|%s>'%i 
+                    vec[n].data[:] = 0.0
+                    vec[n].data[i] = 1.0
+            elif symmetry == 'U1':
+                for n, name in enumerate(names):
+                    if not shift_base_qn:
+                        totqn =  QnU1(n) 
+                        q = make_qsp(symmetry, 
+                            list(range(nmax + 1)), 
+                            [1]*(nmax + 1), 
+                            )
+                    else:
+                        assert nmax%2 == 0 
+                        nmax_half = (nmax )//2
+                        totqn =  QnU1(n-nmax_half) 
+                        q = make_qsp(symmetry, 
+                            list(range(-nmax_half, nmax_half + 1)), 
+                            [1]*(nmax + 1), 
+                            )
+                        
+                    t = iTensor(QSp=[q.copy()], totQN=totqn)   # a rank-1 tensor 
+                    t.data[:] = [1.0]
+                    vec[name] = t
+            else:
+                raise  
+        else:
+            raise 
+        return vec
+
+
     @staticmethod
-    def fermion_op(symmetry, shift_qn=True):
+    def fermion_op(symmetry, shift_base_qn=1):
         """
             ref http://hedrock.ps.uci.edu/docs.cgi?page=tutorials/fermions
             the basis
@@ -762,12 +868,12 @@ class iTensorFactory(object):
                     |ud> = cdag_up cdag_dn|0>
                     
             params:
-                shift_qn: if true, this assumes add a postive electron at each site
+                shift_base_qn: if true, this assumes add a postive electron at each site
                     this has benifits that at half filling MPS has total qn of 0
                     
         """
         vec = iTensorFactory.base_state(which='fermion', symmetry=symmetry, 
-                shift_qn=shift_qn)
+                shift_base_qn=shift_base_qn)
         def make_op(xx):
             op = 0.0
             for a, b, c in xx:
@@ -825,7 +931,7 @@ class iTensorFactory(object):
         return res 
     
     @staticmethod
-    def boson_op(symmetry, nmax, shift_qn=1):
+    def boson_op(symmetry, nmax, shift_base_qn=0):
         """
             nmax:
                 max num of boson allowed on a site. 
@@ -835,11 +941,8 @@ class iTensorFactory(object):
                 After truncation of nmax [b, b^+1] no longer strictly equals 1 
             
         """
-        
-        #print('I turned of shift_qn')
-        
         vec = iTensorFactory.base_state(which='boson', nmax=nmax,  
-                symmetry=symmetry, shift_qn=shift_qn)
+                symmetry=symmetry, shift_base_qn=shift_base_qn)
         def make_op(xx):
             op = 0.0
             for a, b, c in xx:
@@ -929,111 +1032,6 @@ class iTensorFactory(object):
     
     any_op = common_op  #def any_op
     
-    @staticmethod
-    def base_state(which, symmetry, nmax=None, shift_qn=1, **kwargs):
-        """
-            params:
-                which: in ['spin', 'boson', 'fermion']
-                shift_qn: for fermions and bosons
-            notes:
-                1: here is a convention. the states |u> and |d> are the right states. 
-                    Because the qsp of sigma_z  was not properly defined, here I let |u>
-                    have a totqn of -1 将错就错了. 
-            
-        """
-        vec = OrderedDict()
-        if which == 'spin':
-            names = ['u', 'd']    # eigenstats of sigma_z: |u> and |d>
-            if symmetry ==  "Travial":
-                q = QspTravial.easy_init([1], [2])
-                for i, n in enumerate(names) :
-                    vec[n] = iTensor(QSp=[q.copy()])
-                    vec[n].data[:] = 0.0
-                    vec[n].data[i] = 1.0
-            elif symmetry == 'U1' :
-                #totqn_dic = {'u':1, 'd':-1}  # pay attention at here! #note1
-                totqn_dic = {'u':-1, 'd':1}  
-                #q = make_qsp(symmetry, [1, -1], [1, 1])  # pay attention at here!
-                q = make_qsp(symmetry, [-1, 1], [1, 1])
-                for i, n in enumerate(names) :
-                    totqn = QnU1(totqn_dic[n])
-                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
-                    vec[n].data[:] = 0.0
-                vec['u'].data[:] = [1.0]
-                vec['d'].data[:] = [1.0]
-            elif symmetry == 'Z2':
-                raise NotImplemented
-        
-        elif which == 'fermion':
-            names = ['0', 'u', 'd', 'ud']
-            if symmetry ==  "Travial":
-                q = QspTravial.easy_init([1], [4])
-                #e = QspTravial.easy_init([1], [1])
-                for i, n in enumerate(names) :
-                    #vec[n] = iTensor(QSp=[q.copy(), e.copy()])
-                    vec[n] = iTensor(QSp=[q.copy()])
-                    vec[n].data[:] = 0.0
-                    vec[n].data[i] = 1.0
-                    
-            elif symmetry == 'U1':  #charge symmetry
-                if not shift_qn:
-                    q = make_qsp(symmetry, [0, 1, 2], [1, 2, 1])
-                    totqn_dic = {'0':0, 'u':1, 'd':1, 'ud':2}
-                else:  #I have tested with hubbard model, the following is correct in all cases
-                    q = make_qsp(symmetry, [-1, 0, 1], [1, 2, 1])
-                    totqn_dic = {'0':-1, 'u':0, 'd':0, 'ud':1}
-                    
-                for i, n in enumerate(names) :
-                    totqn = QnU1(totqn_dic[n])
-                    #e = make_qsp(symmetry, [0], [1])
-                    #vec[n] = iTensor(QSp=[q.copy(), e.copy()], totQN=totqn)
-                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
-                    vec[n].data[:] = 0.0
-                
-                
-                vec['0'].data[:] = [1.0]
-                vec['u'].data[:] = [1.0, 0.0]
-                vec['d'].data[:] = [0.0, 1.0]
-                vec['ud'].data[:] = [1.0]
-            else:
-                raise ValueError
-        
-        elif which == 'boson':
-            assert nmax is not None 
-            #the dimension of the basis = nmax+1
-            names = ['%d'%i for i in range(nmax + 1)]
-            if symmetry == 'Travial':
-                q = QspTravial.easy_init([1], [nmax + 1])                
-                for i, n in enumerate(names) :
-                    vec[n] = iTensor(QSp=[q.copy()])
-                    vec[n].type_name = '|%s>'%i 
-                    vec[n].data[:] = 0.0
-                    vec[n].data[i] = 1.0
-            elif symmetry == 'U1':
-                for n, name in enumerate(names):
-                    if not shift_qn:
-                        totqn =  QnU1(n) 
-                        q = make_qsp(symmetry, 
-                            list(range(nmax + 1)), 
-                            [1]*(nmax + 1), 
-                            )
-                    else:
-                        assert nmax%2 == 0 
-                        nmax_half = (nmax )//2
-                        totqn =  QnU1(n-nmax_half) 
-                        q = make_qsp(symmetry, 
-                            list(range(-nmax_half, nmax_half + 1)), 
-                            [1]*(nmax + 1), 
-                            )
-                        
-                    t = iTensor(QSp=[q.copy()], totQN=totqn)   # a rank-1 tensor 
-                    t.data[:] = [1.0]
-                    vec[name] = t
-            else:
-                raise  
-        else:
-            raise 
-        return vec
     
     @staticmethod
     def symbol_tensor_prod(symbol, mapper):
@@ -1177,7 +1175,7 @@ class TestIt(unittest.TestCase):
         for symm in ['Travial', 'U1']:
             nmax = 4
             res = iTensorFactory.boson_op(symm, nmax, 
-                    shift_qn=1)
+                    shift_base_qn=1)
             bdag, b = res['bdag'], res['b']
             I, n_i  =  res['I'], res['n_i']
             
@@ -1295,6 +1293,7 @@ class TestIt(unittest.TestCase):
 
 if __name__ == "__main__":
     
+    
     if 0:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main(verbosity=-10)
@@ -1306,9 +1305,9 @@ if __name__ == "__main__":
         #'test_diagonal_tensor_rank2', 
         #'test_spin_one_mat', 
         #'test_fermion_op', 
-        #'test_boson_op', 
+        'test_boson_op', 
         #'test_base_states', 
-        'test_temp', 
+        #'test_temp', 
         
             ]
   
