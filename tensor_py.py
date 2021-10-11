@@ -277,7 +277,7 @@ class iTensor(TensorBase):
     
     def __setstate__(self, d): 
         self.__dict__.update(d)
-        self.buf_ref = np.array([-1, -1], np.int)   # this is important 
+        self.buf_ref = np.array([-1, -1], int)   # this is important 
     
     def __eq__(self, other):
         """
@@ -2186,8 +2186,8 @@ class iTensor(TensorBase):
             if div == rank2: 
                 Dim2 = 1 
             else:
-                Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
-            Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=np.int)  # np.prod([])=1.0, so use dtype=np.int 
+                Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=int)
+            Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=int)  # np.prod([])=1.0, so use dtype=np.int 
             
             data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
                 
@@ -3242,9 +3242,9 @@ class iTensor(TensorBase):
         rank = self.rank
         T2 = iTensor(rank, QSp, self.totQN.copy())
         T2.data[:] = 0.0
-        iQN = np.ndarray(rank, np.int)
-        Dims1 = np.ndarray(rank, np.int)
-        Dims2 = np.ndarray(rank, np.int)
+        iQN = np.ndarray(rank, int)
+        Dims1 = np.ndarray(rank, int)
+        Dims2 = np.ndarray(rank, int)
         #transvers all dense blocks
         for idx  in range(self.nidx):
             p1 = self.Block_idx[0,idx] #-1
