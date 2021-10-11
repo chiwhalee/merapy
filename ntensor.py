@@ -164,10 +164,12 @@ class TensorBase(object):
 
     def __sub__(self, other):
         res = self.copy()
-        if isinstance(other, Number): 
-            res.data = self.data - other
-        else:
-            res.data = self.data - other.data
+        #if isinstance(other, Number): #this is erro pron
+        #    raise  
+        #    res.data = self.data - other
+        #else:
+        #    res.data = self.data - other.data
+        res.data = self.data - other.data
         return res
 
     def __rmul__(self, scalar):
