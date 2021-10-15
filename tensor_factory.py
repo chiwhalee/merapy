@@ -784,7 +784,15 @@ class iTensorFactory(object):
                 vec['u'].data[:] = [1.0]
                 vec['d'].data[:] = [1.0]
             elif symmetry == 'Z2':
-                raise NotImplemented
+                totqn_dic = {'u':1, 'd':-1}  
+                q = make_qsp(symmetry, [1, -1], [1, 1])  
+                for i, n in enumerate(names) :
+                    totqn = QnZ2(totqn_dic[n])
+                    vec[n] = iTensor(QSp=[q.copy()], totQN=totqn)
+                    vec[n].data[:] = 0.0
+                vec['u'].data[:] = [1.0]
+                vec['d'].data[:] = [1.0]
+                #raise NotImplemented   # todo these code are not tested
         
         elif which == 'fermion':
             names = ['0', 'u', 'd', 'ud']
@@ -854,7 +862,7 @@ class iTensorFactory(object):
             else:
                 raise  
         else:
-            raise 
+            raise ValueError(which) 
         return vec
 
 

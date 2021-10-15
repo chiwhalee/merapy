@@ -2639,11 +2639,12 @@ class iTensor(TensorBase):
             res.set_block(i, data_inv)
         return res 
     
-    @staticmethod
+    
     def diagonal_tensor_rank2(qsp): 
         """
-            a tensor t satisfis:  tt* = t*t  =  I 
-            not any qsp can make diagonal_tensor_rank2
+            A tensor t satisfis:  tt* = t*t  =  I 
+            Note a diagonal tensor is NOT identity tensor.
+            Not any qsp can make diagonal_tensor_rank2
             the condision is for each qn and -qn in the QNs, their dim
             must equal, otherwise, it is actually conceptially an isometry tensor 
             e.g.  q = QspU1.easy_init([0, 1, -1], [2, 3, 3]) will do
