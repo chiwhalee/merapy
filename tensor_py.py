@@ -767,7 +767,7 @@ class iTensor(TensorBase):
         a = self.data.nbytes/1e6
         sh = [i.totDim for  i in self.shape]
         b = np.prod(sh)*8/1e6 
-        return (a, b)
+        return ('sparse:', a, 'Mbyte\n', 'dense:', b, 'Mbyts')
     
     if 1: #for compatable with numpy
         @property  
@@ -2332,55 +2332,68 @@ class iTensor(TensorBase):
                 So dont need to fix this soon.
                 
         """
-        V1 = np.array(V1) if not isinstance(V1, np.ndarray) else V1
-        V2 = np.array(V2) if not isinstance(V2, np.ndarray) else V2
-        
-        if self.rank<V1.size: V1 = V1[:self.rank]
-        if T2.rank<V2.size: V2 = V2[:T2.rank]
+        if 0:
+            V1 = np.array(V1) if not isinstance(V1, np.ndarray) else V1
+            V2 = np.array(V2) if not isinstance(V2, np.ndarray) else V2
+            #V1 = np.asarray(V1, dtype=object) if not isinstance(V1, np.ndarray) else V1
+            #V2 = np.asarray(V2, dtype=object) if not isinstance(V2, np.ndarray) else V2
+            print_vars(vars(),  ['V1', 'V2'])
+            if self.rank<V1.size: V1 = V1[:self.rank]
+            if T2.rank<V2.size: V2 = V2[:T2.rank]
+            V_1n2 = np.intersect1d(V1, V2, True)
+            V3 = np.setxor1d(V1, V2, True,)
+            
+        else:
+            V1 = tuple(V1)
+            V2 = tuple(V2)
+            if self.rank<len(V1): V1 = V1[:self.rank]
+            if T2.rank<len(V2): V2 = V2[:T2.rank]
+            V_1n2 = set(V1).intersection(V2)
+            #V3 = np.setxor1d(V1, V2, True,)
+            #V3 = [i for i in V1 + V2 if i not in V_1n2]
+            #V3 = np.ndarray(self.rank + T2.rank-len(V_1n2), dtype=object)
+            V3 = []
 
-        V_1n2 = np.intersect1d(V1, V2, True)
         
-        V3 = np.setxor1d(V1, V2, True)
         Vp1 = np.empty(self.rank, np.int32)   # order of permutated index for tensor1 
         Vp2 = np.empty(T2.rank, np.int32)
         
-        k=0  #indexing Vp1
-        l=0  #indexing V3
+        k = 0  #indexing Vp1
         j = 0  #indexing Vp2
         
         for i in range(self.rank): #below calculate Vp1, Vp2
             if V1[i] not in V_1n2:
                 Vp1[k] = i   # 这里之所以用k，而非直接用Vp1[k]是因为下面k的值要继续，对于l 也一样 p意指position，记录的T1中没有收缩的指标(leg)的编号
-                V3[l] = V1[i]   #T3 来自T1 V1的外腿
-                l += 1 
+                V3.append(V1[i])   #T3 来自T1 V1的外腿
                 k += 1 
 
         #for i in range(len(V_1n2)):  #这一段程序做了两件事：1.验证内线上维数相等，2.计算了totDim3
         for v12 in V_1n2:
-            pos1 = np.where(V1==v12)[0][0]
-            pos2 = np.where(V2==v12)[0][0]
+            pos1 = V1.index(v12)
+            pos2 = V2.index(v12)
+                
             Vp1[k] = pos1
-            k = k+1  #注意这里k接着上面的值了
+            k  += 1 #注意这里k接着上面的值了
             Vp2[j] = pos2
             j += 1   
             
             if self.Dims[pos1] != T2.Dims[pos2]:  #note this checking is still not complete. One should check qsp1 == qsp2.conj() instead  
             #if self.QSp[pos1] != T2.QSp[pos2].conj():
+                print_vars(vars(),  ['pos1', 'pos2'])
                 msg ="""error, dim of index to be contracted not equal: 
                     {0.type_name}, {1.type_name}
                     ind_label_1={V1}, ind_label_2={V2}, ind_label_1n2={V_1n2}
                     dims_1={0.Dims}, dims_2={1.Dims}
                     
                     """.format(self, T2, V1=V1, V2=V2, V_1n2=V_1n2)
+                #self.save('/tmp/aaa'); T2.save('/tmp/bbb')
                 raise Exception(msg)
         
         for i in range(T2.rank):
             if V2[i] not in V_1n2:
                 Vp2[j] = i
-                V3[l] = V2[i]  #T3 V3 来自T2 V2的外腿
+                V3.append(V2[i])  #T3 V3 来自T2 V2的外腿
                 j += 1 
-                l += 1
-        
         return V_1n2, Vp1, Vp2, V3 
 
     def contract(self, T2, V1=None, V2=None, final_ind_labels=None, 
@@ -2405,7 +2418,7 @@ class iTensor(TensorBase):
         try:
             nT1 = T1.permutation(Vp1, use_buf=use_buf)    #把T1 按照 Vp1 重排
             nT2 = T2.permutation(Vp2, use_buf=use_buf)
-            T3 = nT1.contract_core(nT2, V_1n2.size, data=data, use_buf=use_buf)
+            T3 = nT1.contract_core(nT2, len(V_1n2), data=data, use_buf=use_buf)
         except Exception as err:
             V1 = tuple(V1)
             V2 = tuple(V2)
@@ -2449,12 +2462,14 @@ class iTensor(TensorBase):
                 return T3
     
     @staticmethod 
-    def contract_tensor_list(tlist, final_ind_labels=None):   #def ctl
+    def contract_tensor_list(tlist, final_ind_labels=None, check=False):   #def ctl
         """
             requires each t.ind_labels is not None 
             params:
                 tlist can be a nested list, still it is efficient! like [t1, t2, [t3, t4]]
         """
+        if check:
+            assert len(temp)==len(set(temp))  #simple check,  no duplicate tensors, so that I can use ind_labels to contract        
         head = tlist[0]
         if isinstance(head, list):
             head = iTensor.contract_tensor_list(head)
