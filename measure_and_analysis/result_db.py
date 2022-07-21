@@ -4667,15 +4667,12 @@ class ResultDB_idmrg(ResultDB):
         N=s.get('N', None)
         return N
 
-
-class ResultDB_tdvp(ResultDB): 
+class ResultDB_time_evo(ResultDB):  #this is for general time evolution 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
-        kwargs.update(algorithm='tdvp')
-        ResultDB.__init__(self, parpath,  **kwargs)
-    
-    def get_shape_list(self,  N=None, D=None, field='the_time', **kwargs):
-        return super(ResultDB_tdvp, self).get_shape_list(N=N, D=D, field=field, **kwargs)
+        kwargs.update(algorithm='')
+        #ResultDB.__init__(self, parpath,  **kwargs)
+        super(ResultDB_time_evo, self).__init__(parpath, **kwargs)
     
     def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
         """
@@ -4704,6 +4701,90 @@ class ResultDB_tdvp(ResultDB):
             
         
         return tt, val 
+
+    def get_magnetization(self, sh, tlist=None, ts=None, sub_key_list='z',  return_t=False):
+        """
+            tince magnetization is frequently used. I write this function. 
+        """
+        tt, mm = self.get_t_vs_field('magnetization',  sh, ts=ts)
+        if tt is None:
+            return None, None
+        
+        
+        if not (isinstance(mm, np.ndarray) and mm.ndim==2):
+        
+            if sub_key_list == 'z' :
+                #mag = [mm[i][0]['z'].values() for i in ii]
+                #mag = [mm[i]['z'].values() for i in ii]
+                mag = [m['z'].values() for m in mm]
+            else:
+                mag = [m.values() for m in mm]   # e.g. for measure boson numbers
+            
+            mag = [list(t) for t in mag]
+            mag = np.asarray(mag, dtype=float)
+        else:
+            mag = mm
+            
+        if tlist is not None: 
+            tmax = abs(max(tt))
+            if isinstance(tlist,  float) or isinstance(tlist, int):
+                tlist = [tlist]
+            tlist = [t for t in tlist if t < tmax]
+            ii = []
+            for t in tlist:
+                ind = np.where(tt==t)[0]
+                assert len(ind) == 1, (t, tt)
+                ii.append(ind[0])
+            
+            #tt = [tt[i].real for i in ii]
+            #tt = np.asarray(tt)
+            tt = tt[ii].real 
+            mag = mag[ii, :]
+            
+            if len(tlist)==1:
+                mag = mag[0]
+            if len(mag)==0:
+                mag = None
+                
+        if return_t:
+            return tt, mag
+        else:
+            return mag
+
+    def calc_mag_inhomogenity(self, sh,  integrate=0, normalize=True,  boundary_cond='PBC'):
+        """
+            ref:
+                Schiulaz  2015 eq. 7
+        
+        """
+        tt, mag = self.get_magnetization(sh, tlist=None, return_t=1)
+        N = sh[0]
+        mag_1 = np.roll(mag, -1, axis=1)
+        if boundary_cond == 'PBC':
+            diff = mag_1 - mag
+            diff_aver = np.sum(diff**2, axis=1)/N
+        elif boundary_cond == 'OBC':
+            diff = mag_1[:-1] - mag[:-1]
+            diff_aver = np.sum(diff**2, axis=1)/(N-1)
+        #print_vars(vars(),  ['diff_aver[:10]'])
+        if integrate:
+            diff_aver = np.cumsum(diff_aver)
+        if normalize:
+            diff_aver = diff_aver/diff_aver[0]
+        #print_vars(vars(),  ['tt[:10]', 'diff_aver[:10]'])
+        return tt, diff_aver
+
+#class ResultDB_tdvp(ResultDB): 
+class ResultDB_tdvp(ResultDB_time_evo): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs['version'] = 1.0
+        kwargs.update(algorithm='tdvp')
+        #ResultDB.__init__(self, parpath,  **kwargs)
+        super(ResultDB_tdvp, self).__init__(parpath, **kwargs)
+    
+    def get_shape_list(self,  N=None, D=None, field='the_time', **kwargs):
+        return super(ResultDB_tdvp, self).get_shape_list(N=N, D=D, field=field, **kwargs)
+    
     
     def get_current_from_mag(self, sh, mu=None, integrate=False, offset=True, force=False):
         """
@@ -4847,47 +4928,6 @@ class ResultDB_tdvp(ResultDB):
             
         return DD
 
-    def get_magnetization(self, sh, tlist, ts=None, sub_key_list='z',  return_t=False):
-        """
-            tince magnetization is frequently used. I write this function. 
-        """
-        tt, mm = self.get_t_vs_field('magnetization',  sh, ts=ts)
-        if tt is None:
-            return None, None
-        tmax = abs(max(tt))
-        #if isinstance(tlist,  float) :
-        if isinstance(tlist,  float) or isinstance(tlist, int):
-            tlist = [tlist]
-        tlist = [t for t in tlist if t < tmax]
-        ii = []
-        for t in tlist:
-            ind = np.where(tt==t)[0]
-            assert len(ind) == 1, (t, tt)
-            ii.append(ind[0])
-        #tt = [tt[i][0].real for i in ii]
-        tt = [tt[i].real for i in ii]
-        tt = np.asarray(tt)
-        
-        if isinstance(mm, np.ndarray) and mm.ndim==2:
-            temp = mm[ii, :]
-        else:
-            if sub_key_list == 'z' :
-                #temp = [mm[i][0]['z'].values() for i in ii]
-                temp = [mm[i]['z'].values() for i in ii]
-            else:
-                temp = [mm[i].values() for i in ii]   # e.g. for measure boson numbers
-            
-            temp = [list(t) for t in temp]
-            temp = np.asarray(temp, dtype=float)
-            
-        if len(tlist)==1:
-            temp = temp[0]
-        if len(temp)==0:
-            temp = None
-        if return_t:
-            return tt, temp
-        else:
-            return temp
 
     def get_ball_center(tt, data, tmin=None, tmax=None, xmin=None, xmax=None):
             arg = None
@@ -4915,6 +4955,7 @@ class ResultDB_tdvp(ResultDB):
             return tt, aver0
 
 
+
 class ResultDB_ed(ResultDB_tdvp): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
@@ -4933,7 +4974,6 @@ class ResultDB_ed(ResultDB_tdvp):
             temp = [None]*10
         temp.sort()
         return temp[i]
-
 
 
 class ResultDB_proj_qmc(ResultDB): 
@@ -5038,44 +5078,51 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         N = 128
         
-        #from vmps.run_heisenberg.analysis import an_tdvp 
-        #from mps_wigner_crystal.analysis import an_tdvp 
-        from mps_wigner_crystal.analysis import an_exact_diag
+        if 1:
+            from mps_wigner_crystal.analysis import an_exact_diag
+            a = [1, 2, 3, 4] 
+            b = np.roll(a,  1)
+            c = np.cumsum(a)
+            print_vars(vars(),  ['c'])
+            #print_vars(vars(),  ['b'])
+            #raise  
+            
+            xx = an_exact_diag.an_dynamics.an_random_spin
+            xx.outline()
+            db = xx(alpha=1.0, V=100.0, spin_up=0.3, dt=100)
+            print_vars(vars(),  ['db'])
+            
+            #def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
+            sh = (12, 'max')
+            tt,  mag = db.get_t_vs_field('magnetization', (12, 'max'))
+            tt, mag = db.get_magnetization((12, 'max'), tlist=[100, 200, 300] , return_t=1)
+            
+            t, v = db.calc_mag_inhomogenity(sh)
+            print_vars(vars(),  ['v'])
+           
         
-
-        xx = an_exact_diag.an_dynamics.an_random_spin
-        xx.outline()
-        db = xx(alpha=1.0, V=100.0, spin_up=0.3, dt=100)
-        print_vars(vars(),  ['db'])
-        
-        #def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
-        tt,  mag = db.get_t_vs_field('magnetization', (12, 'max'))
-        mag = db.get_magnetization((12, 'max'), tlist=[100, 200, 300] )
-        print_vars(vars(),  ['mag'])
-        raise  
-        vv=[0.0, 0.5, 1.0, 4.0, 16.0]
-        
-        i=0
-        v = 0.0
-        
-        db=xx(Jzz=v, dt=0.5, surfix='fix_err_1em12')
-        sh=(64, 'max')
-        tt=np.arange(1., 180, 1.0)
-        ii=range(sh[0])
-        tt, data = db.get_magnetization(sh, tt, return_t=1,)
-        print_vars(vars(),  ['db.dir_name', 'db.model_param'])
-        raise  
-        print_vars(vars(),  ['data.shape'])
+        if 0:
+            v = 0.0
+            #from vmps.run_heisenberg.analysis import an_tdvp 
+            from mps_wigner_crystal.analysis import an_tdvp 
+            xx = an_tdvp.an_dynamics.an_random_spin
+            db=xx(nu=0.5, alpha=1.0, V=64.0,  dt=0.5, surfix='fix_err_1em12')
+            sh=(80, 'max')
+            tt=np.arange(1., 180, 1.0)
+            ii=range(sh[0])
+            tt, data = db.get_magnetization(sh, tt, return_t=1,)
+            
+            print_vars(vars(),  ['tt'])  
+           
+           
+            data = db.calc_mag_inhomogeneous(sh)
+            print_vars(vars(),  ['data'])
+            raise  
+            print_vars(vars(),  ['data.shape'])
         
 
             
        
-        tt, a = get_ball_center(tt, data, 2, 8, 1, 32)
-        print_vars(vars(),  ['len(a)'])
-        print_vars(vars(),  ['a'])
-        #print_vars(vars(),  ['np.sum(data[1] + 1)'])
-        
-        
         raise  
        
         
