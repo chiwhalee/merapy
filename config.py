@@ -24,7 +24,10 @@ except:
 #LOCAL_USERNAME = 'zhli' 
 #LOCAL_HOSTNAME = 'qtgc30'
 
-LOCAL_IP = '192.168.50.1'
+#LOCAL_IP = '192.168.50.1'
+LOCAL_IP = '202.200.99.200'
+
+
 #LOCAL_IP = '202.200.98.230'
 
 LOCAL_USERNAME = 'ws' 
@@ -341,10 +344,10 @@ class Config(dict):
     @staticmethod 
     def filter(cfg, an=None,  db_class=None, 
             from_energy_rec=True, strict=False, info=0):
+        alg = cfg['algorithm']
         if db_class is None:
             from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_idmrg, 
                     ResultDB_vmps, ResultDB_tdvp)
-            alg = cfg['algorithm']
             db_class = ResultDB.algorithm_name_to_rdb(alg)
         if cfg['parpath_relative'] is None:
              return True
@@ -422,18 +425,25 @@ class Config(dict):
             if db.has_shape(sh, from_energy_rec=from_energy_rec):
                 allow = False
         elif alg == 'tdvp' :
-            trunc_dim, the_time_lim, tlim = cfg['trunc_dim'], cfg['the_time_lim'], cfg['the_time_lim']
-            msg.insert(2, 'td=%d, tlim=%s'%(trunc_dim, tlim))
+            trunc_dim, the_time_lim = cfg['trunc_dim'], cfg['the_time_lim']
+            msg.insert(2, 'td=%d, tlim=%s'%(trunc_dim, the_time_lim))
             sh = (N, trunc_dim)
             the_time = db.fetch_easy('the_time', sh, default=0)
             if info>0:
                 print(the_time, db.get('the_time'))
-            if abs(the_time ) >=  the_time_lim:
-                allow = False 
-            else:
-                allow = True
+            #if abs(the_time ) >=  the_time_lim:
+            #    allow = False 
+            #else:
+            #    allow = True
+            allow = False if  abs(the_time ) >=  the_time_lim else True
+        elif alg == 'exact_diag':
+            trunc_dim, the_time_lim = cfg['num_lanczos_vec'], cfg['the_time_lim']
+            msg.insert(2, 'lanczos_m=%d, tlim=%s'%(trunc_dim, the_time_lim))
+            sh = (N, trunc_dim)
+            the_time = db.fetch_easy('the_time', sh, default=0)
+            allow = False if  abs(the_time ) >=  the_time_lim else True
         else:
-            raise  
+            raise  ValueError(alg)
         
         
         if not cfg.get('auto_resume', True):

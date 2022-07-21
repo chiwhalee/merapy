@@ -33,6 +33,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.lines import Line2D
 
+from scipy.signal import savgol_filter
+
 import itertools 
 from mpl_toolkits.mplot3d import Axes3D
 try:
@@ -63,6 +65,7 @@ from merapy.context_util import rpyc_load, rpyc_save, LOCAL_USERNAME, LOCAL_HOST
 
 __all__ = ['MARKER_LIST', 'MARKER_CYCLE', 
     'ResultDB', 'ResultDB_idmrg', 'ResultDB_vmps', 'ResultDB_mera', 'ResultDB_tdvp', 
+    'ResultDB_ed', 
     'BACKUP_STATE_DIR', 'RESULTDB_DIR', 'RESULTDB_ROOT', 'ResultDB_bethe_ansatz', 
     'display',  
     ]
@@ -690,6 +693,10 @@ class AnalysisTools(object):
         
         return x, y
 
+    def smooth(self, data, window_size, order):
+        res = savgol_filter(data, window_size, order)
+        return res 
+
 class AnalyticFormular(object):
     """
        some formular for comparing with numerics or extracting values
@@ -908,6 +915,13 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         dir = self.parpath.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         dir = dir.replace('dropbox', '')
         return dir 
+    
+    @property
+    def dir_name(self):
+        res = os.path.basename(self.parpath)
+        return res 
+    
+    parpath_name = dir_name  # def parpath_name 
     
     def parpath_map(self, dir):
         if 'C:' in dir:
@@ -4653,25 +4667,6 @@ class ResultDB_idmrg(ResultDB):
         N=s.get('N', None)
         return N
 
-class ResultDB_ed(ResultDB): 
-    def __init__(self, parpath,  **kwargs): 
-        kwargs['version'] = 1.0
-        kwargs.update(algorithm='ED')
-        ResultDB.__init__(self, parpath,  **kwargs)
-    
-    def get_energy_lowest(self, sh, i, qn_exclude=None, qn_only=None): 
-        
-        qn_exclude = qn_exclude if qn_exclude is not None else [] 
-        rec = self.fetch_easy('energy', sh)
-        temp = []
-        if rec is not None:  
-            for k, v in list(rec.items()): 
-                if k not in qn_exclude: 
-                    temp.extend(v)
-        else: 
-            temp = [None]*10
-        temp.sort()
-        return temp[i]
 
 class ResultDB_tdvp(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -4682,11 +4677,12 @@ class ResultDB_tdvp(ResultDB):
     def get_shape_list(self,  N=None, D=None, field='the_time', **kwargs):
         return super(ResultDB_tdvp, self).get_shape_list(N=N, D=D, field=field, **kwargs)
     
-    def get_t_vs_field(self, field_name, sh, tlim=None, integrate=False,  kac_rescale=None,  force=False):
+    def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
         """
              
         """
-        ts=self.get_time_serials(sh, force=force)
+        if ts is None:
+            ts=self.get_time_serials(sh, force=force)
         if ts is None:
             return None, None
         temp = ts.values()
@@ -4851,11 +4847,11 @@ class ResultDB_tdvp(ResultDB):
             
         return DD
 
-    def get_magnetization(self, sh, tlist, return_t=False):
+    def get_magnetization(self, sh, tlist, ts=None, sub_key_list='z',  return_t=False):
         """
             tince magnetization is frequently used. I write this function. 
         """
-        tt, mm = self.get_t_vs_field('magnetization',  sh)
+        tt, mm = self.get_t_vs_field('magnetization',  sh, ts=ts)
         if tt is None:
             return None, None
         tmax = abs(max(tt))
@@ -4867,14 +4863,23 @@ class ResultDB_tdvp(ResultDB):
         for t in tlist:
             ind = np.where(tt==t)[0]
             assert len(ind) == 1, (t, tt)
-            ii.append(ind)
-        
-        tt = [tt[i][0].real for i in ii]
+            ii.append(ind[0])
+        #tt = [tt[i][0].real for i in ii]
+        tt = [tt[i].real for i in ii]
         tt = np.asarray(tt)
         
-        temp = [mm[i][0]['z'].values() for i in ii]
-        temp = [list(t) for t in temp]
-        temp = np.asarray(temp, dtype=float)
+        if isinstance(mm, np.ndarray) and mm.ndim==2:
+            temp = mm[ii, :]
+        else:
+            if sub_key_list == 'z' :
+                #temp = [mm[i][0]['z'].values() for i in ii]
+                temp = [mm[i]['z'].values() for i in ii]
+            else:
+                temp = [mm[i].values() for i in ii]   # e.g. for measure boson numbers
+            
+            temp = [list(t) for t in temp]
+            temp = np.asarray(temp, dtype=float)
+            
         if len(tlist)==1:
             temp = temp[0]
         if len(temp)==0:
@@ -4884,7 +4889,52 @@ class ResultDB_tdvp(ResultDB):
         else:
             return temp
 
-        
+    def get_ball_center(tt, data, tmin=None, tmax=None, xmin=None, xmax=None):
+            arg = None
+            if tmin is not None:
+                arg = tt>= tmin
+            if tmax is not None:
+                arg = arg * (tt<=tmax)
+            
+            if arg is not None:
+                arg = np.where(arg)[0]
+                tt = tt[arg]
+                data = data[arg, :]
+            
+           
+            data = data.copy()
+            data[:, :]  += 1  
+            
+            N = data.shape[1]
+            
+            xmin = xmin if xmin is not None else 0
+            xmax = xmax if xmax is not None else N
+            x0 = np.ndarray((len(tt), xmax-xmin), dtype=int)
+            x0[:] = range(xmin, xmax)
+            aver0 = np.average(x0, axis=1, weights=data[:, xmin:xmax])
+            return tt, aver0
+
+
+class ResultDB_ed(ResultDB_tdvp): 
+    def __init__(self, parpath,  **kwargs): 
+        kwargs['version'] = 1.0
+        kwargs.update(algorithm='ED')
+        ResultDB.__init__(self, parpath,  **kwargs)
+    
+    def get_energy_lowest(self, sh, i, qn_exclude=None, qn_only=None): 
+        qn_exclude = qn_exclude if qn_exclude is not None else [] 
+        rec = self.fetch_easy('energy', sh)
+        temp = []
+        if rec is not None:  
+            for k, v in list(rec.items()): 
+                if k not in qn_exclude: 
+                    temp.extend(v)
+        else: 
+            temp = [None]*10
+        temp.sort()
+        return temp[i]
+
+
 
 class ResultDB_proj_qmc(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -4988,31 +5038,45 @@ class TestResultDB(unittest.TestCase):
     def test_temp(self): 
         N = 128
         
-        #from merapy.run_heisbg.analysis import an_tdvp 
-        from mps_wigner_crystal.analysis import an_tdvp 
+        #from vmps.run_heisenberg.analysis import an_tdvp 
+        #from mps_wigner_crystal.analysis import an_tdvp 
+        from mps_wigner_crystal.analysis import an_exact_diag
         
-        xx = an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
 
-        xx.set_parpath_dict()
-        fig, ax=xx.fig_layout()
-        aa=[ 1.0, 2.0, 4.0, 8.0, 24.0]
-        sh=('max', 'max')
-        for a in aa:
-            db=xx( alpha=0.5, V=a, mu=0.01, dt=0.5, surfix='fix_err_1em12')
-            tt, yy = db.get_t_vs_field('EE_middle', sh)        
+        xx = an_exact_diag.an_dynamics.an_random_spin
+        xx.outline()
+        db = xx(alpha=1.0, V=100.0, spin_up=0.3, dt=100)
+        print_vars(vars(),  ['db'])
+        
+        #def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
+        tt,  mag = db.get_t_vs_field('magnetization', (12, 'max'))
+        mag = db.get_magnetization((12, 'max'), tlist=[100, 200, 300] )
+        print_vars(vars(),  ['mag'])
+        raise  
+        vv=[0.0, 0.5, 1.0, 4.0, 16.0]
+        
+        i=0
+        v = 0.0
+        
+        db=xx(Jzz=v, dt=0.5, surfix='fix_err_1em12')
+        sh=(64, 'max')
+        tt=np.arange(1., 180, 1.0)
+        ii=range(sh[0])
+        tt, data = db.get_magnetization(sh, tt, return_t=1,)
+        print_vars(vars(),  ['db.dir_name', 'db.model_param'])
+        raise  
+        print_vars(vars(),  ['data.shape'])
+        
+
+            
+       
+        tt, a = get_ball_center(tt, data, 2, 8, 1, 32)
+        print_vars(vars(),  ['len(a)'])
+        print_vars(vars(),  ['a'])
+        #print_vars(vars(),  ['np.sum(data[1] + 1)'])
         
         
         raise  
-        tt, current = db.get_current_from_mag(sh)
-        current = np.abs(current)
-        #print_vars(vars(),  ['mag[80:88, 100:105]'])
-        
-        tt1, current1 = db.get_t_vs_field('current', sh, force=0)
-        current1 = np.abs(current1)
-        print_vars(vars(),  ['np.max(np.abs(tt-tt1))'])
-        print_vars(vars(),  ['np.max(np.abs(current - current1))'])
-        #print_vars(vars(),  ['current[:10] - current1[:10]'])
-        #print_vars(vars(),  ['current[2:12] - current1[:10]'])
        
         
     def test_insert_and_fetch(self): 

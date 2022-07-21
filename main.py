@@ -480,13 +480,13 @@ class Main(object):
                 so Iam not able to unittest it under __main__ 
                 
         """
-        #if func is None: 
-        #    #func = cls.run_one
+        if func is None: 
+            func = cls.run_one
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
         from brokest.task_center import TaskCenter, submit_one, submit_many, LOCAL_IP
         if not submit: 
-            tasks = [(cls.run_one, (c, )) for c in config_group] 
+            tasks = [(func, (c, )) for c in config_group] 
             run_many(tasks, servers, 
                     info=kwargs.get('info', 10), querry=1, 
                     try_period=kwargs.get('try_period', 1)
@@ -517,7 +517,7 @@ class Main(object):
                         sh = c.get('N'), c.get('trunc_dim')
                         c['job_description'] = (fn, sh, c.get('the_time_lim'))
                 num_of_threads = c['NUM_OF_THREADS'] 
-                status=submit_one(cls.run_one, 
+                status=submit_one(func, 
                         args=(c, ),
                         num_of_threads=num_of_threads, 
                         server=task_center_server, 

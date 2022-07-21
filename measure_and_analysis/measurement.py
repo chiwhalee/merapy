@@ -57,7 +57,7 @@ except ImportError as err:
     print(err) 
 
 from merapy.measure_and_analysis.result_db import (ResultDB, ResultDB_vmps, ResultDB_mera, 
-        ResultDB_idmrg, ResultDB_tdvp,   BACKUP_STATE_DIR, RESULTDB_DIR, )
+        ResultDB_idmrg, ResultDB_tdvp,   ResultDB_ed,  BACKUP_STATE_DIR, RESULTDB_DIR, )
 from merapy.decorators import timer
 
 
@@ -279,7 +279,9 @@ def measure_S(S=None, parpath=None, path=None,
         if S.__class__.__name__ == 'MPS':                  
             algorithm = 'mps'
         elif isinstance(S, dict): 
-            if 'the_time' in S:   #this line put above mps 
+            if S.get('ALGORITHM') is not None:
+                algorithm = S['ALGORITHM']   
+            elif 'the_time' in S:   #this line put above mps 
                 algorithm = 'tdvp'
             elif 'mps' in S: 
                 algorithm = 'mps'
@@ -317,8 +319,7 @@ def measure_S(S=None, parpath=None, path=None,
             rdb_class= ResultDB_mera 
             
             
-        elif algorithm in ['mps', 'tdvp']: 
-            
+        elif algorithm in ['mps', 'tdvp', 'vmps']: 
             mps= S['mps']
             #N, D = mps.N, mps.D
             #if algorithm == 'tdvp' and mps.is_purification_state == True:
@@ -334,14 +335,14 @@ def measure_S(S=None, parpath=None, path=None,
             fn = "N=%d-D=%d.pickle"%(N, D)
             path = '/'.join([parpath, fn])
             shape =  N,  D
-            if algorithm == 'mps':
+            if algorithm in ['mps', 'vmps']:
                 all_func = all_mps
                 rdb_class= ResultDB_vmps
             elif algorithm == 'tdvp' :
                 rdb_class = ResultDB_tdvp
                 all_func = all_time_evo 
             
-        elif algorithm == 'idmrg': 
+        elif algorithm in ['idmrg', 'iDMRG_mcc']: 
             #field = ['energy', 'correlation', 'correlation_length', 'magnetization', 
                     #'entanglement', 'entanglement_spectrum']
             if check_convergence: 
@@ -365,7 +366,16 @@ def measure_S(S=None, parpath=None, path=None,
             shape =  N, D 
             
             rdb_class= ResultDB_idmrg 
+        
+        elif algorithm == 'exact_diag':
+            rdb_class = ResultDB_ed
+            N, D = S['N'], S['num_lanczos_vec']
+            shape = N, D
+            all_func = all_time_evo   # I use tdvp's measure functions !
+        else:
+            raise  ValueError('algorithm "{}" not found'.format(algorithm))
             
+        
     #which = which if which is not None else field 
     which = which if which is not None else []
     
@@ -467,7 +477,7 @@ def measure_S(S=None, parpath=None, path=None,
                 _rdb['algorithm'] = algorithm
                 changed = True
                 
-            if algorithm in ['mps', 'tdvp', 'idmrg']: 
+            if algorithm in ['mps', 'tdvp', 'idmrg', 'exact_diag']: 
                 N = shape[0]
                 D = shape[1]
                 if 'dim_max' not in _rdb: 

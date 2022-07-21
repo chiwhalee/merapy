@@ -3204,6 +3204,21 @@ class iTensor(TensorBase):
         res= self.is_adjoint_to(self, precision, out_more)
         return res
     
+    def is_unitary(self, tol=1e-14, show_more=True):
+        assert self.rank == 2 
+        #t = self.dot(self.conj())
+        t = self.contract(self.conj(), (0, 1), (2, 1))
+        t = t.to_ndarray()   # this is not effitient 
+        d = t.shape[0]
+        I = np.identity(d, dtype=t.dtype)
+        #print_vars(vars(),  ['t.data-I'])
+        diff = np.max(np.abs(t.data-I)) 
+        #res  = np.allclose(t, I, atol=tol)
+        res = True if diff<tol else False
+        if show_more:
+            res = (res, 'max diff:',  diff)
+        return res 
+    
     def is_close_to(self, other, tol=1e-15): 
         if other == 0:  #0, 1 for convenience 
             res = np.allclose(self.data, 0, atol=tol)
