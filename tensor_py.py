@@ -292,6 +292,9 @@ class iTensor(TensorBase):
         return True
     
     def __matmul__(self, other):
+        """
+            the @ operator 
+        """
         return self.contract(other, return_v3=False)
     
     def buffer_assign(self, data_size, n=None):
@@ -2485,6 +2488,8 @@ class iTensor(TensorBase):
             order = [ll.index(i) for i in final_ind_labels]
             head = head.permutation(order)
             head.ind_labels = final_ind_labels 
+        
+        #print_vars(vars(),  ['head.ind_labels'])
         return head 
     ctl = CTL= contract_tensor_list 
     
@@ -3164,6 +3169,7 @@ class iTensor(TensorBase):
             return res
         else:
             return res.round(round)  
+    matrix_form = matrix_view # def matrix_form 
     
     def matrix_view_rank2_z2(self):
         """
@@ -3438,6 +3444,15 @@ class iTensor(TensorBase):
     
     def load(path):
         return load(path)
+    
+    def diagonal(self):
+        """
+            only suitable for rank-2 tensors. This is mainly for debug. 
+        
+        """
+        from merapy.tensor_svd import iTensor_rank2_operation
+        assert self.rank == 2 
+        return iTensor_rank2_operation.diag_rank2(self)
    
 class iTensor_new(TensorBase):
     def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
