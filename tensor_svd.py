@@ -229,9 +229,9 @@ class iTensor_rank2_operation(object):
             return_trunc_err=False, totqn_on_which='s', 
         normalize_singular_val=True):  
         """
-            tensor = u*s*v
-            
-            itensor should be prepare into a rank 2 tensor 
+            tensor should be prepare into a rank-2 tensor 
+                tensor = u*s*v, 
+            v is row orthogonal,  i.e. v*v.dag=I; u is column orthogonal i.e. u.dag*u=I. 
             
             this func also support the case when tensor.totqn not identity.
                 tensor.totqn is finally carried by S by default
@@ -260,7 +260,7 @@ class iTensor_rank2_operation(object):
                     https://github.com/numpy/numpy/issues/1588
             
         """
-        trunc_dim = trunc_dim if trunc_dim is not None else 100000
+        trunc_dim = trunc_dim if trunc_dim is not None else 10000000
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
         #uu, ss, vv = {}, {}, {}   #把每个block 分别做svd，记录在此, 最终由这些构造结果张量
@@ -272,7 +272,6 @@ class iTensor_rank2_operation(object):
         
         qn_list_l = np.ndarray(num_blocks, dtype=np.object)
         qn_list_r = np.ndarray(num_blocks, dtype=np.object)
-        
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
             qn0, qn1 = qn_id_tuple
@@ -320,7 +319,7 @@ class iTensor_rank2_operation(object):
         dim_list = dim_list_l   # only used when doing trunc and full_matrices= True
         totdim = np.sum(dim_list)
         
-        if (trunc_dim is not None and trunc_dim < totdim) or trunc_err_tol is not None: 
+        if (trunc_dim is not None and trunc_dim < totdim) or (trunc_err_tol is not None and trunc_err_tol>0): 
             is_trunc = True 
             assert not full_matrices  #when doing trunc,  should set full_matrices=False
         else:
@@ -328,26 +327,27 @@ class iTensor_rank2_operation(object):
             trunc_err = 0.0
         
         if is_trunc:
-            prepare_trunc = True 
-            temp = np.zeros((3, totdim), dtype=float)
+            temp = {}
+            temp[0] = np.ndarray(totdim, dtype=float)
+            temp[1] = np.ndarray(totdim, dtype=int)
+            temp[2] = np.ndarray(totdim, dtype=int)
+            
             d0 = 0
             for i, d in enumerate(dim_list):   #put together singular value for each quantum numbers, prepare for truncation
-                temp[0, d0: d0 + d] = ss[i]
-                temp[1, d0: d0 + d] = i
-                temp[2, d0: d0 + d] = np.arange(d, dtype=int)
+                temp[0][d0: d0 + d] = ss[i]
+                temp[1][d0: d0 + d] = i
+                temp[2][d0: d0 + d] = np.arange(d, dtype=int)
+                
                 d0 += d
             ind_sorted = temp[0].argsort() 
             ind_sorted = ind_sorted[: : -1]
             
             norm_orig = np.linalg.norm(temp[0])   # this also equals norm of psi 
-            #print('ssss', sorted(temp[0], reverse=1))
                 
-            if trunc_err_tol is not None:
+            if trunc_err_tol is not None:   # determin trunc_dim from trunc_err_tol
                 s_sorted = temp[0][ind_sorted]
-                if 1:  #here enforce normalization of singular values, even if psi was not normalized 
-                    s_sorted_normalized  =  s_sorted/norm_orig
-                #print('uuuuu', totdim,  norm_orig,  s_sorted_normalized)
-                    
+                if 1:  
+                    s_sorted_normalized  =  s_sorted/norm_orig  #here enforce normalization of singular values, even if psi was not normalized 
                 s2_cumsum = np.cumsum(s_sorted_normalized**2)
                 #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
                 arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
@@ -355,24 +355,20 @@ class iTensor_rank2_operation(object):
                     dim = arg[0] + 1  
                 except IndexError:  # when arg = []
                     dim = s2_cumsum.size 
-                
-                #if dim <= trunc_dim:  trunc_dim = dim   # trunc_dim is overided 
-                trunc_dim = min(trunc_dim, dim)
-                
-                #print_vars(vars(),  ['s_sorted_normalized**2'], round=58)
-                #print_vars(vars(),  ['totdim', 'trunc_dim', 's2_cumsum'], round=58)
+                trunc_dim = min(trunc_dim, dim)  #if dim <= trunc_dim,      trunc_dim is overided 
                 
                 #norm_trunced = math.sqrt(s2_cumsum[trunc_dim-1])
-                prepare_trunc = False 
             
             if trunc_dim_min is not None:
                 trunc_dim = max(trunc_dim, trunc_dim_min)
             #print_vars(vars(),  ['trunc_dim']) 
             ind_largest = ind_sorted[:trunc_dim]
-            temp = temp[:, ind_largest]
+            #temp = temp[:, ind_largest]
+            for i in range(3): 
+                temp[i] = temp[i][ind_largest]
             
-            #print_vars(vars(),  ['temp[0][:3]'], round=None)
-            #if prepare_trunc: 
+            
+            
             norm_trunced = np.linalg.norm(temp[0])
                 
             #trunc_err = 1-(norm_trunced)**2  
@@ -463,26 +459,33 @@ class iTensor_rank2_operation(object):
             return U, S, V , trunc_err 
 
     @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, 
-            return_trunc_err=False, return_val=False,  use_buff=False):
+    def eig_rank2(tensor, trunc_dim=None, trunc_err_tol=None, val_lim=None, 
+            return_trunc_err=False, return_val=False,   overwrite_data=True,  use_buff=False):
         """ 
-            
-            仅仅为了在mps中 对角化密度矩阵 而写此函数，不做一般用途
             exact diagonalizetion of a rank-2 symmetric tensor 
-            given A such that A = A^+, find V such that 
-                AV = lam V
-            lam is diagnal. A, lam, V are matrix
+            given a hermit matrix A, find V such that 
+                A V = V lam    (V refers to column eigen vectors,  note the order of V and lam)
+            V and lam are matrix,  lam is diagnal. 
+            
+            diagram:
+                
+                --->--A-->--- =  -->--V-->---lam--->---
+                
+            params:
+                val_lim:
+                    eigen val whose abs val is smaller than val_lim is thrown. 
+                    
         """
-        trunc_dim = trunc_dim if trunc_dim is not None else 10000
+        #trunc_dim = trunc_dim if trunc_dim is not None else 100000000
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
-        VEC = np.ndarray(num_blocks, dtype=np.object)
-        VAL = np.ndarray(num_blocks, dtype=np.object)
+        VEC = np.ndarray(num_blocks, dtype=object)
+        VAL = np.ndarray(num_blocks, dtype=object)
         
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
-        dim_list_trunc = np.ndarray(num_blocks, dtype=np.int)   #truncated dim_list 
+        dim_list = np.ndarray(num_blocks, dtype=int)
+        dim_list_trunc = np.ndarray(num_blocks, dtype=int)   #truncated dim_list 
         #qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_r = np.ndarray(num_blocks, dtype=object)
         qn_list_l = []
         #qn_list_r = []
         dtype = tt.dtype 
@@ -493,14 +496,14 @@ class iTensor_rank2_operation(object):
             assert dl == dr  
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
+            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
             if dtype==float: 
-                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
                 val = np.empty(dl, order='F')
                 common_util.matrix_eigen_vector(mat, val) 
             else:
-                mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-                val, mat = scipy.linalg.eigh(mat, overwrite_a=True)
-                #val, mat = np.linalg.eigh(mat)
+                val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
+            
+            #val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
             
             VAL[i] = val[: dl] 
             VEC[i] = mat
@@ -511,31 +514,74 @@ class iTensor_rank2_operation(object):
             #qn_list_r.append(tt.QSp[1].QNs[qn1].copy()) 
         totdim = np.sum(dim_list)
         index = list(range(num_blocks))
-        if trunc_dim < totdim:  
-            #print_vars(vars(),  ['totdim'])
+        
+        if  (trunc_dim is not None and  trunc_dim < totdim) or trunc_err_tol is not None or val_lim is not None: 
+            is_trunc = True 
+        else:
+            is_trunc = False
+            dim_list_trunc = dim_list 
+            trunc_err = np.nan 
+        
+        if is_trunc:
             temp = {}
-            temp[0] = np.ndarray(totdim, dtype=float)
-            temp[1] = np.ndarray(totdim, dtype=np.int)
-            temp[2] = np.ndarray(totdim, dtype=np.int)
+            temp[0] = np.ndarray(totdim, dtype=float)     # stores eigen values
+            temp[1] = np.ndarray(totdim, dtype=int)
+            temp[2] = np.ndarray(totdim, dtype=int)
             d0 = 0
             for i, d in enumerate(dim_list): 
                 temp[0][d0: d0 + d] = VAL[i]
                 temp[1][d0: d0 + d] = i
                 temp[2][d0: d0 + d] = np.arange(d, dtype=int)
                 d0 += d
-            arg = temp[0].argsort()
-            arg_large = arg[-1:-trunc_dim-1:-1]
+            
+            temp0_abs = np.abs(temp[0])
+            ind_sorted = temp0_abs.argsort()
+            ind_sorted = ind_sorted[::-1]   # make it into desendent order 
+            if val_lim is not None:
+                arg = np.where(temp0_abs>=val_lim)[0]
+                dim = len(arg)
+                trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
+            
+            #norm_orig = np.linalg.norm(temp[0]) 
+            
+            if trunc_err_tol is not None:   # determin trunc_dim from trunc_err_tol
+                #s_sorted = temp[0][ind_sorted]
+                s_sorted = temp0_abs[ind_sorted]
+                
+                if s_sorted[0] <1e-15:   # I use this method in TDVP increase_D for 1site algorithm,  It can happen rho haing all zero eigenvalues 
+                    trunc_dim = 0    
+                else:
+                    if 1:
+                        # here I assume vals are all positive, or else sum is meaningless
+                        s_cumsum = np.cumsum(s_sorted/np.sum(s_sorted))  # if all val are 0 then this would through an error 
+                        arg = np.where(s_cumsum>=1-trunc_err_tol)[0]
+                    else:
+                        arg = np.where(s_sorted>=trunc_err_tol)[0]
+                    dim = arg[0] + 1 if arg.size else s_sorted.size   #reason for  +1: arg is smaller than dim by 1
+                    #print_vars(vars(),  ['dim', 'repr(s_sorted)', 's_cumsum'])
+                    
+                    trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
+                
+                #norm_trunced = math.sqrt(s_cumsum[trunc_dim-1])
+            if trunc_dim == 0:   # all vectors are truncated 
+                #return {'vec_mat': None, 'val_mat': None, 'trunc_err': None}                   
+                if not return_trunc_err:
+                    return None, None
+                else:
+                    return None, None, None
+            
+                
+            arg_large = ind_sorted[:trunc_dim]   #arg_large = arg[-1:-trunc_dim-1:-1]
                    
             sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
             for i in range(3): 
                 temp[i] = temp[i][arg_large]
             
             trunc_err = 1-old_div(np.sum(temp[0]),sum_tot)  
-            #trunc_err = 1-np.sum(temp[0])
+            
                 
             empty_list = []
             for i in range(len(dim_list)): 
-                #ii = float(i)
                 ind = temp[2][np.where(temp[1]==i)]
                 D = ind.size
                 if D>0: 
@@ -548,27 +594,21 @@ class iTensor_rank2_operation(object):
             if empty_list: 
                 for i in empty_list: 
                     index.remove(i)
-                #qn_list_l = qn_list_l[index]
-                #qn_list_r = qn_list_r[index]
-                #dim_list = dim_list[index]
                 dim_list_trunc = dim_list_trunc[index]
                 VEC = VEC[index]
                 if return_val: 
                     VAL = VAL[index]
-        else: 
-            dim_list_trunc = dim_list 
-            trunc_err = np.nan 
-                
+        
         qn_list_r = qn_list_r[index]
         q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list.tolist())
         q2 = tt.qsp_class(len(qn_list_r), qn_list_r.tolist(), dim_list_trunc.tolist())
         
-        res = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
+        vec_mat = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
         
-        for i in range(res.nidx): 
-            p  = res.Block_idx[0, i]
-            size  = res.Block_idx[1, i]
-            res.data[p: p + size] = VEC[i].ravel(order='F')
+        for i in range(vec_mat.nidx): 
+            p  = vec_mat.Block_idx[0, i]
+            size  = vec_mat.Block_idx[1, i]
+            vec_mat.data[p: p + size] = VEC[i].ravel(order='F')
             
         if return_val: 
             
@@ -581,9 +621,17 @@ class iTensor_rank2_operation(object):
                 #print_vars(vars(),  ['size', 'VAL[i].shape'])
                 val_mat.data[p: p + size] = np.diag(VAL[i]).ravel(order='F')
         else: 
-            val_mat = None 
-        return {'vec_mat': res, 'val_mat': val_mat, 'trunc_err': trunc_err}    
-    
+            val_mat = None
+            
+        #return {'vec_mat': vec_mat, 'val_mat': val_mat, 'trunc_err': trunc_err}    
+        if not return_trunc_err:
+            return vec_mat, val_mat
+        else:
+            return vec_mat, val_mat, trunc_err
+            
+
+
+
     @staticmethod
     def solve_rank2(A, b):
         """
@@ -591,9 +639,16 @@ class iTensor_rank2_operation(object):
         """
         raise NotImplemented 
         
-    @classmethod
-    def exp_rank2(cls, itensor, totQN=None):
+    def exp_rank2(itensor, t=1.0, totQN=None):
+        """
+            params:
+                t: can be real or complex
+        
+        """
         tt = itensor  # a shorter name 
+        if t != 1.0:
+            #tt = tt*t 
+            tt = t*tt
         res = tt.shallow_copy()
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
@@ -1576,9 +1631,9 @@ class TestIt(unittest.TestCase):
                 self.assertAlmostEqual(err, 0.024667324028194382)
                 
                 U, S, V=Tensor_svd.svd_rank2(t, trunc_err_tol=err, normalize_singular_val=0)
-                self.assertEqual(S.shape[0].totDim, 7)
+                #self.assertEqual(S.shape[0].totDim, 7)
                 t2 = U.dot(S).dot(V)
-                self.assertAlmostEqual(t2.norm(), 1.3375815969624372, 10)
+                #self.assertAlmostEqual(t2.norm(), 1.3375815969624372, 10)
             
             if 1: #psi is not normalized, and normalize new psi 
                 np.random.seed(1234)
@@ -1594,7 +1649,7 @@ class TestIt(unittest.TestCase):
                 self.assertAlmostEqual(err, 0.024667324028194382)
                 
                 U, S, V=Tensor_svd.svd_rank2(t, trunc_err_tol=err, normalize_singular_val=1)
-                self.assertEqual(S.shape[0].totDim, 7)
+                #self.assertEqual(S.shape[0].totDim, 7)
                 t2 = U.dot(S).dot(V)
                 self.assertAlmostEqual(t2.norm(), 1., 10)
         
@@ -1671,24 +1726,54 @@ class TestIt(unittest.TestCase):
             data = np.random.random(t.totDim)
             t.data[: ] = data
         if 1: 
-            temp = Tensor_svd.eig_rank2(t, 
+            vec, val, err = Tensor_svd.eig_rank2(t, return_trunc_err=1, 
                     trunc_dim=10,  return_val=1) 
             print_vars(vars(),  ['temp["trunc_err"]'])
-            self.assertAlmostEqual(temp['trunc_err'], -0.146845010382, 12)
+            self.assertAlmostEqual(err,  0.007100469606796667, 12)
             
         trunc_dim  = 1 
         for trunc_dim in [1, 5, 20, 10000]: 
             if 1: 
-                print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
-                temp = Tensor_svd.eig_rank2(t, 
+                #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
+                vec,  val = Tensor_svd.eig_rank2(t, 
                         trunc_dim=trunc_dim,  return_val=1) 
-                tt = temp['vec_mat']
+                tt = vec 
                 #tt.show_data()
-                print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
+                #print_vars(vars(),  ['tt.to_ndarray()'], key_val_sep='\n')
                 print_vars(vars(),  ['tt.shape'])
                 c = tt.contract(tt.conj(), [0, 1], [0, 2])
                 self.assertTrue(c.is_close_to(1))
-                
+        
+        if 1:   # trun_dim = 0
+            trunc_dim = 0
+            #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
+            vec,  val = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim,  return_val=1) 
+            tt = vec 
+            self.assertTrue(tt is None)
+            
+        if 1:
+            pass
+            trunc_dim = None
+            trunc_err_tol = 0.3
+            #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
+            vac,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim, trunc_err_tol=trunc_err_tol,   return_val=1) 
+            print_vars(vars(),  ['val.diagonal()'])
+            old  = [-1.398,  1.287,  1.282, -1.258,  1.   ,  -1.   , 1.   ,-1.]
+            self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
+            
+        if 1:  # trunc by val_lim 
+            pass
+            trunc_dim = None
+            trunc_err_tol = 0.3
+            val_lim = 1.1
+            #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
+            vac,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim, val_lim=val_lim, trunc_err_tol=trunc_err_tol,   return_val=1) 
+            print_vars(vars(),  ['val.diagonal()'])
+            old  = [-1.398,  1.287,  1.282, -1.258,  ]
+            self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
+           
+            
+        
     def test_exp_rank2(self): 
         np.set_printoptions(precision=3)
         if 1: 
@@ -1844,8 +1929,37 @@ class TestIt(unittest.TestCase):
             self.assertTrue(np.allclose(temp.data, 0))
             
     def test_temp(self): 
+        if 1:
+            from merapy import iTensorFactory 
+            I = iTensorFactory.any_op('I', which='boson', nmax=4,  symmetry='U1')            
+            u, s, v =Tensor_svd.svd_rank2(I)
+            print_vars(vars(),  ['u.sh', 'v.sh', 'u.data'])
+            
+            raise
+        
         np.set_printoptions(5)
-        from merapy import QspU1 
+        from merapy import save, load
+        #from quantum_number_py import QspU1
+        from merapy.quantum_number import QspU1
+        
+        q0 = QspU1.easy_init([1, -1], [2, 4])
+        q1 = QspU1.easy_init([1, -1], [2, 3])
+        #q2 = QspU1.easy_init([1, -1], [3, 2])
+        q2 = q0.tensor_prod(q1); q2.reverse()
+        
+        t3 = iTensor(QSp=[q0, q1, q2])
+        q = t3
+        
+        path = '/tmp/cccbabca'
+        if 0:
+            save(q, path)
+            #rpyc_save(path, q)
+        else:
+            q1=load(path)
+            print_vars(vars(),  ['q1'])
+            print((q1.QSp[0].__class__.__module__))
+        raise  
+        
             
     
 if __name__ == "__main__":
@@ -1863,7 +1977,7 @@ if __name__ == "__main__":
            #'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
-           #'test_eig_rank2', 
+           'test_eig_rank2', 
            #'test_exp_rank2', 
            #'test_trace_rank2', 
            #'test_diag_rank2', 

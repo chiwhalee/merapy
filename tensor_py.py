@@ -815,14 +815,14 @@ class iTensor(TensorBase):
         other.type_name = self.type_name 
         return other
 
-    def copy_struct_new(self, other=None, use_buf=False):
+    def copy_struct_new(self, other=None, index_data=False,  use_buf=False):
         """
             see iTensor_CopyStruct in f90
         """
         QSp= [q.copy() for q in self.QSp]
         totQN = self.totQN.copy()
         other = iTensor(rank=self.rank, QSp=QSp,totQN=totQN, 
-                index_data=False, has_data=False, use_buf=use_buf)
+                index_data=index_data, has_data=False, use_buf=use_buf)
         return other
 
     def shallow_copy(self):
@@ -2482,6 +2482,7 @@ class iTensor(TensorBase):
                     t = iTensor.contract_tensor_list(t)
                 head = head.contract(t)
         except Exception:
+            print_vars(vars(),  ['head.ind_labels', 't.ind_labels'])
             raise  
         if final_ind_labels is not None:
             ll = list(head.ind_labels)  # head.ind_labels may be np.ndarray, convert it to list
@@ -2492,6 +2493,13 @@ class iTensor(TensorBase):
         #print_vars(vars(),  ['head.ind_labels'])
         return head 
     ctl = CTL= contract_tensor_list 
+    
+    def set_ind_labels(*args):
+        n = len(args)//2 
+        for i in range(n):
+            o = args[i*2]
+            ind = args[i*2+1]
+            o.ind_labels= ind 
     
     def dot(self, other): 
         """

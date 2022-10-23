@@ -283,7 +283,7 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
         else: 
             return z 
 
-def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=', 
+def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=', 
         show_header=0, return_str=False, fault_tol=True, round=5):
     """
         
@@ -298,6 +298,7 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
         caller_name =  frm[3] #inspect.stack()[1][3] 
         #head = '\n---print at %s line %s---\n'%(module_name, lineno)
         head = '\n[%5s LINE%d]  '%(module_name, lineno, )
+    
     dic['np'] = np  #inject np to the namespace so that it can be evaled 
     if var_name_list is None: 
         var_name_list = sorted(dic)
@@ -306,11 +307,14 @@ def print_vars(dic, var_name_list=None, head=None, sep=', ', key_val_sep='=',
         print(msg) 
     def get_val(x): 
         #if not '.' in str(x): 
-        if not isinstance(x, str) and not isinstance(x, str): 
+        #if not isinstance(x, str) and not isinstance(x, str): 
+        if not isinstance(x, str):
             res = dic[x]
         else: 
             #a, b = x.split('.')
             #res = dic[a].__getattribute__(b)
+            if x[0] == '"' :    # '"simply a string to display"'
+                return str(x)
             try: 
                 res= eval(x, dic)
             except NameError as err: 
