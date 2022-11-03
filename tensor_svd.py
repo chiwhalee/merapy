@@ -462,14 +462,19 @@ class iTensor_rank2_operation(object):
     def eig_rank2(tensor, trunc_dim=None, trunc_err_tol=None, val_lim=None, 
             return_trunc_err=False, return_val=False,   overwrite_data=True,  use_buff=False):
         """ 
-            exact diagonalizetion of a rank-2 symmetric tensor 
-            given a hermit matrix A, find V such that 
-                A V = V lam    (V refers to column eigen vectors,  note the order of V and lam)
-            V and lam are matrix,  lam is diagnal. 
-            
+            exact diagonalizetion of a rank-2 symmetric tensor given a hermit
+            matrix A, find V and lam such that 
+                A V = V lam, 
+            V and lam are matrix,  lam is diagnal.  V refers to column eigen
+            vectors,  note the order of V and lam. 
             diagram:
                 
-                --->--A-->--- =  -->--V-->---lam--->---
+                --->--A-->---V-->--   =  -->--V-->---lam--->---
+            
+            This is equivlent to 
+                A = V*lam*V.dag
+                
+                --->--A-->--   =  -->--V-->---lam-->--Vdag-->--
                 
             params:
                 val_lim:
@@ -521,6 +526,7 @@ class iTensor_rank2_operation(object):
             is_trunc = False
             dim_list_trunc = dim_list 
             trunc_err = np.nan 
+        print_vars(vars(),  ['is_trunc', 'trunc_dim', 'totdim'])
         
         if is_trunc:
             temp = {}
@@ -535,6 +541,7 @@ class iTensor_rank2_operation(object):
                 d0 += d
             
             temp0_abs = np.abs(temp[0])
+            #print_vars(vars(),  ['np.asarray(sorted(temp0_abs, reverse=1))'], round=5)
             ind_sorted = temp0_abs.argsort()
             ind_sorted = ind_sorted[::-1]   # make it into desendent order 
             if val_lim is not None:
@@ -573,11 +580,14 @@ class iTensor_rank2_operation(object):
                 
             arg_large = ind_sorted[:trunc_dim]   #arg_large = arg[-1:-trunc_dim-1:-1]
                    
-            sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
             for i in range(3): 
                 temp[i] = temp[i][arg_large]
             
-            trunc_err = 1-old_div(np.sum(temp[0]),sum_tot)  
+            #sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
+            #trunc_err = 1-old_div(np.sum((temp[0])),sum_tot)  
+            sum_tot = np.sum(temp0_abs)  # if rho is not corrected sum_tot=1.0
+            trunc_err = 1-np.sum(np.abs(temp[0]))/sum_tot
+            #print_vars(vars(),  ['trunc_err'])
             
                 
             empty_list = []
@@ -1729,7 +1739,7 @@ class TestIt(unittest.TestCase):
             vec, val, err = Tensor_svd.eig_rank2(t, return_trunc_err=1, 
                     trunc_dim=10,  return_val=1) 
             print_vars(vars(),  ['temp["trunc_err"]'])
-            self.assertAlmostEqual(err,  0.007100469606796667, 12)
+            self.assertAlmostEqual(err, 0.02467994881527491, 12)
             
         trunc_dim  = 1 
         for trunc_dim in [1, 5, 20, 10000]: 
