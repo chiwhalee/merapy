@@ -283,7 +283,41 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
         else: 
             return z 
 
-def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=', 
+class TermColor:
+    """
+        ref:
+            https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal 
+    """
+    RED = '\033[91m'
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
+    ENDC = '\033[0m'
+    
+    CBOLD     = '\33[1m'
+    CITALIC   = '\33[3m'
+    CURL      = '\33[4m'
+    CBLINK    = '\33[5m'
+    CBLINK2   = '\33[6m'
+    CSELECTED = '\33[7m'
+
+    CBLACK  = '\33[30m'
+    CRED    = '\33[31m'
+    CGREEN  = '\33[32m'
+    CYELLOW = '\33[33m'
+    CBLUE   = '\33[34m'
+    CVIOLET = '\33[35m'
+    CBEIGE  = '\33[36m'
+    CWHITE  = '\33[37m'
+
+
+def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=', color=None, 
         show_header=0, return_str=False, fault_tol=True, round=5):
     """
         
@@ -315,6 +349,10 @@ def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=',
             #res = dic[a].__getattribute__(b)
             if x[0] == '"' :    # '"simply a string to display"'
                 return str(x)
+            if ':' in x:  # like 'new_var_name:var_name',  then use new name to replace name
+                name_str, x = x.split(':')
+            else:
+                name_str = str(x)   
             try: 
                 res= eval(x, dic)
             except NameError as err: 
@@ -325,7 +363,7 @@ def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=',
                     res='error: ' +  str(err)
                 else:
                     raise  
-                
+        
         #if isinstance(res, str):   # only print a str 
         #    return  str(res)
         #else: 
@@ -335,11 +373,13 @@ def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=',
         res_str = str(res)
         if isinstance(res, np.ndarray) and res.ndim>1:
             res_str = '\n\t' + res_str.replace('\n', '\n\t')
-        return  str(x) + key_val_sep + res_str
-            
+        return  name_str + key_val_sep + res_str
     
-    res = head
-    res  +=  sep.join([ get_val(i)  for i in  var_name_list])
+    res  =  sep.join([ get_val(i)  for i in  var_name_list])
+    if color:
+        if color == 'red':
+            res= TermColor.RED +  res  + TermColor.ENDC
+    res = head  + res
     if not return_str:         
         print(res)
     else: 
