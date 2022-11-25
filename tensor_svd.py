@@ -459,8 +459,8 @@ class iTensor_rank2_operation(object):
             return U, S, V , trunc_err 
 
     @staticmethod
-    def eig_rank2(tensor, trunc_dim=None, trunc_err_tol=None, val_lim=None, 
-            return_trunc_err=False, return_val=False,   overwrite_data=True,  use_buff=False):
+    def eig_rank2(tensor, trunc_dim=None, trunc_err_tol=None, val_lim=None, qsp_guide=None, 
+            return_trunc_err=False, return_val=False,   overwrite_data=False,  use_buff=False, debug=0):
         """ 
             exact diagonalizetion of a rank-2 symmetric tensor given a hermit
             matrix A, find V and lam such that 
@@ -479,9 +479,10 @@ class iTensor_rank2_operation(object):
             params:
                 val_lim:
                     eigen val whose abs val is smaller than val_lim is thrown. 
+                qsp_guide:
+                    Only for using in TDVP.increase_D. But this is not successful 
                     
         """
-        #trunc_dim = trunc_dim if trunc_dim is not None else 100000000
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
         VEC = np.ndarray(num_blocks, dtype=object)
@@ -489,10 +490,8 @@ class iTensor_rank2_operation(object):
         
         dim_list = np.ndarray(num_blocks, dtype=int)
         dim_list_trunc = np.ndarray(num_blocks, dtype=int)   #truncated dim_list 
-        #qn_list_l = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_l = []   #qn_list_r would be truncated,  so their def are different 
         qn_list_r = np.ndarray(num_blocks, dtype=object)
-        qn_list_l = []
-        #qn_list_r = []
         dtype = tt.dtype 
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
@@ -508,15 +507,11 @@ class iTensor_rank2_operation(object):
             else:
                 val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
             
-            #val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
-            
             VAL[i] = val[: dl] 
             VEC[i] = mat
             dim_list[i] = dl 
-            #qn_list_l[i] = tt.QSp[0].QNs[qn0].copy()
             qn_list_l.append(tt.QSp[0].QNs[qn0].copy()) 
             qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
-            #qn_list_r.append(tt.QSp[1].QNs[qn1].copy()) 
         totdim = np.sum(dim_list)
         index = list(range(num_blocks))
         
@@ -526,7 +521,14 @@ class iTensor_rank2_operation(object):
             is_trunc = False
             dim_list_trunc = dim_list 
             trunc_err = np.nan 
-        print_vars(vars(),  ['is_trunc', 'trunc_dim', 'totdim'])
+        
+        #is_trunc = 1
+        #print_vars(vars(),  ['is_trunc', 'trunc_dim', 'totdim', ] )
+        if debug:
+            iii = np.abs(VAL[0])
+            jjj = iii.argsort()
+            jjj = jjj[::-1]   # make it into desendent order 
+            print_vars(vars(),  ['all vals:VAL[0][jjj]'], round=10, color='blue')
         
         if is_trunc:
             temp = {}
@@ -536,20 +538,18 @@ class iTensor_rank2_operation(object):
             d0 = 0
             for i, d in enumerate(dim_list): 
                 temp[0][d0: d0 + d] = VAL[i]
-                temp[1][d0: d0 + d] = i
-                temp[2][d0: d0 + d] = np.arange(d, dtype=int)
+                temp[1][d0: d0 + d] = i   # i is indix of data block 
+                temp[2][d0: d0 + d] = np.arange(d, dtype=int)   # numbering each data block 
                 d0 += d
             
             temp0_abs = np.abs(temp[0])
-            #print_vars(vars(),  ['np.asarray(sorted(temp0_abs, reverse=1))'], round=5)
             ind_sorted = temp0_abs.argsort()
             ind_sorted = ind_sorted[::-1]   # make it into desendent order 
+            #print_vars(vars(),  ['temp[0][ind_sorted]'], round=5)
             if val_lim is not None:
                 arg = np.where(temp0_abs>=val_lim)[0]
                 dim = len(arg)
                 trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
-            
-            #norm_orig = np.linalg.norm(temp[0]) 
             
             if trunc_err_tol is not None:   # determin trunc_dim from trunc_err_tol
                 #s_sorted = temp[0][ind_sorted]
@@ -583,23 +583,59 @@ class iTensor_rank2_operation(object):
             for i in range(3): 
                 temp[i] = temp[i][arg_large]
             
-            #sum_tot = np.sum(temp[0])  # if rho is not corrected sum_tot=1.0
-            #trunc_err = 1-old_div(np.sum((temp[0])),sum_tot)  
+            #print_vars(vars(),  ['temp[0]'], round=10)
+            
             sum_tot = np.sum(temp0_abs)  # if rho is not corrected sum_tot=1.0
             trunc_err = 1-np.sum(np.abs(temp[0]))/sum_tot
             #print_vars(vars(),  ['trunc_err'])
-            
                 
             empty_list = []
             for i in range(len(dim_list)): 
                 ind = temp[2][np.where(temp[1]==i)]
-                D = ind.size
-                if D>0: 
-                    VAL[i] = VAL[i][ind]
-                    VEC[i] = VEC[i][:, ind]
-                else: 
-                    empty_list.append(i)
-                dim_list_trunc[i] = D 
+                D = ind.size   # dim retained after truncation
+                if qsp_guide is None:
+                    if D>0: 
+                        VAL[i] = VAL[i][ind]
+                        VEC[i] = VEC[i][:, ind]
+                    else: 
+                        empty_list.append(i)
+                    dim_list_trunc[i] = D 
+                else: # qsp_guide does not work, delete this in future
+                    qn = qn_list_r[i]
+                    try:
+                        ii = qsp_guide.QNs.index(qn)
+                        D_ref = qsp_guide.Dims[ii]
+                    except ValueError:
+                        D_ref = 0
+                    D_full = dim_list[i]
+                    D_trunc = D_full - D
+                    if D_ref > D_trunc:
+                        #####
+                            #   <---------D_full---------------------->
+                            #                      |                 
+                            #                      |                   
+                            #   <----D------------>|<-----D_trunc----->
+                            #                      |                    
+                            #                      |                   
+                            #                 |    |                   
+                            #   <---D1------->|<-------D_ref----------->
+                            #                 |   
+                            #                 |   
+                        if D_full >= D_ref:
+                            D1 = D_full-D_ref
+                        else:
+                            D1 = 0
+                    elif D_ref <= D_trunc:  # this is identicle to no qsp_guide
+                        D1 = D
+                    
+                    #print_vars(vars(),  ['qn', 'ii','D', 'D1', 'D_full',  'D_ref', 'D_trunc',  'qn_list_r',  'qsp_guide'])
+                    if D1 > 0: 
+                        ind = ind[:D1]  # only retain those exceeding D_ref
+                        VAL[i] = VAL[i][ind]
+                        VEC[i] = VEC[i][:, ind]
+                    else: 
+                        empty_list.append(i)
+                    dim_list_trunc[i] = D1
                 
             if empty_list: 
                 for i in empty_list: 
@@ -638,9 +674,6 @@ class iTensor_rank2_operation(object):
             return vec_mat, val_mat
         else:
             return vec_mat, val_mat, trunc_err
-            
-
-
 
     @staticmethod
     def solve_rank2(A, b):
@@ -1736,7 +1769,7 @@ class TestIt(unittest.TestCase):
             data = np.random.random(t.totDim)
             t.data[: ] = data
         if 1: 
-            vec, val, err = Tensor_svd.eig_rank2(t, return_trunc_err=1, 
+            vec, val, err = Tensor_svd.eig_rank2(t.copy(), return_trunc_err=1, 
                     trunc_dim=10,  return_val=1) 
             print_vars(vars(),  ['temp["trunc_err"]'])
             self.assertAlmostEqual(err, 0.02467994881527491, 12)
@@ -1745,7 +1778,7 @@ class TestIt(unittest.TestCase):
         for trunc_dim in [1, 5, 20, 10000]: 
             if 1: 
                 #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
-                vec,  val = Tensor_svd.eig_rank2(t, 
+                vec,  val = Tensor_svd.eig_rank2(t.copy(), 
                         trunc_dim=trunc_dim,  return_val=1) 
                 tt = vec 
                 #tt.show_data()
@@ -1757,7 +1790,7 @@ class TestIt(unittest.TestCase):
         if 1:   # trun_dim = 0
             trunc_dim = 0
             #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
-            vec,  val = Tensor_svd.eig_rank2(t, trunc_dim=trunc_dim,  return_val=1) 
+            vec,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim,  return_val=1) 
             tt = vec 
             self.assertTrue(tt is None)
             
@@ -1767,8 +1800,8 @@ class TestIt(unittest.TestCase):
             trunc_err_tol = 0.3
             #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
             vac,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim, trunc_err_tol=trunc_err_tol,   return_val=1) 
-            print_vars(vars(),  ['val.diagonal()'])
-            old  = [-1.398,  1.287,  1.282, -1.258,  1.   ,  -1.   , 1.   ,-1.]
+            print_vars(vars(),  ['repr(val.diagonal())'])
+            old = [ 1.814,  1.391, -0.594,  1.259,  0.99 ]
             self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
             
         if 1:  # trunc by val_lim 
@@ -1778,9 +1811,22 @@ class TestIt(unittest.TestCase):
             val_lim = 1.1
             #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
             vac,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim, val_lim=val_lim, trunc_err_tol=trunc_err_tol,   return_val=1) 
-            print_vars(vars(),  ['val.diagonal()'])
-            old  = [-1.398,  1.287,  1.282, -1.258,  ]
+            print_vars(vars(),  ['repr(val.diagonal())'])
+            old = [1.814, 1.391, 1.259]
             self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
+        
+        if 1: #use qsp_guide 
+            
+            qsp_guide = QspU1.easy_init([0, -1, 1, -2, 5] , [1, 1, 1, 1, 4])
+            vec, val, err = Tensor_svd.eig_rank2(t.copy(),  return_trunc_err=1, 
+                    qsp_guide=qsp_guide, 
+                    trunc_dim=10,  return_val=1) 
+            print_vars(vars(),  ['temp["trunc_err"]'])
+            print_vars(vars(),  ['qsp_guide'])
+            print_vars(vars(),  ['vec.sh'])
+            qsp = vec.sh[1]
+            qsp_old = qsp_any('U1', [0, -1, 1, -2, 2], [2, 1, 2, 1, 2])
+            self.assertEqual(qsp, qsp_old)
            
             
         
@@ -1939,37 +1985,29 @@ class TestIt(unittest.TestCase):
             self.assertTrue(np.allclose(temp.data, 0))
             
     def test_temp(self): 
-        if 1:
-            from merapy import iTensorFactory 
-            I = iTensorFactory.any_op('I', which='boson', nmax=4,  symmetry='U1')            
-            u, s, v =Tensor_svd.svd_rank2(I)
-            print_vars(vars(),  ['u.sh', 'v.sh', 'u.data'])
-            
-            raise
-        
-        np.set_printoptions(5)
-        from merapy import save, load
-        #from quantum_number_py import QspU1
-        from merapy.quantum_number import QspU1
-        
-        q0 = QspU1.easy_init([1, -1], [2, 4])
-        q1 = QspU1.easy_init([1, -1], [2, 3])
-        #q2 = QspU1.easy_init([1, -1], [3, 2])
-        q2 = q0.tensor_prod(q1); q2.reverse()
-        
-        t3 = iTensor(QSp=[q0, q1, q2])
-        q = t3
-        
-        path = '/tmp/cccbabca'
-        if 0:
-            save(q, path)
-            #rpyc_save(path, q)
-        else:
-            q1=load(path)
-            print_vars(vars(),  ['q1'])
-            print((q1.QSp[0].__class__.__module__))
-        raise  
-        
+        np.set_printoptions(precision=3)
+        if 1: 
+            np.random.seed(1234)
+            qsp = QspU1.easy_init([0, 1, -1, 2, -2] , [4, 2, 3, 2, 2])
+            #qsp = QspU1.easy_init([0, 1, -1] , [4, 2, 3])
+            #qsp = QspU1.easy_init([0, 1, -1, ], [8, 5, 5, ]) 
+            qsp = qsp.copy_many(2, reverse=[1])
+            t = iTensor.example(qsp=qsp, rank=2,   symmetry='U1')
+            data = np.random.random(t.totDim)
+            t.data[: ] = data
+        if 1: 
+            print_vars(vars(),  ['t.sh'])
+            #qsp_guide = None
+            qsp_guide = QspU1.easy_init([0, -1, 1, -2, 5] , [1, 1, 1, 1, 4])
+            vec, val, err = Tensor_svd.eig_rank2(t,  return_trunc_err=1, 
+                    qsp_guide=qsp_guide, 
+                    trunc_dim=10,  return_val=1) 
+            print_vars(vars(),  ['temp["trunc_err"]'])
+            print_vars(vars(),  ['qsp_guide'])
+            print_vars(vars(),  ['vec.sh'])
+            qsp = vec.sh[1]
+            qsp_old = qsp_any('U1', [0, -1, 1, 2], [1, 1, 2, 2])
+            self.assertEqual(qsp, qsp_old)
             
     
 if __name__ == "__main__":

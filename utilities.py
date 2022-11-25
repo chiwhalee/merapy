@@ -283,7 +283,7 @@ def save(obj, path=None, compress=False, compress_level=2, as_str=False, info=0)
         else: 
             return z 
 
-class TermColor:
+class TextColor:
     """
         ref:
             https://stackoverflow.com/questions/287871/how-do-i-print-colored-text-to-the-terminal 
@@ -298,7 +298,7 @@ class TermColor:
     
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-    ENDC = '\033[0m'
+    END = '\033[0m'
     
     CBOLD     = '\33[1m'
     CITALIC   = '\33[3m'
@@ -311,7 +311,7 @@ class TermColor:
     CRED    = '\33[31m'
     CGREEN  = '\33[32m'
     CYELLOW = '\33[33m'
-    CBLUE   = '\33[34m'
+    BLUE   = '\33[34m'
     CVIOLET = '\33[35m'
     CBEIGE  = '\33[36m'
     CWHITE  = '\33[37m'
@@ -378,7 +378,10 @@ def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=', c
     res  =  sep.join([ get_val(i)  for i in  var_name_list])
     if color:
         if color == 'red':
-            res= TermColor.RED +  res  + TermColor.ENDC
+            res= TextColor.RED +  res  + TextColor.END
+        elif color == 'blue':
+            res= TextColor.BLUE +  res  + TextColor.END
+            
     res = head  + res
     if not return_str:         
         print(res)
