@@ -349,7 +349,8 @@ def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=', c
             #res = dic[a].__getattribute__(b)
             if x[0] == '"' :    # '"simply a string to display"'
                 return str(x)
-            if ':' in x:  # like 'new_var_name:var_name',  then use new name to replace name
+            if ':' in x and '[' not in x:  # like 'new_var_name:var_name',  then use new name to replace name
+                                          # '[' not in x: means not array slicing 
                 name_str, x = x.split(':')
             else:
                 name_str = str(x)   

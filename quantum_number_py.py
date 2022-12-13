@@ -126,7 +126,13 @@ class QnBase(ABC):   #with object new python cannot load old pickled files,  I d
     
     def __ne__(self, other):
         return self._val != other._val 
-
+    
+    def __lt__(self, other): 
+        return self._val < other._val 
+    
+    def __hash__(self):
+        return self._val 
+    
     def set_val(self,val):
         """
         newly added, assign val to self.val
