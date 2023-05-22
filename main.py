@@ -484,7 +484,7 @@ class Main(object):
             func = cls.run_one
         #    func = run_one_dist 
         from brokest.brokest import queue, run_many 
-        from brokest.task_center import TaskCenter, submit_one, submit_many, LOCAL_IP
+        from brokest.task_center import TaskCenterUI, submit_one, submit_many, LOCAL_IP
         if not submit: 
             tasks = [(func, (c, )) for c in config_group] 
             run_many(tasks, servers, 
@@ -535,7 +535,7 @@ class Main(object):
                 i=input('add_notify for %s ? (press Enter if yes, otherwise no)\n'%(job_group_name))
                 if i.lower() in ['y', '']:
                     host = task_center_server[0]
-                    tc = TaskCenter(host=host)
+                    tc = TaskCenterUI(host=host)
                     print(tc.add_notify(job_group_name))
                 else:
                     print('canceled')
