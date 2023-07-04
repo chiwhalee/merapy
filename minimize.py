@@ -15,7 +15,7 @@ import time
 from math import log10
 import warnings
 import time
-from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
+#from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence
 
 from merapy import print_vars
 from merapy.decorators import (set_STATE_end_1, tensor_player, get_player_state, 

@@ -37,7 +37,7 @@ from merapy.decorators import (tensor_player, get_player_state,  set_player_stat
 from merapy.utilities import print_vars
 #import merapy.crandom as crandom 
 from merapy.models import *
-from merapy.context_util import rpyc_conn_local, rpyc_conn_local_zerodeploy, rpyc_load
+from merapy.context_util import rpyc_conn_local,  rpyc_load
 from merapy.mera import Mera
 from merapy.tensor import *
 from merapy.tensor_network import *

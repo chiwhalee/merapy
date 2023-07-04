@@ -22,7 +22,7 @@ from plumbum import SshMachine, PuttyMachine  #SshMachine means you can operate 
 import paramiko
 import rpyc
 from rpyc.utils.server import ThreadedServer
-#from rpyc.utils.zerodeploy import DeployedServer
+from rpyc.utils.zerodeploy import DeployedServer
 import socket 
 import warnings 
 import zlib
@@ -125,7 +125,7 @@ def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None):
     timeout = timeout if timeout is not None else 3600*4  #timeout 指的是连接上的时间，不包括之后持续的时间, 增大此时间，可抗网络故障，但是，在debug时，要把它弄小
     args= dict(host=hostname, user=user, connect_timeout=timeout)
     
-    if hostname in [LOCAL_HOSTNAME, 'local']: 
+    if hostname in [LOCAL_HOSTNAME, 'local', 'center']: 
         args= dict(host=LOCAL_IP, user=LOCAL_USERNAME, connect_timeout=timeout)
     elif hostname == 'sugon': 
         ip, user = '211.86.151.102', 'zhihuali'
@@ -156,6 +156,25 @@ def ssh_connect(hostname, backend='rpyc', user=None, info=0, timeout=None):
         print(msg)
     return ssh
 
+
+@contextmanager
+def ssh_connect_context(hostname):
+    try:
+        ssh = ssh_connect(hostname, backend='paramiko', )
+        yield ssh
+    finally: 
+        ssh.close()
+
+def sftp_exists(sftp, path):
+    """
+        sftp is paramiko.open_sftp obect 
+    """
+    try:
+        sftp.stat(path)
+        return True
+    except FileNotFoundError:
+        return False
+
 @contextmanager
 def rpyc_conn_zerodeploy(hostname): 
     try:
@@ -166,23 +185,6 @@ def rpyc_conn_zerodeploy(hostname):
         conn.modules.sys.path.extend(path)
         # see this link, may be can find a way out
         #http://stackoverflow.com/questions/856116/changing-ld-library-path-at-runtime-for-ctypes
-        
-        yield conn
-    finally: 
-        conn.close()
-        server.close()
-        ssh.close()
-
-@contextmanager
-def rpyc_conn_local_zerodeploy(info=0): 
-    try: 
-        get_ip_address()
-        ssh = ssh_connect('local', info=info)
-        server = DeployedServer(ssh)
-        conn = server.classic_connect()
-        path = [LOCAL_MERA_PATH]
-        conn.modules.sys.path.extend(path)
-        
         # search this https://www.google.com.hk/search?newwindow=1&safe=off&q=python+change+ld_library_path+at+runtime&oq=python+change+ld_library_path+at+runtime&gs_l=serp.3...3045.4184.0.4379.7.7.0.0.0.1.327.327.3-1.1.0....0...1c.1.39.serp..7.0.0.umAiWXHnYYs
         # see this link, may be can find a way out
         # http://stackoverflow.com/questions/1178094/change-current-process-environment
@@ -201,7 +203,27 @@ def rpyc_conn_local_zerodeploy(info=0):
             for l in lib: 
                 conn.execute('ctypes.cdll.LoadLibrary("%s")'%l)
             #conn.modules.os.environ.update(os.environ) 
+        
         yield conn
+    finally: 
+        conn.close()
+        server.close()
+        ssh.close()
+
+@contextmanager
+def rpyc_conn_local_zerodeploy_del(info=0): 
+    try: 
+        get_ip_address()
+        ssh = ssh_connect('local', info=info)
+        #ssh = ssh_connect('local', backend='paramiko',  info=info)
+        server = DeployedServer(ssh)
+        conn = server.classic_connect()
+        path = [LOCAL_MERA_PATH]
+        conn.modules.sys.path.extend(path)
+        
+        yield conn
+    except:
+        raise  
     finally: 
         conn.close()
         server.close()
@@ -262,7 +284,7 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
             print('ssh connection failed')
             pass
 
-def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, info=0): 
+def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, timeout=None,  info=0): 
     if not use_local_storage: 
         res= load(path)
     else:
@@ -298,8 +320,8 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
                         res = rpyc.classic.obtain(res)
                         inn.close()
                 
-            #with rpyc_conn_local_zerodeploy() as conn:
-                #注意 rpyc_conn_local_zerodeploy 虽然能连接上，但是有限制:
+            #with rpyc_conn_zerodeploy('local') as conn:
+                #注意 rpyc_conn_zerodeploy 虽然能连接上，但是有限制:
                 #下面的一行  load_local = conn.modules['merapy.utilities'].load 会报错：
                 #ImportError: libifport.so.5: cannot open shared object file: No such file or directory
                 #找不到动态库
@@ -310,10 +332,13 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, in
                 #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
                 s= load_local(path, decompress=False, as_str=1)
         elif backend == 'sftp' :
-            ssh = ssh_connect('local', backend='paramiko')
+            ssh = ssh_connect('local', backend='paramiko', timeout=timeout)
             ftp = ssh.open_sftp()
-            f=ftp.file(path, 'r', -1)
-            s=f.read()
+            try:
+                f=ftp.file(path, 'r', -1)
+                s=f.read()
+            except Exception as err:
+                raise 
             #f.flush()
             ftp.close()
             ssh.close()           
@@ -345,10 +370,6 @@ def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=Fals
     if not use_local_storage: 
         save(obj, path, compress)
     else: 
-        #with rpyc_conn_local_zerodeploy() as conn:
-        #    out = conn.builtin.open(path, 'wb')
-        #    conn.modules.cPickle.dump(obj, out)
-        #    out.close()
         s=save( obj, path=None, compress=compress, as_str=1)
         if backend == 'auto' :
             l = len(s)
@@ -453,8 +474,6 @@ class TestIt(unittest.TestCase):
             print(conn.modules.merapy)
     
     def xtest_rpyc_conn_local_zero(self):  #disable this, becuase fails on other machines
-        with rpyc_conn_local_zerodeploy(info=1) as conn: 
-            print(conn.modules['os'])
 
         with rpyc_conn_zerodeploy(hostname='local') as conn: 
             print(conn.modules['os'])
@@ -475,12 +494,12 @@ if __name__ == '__main__' :
     else: 
         suite = unittest.TestSuite()
         add_list = [
-           'test_temp', 
+           #'test_temp', 
            #'xtest_ssh_connect', 
            #'xtest_save_and_load', 
            #'test_save_and_load_sftp', 
            #'xtest_rpyc_conn_local', 
-           #'xtest_rpyc_conn_local_zero', 
+           'xtest_rpyc_conn_local_zero', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))

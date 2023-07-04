@@ -43,7 +43,7 @@ if uname in ['QTG-WS1-ubuntu']:
 
 from merapy.utilities import print_vars, save 
 from merapy.context_util import (make_temp_dir, rpyc_conn_local, 
-        rpyc_conn_local_zerodeploy, rpyc_conn, rpyc_conn_zerodeploy)
+         rpyc_conn, rpyc_conn_zerodeploy)
 from merapy.quantum_number import *
 
 from merapy.hamiltonian import System
