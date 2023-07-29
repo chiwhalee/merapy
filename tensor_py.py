@@ -374,8 +374,9 @@ class iTensor(TensorBase):
             
         
         arg = [QSp[i].nQN for i in range(rank_1)]
-        #iqn = np.ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
-        iqn = ndindex(*arg, order='F')  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+        #iqn = np.ndindex(*arg)  #iQN like a pointer, 用于给量子数组合编号  #iQN[i]用作leg i 上的量子数 计数
+                                # if using 'C' order,  this conflicts with get_idx
+        iqn = ndindex(*arg, order='F')  #I added an arg "order" for np.ndindex
         self.idx_dim = np.prod(arg, dtype=int)
 
         self.idx = np.ndarray(self.idx_dim, int)   #-1                
@@ -666,7 +667,7 @@ class iTensor(TensorBase):
         for i in range(self.rank-1, 0 , -1):
             pq = (pq+qn_id_tuple[i])*self.QSp[i-1].nQN
         pq = pq+qn_id_tuple[0]
-        #return  self.idx[pq]
+        
         return pq 
     
     def get_block(self, i, linear=True, order='F'): 
@@ -2106,28 +2107,23 @@ class iTensor(TensorBase):
         #找到原来的block的位置与新的位置间的转换pidx<-->qidx
         #warnings.warn("using array_permutation_np")
         for n  in range(self.nidx):
-            pidx = self.Block_idx[0,n]
-            totDim = self.Block_idx[1,n]
-            pos[0] = 0  # for rank=0
-            pos[0:rank] = self.Addr_idx[0:rank,n]
-            np1 = 0
-            for i  in range(rank-1, 0, -1):
-                np1 = (pos[P[i]]+np1)*Tp.QSp[i-1].nQN
-                Dims[i] = self.QSp[i].Dims[pos[i]]
-            i = 0
-            np1 = np1+pos[P[i]]
-            Dims[i] = self.QSp[i].Dims[pos[i]]
-            qidx = Tp.Block_idx[0,Tp.idx[np1]]            
             
-            temp= self.data[pidx:pidx+totDim]   #.copy()
+            temp = self.get_block(n)
+            
+            pos[0] = 0  # for rank=0
+            pos[0:rank] = self.Addr_idx[0:rank,n]  # qn number index 
+            pos_new = [pos[P[i]] for i in range(rank)]
+            data = Tp.get_block(pos_new)
+            Dims= np.asarray(self.get_block_shape(n), dtype=int)
             
             #attention_may_be_not_efficient  可以改成inplace 
             #Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation_np(temp,rank,Dims,P)
             
-            data = Tp.data[qidx:qidx+totDim]
             # 如果错误信息为 #error: failed in converting 5th argument `b' of array_permutation_64_ifort.array_permutation_fort_parallel to C/Fortran array
             #则检查 Dims，其中可能包含了0维 
+            #print_vars(vars(),  ['temp.size', 'data.size'])
             array_permutation.array_permutation_inplace(temp, self.rank, Dims, P, data)
+            
             #Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation(temp,rank,Dims,P)
             #try: 
             #    array_permutation.array_permutation_inplace(temp, self.rank, Dims, P, data)
@@ -4644,7 +4640,49 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
     
     def test_temp(self): 
+        from merapy import QspZ2 
         
+        if 0:  #pass 
+            #qsp_class= QspU1
+            qsp_class= QspZ2
+            qa = qsp_class.easy_init([1, -1],  [2, 2])
+            qb = qsp_class.easy_init([1, -1],  [3, 2])
+            qc = qsp_class.easy_init([1, -1],  [2, 3])
+            qd = qsp_class.easy_init([1, -1],  [2, 3])
+            qe = qsp_class.easy_init([1, -1],  [2, 3])
+            
+            t = iTensor(QSp=[qa*qb, qc, qd*qe]); t.data[:] = np.arange(t.size)
+            t2=t.split_qsp(0, [qa, qb], 2, [qd, qe])
+            c2 = t.contract(t, [0, 100, 1], [0, 1000, 1])
+            c3 = t2.contract(t2, [0, 1, 100, 2, 3], [0, 1, 1000, 2, 3])
+            #c2.show_data()
+            #c3.show_data()
+            print_vars(vars(),  ['c2.data', 'c3.data'])
+            self.assertTrue(np.all(c2.data==c3.data))
+
+        from merapy import QspZ2 
+        if 1:
+            q0 = QspZ2.easy_init([1, -1], [2, 4])
+            q1 = QspZ2.easy_init([1, -1], [2, 3])
+            q2 = QspZ2.easy_init([1, -1], [3, 2])
+            
+            t3 = iTensor(QSp=[q0, q1, q2])
+            #print_vars(vars(),  ['t3.QNs'])
+            #raise  
+            
+            #t2 = t3.merge_3to2((0, 1))
+            #print_vars(vars(),  ['t3.sh', 't2.sh'])
+            #print_vars(vars(),  ['t3.sh'])
+            #print_vars(vars(),  ['t3'])
+            t3.transpose([2, 0, 1])
+            raise  
+            
+            c3 = t3.contract(t3.copy(), [0, 1, 2], [0, 1, 3])
+            
+        
+        raise  
+    
+    
         if 1:
             pass
             if tensor_player.version == 'single':
@@ -4755,7 +4793,7 @@ class Test_iTensor(unittest.TestCase):
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
-    if 0: 
+    if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()

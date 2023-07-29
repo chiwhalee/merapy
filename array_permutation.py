@@ -161,9 +161,9 @@ def array_permutation_inplace(a, rank, Dims, order, b):
     order_[:]=order[:rank]
     
 
-    #b=np.ndarray(a.size, dtype=a.dtype)
-    #b=np.ndarray(a.size,dtype=a.dtype, buffer=out_buff)
-    #print_vars(vars(),  ['a.dtype', 'b.dtype'], sep=' ')
+    #if it raises ValueError: failed in converting 4th argument `b' of array_permutation.array_permutation_fort_parallel to C/Fortran array
+    #then it possible means a.size != b.size  
+
     if a.dtype == float:  
         array_permutation_fort_parallel(Dims_, order_,  a, b)
     else:
