@@ -312,8 +312,8 @@ def tensor_player(which):
                     inner.tape[inner.calls] = (self.nidx, tape_ind, tape_dim, tape_ord)
                 return Tp
 
-            def permute_player_bac(self, P, buffer=None, use_buf=False):
-                
+            #@profile
+            def permute_player(self, P, buffer=None, use_buf=False):
                 rank = self.rank
                 #permute QSp, QNs
                 if 0:
@@ -337,17 +337,6 @@ def tensor_player(which):
 
                 return Tp
 
-            #@profile
-            def permute_player(self, P, buffer=None, use_buf=False):
-                #since __init__ has been decorated, just do in following way                
-                Tp=self.__class__(rank=None, QSp=None, totQN=None, buffer=buffer, use_buf=use_buf)
-                
-                nidx, tape_ind, tape_dim, tape_ord = inner.tape[inner.calls]
-                array_permutation.permute_player_fort(self.rank, 
-                            tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
-
-                return Tp
-            
             def contract_core_recorder(self, T2, div, data=None, use_buf=False):
                 """
                     see iTensor_Contraction2 in f90
@@ -429,13 +418,10 @@ def tensor_player(which):
                 inner.tape[inner.calls] = contract_record_1[:ind_count, :], ind_count
                 return T3
 
-            def contract_core_player_bac(self, T2, div, data=None, use_buf=False):
+            #@profile
+            def contract_core_player(self, T2, div, data=None, use_buf=False):
                 """
-                    see iTensor_Contraction2 in f90
-                    把T1，和T2的非零block 如果量子数组合相等则收缩
-                    locals:
-                        div: num. of legs to be contracted for each tensor
-                        buffer: use buffer to save data of T3
+                    
                 """
                 rank1 = self.rank
                 rank2 = T2.rank
@@ -456,34 +442,12 @@ def tensor_player(which):
                     common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                 else: 
                     common_util.contract_core_player_fort_complex(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                    #common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                    
-                return T3
-            
-            #@profile
-            def contract_core_player(self, T2, div, data=None, use_buf=False):
-                """
-                    see iTensor_Contraction2 in f90
-                    把T1，和T2的非零block 如果量子数组合相等则收缩
-                    locals:
-                        div: num. of legs to be contracted for each tensor
-                        buffer: use buffer to save data of T3
-                """
-                T3 = self.__class__(rank=None, QSp=None, totQN=None, buffer=data, use_buf=use_buf)
-                
-                rec, num_rec = inner.tape[inner.calls]
-                common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                 return T3
             
             def contract_core_player_parallel_1(self, T2, div, data=None, use_buf=False):
                 """
                 not work
                 a parallel version
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
                 """
                 if 0:
                     from . import tensor_py
@@ -534,11 +498,6 @@ def tensor_player(which):
             def contract_core_player_parallel_2(self, T2, div, data=None, use_buf=False):
                 """
                 this one worked but much slower
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
                 """
                 if 0:
                     from . import tensor_py
@@ -591,11 +550,6 @@ def tensor_player(which):
             def contract_core_player_parallel_3(self, T2, div, data=None, use_buf=False):
                 """
                 this one worked but much slower
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
                 """
                 if 0:
                     from . import tensor_py
@@ -794,8 +748,8 @@ def tensor_player(which):
                             "Qsp_copy":Qsp_copy_recorder
                             }
             player_dic = {  "data_entrance":data_entrance_player, 
-                            "contract": contract_core_player_bac, #contract_core_player_bac, 
-                            "permute":  permute_player_bac, #permute_player_bac, 
+                            "contract": contract_core_player, 
+                            "permute":  permute_player,
                             "group_legs":group_legs_player, 
                             "init":init_player, 
                             "Qsp_copy":Qsp_copy_player

@@ -343,16 +343,17 @@ def tensor_player(which):
                     
                 return Tp
 
-            def permute_player_bac(self, P, buffer=None, use_buf=False):
+            #@profile
+            def permute_player(self, P, buffer=None, use_buf=False):
                 rank = self.rank
                 
-                if 0:
-                    QSp=[self.QSp[P[i]].copy() for i in range(rank)]
-                    totQN = self.totQN.copy()
-                else:
-                    QSp=[self.QSp[P[i]] for i in range(rank)]
-                    totQN = self.totQN
+
+                #QSp=[self.QSp[P[i]].copy() for i in range(rank)]
+                #totQN = self.totQN.copy()
+                #copy is not needed
                 
+                QSp=[self.QSp[P[i]] for i in range(rank)]
+                totQN = self.totQN
                 
                 #since __init__ has been decorated, just do in following way                
                 Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
@@ -368,16 +369,6 @@ def tensor_player(which):
 
                 return Tp
 
-            #@profile
-            def permute_player(self, P, buffer=None, use_buf=False):
-                #since __init__ has been decorated, just do in following way                
-                Tp=self.__class__(rank=None, QSp=None, totQN=None, buffer=buffer, use_buf=use_buf)
-                
-                nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
-                array_permutation.permute_player_fort(self.rank, 
-                            tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)
-
-                return Tp
             
             def contract_core_recorder(self, T2, div, data=None, use_buf=False):
                 """
@@ -478,8 +469,21 @@ def tensor_player(which):
                 """
                 return tensor_player.the_tape[tensor_player.the_tape.calls][1] 
 
-            def contract_core_player_bac(self, T2, div, data=None, use_buf=False):
+            #@profile
+            def contract_core_player(self, T2, div, data=None, use_buf=False):
                 """
+                    I have tried to make the following parallel, using either python or fortran code.
+                    python:
+                        contract_core_player_parallel_1, 2, 3
+                        they are all slow
+                    fortran:
+                        contract_core_player_fort_paralell_critical,  result correct
+                        contract_core_player_fort_paralell_reduction,  result correct
+                        contract_core_player_fort_paralell_ordered,  result correct
+                        
+                        The results are all correct, but I don't remember why I
+                        did not use these parallel versions. I may check these out in future. 
+                    
                 """
                 rank1 = self.rank
                 rank2 = T2.rank
@@ -499,32 +503,18 @@ def tensor_player(which):
                 _, rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
                 if dtype == float:  
                     common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                    #common_util.contract_core_player_fort_paralell_critical(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                    #common_util.contract_core_player_fort_paralell_ordered(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                    #common_util.contract_core_player_fort_paralell_reduction(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                 else: 
                     common_util.contract_core_player_fort_complex(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                    #common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                     
-                return T3
-            
-            #@profile
-            def contract_core_player(self, T2, div, data=None, use_buf=False):
-                """
-                    
-                """
-                T3 = self.__class__(rank=None, QSp=None, totQN=None, buffer=data, use_buf=use_buf)
-                
-                rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
-                common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                 return T3
             
             def contract_core_player_parallel_1(self, T2, div, data=None, use_buf=False):
                 """
                 not work
                 a parallel version
-                see iTensor_Contraction2 in f90
-                把T1，和T2的非零block 如果量子数组合相等则收缩
-                locals:
-                    div: num. of legs to be contracted for each tensor
-                    buffer: use buffer to save data of T3
                 """
                 if 0:
                     from . import tensor_py
@@ -838,8 +828,8 @@ def tensor_player(which):
             player_dic = {  
                             'init':init_player, 
                             'data_entrance':data_entrance_player, 
-                            'contract': contract_core_player_bac, #contract_core_player_bac, 
-                            'permute':  permute_player_bac, #permute_player_bac, 
+                            'contract': contract_core_player, 
+                            'permute':  permute_player, 
                             'prepare_leg':prepare_leg_player,
                             'group_legs':group_legs_player, 
                             'Qsp_copy':Qsp_copy_player
