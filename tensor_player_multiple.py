@@ -345,7 +345,7 @@ def tensor_player(which):
 
             def permute_player_bac(self, P, buffer=None, use_buf=False):
                 rank = self.rank
-                #permute QSp, QNs
+                
                 if 0:
                     QSp=[self.QSp[P[i]].copy() for i in range(rank)]
                     totQN = self.totQN.copy()
@@ -353,10 +353,12 @@ def tensor_player(which):
                     QSp=[self.QSp[P[i]] for i in range(rank)]
                     totQN = self.totQN
                 
-                #Tp=self.__class__(rank, QSp, totQN,  buffer=buffer, use_buf=use_buf)
+                
+                #since __init__ has been decorated, just do in following way                
                 Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
                 
                 _, nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
+                
                 if self.data.dtype == float: 
                     array_permutation.permute_player_fort(
                                 tape_ind, tape_dim, tape_ord, self.data, Tp.data)
@@ -453,7 +455,11 @@ def tensor_player(which):
 
                         data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                         data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F') 
-                        data3=self.__class__.mul_temp(data1, data2, alpha, beta, dtype=dtype)
+                        #data3=self.__class__.mul_temp(data1, data2, alpha, beta, dtype=dtype)
+                        
+                        data3 = np.matmul(data1, data2, order='F', dtype=dtype)
+                        
+                        
                         T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
                 
                 tensor_player.the_tape[tensor_player.the_tape.calls] = ('contract', contract_record_1[:ind_count, :], ind_count)

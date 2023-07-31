@@ -2202,10 +2202,13 @@ class iTensor(TensorBase):
                     Dim1 = 1   #when shift = 1.0,  np.prod yields 1.0, should be converted to int 
                 data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                 
-                #T3.data[p3] = self.data[p1].dot(T2.data[p2])
+                
                 #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
                 #attention_may_be_not_efficient  这里学要为data3分配内存，能否直接在T3.data上操作？
-                data3=iTensor.mul_temp(data1, data2, alpha, beta, dtype=dtype)
+                
+                #data3=iTensor.mul_temp(data1, data2, alpha, beta, dtype=dtype)
+                
+                data3 = np.matmul(data1, data2, order='F', dtype=dtype)
                 
                 iQN3[0:shift] = iQN1[0:shift]  #iQN3[0] = 1 #!for rank=1
                 iQN3[shift:rank3] = iQN2[div:rank2]
