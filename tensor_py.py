@@ -44,6 +44,7 @@ import nose
 import warnings
 import pickle
 import pprint
+import time 
 import numpy as np
 import itertools 
 import math 
@@ -52,6 +53,8 @@ from multiprocessing import Pool
 #from common_util import get_num_of_threads
 #import common_util
 
+
+from scipy.linalg.blas import dgemm, sgemm, zgemm
 from numpy.lib.stride_tricks import as_strided
 import numpy.core.numeric as _nx
         
@@ -2098,7 +2101,7 @@ class iTensor(TensorBase):
         QSp=[self.QSp[P[i]] for i in range(rank)]   #no copy, faster
         totQN = self.totQN
 
-        Tp=iTensor(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
+        res=iTensor(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
 
         pos=np.empty(self.rank, int)
         Dims=np.empty(self.rank, int)
@@ -2108,41 +2111,32 @@ class iTensor(TensorBase):
         #warnings.warn("using array_permutation_np")
         for n  in range(self.nidx):
             
-            temp = self.get_block(n)
+            data = self.get_block(n)
             
             pos[0] = 0  # for rank=0
             pos[0:rank] = self.Addr_idx[0:rank,n]  # qn number index 
             pos_new = [pos[P[i]] for i in range(rank)]
-            data = Tp.get_block(pos_new)
-            Dims= np.asarray(self.get_block_shape(n), dtype=int)
-            
-            #attention_may_be_not_efficient  可以改成inplace 
-            #Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation_np(temp,rank,Dims,P)
-            
-            # 如果错误信息为 #error: failed in converting 5th argument `b' of array_permutation_64_ifort.array_permutation_fort_parallel to C/Fortran array
-            #则检查 Dims，其中可能包含了0维 
-            #print_vars(vars(),  ['temp.size', 'data.size'])
-            array_permutation.array_permutation_inplace(temp, self.rank, Dims, P, data)
-            
-            #Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation(temp,rank,Dims,P)
-            #try: 
-            #    array_permutation.array_permutation_inplace(temp, self.rank, Dims, P, data)
-            #    #Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation(temp,rank,Dims,P)
-            #except Exception as err:
-            #    msg = print_vars(vars(), [
-            #        'type(err)', 
-            #        'type(data)', 
-            #        'Dims', 
-            #        'P',  
-            #        'temp.size', 'data.size',  
-            #        'data.flags', 
-            #        ], head = 'additional err info:  ', return_str=1)
-            #    if not err.args: 
-            #               err.args=('',)
-            #    err.args = (err.args[0] + "\n"*2 + msg,)+err.args[1:]
-            #    raise 
+            data_p = res.get_block(pos_new)
+            shape = self.get_block_shape(n)
+            if 0:            
+                Dims= np.asarray(shape, dtype=int)
+                #attention_may_be_not_efficient  可以改成inplace 
+                #res.data_p[qidx:qidx+totDim]=array_permutation.array_permutation_np(data,rank,Dims,P)
+                # 如果错误信息为 #error: failed in converting 5th argument `b' of array_permutation_64_ifort.array_permutation_fort_parallel to C/Fortran array
+                #则检查 Dims，其中可能包含了0维 
+                array_permutation.array_permutation_inplace(data, self.rank, Dims, P, data_p)
+                
+            else:
+                #data = as_strided(data, shape)   # this seems not needed, because reshape should not allocate memory 
+                data1 = data.reshape(shape, order='F')
+                data2 = data1.transpose(P)
+                #note: reshape and transpose won't allocate memory, which can be checked by shares_memory. So this code is enough efficient.
+                #assert np.shares_memory(data, data1)
+                #assert np.shares_memory(data1, data2)
+                data_p[:] = data2.ravel(order='F')
+                
 
-        return Tp
+        return res
     
     #def transpose 
     transpose = permutation   # compatible with numpy 
@@ -2169,11 +2163,12 @@ class iTensor(TensorBase):
             QSp = []  #QSp = [self.QSp[0].null()]
         
         dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+        matmul_func = dgemm if dtype == float else zgemm  
+        
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
         T3.data[:]=0.0   #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
         
         nidx3 = 0
-        alpha = 1.0; beta=1.0
         iQN1=np.empty(self.rank + 1, int)
         iQN2=np.empty(T2.rank + 1, int)        
         iQN3=np.empty(T3.rank + 1, int) # +1 to avoid T3.rank=0
@@ -2181,149 +2176,43 @@ class iTensor(TensorBase):
         for idx2 in range(T2.nidx):
             iQN2[0] = 0  #!for rank=0
             iQN2[0:rank2] = T2.Addr_idx[0:rank2, idx2]
-            p2 = T2.Block_idx[0,idx2]
             if div == rank2: 
                 Dim2 = 1 
             else:
                 Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=int)
             Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=int)  # np.prod([])=1.0, so use dtype=np.int 
             
-            data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
+            data2 = T2.get_block(idx2)
+            data2 = data2.reshape((Dimc,Dim2), order='F')    
                 
             for idx1 in range(self.nidx):
                 iQN1[0] = 1 #!for rank=0
                 iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
-                p1 = self.Block_idx[0, idx1]
                 iseq = np.all(iQN1[shift:shift+div] == iQN2[0:div])  #注意这里写得不适当，准确地，如果是U1 symm 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定....写不清楚啊
                 if not iseq:  #如果量子数组合相等则收缩
                     continue
-                Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)])
                 if shift == 0: 
                     Dim1 = 1   #when shift = 1.0,  np.prod yields 1.0, should be converted to int 
-                data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
+                else:
+                    Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)])
                 
-                
-                #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
-                #attention_may_be_not_efficient  这里学要为data3分配内存，能否直接在T3.data上操作？
-                
-                #data3=iTensor.mul_temp(data1, data2, alpha, beta, dtype=dtype)
-                
-                data3 = np.matmul(data1, data2, order='F', dtype=dtype)
+                data1 = self.get_block(idx1)
+                data1 = data1.reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                 
                 iQN3[0:shift] = iQN1[0:shift]  #iQN3[0] = 1 #!for rank=1
                 iQN3[shift:rank3] = iQN2[div:rank2]
-                p3=T3.get_position(iQN3[:T3.rank])
-                idx3 = T3.idx[p3]
                 
-                p3 = T3.Block_idx[0,idx3]
-                T3.data[p3:p3+Dim1*Dim2] += data3.ravel('F')[:]   #attention_here  fortran order
                 
-                #t3data = T3.data[p3:p3+Dim1*Dim2] 
-                #data3 = data3.ravel("F")
-                #t3data  += data3   #attention_here  fortran order
-                #t3data = numexpr.evaluate("t3data + data3")
+                data3 = T3.get_block(iQN3[:T3.rank]).reshape((Dim1,Dim2), order='F')    
+                matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                
+                #T3_data = T3.get_block(iQN3[:T3.rank])
+                #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
+                #T3_data += data3.ravel('F')[:]   
+                    
         
         return T3
 
-    def contract_core_new(self, T2, div, data=None, use_buf=False):
-        """
-        status_1_uncheck
-        see iTensor_Contraction2 in f90
-        把T1，和T2的非零block 如果量子数组合相等则收缩
-        locals:
-            div: num. of legs to be contracted for each tensor
-            buffer: use buffer to save data of T3
-        """
-        
-        rank1 = self.rank
-        rank2=T2.rank
-        rank3=rank1+rank2-div-div
-        tQN = self.totQN+T2.totQN
-        shift = rank1-div
-
-        #QSp = [self.QSp[i].copy() for i in xrange(shift)]
-        #QSp.extend([T2.QSp[i].copy() for i in xrange(div, rank2)])
-        #copy is needless conceptially
-        QSp = self.QSp[:shift]
-        QSp.extend(T2.QSp[div:rank2])
-        
-        T3= iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
-        T3.data[:]=0.0
-        
-        #print "RRRR T3 ", T3.rank, "use_buff", use_buf, T3.use_buf
-        #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
-        #T3.data[:T3.totDim] = 0.0
-        
-        nidx3 = 0
-        alpha = 1.0; beta=1.0
-        iQN1=np.empty(self.rank,"int")
-        iQN2=np.empty(self.rank,"int")        
-        iQN3=np.empty(self.rank,"int")                
-        for idx2 in range(T2.nidx):
-            iQN2[0] = 0  #!for rank=0
-            iQN2[0:rank2]=T2.Addr_idx[0:rank2,idx2]
-            p2 = T2.Block_idx[0,idx2]
-            
-            Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)])
-            Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)])
-            
-            for idx1 in range(self.nidx):
-                iQN1[0] = 1 #!for rank=0
-                iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
-                p1 = self.Block_idx[0,idx1]
-                iseq = np.all(iQN1[shift:shift+div] == iQN2[0:div])
-                if not iseq:
-                    #如果量子数组合相等则收缩
-                    continue
-                Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)])
-                
-                iQN3[0] = 1 #!for rank=1
-                iQN3[0:shift] = iQN1[0:shift]
-                iQN3[shift:rank3] = iQN2[div:rank2]
-                p3=T3.get_position(iQN3[:T3.rank])
-                idx3 = T3.idx[p3]
-                p3 = T3.Block_idx[0,idx3]
-
-                data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
-                data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
-                
-                
-                #data3=T3.data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order="F")
-                #below doesn't work as data3.base is NOT longer T3.data 
-                #data3 = np.ndarray(Dim1*Dim2, order="F")
-                data3 = np.ndarray((Dim1, Dim2), order="F")
-                common_util.matrix_multiply_inplace(data1, data2, data3, alpha=1.0, beta=1.0) 
-                #common_util.matrix_multiply_inplace(data1, data2, T3.data[p3:p3+Dim1*Dim2], alpha=1.0, beta=1.0) 
-
-                #T3.data[p3] = self.data[p1].dot(T2.data[p2])
-                
-                #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
-                
-                #attention_may_be_not_efficient  这里学要为data3分配内存，能否直接在T3.data上操作？
-                #data3=iTensor.mul_temp(data1, data2, alpha, beta)
-
-                #T3.data[p3:p3+Dim1*Dim2]=data3.ravel()[:]
-                #T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
-                
-                #t3data = T3.data[p3:p3+Dim1*Dim2] 
-                #data3=common_util.matrix_multiply(data1, data2, alpha, beta)   #alpha beta here have no effect
-                #call dgemm('N', 'N', n, m, l, alpha, A, n, B, l, beta, C, n)
-
-                #data3 = data3.ravel("F")
-                #t3data  += data3   #attention_here  fortran order
-                #t3data = numexpr.evaluate("t3data + data3")
-
-                #print "iii",p3, data3, idx2, idx1,iQN1[:4],iQN2[:4],iQN3[:4],T3.data.round(4)
-
-        return T3
-
-    @staticmethod
-    def mul_temp(data1, data2, alpha, beta, dtype=float):
-        """ only for profiling"""
-        if dtype == float:  
-            return common_util.matrix_multiply(data1, data2, alpha, beta) 
-        else: 
-            return common_util.matrix_multiply_complex(data1, data2, alpha, beta) 
     
     def prepare_leg(self,T2, V1, V2, info=0):
         """
@@ -3774,7 +3663,6 @@ if 0:
             print(W.get_element([1, 1, 0], [0, 1, 0]))  #result is supposed to be 3.0
             print(W.get_element([1, 1, 0], [0, 0, 1]))  #result is supposed to be 4.0
         
-
         @classmethod
         def permutation_buffon(cls):
             #u=simple_itensor()[0]
@@ -4200,7 +4088,7 @@ class Test_iTensor(unittest.TestCase):
         print(tensor_player.the_tape.get(1))
         set_player_state_manual('stop')
        
-        for i in range(1, 2):
+        for i in range(1, 4):
             set_player_state_auto(iter=i, record_at=1, info=1)    
             t1 = iTensor.example(rank=4)
             t2 = iTensor.example(rank=4)
@@ -4240,6 +4128,34 @@ class Test_iTensor(unittest.TestCase):
         tp=t.permutation([1, 0])
         np.set_printoptions(4)
         print_vars(vars(),  ['t.to_ndarray()', 'tp.to_ndarray()'], '', ' ')
+    
+    def test_contract(self):
+        from merapy import qsp_any
+        if 0:
+            q0 = qsp_any('U1', [1, -1], [3, 4])
+            q1 = qsp_any('U1', [1, -1], [2, 1])
+            qsp = [q0, q1]
+            t = iTensor(QSp=qsp)
+            t.data[:] = np.arange(t.data.size)
+            t1 = t.conj()
+            res = t.contract(t1, [0, 1, ], [0, 5])
+            print_vars(vars(),  ['res.data'])
+            raise  
+            #res_old = np.asarray([245100., 262860., 280620., 298380., 316140., 262860., 296677., 330494., 364311., 398128.])
+            #self.assertTrue(np.all(res.data[:10]==res_old))
+       
+        if 1:
+            q = qsp_any('U1', [0, 1, -1], [5, 3, 2])
+            qsp = q.copy_many(3)
+            
+            t = iTensor(QSp=qsp)
+            t.data[:] = np.arange(t.data.size)
+            t1 = t.conj()
+            res = t.contract(t1, [0, 1, 3], [1, 0, 4])
+            res_old = np.asarray([245100., 262860., 280620., 298380., 316140., 262860., 296677., 330494., 364311., 398128.])
+            #print_vars(vars(),  ['res.data[:10]'])
+            self.assertTrue(np.all(res.data[:10]==res_old))
+        
     
     def test_to_ndarray(self): 
         q = QspZ2.easy_init([1, -1], [2, 2])
@@ -4641,7 +4557,47 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(np.allclose(t.data, t2.data))
             print_vars(vars(),  ['t.shape', 't2.shape'])
             self.assertTrue(t.shape==t2.shape)
-    
+
+    def test_tensor_player_performance_large_tensor(self):
+        from merapy.tensor_py import iTensor, qsp_any
+        #q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[20, 10, 10, 5, 5])
+        q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
+        q1 = q0.conj()
+        qsp = [q0, q0.copy(), q0.conj(), q0.conj()]
+        t = iTensor(QSp=qsp)
+        
+        N = 10
+        
+        t0 = time.time()
+        for i in range(N):
+            #print('i=', i)
+            t.transpose((1, 0, 3, 2))
+            t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
+        t1 = time.time()
+        
+        
+        for i in range(N):
+            #print('i=', i)
+            #set_player_state_auto(iter=i, record_at=1, info=1)    
+            set_player_state_auto(iter=i, record_at=0, info=0)
+            t.transpose((1, 0, 3, 2))
+            t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
+            #t.contract(t, [0, 1], [1, 2])
+        t2 = time.time()
+            
+        print_vars(vars(),  ['t1-t0'])
+        print_vars(vars(),  ['t2-t1'])
+        #tensor_player.STATE = 'stop'
+        print(TapeList[0])
+        print(tensor_player.the_tape.keys())
+
+        
+        set_player_state_manual('stop')
+            
+           
+        #tensor_player.STATE = 'stop'
+        
+
     def test_temp(self): 
         from merapy import QspZ2 
         
@@ -4796,7 +4752,7 @@ class Test_iTensor(unittest.TestCase):
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
-    if 1: 
+    if 0: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -4804,6 +4760,7 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         add_list_iTensor = [
            #'test_permutation', 
+           'test_contract', 
            #'test_to_ndarray', 
            #'test_rank_zero', 
            #'test_rank_zero_1', 
@@ -4826,7 +4783,8 @@ if __name__ == "__main__":
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
-           'test_temp', 
+           'test_tensor_player_performance_large_tensor', 
+           #'test_temp', 
         ]
         
         

@@ -14,17 +14,23 @@ import os, sys
 import unittest 
 import pickle as pickle
 import cProfile 
+import time 
 import numpy as np
 import pstats 
 import os.path
 import warnings
 #import pprocess
 
+
+from scipy.linalg.blas import dgemm, sgemm, zgemm
+
+
 #from merapy import common_util
 import merapy.common_util as common_util
 
 from merapy import array_permutation
 from merapy.context_util import redirect
+from merapy.utilities import save, print_vars
 
 
 num_of_instance = 0
@@ -184,7 +190,7 @@ def tensor_player(which):
 
                 if 1:                
                     self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()  #note1 
-                    self.buf_ref = np.array([-1, -1], np.int)
+                    self.buf_ref = np.array([-1, -1], np.int64)
                     if has_data:
                         if buffer is None and use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
                             buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2)  #else complex 
@@ -324,14 +330,20 @@ def tensor_player(which):
                     Dims[i] = self.QSp[i].Dims[pos[i]]
                     qidx = Tp.Block_idx[0,Tp.idx[np1]]            
                     
-                    temp= self.data[pidx:pidx+totDim]   #.copy()
+                    data = self.data[pidx:pidx+totDim]   #.copy()
                     
-                    #data = Tp.data[qidx:qidx+totDim]
-                    #array_permutation.array_permutation_inplace(temp, self.rank, Dims, P, data)
-                    Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation(temp,rank,Dims,P)
+                    if 0:
+                        #data = Tp.data[qidx:qidx+totDim]
+                        #array_permutation.array_permutation_inplace(temp, self.rank, Dims, P, data)
+                        Tp.data[qidx:qidx+totDim]=array_permutation.array_permutation(
+                                data, rank,Dims,P)
+                    else:
+                        data = data.reshape(Dims, order='F')
+                        data = np.transpose(data, axes=P)
+                        Tp.data[qidx:qidx+totDim]= data.ravel(order='F')
+                        
                     
-                    #record[n] = (qidx, pidx, totDim, Dims.copy())
-                    tape_ind[n][0:3] = [pidx, qidx, totDim]
+                    tape_ind[n][0:3] = (pidx, qidx, totDim)
                     tape_dim[n][:] = Dims[:rank]
                     tape_ord[n][:] = P[:rank]
                 if 0:
@@ -359,13 +371,22 @@ def tensor_player(which):
                 Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
                 
                 _, nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
-                
-                if self.data.dtype == float: 
-                    array_permutation.permute_player_fort(
-                                tape_ind, tape_dim, tape_ord, self.data, Tp.data)
-                else:  #complex 
-                    array_permutation.complex_permute_player_fort(
-                                tape_ind, tape_dim, tape_ord, self.data, Tp.data)
+                if 0:
+                    if self.data.dtype == float: 
+                        array_permutation.permute_player_fort(
+                                    tape_ind, tape_dim, tape_ord, self.data, Tp.data)
+                    else:  #complex 
+                        array_permutation.complex_permute_player_fort(
+                                    tape_ind, tape_dim, tape_ord, self.data, Tp.data)
+                else:
+                    for ind in range(nidx):
+                        pidx, qidx, totDim  = tape_ind[ind]
+                        dims = tape_dim[ind]
+                        P = tape_ord[ind]
+                        data = self.data[pidx:pidx+totDim]
+                        data = data.reshape(dims, order='F')
+                        data = np.transpose(data, axes=P)
+                        Tp.data[qidx:qidx+totDim] = data.ravel(order='F')
 
                 return Tp
 
@@ -378,10 +399,6 @@ def tensor_player(which):
                         div: num. of legs to be contracted for each tensor
                         buffer: use buffer to save data of T3
                 """
-                
-                #contract_record_1 = {}
-                contract_record_1 = np.ndarray((self.nidx*T2.nidx, 6), np.int)
-                ind_count = 0
                 
                 rank1 = self.rank
                 rank2=T2.rank
@@ -403,6 +420,7 @@ def tensor_player(which):
                     QSp = []
 
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+                matmul_func = dgemm if dtype == float else zgemm  
                 
                 T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf, dtype=dtype)
                 T3.data[:]=0.0
@@ -412,6 +430,11 @@ def tensor_player(which):
                 iQN1=np.empty(self.rank + 1, np.int)
                 iQN2=np.empty(T2.rank + 1, np.int)        
                 iQN3=np.empty(T3.rank + 1, np.int) # +1 to avoid T3.rank=0
+                
+                ind_count = 0
+                
+                contract_record = np.ndarray((self.nidx*T2.nidx, 6), np.int)
+                
 
                 for idx2 in range(T2.nidx):
                     iQN2[0] = 0  #!for rank=0
@@ -420,6 +443,7 @@ def tensor_player(which):
                     
                     Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
                     Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=np.int)
+                    data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F') 
                     
                     for idx1 in range(self.nidx):
                         iQN1[0] = 1 #!for rank=0
@@ -438,37 +462,25 @@ def tensor_player(which):
                         idx3 = T3.idx[p3]
                         p3 = T3.Block_idx[0,idx3]
                         
-                        contract_record_1[ind_count][:] = (p1, p2, p3, Dim1, Dim2, Dimc)
+                        contract_record[ind_count][:] = (p1, p2, p3, Dim1, Dim2, Dimc)
                         ind_count  += 1  
-                        #contract_record_1[idx2, idx1] = np.array((p1, p2, p3, Dim1, Dim2, Dimc), np.int)
-                        #contract_record_1[idx2, idx1] = (p1, p2, p3, Dim1, Dim2, Dimc)
                 
 
                         data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
-                        data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F') 
-                        #data3=self.__class__.mul_temp(data1, data2, alpha, beta, dtype=dtype)
                         
-                        data3 = np.matmul(data1, data2, order='F', dtype=dtype)
+                        data3 = T3.data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
+                        matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                        
+                        #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
+                        #T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')  
                         
                         
-                        T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')[:]   #attention_here  fortran order
                 
-                tensor_player.the_tape[tensor_player.the_tape.calls] = ('contract', contract_record_1[:ind_count, :], ind_count)
+                tensor_player.the_tape[tensor_player.the_tape.calls] = (
+                        'contract', contract_record[:ind_count, :], ind_count)
                 #print('xxxxxxxxxx contr', tensor_player.the_tape.calls)
                 return T3
         
-            def prepare_leg_recorder(self,T2, V1, V2, info=0):
-                """
-                """
-                res = func(self, T2, V1, V2, info)
-                tensor_player.the_tape[tensor_player.the_tape.calls] = ('prepare', res)
-                return res
-
-            def prepare_leg_player(self,T2, V1, V2, info=0):
-                """
-                """
-                return tensor_player.the_tape[tensor_player.the_tape.calls][1] 
-
             #@profile
             def contract_core_player(self, T2, div, data=None, use_buf=False):
                 """
@@ -483,6 +495,10 @@ def tensor_player(which):
                         
                         The results are all correct, but I don't remember why I
                         did not use these parallel versions. I may check these out in future. 
+                    UPDATE: actually,  in practice the parallel version may be slower,  so not needed. 
+                        The reason is that the sizes of the data blocks are
+                        very inhomogenous, so the lagest data block would be
+                        bottle neck. 
                     
                 """
                 rank1 = self.rank
@@ -499,18 +515,47 @@ def tensor_player(which):
                     QSp = [self.QSp[0].null()]
                     
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
+                matmul_func = dgemm if dtype == float else zgemm  
                 T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
+                T3.data[:]=0.0
+                
                 _, rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
-                if dtype == float:  
-                    common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                    #common_util.contract_core_player_fort_paralell_critical(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                    #common_util.contract_core_player_fort_paralell_ordered(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                    #common_util.contract_core_player_fort_paralell_reduction(self.data, T2.data, T3.data, rec, num_rec=num_rec)
-                else: 
-                    common_util.contract_core_player_fort_complex(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                
+                if 0:
+                    if dtype == float:  
+                        common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                        #common_util.contract_core_player_fort_paralell_critical(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                        #common_util.contract_core_player_fort_paralell_ordered(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                        #common_util.contract_core_player_fort_paralell_reduction(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                    else: 
+                        common_util.contract_core_player_fort_complex(self.data, T2.data, T3.data, rec, num_rec=num_rec)
+                
+                if 1:
+                     for ind in range(num_rec):
+                        p1, p2, p3, Dim1, Dim2, Dimc = rec[ind]
+                        data1 = self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
+                        data2 = T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
+                        data3 = T3.data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
+                        matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                        
+                        #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
+                        #T3.data[p3:p3+Dim1*Dim2] += data3.ravel('F') 
+                        
                     
                 return T3
             
+            def prepare_leg_recorder(self,T2, V1, V2, info=0):
+                """
+                """
+                res = func(self, T2, V1, V2, info)
+                tensor_player.the_tape[tensor_player.the_tape.calls] = ('prepare', res)
+                return res
+
+            def prepare_leg_player(self,T2, V1, V2, info=0):
+                """
+                """
+                return tensor_player.the_tape[tensor_player.the_tape.calls][1] 
+
             def contract_core_player_parallel_1(self, T2, div, data=None, use_buf=False):
                 """
                 not work
@@ -977,10 +1022,84 @@ def set_STATE_end_simple(iter,  record_at=0, resume=False, power_on=True):
 class TestIt(unittest.TestCase): 
     def setUp(self): 
         pass 
+        from merapy.tensor_py import iTensor, qsp_any
+        #the following line is required 
+        iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
+        self.iTensor = iTensor 
     
     def test_tensor_player(self): 
-        from merapy.tensor_py import iTensor 
+        from merapy import qsp_any
+        iTensor = self.iTensor
+        q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
+        q1 = q0.conj()
+        qsp = [q0, q1]
+        t = iTensor(QSp=qsp)
+        np.random.seed(3333)
+        t.data = 2*(np.random.random(t.size) -0.5)
+        
+        N = 5
+        t0 = time.time()
+        for i in range(N):
+            print('i=', i)
+            set_player_state_auto(iter=i, record_at=0, info=1)
+            t=t.dot(t)
+        t1 = time.time()
+        print_vars(vars(),  ['t.data'], round=10)
+        print_vars(vars(),  ['t.norm()'])
+        self.assertAlmostEqual(t.norm(), 0.38622236988000797, 10)
+        print(tensor_player.the_tape.keys())
+        set_player_state_manual('stop')
+        tensor_player.STATE = 'stop'
+            
+        #TapeList[0].reset()
+    
+    def xtest_tensor_player_performance(self):
+        from merapy import qsp_any
+        iTensor = self.iTensor
+        #from merapy.tensor_py import iTensor, qsp_any
+        #print_vars(vars(),  ['TapeList[0]'])
+        #TapeList[0].reset()
+
+        # the following line is required 
+        #iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
+        Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[200, 100, 100, 50, 50])
+        #Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
+        Dr = Dl.conj()
+        d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
+        qsp = [Dl, Dr, d]
+        t = iTensor(QSp=qsp)
+        tc = t.conj()
+        
+        N = 100
+        
+        t0 = time.time()
+        for i in range(N):
+            #print('i=', i)
+            
+            t.contract(tc, [0, 1, 2], [3, 1, 2])
+        t1 = time.time()
+        
+        TapeList[1] = Tape()   #construct a default tape
+
+        for i in range(N):
+            #print('i=', i)
+            set_player_state_auto(iter=i, record_at=0, tape_id=1,  info=0)
+            t.contract(tc, [0, 1, 2], [3, 1, 2])
+            
+        t2 = time.time()
+            
+        print_vars(vars(),  ['t1-t0'])
+        print_vars(vars(),  ['t2-t1'])
+        tensor_player.STATE = 'stop'
+        #print(TapeList[0])
+        print(tensor_player.the_tape.keys())
+
+        
+        set_player_state_manual('stop')
+            
            
+        #tensor_player.STATE = 'stop'
+        
     
     def test_temp(self): 
         from merapy.tensor_py import iTensor 
@@ -1010,15 +1129,16 @@ class TestIt(unittest.TestCase):
 if __name__ == "__main__":
 
 
-    #warnings.filterwarnings('ignore')
+    warnings.filterwarnings('ignore')
     if 0:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     else: 
         suite = unittest.TestSuite()
         add_list = [
-        #'test_tensor_player', 
-        'test_temp', 
+        'xtest_tensor_player_performance', 
+        'test_tensor_player', 
+        #'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
