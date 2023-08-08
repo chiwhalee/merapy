@@ -18,7 +18,7 @@ try:
 except:
     warnings.warn('config_local.py not found')
 
-
+# add a line test git push
 
 #LOCAL_IP = '210.45.74.88'
 #LOCAL_USERNAME = 'zhli' 
