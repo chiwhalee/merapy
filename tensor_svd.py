@@ -583,11 +583,9 @@ class iTensor_rank2_operation(object):
             for i in range(3): 
                 temp[i] = temp[i][arg_large]
             
-            #print_vars(vars(),  ['temp[0]'], round=10)
-            
             sum_tot = np.sum(temp0_abs)  # if rho is not corrected sum_tot=1.0
             trunc_err = 1-np.sum(np.abs(temp[0]))/sum_tot
-            #print_vars(vars(),  ['trunc_err'])
+            
                 
             empty_list = []
             for i in range(len(dim_list)): 
@@ -601,34 +599,38 @@ class iTensor_rank2_operation(object):
                         empty_list.append(i)
                     dim_list_trunc[i] = D 
                 else: # qsp_guide does not work, delete this in future
+                    raise # below is deprecated
                     qn = qn_list_r[i]
                     try:
                         ii = qsp_guide.QNs.index(qn)
                         D_ref = qsp_guide.Dims[ii]
                     except ValueError:
                         D_ref = 0
-                    D_full = dim_list[i]
-                    D_trunc = D_full - D
-                    if D_ref > D_trunc:
-                        #####
-                            #   <---------D_full---------------------->
-                            #                      |                 
-                            #                      |                   
-                            #   <----D------------>|<-----D_trunc----->
-                            #                      |                    
-                            #                      |                   
-                            #                 |    |                   
-                            #   <---D1------->|<-------D_ref----------->
-                            #                 |   
-                            #                 |   
-                        if D_full >= D_ref:
-                            D1 = D_full-D_ref
-                        else:
-                            D1 = 0
-                    elif D_ref <= D_trunc:  # this is identicle to no qsp_guide
-                        D1 = D
-                    
-                    #print_vars(vars(),  ['qn', 'ii','D', 'D1', 'D_full',  'D_ref', 'D_trunc',  'qn_list_r',  'qsp_guide'])
+                    if 0: # this way is of no use, it will never trunc 
+                        D_full = dim_list[i]
+                        D_trunc = D_full - D
+                        if D_ref > D_trunc:
+                            #####
+                                #   <---------D_full---------------------->
+                                #                      |                 
+                                #                      |                   
+                                #   <----D------------>|<-----D_trunc----->
+                                #                      |                    
+                                #                      |                   
+                                #                 |    |                   
+                                #   <---D1------->|<-------D_ref----------->
+                                #                 |   
+                                #                 |   
+                            if D_full >= D_ref:
+                                D1 = D_full-D_ref
+                            else:
+                                D1 = 0
+                        elif D_ref <= D_trunc:  # this is identicle to no qsp_guide
+                            D1 = D
+                        #print_vars(vars(),  ['qn', 'ii','D', 'D1', 'D_full',  'D_ref', 'D_trunc',  'qn_list_r',  'qsp_guide'])
+                    if 1: # this is no right either,  it over truncated
+                        D1 = D-D_ref if D>D_ref else 0
+                        print_vars(vars(),  ['D1', 'D', 'D_ref'], color='red')
                     if D1 > 0: 
                         ind = ind[:D1]  # only retain those exceeding D_ref
                         VAL[i] = VAL[i][ind]
