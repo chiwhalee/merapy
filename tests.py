@@ -20,6 +20,9 @@ from merapy.tensor_factory import TestIt as Test_iTensorFactory
 from merapy.tensor_svd import TestIt as Test_svd 
 from merapy.common_util import TestCommon 
 from merapy.decorators import TestIt as Test_decorators 
+
+#from merapy.tensor_player_multiple import TestIt as Test_tensor_player   # this will raise
+
 import platform 
 
 #suite = unittest.TestLoader().loadTestsFromTestCase(TestTensor)

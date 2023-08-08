@@ -294,7 +294,6 @@ class iTensor(TensorBase):
                 if isinstance(buffer, cp.ndarray):
                     buffer = buffer.data 
                 self.data = cp.ndarray(self.totDim, memptr=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
-                
     
     def __setstate__(self, d): 
         self.__dict__.update(d)
@@ -1829,7 +1828,8 @@ class iTensor(TensorBase):
         
         #print_vars(vars(), ['leg_map', 'len(qsp)']); raise 
         
-        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
+        res = iTensor(QSp=qsp, totQN=self.totQN.copy(), 
+                dtype=self.dtype, use_gpu=self.use_gpu)
         #print_vars(vars(),  ['self.data.dtype'], '', '  ')
         t2 = self
         t3 = res 
@@ -1969,7 +1969,8 @@ class iTensor(TensorBase):
         #print_vars(vars(),  ['qsp'])
         
         
-        t2 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
+        t2 = iTensor(QSp=qsp, totQN=self.totQN.copy(), 
+                dtype=self.dtype, use_gpu=self.use_gpu)
         t3 = self
         t3ind = list(range(t3.nidx))
         for i in range(t2.nidx): 
@@ -2054,7 +2055,9 @@ class iTensor(TensorBase):
             common2, common3 = 0, 0 
         #assert self.qsp_class.prod_many(qsp_list)==self.QSp[which]   #use when debug 
         t2 = self 
-        t3 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
+        t3 = iTensor(QSp=qsp, totQN=self.totQN.copy(), 
+                dtype=self.dtype, use_gpu=self.use_gpu)
+        #print_vars(vars(),  ['t3.device'])
         jj = list(range(t3.nidx))
         for i in range(t2.nidx): 
             qn_id_tuple_2 = t2.Addr_idx[:, i]
@@ -2100,7 +2103,8 @@ class iTensor(TensorBase):
             qsp = [q0, qm]
             common2, common3 = 0, 0
                 
-        t2 = iTensor(QSp=qsp, totQN=self.totQN.copy(), dtype=self.dtype)
+        t2 = iTensor(QSp=qsp, totQN=self.totQN.copy(), 
+                dtype=self.dtype, use_gpu=self.use_gpu)
         t3 = self
         jj = list(range(t3.nidx))
         for i in range(t2.nidx): 
@@ -2142,8 +2146,8 @@ class iTensor(TensorBase):
         rank = self.rank
         QSp=[self.QSp[P[i]] for i in range(rank)]   #no copy, faster
         totQN = self.totQN
-
-        res=iTensor(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
+        res=iTensor(rank, QSp, totQN, buffer=buffer, 
+                dtype=self.dtype, use_buf=use_buf, use_gpu=self.use_gpu)
 
         pos=np.empty(self.rank, int)
         Dims=np.empty(self.rank, int)
@@ -3412,15 +3416,6 @@ class iTensor(TensorBase):
     @property
     def device(self):
         return 'cpu' if isinstance(self.data, np.ndarray) else 'gpu'
-   
-   
-
-class Tensor_del(iTensor, nTensor): 
-    def __new__(cls, qsp, tot_qn=None): 
-        pass 
-    
-    def __init__(self, qsp): 
-        pass 
 
 if 0:
     class test_iTensor(object):
@@ -4525,45 +4520,26 @@ class Test_iTensor(unittest.TestCase):
             print_vars(vars(),  ['t.shape', 't2.shape'])
             self.assertTrue(t.shape==t2.shape)
 
-    def xtest_tensor_player_performance_large_tensor(self):
-        from merapy.tensor_py import iTensor, qsp_any
-        #q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[20, 10, 10, 5, 5])
-        q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
-        q1 = q0.conj()
-        qsp = [q0, q0.copy(), q0.conj(), q0.conj()]
-        t = iTensor(QSp=qsp)
+    def test_itensor_gpu(self):
+        try:
+            type(cp)
+        except:
+            print('cupy not installed, return')
+            return 
+        Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=[10, 5, 5, ])
+        Dr = Dl.conj()
+        d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
+        qsp = [Dl, Dr, d]
+        use_gpu = 1
+        t = iTensor(QSp=qsp, use_gpu=use_gpu)
+        assert t.device == 'gpu' 
+        tp = t.transpose((0, 2, 1))
+        self.assertTrue(tp.device=='gpu')
         
-        N = 10
-        
-        t0 = time.time()
-        for i in range(N):
-            #print('i=', i)
-            t.transpose((1, 0, 3, 2))
-            t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
-        t1 = time.time()
-        
-        
-        for i in range(N):
-            #print('i=', i)
-            #set_player_state_auto(iter=i, record_at=1, info=1)    
-            set_player_state_auto(iter=i, record_at=0, info=0)
-            t.transpose((1, 0, 3, 2))
-            t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
-            #t.contract(t, [0, 1], [1, 2])
-        t2 = time.time()
-            
-        print_vars(vars(),  ['t1-t0'])
-        print_vars(vars(),  ['t2-t1'])
-        #tensor_player.STATE = 'stop'
-        #print(TapeList[0])
-        print(tensor_player.the_tape.keys())
-
-        
-        set_player_state_manual('stop')
-            
-           
-        #tensor_player.STATE = 'stop'
-        
+        t2 = t.merge_qsp((1, 2))
+        t3 = t2.split_qsp(1, (Dr, d))
+        self.assertTrue(t==t3)
+    
 
     def test_temp(self): 
         if 1:
@@ -4728,7 +4704,7 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         add_list_iTensor = [
            #'test_permutation', 
-           'test_contract', 
+           #'test_contract', 
            #'test_to_ndarray', 
            #'test_rank_zero', 
            #'test_rank_zero_1', 
@@ -4751,8 +4727,8 @@ if __name__ == "__main__":
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
-           #'xtest_tensor_player_performance_large_tensor', 
-           'test_temp', 
+           'test_itensor_gpu'
+           #'test_temp', 
         ]
         
         

@@ -362,7 +362,8 @@ def tensor_player(which):
                                 data, rank,Dims,P)
                     else:
                         data = data.reshape(Dims, order='F')
-                        data = np.transpose(data, axes=P)
+                        #data = np.transpose(data, axes=P)
+                        data = data.transpose(P)
                         Tp.data[qidx:qidx+totDim]= data.ravel(order='F')
                         
                     
@@ -408,7 +409,8 @@ def tensor_player(which):
                         P = tape_ord[ind]
                         data = self.data[pidx:pidx+totDim]
                         data = data.reshape(dims, order='F')
-                        data = np.transpose(data, axes=P)
+                        #data = np.transpose(data, axes=P)
+                        data = data.transpose(P)
                         Tp.data[qidx:qidx+totDim] = data.ravel(order='F')
 
                 return Tp
@@ -1065,20 +1067,27 @@ class TestIt(unittest.TestCase):
     
     @classmethod 
     def setUpClass(cls):
-        
         from merapy.tensor_py import iTensor, qsp_any
         #the following line is required 
         iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
         cls.iTensor = iTensor 
-        print(TapeList[0])
+        #tape = Tape()
+        #TapeList['ttt'] = tape 
+        #cls.tape = tape 
+        #print(TapeList[0])
     
-    def xsetUp(self): 
-        pass 
-        from merapy.tensor_py import iTensor, qsp_any
-        #the following line is required 
-        iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
-        self.iTensor = iTensor 
-        print(TapeList[0])
+    def setUp(self): 
+        #TapeList[0].reset()
+        #self.__class__.tape.reset()
+        set_player_state_manual('stop', tape_id=0)
+        #set_player_state_manual('stop', tape_id='ttt')
+        tensor_player.STATE = 'stop'
+    
+    def tearDown(self):
+        #self.__class__.tape.reset()
+        set_player_state_manual('stop', tape_id=0)
+        #set_player_state_manual('stop', tape_id='ttt')
+        tensor_player.STATE = 'stop'
  
     def test_tensor_player(self): 
         from merapy import qsp_any
@@ -1107,10 +1116,76 @@ class TestIt(unittest.TestCase):
         tensor_player.STATE = 'stop'
             
         TapeList[0].reset()
+
+    def test_tensor_player_gpu(self): 
+        from merapy import qsp_any
+        #iTensor = TestIt.iTensor
+        iTensor = self.__class__.iTensor
+        try:
+            type(cp)
+        except:
+            print('cupy not installed, return')
+            return 
+        
+        Dl = qsp_any('U1', qns=[0, 1, -1, ], 
+                dims=[200, 130, 130, ])
+        #Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
+        Dr = Dl.conj()
+        d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
+        qsp = [Dl, Dr, d]
+        
+        use_gpu = 1
+        t = iTensor(QSp=qsp, use_gpu=use_gpu)
+        tc = t.conj()
+        
+        N = 10
+        for i in range(N):
+            print_vars(vars(),  ['i'])
+            set_player_state_auto(iter=i, record_at=0, tape_id=0,  info=0)
+            res=t.contract(tc, [0, 1, 2], [1, 3, 2])
+            #t.transpose((0, 2, 1))
+        assert res.device == 'gpu'  
+
+    def test_tensor_player_2(self):
+        from merapy import qsp_any
+        iTensor = self.__class__.iTensor
+        #q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[20, 10, 10, 5, 5])
+        q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
+        q1 = q0.conj()
+        qsp = [q0, q0.copy(), q0.conj(), q0.conj()]
+        t = iTensor(QSp=qsp)
+        
+        N = 10
+        
+        t0 = time.time()
+        for i in range(N):
+            #print('i=', i)
+            t.transpose((1, 0, 3, 2))
+            t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
+        t1 = time.time()
+        
+        
+        for i in range(N):
+            #print('i=', i)
+            #set_player_state_auto(iter=i, record_at=1, info=1)    
+            set_player_state_auto(iter=i, record_at=0, tape_id='ttt',  info=0)
+            t.transpose((1, 0, 3, 2))
+            t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
+            #t.contract(t, [0, 1], [1, 2])
+        t2 = time.time()
+            
+        print_vars(vars(),  ['t1-t0'])
+        print_vars(vars(),  ['t2-t1'])
+        #tensor_player.STATE = 'stop'
+        #print(TapeList[0])
+        #print(tensor_player.the_tape.keys())
+        
+        set_player_state_manual('stop', tape_id='ttt')
+            
+           
+        #tensor_player.STATE = 'stop'
     
     def test_tensor_player_performance(self):
-       
-        
         if 0:
             n, m = 150, 100
             a=cp.random.random((n, m))
@@ -1179,10 +1254,8 @@ class TestIt(unittest.TestCase):
         TapeList[0].reset()
            
         #tensor_player.STATE = 'stop'
-        
     
     def test_temp(self): 
-        
         print(dir(cublas))
         
         dgemm  =  cublas.gemm
@@ -1230,8 +1303,10 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-        'test_tensor_player_performance', 
-        'test_tensor_player', 
+        #'test_tensor_player_performance', 
+        #'test_tensor_player', 
+        'test_tensor_player_gpu', 
+        #'test_tensor_player_2', 
         #'test_temp', 
         ]
         for a in add_list: 
