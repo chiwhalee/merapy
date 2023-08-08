@@ -29,6 +29,7 @@ from operator import itemgetter
 import time
 import scipy.integrate
 
+
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.lines import Line2D
@@ -53,6 +54,7 @@ from scipy.optimize import curve_fit
 from scipy.special import sici
 import unittest
 from numpy import inf
+import textwrap
 
 from IPython.display import display
 
@@ -103,18 +105,7 @@ def set_matplotlib_style():
     #mpl.rcParams['legend.frameon'] = False  # whether or not to draw a frame around legend   
     v = mpl.__version__
     #if platform.system()=='Windows':
-    if v<'2.0.0':
-        raise  
-        MATPLOTLIBRC = {
-            u'grid.linestyle':'dotted', 
-            #'legend.alpha': 0,    # this will make the box totally transanalysis_class 
-            #'legend.edge_color': 'white',   # this will make the edges of the border white to match the background instead 
-            'legend.frameon': 0,# whether or not to draw a frame around legend    
-            'savefig.bbox': 'tight',  # default value is 'standard', it make figure craped when save 
-            'figure.facecolor': 'white', 
-            u'axes.titlesize':'x-large',
-            }
-    else:
+    if 1:
         MATPLOTLIBRC = {
             'axes.grid':1, 
             u'legend.fontsize':'large', 
@@ -135,7 +126,7 @@ def set_matplotlib_style():
     mpl.rcParams.update(MATPLOTLIBRC)
     
     #print Line2D.marker
-    marker_cycle = itertools.cycle(Line2D.markers)
+    #marker_cycle = itertools.cycle(Line2D.markers)
     ## for reference 
     {
          None: 'nothing',
@@ -189,6 +180,8 @@ def set_matplotlib_style():
 MARKER_LIST, MARKER_CYCLE, MATPLOTLIBRC = set_matplotlib_style()
 
 
+
+
 class AnalysisTools(object): 
     """
         an abstract base calss 
@@ -228,7 +221,7 @@ class AnalysisTools(object):
         return arg 
     
     @staticmethod 
-    def fit_curve(x, y, func, p0=None, method='lm', fit_range=None): 
+    def fit_curve(x, y, func, p0=None, bounds=None,  method='lm', fit_range=None): 
         """
             just a wrapper 
             about curve_fit:
@@ -243,8 +236,10 @@ class AnalysisTools(object):
         #param, cov = curve_fit(func, x, y)    
         #res = func, param, cov 
         res= None
+        if bounds is None:
+            bounds=(-np.inf, np.inf)
         try:
-            param, cov = curve_fit(func, x, y, p0=p0, method=method)    
+            param, cov = curve_fit(func, x, y, p0=p0, bounds=bounds,  method=method)    
             res = func, param, cov 
         except RuntimeError as err:
             warnings.warn(str(err))
@@ -255,20 +250,20 @@ class AnalysisTools(object):
             raise  
         return res
     
-    def fit_line(self, line, func=None, data=None, x_min=None, x_max=None, 
-            x_extra=None, plot_range=None,  period=None, x1=None, p0=None, method='lm'):
-        if isinstance(func, str): 
-            if func == 'EE_vs_L' : 
-                func = lambda x, c, a: c/6.*np.log(x) + a
-            elif func  == 'EE_vs_D': 
-                #c=12*(1./k - 1)**(-2); k=1/(math.sqrt(12/c) + 1)
-                #func = lambda x, c, a:  1/(math.sqrt(12/c) + 1)*np.log(x) + a 
-                func = lambda x, k, a: k*np.log(x) + a 
-            elif func == 'power' : 
-                #func = lambda x, k, eta: k*x**(eta)
-                func = lambda x, eta, k: k*x**(-eta)
-            else: 
-                raise 
+    def fit_line(self, line, func=None, data=None, x_min=None, x_max=None, plot_fit=True, 
+            x_extra=None, plot_range=None,  period=None, x1=None, p0=None, bounds=None,  method='lm', **kwargs):
+        #if isinstance(func, str): 
+        #    if func == 'EE_vs_L' : 
+        #        func = lambda x, c, a: c/6.*np.log(x) + a
+        #    elif func  == 'EE_vs_D': 
+        #        #c=12*(1./k - 1)**(-2); k=1/(math.sqrt(12/c) + 1)
+        #        #func = lambda x, c, a:  1/(math.sqrt(12/c) + 1)*np.log(x) + a 
+        #        func = lambda x, k, a: k*np.log(x) + a 
+        #    elif func == 'power' : 
+        #        #func = lambda x, k, eta: k*x**(eta)
+        #        func = lambda x, eta, k: k*x**(-eta)
+        #    else: 
+        #        raise 
         if data is not None:
             x, y = list(zip(*data))
         else:
@@ -276,12 +271,44 @@ class AnalysisTools(object):
         x = np.copy(x)
         y = np.copy(y)
         x = x.astype(float); y=y.astype(float)
+        
         arg = self.filter_array(x, x_min, x_max, period, x1)
         x = x[arg]
         y = y[arg]
         if len(x) ==0 or len(y)==0:
             return None
-        temp = self.__class__.fit_curve(x, y, func, p0=p0, method=method)
+        if func in ['exp', 'log', 'power', 'linear'] :   #note that polyfit is not identicle to scipy.curve_fit ins some cases 
+            if func == 'log':
+                x_ = np.log(x)   # y = a*ln(x)
+                temp = np.polyfit(x_, y, deg=1)
+                k, b = temp[0],  temp[1]
+                func_ = lambda x0, k, b: k*np.log(x0)  + b
+                param = (k, b)
+            elif func == 'exp' :   # y = a*e**(k*x)
+                y_ = np.log(y)
+                temp = np.polyfit(x, y_, deg=1)
+                k, lna = temp
+                func_ = lambda x, k, a: a*np.exp(k*x)
+                a = np.exp(lna)
+                param = (k, a)
+            elif func == 'power' :   # y = a*x**k 
+                x_, y_ = np.log(x), np.log(y)
+                temp = np.polyfit(x_, y_, deg=1)
+                k, lna = temp
+                a = np.exp(lna)
+                func_ = lambda x, k, a: a*x**k 
+                param = (k, a)
+            elif func == 'linear':
+                temp = np.polyfit(x, y, deg=1)
+                k, a = temp
+                func_ = lambda x, k, a: k*x  +  a
+                param = (k, a)
+                
+            temp = func_, param, None
+            if bounds is not None:
+                raise ValueError('bounds not used in np.polyfit')
+        else:
+            temp = self.__class__.fit_curve(x, y, func, p0=p0, bounds=bounds,  method=method)
         if temp is None:
             return None
         else:
@@ -308,7 +335,30 @@ class AnalysisTools(object):
                 x = np.append(x, b)
         
         y_fit = func_(x, *param)
-        res = {'param': param, 'cov': cov, 'func': func, 'x': x, 'y': y_fit}
+        if 1:
+            n  = func_.__code__.co_argcount -1
+            names  =  func_.__code__.co_varnames[1:]
+            dic = [(names[i], param[i]) for i in range(n)]
+            dic = OrderedDict(dic)
+            param = dic 
+            
+        res = {'param': param, 'cov': cov, 'func': func_, 'x': x, 'y': y_fit}
+        
+        if plot_fit: 
+            args = kwargs.copy()
+            color = kwargs['color'] if 'color' in kwargs else line.get_color()
+            marker = kwargs.get('marker', None)
+            args.update(color=color, marker=marker)
+            #print_vars(vars(),  ['args'])
+            #_ = self._plot.im_func(None, res['x'], res['y'], 
+            #        ax=ax, color=l.get_color(), label='', marker=None)        
+            _ = self._plot.__func__(None, res['x'], res['y'], 
+                    **args)
+            #if x_extra is not None:
+            #    tic= ax.get_xticks().tolist()
+            #    print_vars(vars(),  ['tic'])
+            #    pass
+        
         return res 
     
     def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
@@ -319,35 +369,34 @@ class AnalysisTools(object):
                 
         """
         ll = list(ax.lines)
-        which_lines = list(range(len(ll))) if which_lines is None else which_lines 
-        #for l in ax.lines[:len(aa)]:
+        #which_lines = list(range(len(ll))) if which_lines is None else which_lines 
+        #which_lines = list(range(len(ll))) if which_lines is None else which_lines 
+        if which_lines is not None:
+            if isinstance(which_lines[0], int):
+                ll = [ll[i] for i in which_lines]
+            elif isinstance(which_lines[0], mpl.lines.Line2D):
+                ll = which_lines
+            else:
+                raise  
+        
         temp = []
         fit_line_args= {a: kwargs.get(a) for a in 
-                ['x_min', 'x_max', 'x_extra', 'period', 'x1'] }
-        fit_line_args.update(x_extra=x_extra, plot_range=plot_range)
-        for i, l in enumerate(ll): 
-            if not i in which_lines: 
-                continue 
+                ['x_min', 'x_max', 'x_extra', 'period', 'x1', 'p0', 'bounds', 'method'] }
+        fit_line_args.update(x_extra=x_extra, plot_range=plot_range, plot_fit=False)
+        #for i, l in enumerate(ll): 
+        #    if not i in which_lines: 
+        #        continue 
+        for l in ll:
             try: 
                 a=eval(l.get_label())#[0]
             except: 
                 a = None 
-            if 0:
-                try: 
-                    res=self.fit_line(l, func, **fit_line_args) 
-                    k = res['param'][0]
-                except Exception as err: 
-                    k = np.nan 
-                    if fault_tol: 
-                        warnings.warn(str(err))
-                    else: 
-                        raise
-                    continue 
-            else:
+            if 1:
                 res=self.fit_line(l, func, **fit_line_args) 
                 
                 if res is not None:
-                    k = res['param'][0]
+                    #k = res['param'][0]
+                    k = list(res['param'].values())[0]
                 else:
                     k = np.nan 
                     continue 
@@ -359,7 +408,15 @@ class AnalysisTools(object):
                 l.set_label(label)
             #temp.append((a, round(k, 2)))
             if return_all_params: 
-                temp.append((a, res['param']))
+                if 1:
+                    temp.append((a, res['param']))
+                else:
+                    n  = func.__code__.co_argcount -1
+                    names  =  func.__code__.co_varnames[1:]
+                    val = res['param']
+                    dic = [(names[i], val[i]) for i in range(n)]
+                    dic = OrderedDict(dic)
+                    temp.append((a, dic))
             else: 
                 temp.append((a, round(k, rounding)))
           
@@ -368,15 +425,8 @@ class AnalysisTools(object):
                 color = kwargs['color'] if 'color' in kwargs else l.get_color()
                 marker = kwargs.get('marker', None)
                 args.update(color=color, marker=marker)
-                #print_vars(vars(),  ['args'])
-                #_ = self._plot.im_func(None, res['x'], res['y'], 
-                #        ax=ax, color=l.get_color(), label='', marker=None)        
                 _ = self._plot.__func__(None, res['x'], res['y'], 
                         ax=ax, **args)
-                #if x_extra is not None:
-                #    tic= ax.get_xticks().tolist()
-                #    print_vars(vars(),  ['tic'])
-                #    pass
                 
         return temp 
     
@@ -500,7 +550,7 @@ class AnalysisTools(object):
 
     def find_lines_extreme(self, ax, which='max', add_text=True, 
             find_range=None, 
-            zoom_scale=None, font_dict=None, rounding=3): 
+            zoom_scale=None, font_dict=None, rounding=3):    # find peak,  bottom
         temp=[]        
         fd = {'color': 'r', 'size': 14} 
         if font_dict is not None: 
@@ -548,10 +598,6 @@ class AnalysisTools(object):
             ax.set_ylim(y1, y2)            
         return labels, loc, val 
     
-    def find_points_in_line_bac(self, line, ymin, ymax):
-        x, y = line.get_data()
-        arg = np.bitwise_and(y>=ymin, y<=ymax)
-        return x[arg], y[arg]
     
     def find_points_in_line(self, line, range=None, close_to=None):
         x, y = line.get_data()
@@ -696,6 +742,22 @@ class AnalysisTools(object):
     def smooth(self, data, window_size, order):
         res = savgol_filter(data, window_size, order)
         return res 
+    
+    def reset_marker_cycle(self,  start='o'):
+        """
+            let MARKER_CYCLE start from 'o'
+        
+        """
+        #global MARKER_CYCLE
+        i = MARKER_LIST.index(start)-1
+        last = MARKER_LIST[i]
+        print('idxxxx', id(MARKER_CYCLE))
+        while 1:  
+            m = next(MARKER_CYCLE)
+            #print_vars(vars(),  ['m'])
+            if m == last:
+                break 
+        
 
 class AnalyticFormular(object):
     """
@@ -916,6 +978,12 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         dir = dir.replace('dropbox', '')
         return dir 
     
+    def state_path(self, sh):
+        name = self.shape_to_backup_path(sh)
+        dir = self.state_parpath
+        res= '/'.join([dir, name])
+        return res 
+    
     @property
     def dir_name(self):
         res = os.path.basename(self.parpath)
@@ -1026,6 +1094,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     sh = temp[0]
         
         path = self.shape_to_backup_path(sh)
+        #print_vars(vars(),  ['path'])
         try:
             res= rpyc_load(path, use_local_storage=use_local_storage)
         except IOError as err: 
@@ -1163,7 +1232,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         return pickle_files
     
     def get_time_serials(self, sh, attr_name=None, info=0, force=0): 
-        #if rec is not None: 
+        if sh[0] == 'max' :
+            N = self.get_N_max()
+            sh = (N, sh[1])
+        
         if 'time_serials' in self: 
             ts = self['time_serials'].get(sh)
         else: 
@@ -1274,6 +1346,21 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 return N, D 
     
     get_dim_max = get_dim_max_for_N  #def get_dim_max a shorter name 
+    
+    def get_N_max(self):
+        temp = self.get_shape_list( only_return_max=1, from_energy_rec=0)
+        temp = [t[0] for t in temp]
+        if not temp:
+            N = -1
+        else:
+            N = max(temp)
+        
+        return N 
+    
+    def get_sh_max(self):
+        raise NotImplemented  
+        
+    
     
     def get_energy_fluc_count(self, sh, bins=None): 
         if bins is None: 
@@ -2366,15 +2453,19 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     ax.__getattribute__('set_' + t)(*tt)
                 else: 
                     ax.__getattribute__('set_' + t)(tt)
-        #if kwargs.has_key('title') and ax.is_first_row(): 
-        if 'title' in kwargs:   
-            ax.set_title(kwargs.get('title')) 
+        
+        if 'title' in kwargs:   #if kwargs.has_key('title') and ax.is_first_row(): 
+            title =  str(kwargs.get('title'))
+            title = textwrap.fill(title, 20)   # auto wrap long title 
+            ax.set_title(title) 
             
         for l in lines:  #line stype   #matploblib 可能有个bug，mfc = 'w', 则 mec总是黑色，和line color 不同，故这里要重新set mec
             mec = kwargs.get('mec', l.get_color())
             l.set_mec(mec)
         #note the position to invoke .legend maters,  it must be placed after line.set_mec,  or else line.set_mec wont change mec in the legend
-        ax.legend(title=kwargs.get('legend_title'), loc=kwargs.get('legend_loc', 0))
+        
+        if np.any([l.get_label()[0] != '_' for l in lines]):
+            ax.legend(title=kwargs.get('legend_title'), loc=kwargs.get('legend_loc', 0))
         #ax.grid(1)
         
         #ax.figure.set_facecolor('white')   # matplotrc not working, so set at here
@@ -3344,11 +3435,13 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         res = 'N=%(N)d-D=%(D)d.pickle'%vars()
         return res
     
-    def shape_to_backup_path(self, sh): 
+    def shape_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
         dir = self.parpath.replace('Dropbox', '').replace('dropbox', '')
         dir = dir.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         return '/'.join([dir, fn])
+    
+    shape_to_backup_path = state_path  # def shape_to_backup_path
 
     def update_db_structure(self, update_what='all'):
         """
@@ -4702,17 +4795,15 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
         
         return tt, val 
 
-    def get_magnetization(self, sh, tlist=None, ts=None, sub_key_list='z',  return_t=False):
+    def get_magnetization(self, sh, tlist=None, ilist=None, tlim=None,  ts=None, sub_key_list='z',  return_t=False):
         """
             tince magnetization is frequently used. I write this function. 
         """
-        tt, mm = self.get_t_vs_field('magnetization',  sh, ts=ts)
+        tt, mm = self.get_t_vs_field('magnetization',  sh, ts=ts, tlim=tlim)
         if tt is None:
             return None, None
         
-        
         if not (isinstance(mm, np.ndarray) and mm.ndim==2):
-        
             if sub_key_list == 'z' :
                 #mag = [mm[i][0]['z'].values() for i in ii]
                 #mag = [mm[i]['z'].values() for i in ii]
@@ -4745,19 +4836,24 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
                 mag = mag[0]
             if len(mag)==0:
                 mag = None
+        
+        if mag is not None and ilist:
+            mag = mag[:, ilist]
                 
         if return_t:
             return tt, mag
         else:
             return mag
 
-    def calc_mag_inhomogenity(self, sh,  integrate=0, normalize=True,  boundary_cond='PBC'):
+    def calc_mag_inhomogenity(self, sh, tlist=None, tlim=None,  time_aver=0, normalize=True,  boundary_cond='PBC'):
         """
             ref:
                 Schiulaz  2015 eq. 7
         
         """
-        tt, mag = self.get_magnetization(sh, tlist=None, return_t=1)
+        tt, mag = self.get_magnetization(sh, tlist=tlist, tlim=tlim,  return_t=1)
+        if tt is None:
+            return None,  None 
         N = sh[0]
         mag_1 = np.roll(mag, -1, axis=1)
         if boundary_cond == 'PBC':
@@ -4766,13 +4862,47 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
         elif boundary_cond == 'OBC':
             diff = mag_1[:-1] - mag[:-1]
             diff_aver = np.sum(diff**2, axis=1)/(N-1)
-        #print_vars(vars(),  ['diff_aver[:10]'])
-        if integrate:
-            diff_aver = np.cumsum(diff_aver)
+        
         if normalize:
             diff_aver = diff_aver/diff_aver[0]
-        #print_vars(vars(),  ['tt[:10]', 'diff_aver[:10]'])
+        if time_aver:
+            #diff_aver = np.cumsum(diff_aver)
+            diff_aver = scipy.integrate.cumtrapz(diff_aver, tt, initial=None)
+            diff_aver = diff_aver/tt[1:]
+            diff_aver = np.insert(diff_aver, 0, 1.0)
+        
         return tt, diff_aver
+
+    def get_qsp_middle(self, sh, ts=None, tlim=None, only_total=False):
+        tt, qq = self.get_t_vs_field('qsp_middle',  sh, ts=ts, tlim=tlim)
+        if tt is None:
+            return None, None
+        
+        qq = [q[0] for q in qq]
+        if only_total:
+            res = [q.totDim for q in qq]
+            return tt, res 
+        
+        all_qns= set()
+        for q in qq:
+            temp = [qn for qn in q.QNs]
+            temp = set(temp)
+            all_qns = all_qns | temp
+        all_qns= list(all_qns)
+        all_qns.sort()
+        #print_vars(vars(),  ['all_qns'])
+        n = len(tt)
+        res = OrderedDict()
+        for qn in all_qns:
+            temp = [None]*n 
+            for i in range(n):
+                qsp = qq[i]
+                ind = qsp.has_quant_num(qn)
+                dim = None if ind == -1 else qsp.Dims[ind] 
+                temp[i] = dim
+            res[qn._val] = np.asarray(temp, dtype=float)
+        return tt, res 
+    
 
 #class ResultDB_tdvp(ResultDB): 
 class ResultDB_tdvp(ResultDB_time_evo): 
@@ -4869,25 +4999,49 @@ class ResultDB_tdvp(ResultDB_time_evo):
             imb = np.sum(mag, axis=1)/L 
         return tt, ee
 
-    def calc_diffuse_const(db, sh, tlim=None, force=False):
+    def calc_dynamical_exponent(db, sh, tlim=None, integrate=1,  force=False):
         """
-            calc diffuse const through measure integrate of j(t)
+            calc dynamical expoennt z(t) through measure integrate of j(t) in a
+            domain-wall quench dynamics. It is expected     
+                J0(t) ~ t^(z-1)  (1)
+            Then
+                integrate of J0(t) ~ t^z   (2)
+            
             ref:
                Ljubotina, Prosen 2017  eq.4 and Fig. 2
-        
+            params:
+                integrate: 
+                        If true using eq.(2) to calculate z. In practice, this is
+                    always needed. Because,  without that,  there will be very
+                    large fluctuations. For discrete signals,  use and not use
+                    integrate may be NOT equivlent. 
+                        There is yet another way to calc J0 and then z. One only need to
+                    calculate M_left and M_right,  then J0(t) = M_right-M_left.
+                    
         """
-        tt, yy = db.get_t_vs_field('current', sh, tlim=tlim, force=force)
+        tt, jj = db.get_t_vs_field('current', sh, tlim=tlim, force=force)
         if tt is None:
             return None, None
-        yy = scipy.integrate.cumtrapz(yy, tt, initial=0)
-
         tt_log=np.log(tt)
-        yy=np.log(np.abs(yy))
-
         tt_diff= np.diff(tt_log)
-        yy_diff=np.diff(yy)
-        yt_diff= yy_diff/tt_diff
-        return tt[:-1], yt_diff
+        if integrate:  #method 1
+            jj = scipy.integrate.cumtrapz(jj, tt, initial=0)
+
+            jj=np.log(np.abs(jj))
+
+            jj_diff=np.diff(jj)
+            z = jj_diff/tt_diff
+            return tt[:-1], z 
+        else:  # method 2. j ~ t^{z-1} then z-1 =d ln(np.abs(jj))/ dt
+            warnings.warn('this may cause large fluctuation')
+            jj=np.log(jj)
+            jj_diff=np.diff(jj)
+            yt_diff= jj_diff/tt_diff
+            z = 1 + yt_diff   
+            return tt[:-1], z 
+    
+    calc_diffuse_const   = calc_transport_exponent  = calc_dynamical_exponent
+        
     
     def calc_diffuse_coeff(self, sh, tlist, force=False):
         """
@@ -5076,43 +5230,24 @@ class TestResultDB(unittest.TestCase):
             self.db = ResultDB(parpath)
         
     def test_temp(self): 
-        N = 128
+        
+        from mps_wigner_crystal.analysis import an_exact_diag 
+        
+        
         
         if 1:
-            from mps_wigner_crystal.analysis import an_exact_diag
-            a = [1, 2, 3, 4] 
-            b = np.roll(a,  1)
-            c = np.cumsum(a)
-            print_vars(vars(),  ['c'])
-            #print_vars(vars(),  ['b'])
-            #raise  
-            
-            xx = an_exact_diag.an_dynamics.an_random_spin
-            xx.outline()
-            db = xx(alpha=1.0, V=100.0, spin_up=0.3, dt=100)
-            print_vars(vars(),  ['db'])
-            
-            #def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
-            sh = (12, 'max')
-            tt,  mag = db.get_t_vs_field('magnetization', (12, 'max'))
-            tt, mag = db.get_magnetization((12, 'max'), tlist=[100, 200, 300] , return_t=1)
-            
-            t, v = db.calc_mag_inhomogenity(sh)
-            print_vars(vars(),  ['v'])
-           
-        
-        if 0:
             v = 0.0
             #from vmps.run_heisenberg.analysis import an_tdvp 
             from mps_wigner_crystal.analysis import an_tdvp 
             xx = an_tdvp.an_dynamics.an_random_spin
             db=xx(nu=0.5, alpha=1.0, V=64.0,  dt=0.5, surfix='fix_err_1em12')
-            sh=(80, 'max')
+            sh=('max', 'max')
             tt=np.arange(1., 180, 1.0)
-            ii=range(sh[0])
+            ii=range(80)
             tt, data = db.get_magnetization(sh, tt, return_t=1,)
             
             print_vars(vars(),  ['tt'])  
+            raise  
            
            
             data = db.calc_mag_inhomogeneous(sh)
@@ -5120,8 +5255,6 @@ class TestResultDB(unittest.TestCase):
             raise  
             print_vars(vars(),  ['data.shape'])
         
-
-            
        
         raise  
        
@@ -5161,11 +5294,11 @@ class TestResultDB(unittest.TestCase):
         self.db.add_key_list(xx, val='xxx')
         self.assertTrue(self.db.has_key_list(xx ))
         self.assertFalse(self.db.has_key_list(xx + [5]))
-        
+
 
 if __name__ == '__main__': 
-    #warnings.filterwarnings('ignore')
-    warnings.filterwarnings('once')
+    
+    warnings.filterwarnings('once')  #warnings.filterwarnings('ignore')
     if 1: 
         FIELD_NAME_LIST = [
             'energy', 
@@ -5213,42 +5346,6 @@ if __name__ == '__main__':
             print(res)
             #db.upgrade()
             #db.backup()
-
-    #if len(sys.argv)<=1 :   
-    if 0: 
-        args= {}
-        parpath = '/home/zhli/Documents/mera_backup_tensor/run-long-better/alpha=0.3'
-        #parpath = '/tmp/'
-        sh = (4, 4);  
-        args['dir'] = parpath
-        args['mera_shape_list'] = sh
-        args['draw'] = 1
-        #args['show_fig'] = 1
-        args['which'] = 'plot_structure_factor' 
-        args['switch'] = 'diff'
-        args['fit'] = 'power'
-        args['plot'] = 1
-        args['plot_fit'] = 1
-        #args['xlim'] = (0, 10000)
-        
-        parpath = args['dir'] 
-        db = ResultDB(parpath)
-    
-        if 0: 
-            sh = args['mera_shape_list']
-            #sh[0] = eval(sh[0]); sh[1]=eval(sh[1])
-            which = args['which']
-            
-            #if which in which_list: 
-            if 1: 
-                args.pop('which')
-                res=db.__getattribute__(which)(sh=sh, show_fig=1, show_val=1, **args)
-                print(res)
-            else: 
-                pass
-                #db.upgrade()
-                #db.backup()
-
     
     if len(sys.argv)<=1 :   
       

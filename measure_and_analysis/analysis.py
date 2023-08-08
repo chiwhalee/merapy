@@ -55,7 +55,7 @@ import merapy.measure_and_analysis.result_db as result_db_module
 from merapy.measure_and_analysis.result_db import (ResultDB, 
         MATPLOTLIBRC, 
         ResultDB_mera, ResultDB_idmrg, ResultDB_vmps, html_border, 
-        ResultDB_tdvp, 
+        ResultDB_tdvp,  ResultDB_ed, 
         ResultDB_proj_qmc, ResultDB_bethe_ansatz, 
         BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT, LOCAL_HOSTNAME)
 from  merapy.measure_and_analysis.result_db import (  MARKER_CYCLE, 
@@ -71,7 +71,7 @@ mpl.rcParams.update(MATPLOTLIBRC)
 
 IS_PY3 = sys.version_info.major>2
 
-__all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 
+__all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 'Analysis_exact_diag', 'Analysis_tdvp', 
          'MARKER_CYCLE', ]
 
 class OrderedDictLazy(OrderedDict): 
@@ -183,7 +183,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         
         if Alpha is not None and 'surfix' not in Alpha._fields: 
             fields = Alpha._fields  + ('surfix', )
-            defaults = [Alpha._fields_defaults[i] for i in Alpha._fields]
+            #defaults = [Alpha._fields_defaults[i] for i in Alpha._fields]
+            defaults = [Alpha._field_defaults[i] for i in Alpha._fields]
             defaults.append('')
             Alpha = namedtuple('Alpha', fields, defaults=defaults)
             
@@ -286,13 +287,25 @@ class Analysis(AnalysisTools, AnalyticFormular):
         #    kwargs.pop('surfix')
         #else:
         #    sur = None
+        assert self.Alpha is not None         
+        try:
+            alpha = self.Alpha(*args, **kwargs)
+        except TypeError as err:
+            print('self.Alpha:', self.Alpha._fields)
+            raise err 
         
-        alpha = self.Alpha(*args, **kwargs)
         if None in alpha:
             raise ValueError('arg missing in {}'.format(alpha)) 
         #if sur:
         #    alpha = alpha + (sur, )
         return self[alpha]
+    
+    @property 
+    def long_name(self):
+        temp = self.local_root.split('/')
+        temp = temp[-3:]   # last three levels of dir
+        res = '/'.join(temp)
+        return res 
     
     @property
     def last_modify_time(self):
@@ -408,7 +421,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 continue
             i = param_list.index(k)
             
-            if isinstance(v, float): 
+            if isinstance(v, (float, int)): 
                 #if hasattr(aa[0], '__iter__'): 
                 #    func = lambda x: x[i]== v
                 #else:
@@ -599,7 +612,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     val = '-'  + val[1: ]
                 try: 
                     #val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
-                    val = float(val) if '.' in val else int(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
+                    val = float(val) if ('.' in val or val=='inf') else int(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
                 except: 
                     val = val
                 return (key, val)
@@ -631,8 +644,13 @@ class Analysis(AnalysisTools, AnalyticFormular):
             #        surfix = temp[-1][1]
             #        alpha = self.Alpha(** dict(temp[:-1]))
             #        alpha += (surfix, ) 
-            
-            alpha = self.Alpha(** dict(temp))  # if Alpha is provided, always  use namedtupe as key for the dicts
+            try:
+                alpha = self.Alpha(** dict(temp))  # if Alpha is provided, always  use namedtupe as key for the dicts
+            except TypeError as err:
+                print('self.Alpha:', self.Alpha._fields, 'temp:',temp)
+                raise err
+            else:
+                pass 
                 
         else:
             aa = fn.split('-')
@@ -738,7 +756,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         for a in alpha_list: 
             try: 
                 p = self.alpha_parpath_dict[a]
-                db = self.result_db_class(parpath=p, 
+                db = self.result_db_class(parpath=p, model_param=a, 
                         create_empty_db=create_empty_db, version=db_version, 
                         algorithm=algorithm)
                 #rdb[a] = db
@@ -765,8 +783,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         assert root is not None , 'param root reqired'
         try:
             dic = self.scan_alpha(root=root, signiture=signiture)
-        except TypeError:
-            msg = 'scan_alpha failed: self.Alpha={} need change'.format(self.Alpha._fields)
+        except TypeError as err:
+            msg = '\n\nSCAN_ALPHA FAILED: {} \n self.Alpha={} need change. local_root={}\n\n'.format(str(err), self.Alpha._fields, self.local_root)
             warnings.warn(msg)
             dic = {}
             
@@ -1384,7 +1402,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             fig=ResultDB._plot.__func__(None, x, y, **kwargs)  
         return fig
     
-    def _plot3d(self, xx, yy, data, which_plot=None, zfunc=None,   **kwargs):
+    def _plot3d(self, xx, yy, data, which_plot=None, add_cb=True,  zfunc=None,   **kwargs):
         """
             pass
         """
@@ -1411,6 +1429,11 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 if not ax_found: 
                     raise Exception('ax is not defined; examine the layout of fig')
         fig = ax.figure  
+        if kwargs.get('xfunc'): 
+            xx = kwargs['xfunc'](xx)
+        if kwargs.get('yfunc'): 
+            yy = kwargs['yfunc'](yy)
+        
         XX,YY=np.meshgrid(xx,yy)
         
         style_dic = {
@@ -1463,12 +1486,16 @@ class Analysis(AnalysisTools, AnalyticFormular):
         X,Y,Z=XX,YY,data
         if zfunc is not None : 
             Z = zfunc(Z)
+            
         if kwargs.get('zmin'): 
             zmin = kwargs['zmin']
             Z[Z<zmin] = np.nan 
         if kwargs.get('zmax'): 
             zmax= kwargs['zmax']
             Z[Z>zmax] = np.nan 
+            
+            
+            
         cb, cs = None, None
         if which_plot == 'contour': 
             
@@ -1496,12 +1523,21 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 #style_dic['extent'] = [min(xx)-dx2, max(xx)+dx2, min(yy)-dy2, max(yy)+dy2]
                 style_dic['extent'] = [min(xx), max(xx)+dx, min(yy), max(yy)+dy]
             im = ax.imshow(Z,  origin='lower', **style_dic) 
-                    
+             
+            cs = im
+             
             #cb=fig.colorbar(im,  orientation="horizontal", ax=ax)
-            cb=fig.colorbar(im,   ax=ax)
+            #cb=fig.colorbar(im,   ax=ax)
+            if add_cb:
+                cb=plt.colorbar(im, ax=ax)
             clim = kwargs.get('clim')
             if clim is not None : 
                 im.set_clim(clim)
+        elif which_plot == 'pcolor':
+            dx, dy = old_div((max(xx)-min(xx))*1.0,(len(xx)-1)), old_div((max(yy)-min(yy))*1.0,(len(yy)-1))
+            xx = np.asarray(xx)
+            cs = ax.pcolor(xx + dx/2, yy,  data,  shading='nearest')
+            
         elif which_plot == 'surface': 
             temp = ['interpolation', 'extent', 'aspect']  #these are not accepted by plot_surface 
             for t in temp: 
@@ -1523,7 +1559,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     ax.__getattribute__('set_' + t)(tt)
       
         ax.grid(1)
-        
         #res={'data':data.T, 'alpha':XX,'g':YY, 'cb':cb}
         #cb: color bar,  cs: contour set
         res= {'fig': fig, 'ax': ax, 'cb': cb,  'cs':cs}
@@ -2989,6 +3024,53 @@ class Analysis(AnalysisTools, AnalyticFormular):
 
     def submit_job(self, N=None):
         pass
+    
+    def average_mag_inhomogenity(self, aa, sh, t=None, tlim=None, time_aver=False, return_sample_size=False):
+        """
+            note1: if data is array, they should have same length
+        """
+        xx = self
+        res=[]
+        tt_not_none=[]
+        t1=0
+        for a in aa:
+            db=xx[a]
+            tt, data = db.calc_mag_inhomogenity(sh, time_aver=time_aver, tlim=tlim)   # note1
+            if data is not None:
+                #tt_not_none=tt_not_none if len(tt_not_none>=tt) else tt
+                if len(tt)> len(tt_not_none):
+                    tt_not_none = tt
+                res.append(data)
+                t1=max(len(tt_not_none), t1)
+        if not res:
+            if return_sample_size:
+                return None, None, 0
+            else:
+                return None, None 
+        sample_size_0 = len(res)
+        res=[i for i in res if len(i)==t1]
+        sample_size = len(res)
+        if sample_size != sample_size_0:
+            print(f'{sample_size-sample_size_0}  samples are omitted due to shortter time')
+        res=np.asarray(res)
+        res = np.mean(res, axis=0)
+        if len(tt_not_none)==0:
+            tt_not_none=None
+        if t is  None:
+            if return_sample_size:
+                return tt_not_none, res, sample_size
+
+            else:
+                return tt_not_none, res 
+        else:
+            arg=np.where(tt_not_none==t)[0][0]
+            res=res[arg]
+            if return_sample_size:
+                return 0, res, sample_size
+            else:
+                return 0, res
+        
+    
 
 class Analysis_mera(Analysis): 
     def __init__(self, **kwargs): 
@@ -3058,18 +3140,39 @@ class Analysis_tdvp(Analysis):
         kwargs.update(algorithm='tdvp', result_db_class=ResultDB_tdvp)
         Analysis.__init__(self, **kwargs)
 
+class Analysis_exact_diag(Analysis): 
+     def __init__(self, **kwargs): 
+        kwargs.update(algorithm='exact_diag', result_db_class=ResultDB_ed)
+        Analysis.__init__(self, **kwargs)
+
 
 class TestAnalsysis(unittest.TestCase): 
     def setUp(self): 
         pass
     
     def test_temp(self): 
-        from merapy.run_heisbg.analysis import an_tdvp 
-        from merapy.run_heisbg.analysis import an_vmps
+        #from merapy.run_heisbg.analysis import an_tdvp 
+        #from merapy.run_heisbg.analysis import an_vmps
+        from mps_wigner_crystal.analysis import an_exact_diag 
+
+        
+        xx = an_exact_diag.an_dynamics.an_random_spin
+        
+        xx.reset_marker_cycle('+')
+        #print(MARKER_LIST)
+        print('idyyyyy', id(MARKER_CYCLE))
+        print(next(MARKER_CYCLE))
+        print(next(MARKER_CYCLE))
+        raise  
+        
         Jzz = 0.0
         sh = 128, 'max'
         xx = an_tdvp.an_finite_T.an_dynamics.an_szsz
         aa = xx.filter_alpha(Jzz=2.0, T=inf)
+        
+        
+        
+        
         for a in aa:
             db = xx[a]
             print_vars(vars(),  ['db.param'])
