@@ -62,7 +62,10 @@ from py3nj import (clebsch_gordan, wigner3j, wigner6j, wigner9j)
 
 
 import scipy
-
+try:
+    import cupy as cp
+except:
+    pass
 
 #from quantum_number import *  #QuantSpace, QN_idendity, QSp_null, QSp_base
 from merapy.utilities import (print_vars, save, load)
@@ -98,19 +101,22 @@ from merapy.decorators import (tensor_player, decorate_methods, set_player_state
 __all__ = ['TensorBase', 'nTensor', 'iTensor', ]
 
 
-class tBuffer(object):
+class DataBuffer(object):
     """
     the point of tBUffer is :当tensor用过自动garbage collect后，只要把tensor使用
     的buff标记in_use改为-1，而buff并未必删除，可以继续使用
     """
-    def __init__(self, size, dtype):
+    def __init__(self, size, dtype, use_gpu=False):
         """
-        see init_tBuffer in f90
-        size: number of tensors
+            size: number of tensors
         """
         #self.T=[Tensor() for i in xrange(size)]
         #make self.T simpliy a place holder
-        self.T=[np.ndarray(0, dtype=dtype) for i in range(size)]
+        if not use_gpu:
+            self.T=[np.ndarray(0, dtype=dtype) for i in range(size)]
+        else:
+            self.T=[cp.ndarray(0, dtype=dtype) for i in range(size)]
+            
         #for i in xrange(size): self.T[i].nullify()
         self.in_use=np.ndarray(1024,"bool")
         self.in_use[:] = False
@@ -204,12 +210,13 @@ class iTensor(TensorBase):
     """
     num_of_instance = 0
     #issue:  these buffer may not compatible with complex type 
-    #T_BUFFER=[tBuffer(size=100, dtype=TensorBase.dtype) for  i in xrange(4)]
-    T_BUFFER=[tBuffer(size=100, dtype=float) for  i in range(4)]
+    DATA_BUFFER = [DataBuffer(size=100, dtype=float) for  i in range(2)]
+    DATA_BUFFER_GPU = [DataBuffer(size=100, dtype=float) for  i in range(2)]
     #BUFFER_ON = False
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
-            buffer=None, use_buf=False, index_data=True, has_data=True, init_data=None, ):
+            buffer=None, use_buf=False, index_data=True, 
+            has_data=True, init_data=None, use_gpu=False):
         """
             params: 
                 totQN : 
@@ -221,8 +228,8 @@ class iTensor(TensorBase):
                 self.Dims[i]:  
                     在leg i 对应的空间维数
                 buf_ref: 
-                    buf_ref[0]---which iTensor.T_BUFFER, buf_ref[1]---which tensor in the iTensor.T_BUFFER
-                    default -1 means not using iTensor.T_BUFFER
+                    buf_ref[0]---which iTensor.DATA_BUFFER, buf_ref[1]---which tensor in the iTensor.DATA_BUFFER
+                    default -1 means not using iTensor.DATA_BUFFER
             issue:
                 in future, QSp only searve as a way to construct iTensor, forbit it being modified, because modifying qsp alone
                 is meanless and dangeous if not copyed.
@@ -261,6 +268,7 @@ class iTensor(TensorBase):
         self.use_buf=use_buf
         self.buf_ref = np.array([-1, -1], int)
         self.type_name = ''
+        self.use_gpu = use_gpu
         
         if rank == 0:   #Dims 指的是对应的**dense** tensor 的维数
             self.Dims = np.array((1, ), int) 
@@ -274,9 +282,19 @@ class iTensor(TensorBase):
                 self.set_data_entrance_non_Abelian(order=order )
 
         if has_data:
-            if buffer is None and use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
-                buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2)  #else complex 
-            self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
+            if buffer is None and use_buf:   #use internal DATA_BUFFER; else use external buffer or no buffer
+                if not self.use_gpu:
+                    buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
+                else:
+                    buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
+                   
+            if not self.use_gpu:
+                self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
+            else:
+                if isinstance(buffer, cp.ndarray):
+                    buffer = buffer.data 
+                self.data = cp.ndarray(self.totDim, memptr=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
+                
     
     def __setstate__(self, d): 
         self.__dict__.update(d)
@@ -302,8 +320,7 @@ class iTensor(TensorBase):
     
     def buffer_assign(self, data_size, n=None):
         """
-            see use_tBuffer in f90
-            let self point to a iTensor.T_BUFFER
+            let self point to a iTensor.DATA_BUFFER
             n: which buff to use
                 n = 0: for small rank tensor
                 n = 1: for lager rank tensor
@@ -314,20 +331,42 @@ class iTensor(TensorBase):
         if n is None:  
             if self.rank <= 4:  
                 n = 0
+            else:
+                n = 1
+        for i in range(iTensor.DATA_BUFFER[n].size):
+            if not iTensor.DATA_BUFFER[n].in_use[i]:  
+                self.buf_ref[0]=n
+                self.buf_ref[1]=i                
+                iTensor.DATA_BUFFER[n].in_use[i] = True 
+                if iTensor.DATA_BUFFER[n].T[i].size<data_size:
+                    iTensor.DATA_BUFFER[n].T[i] = np.empty(data_size, dtype=float)
+                
+                return iTensor.DATA_BUFFER[n].T[i].data
+        raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.DATA_BUFFER[0].in_use[:100], )))
+    
+    def buffer_assign_gpu(self, data_size, n=None):
+        """
+        """
+        if n is None:  
+            if self.rank <= 4:  
+                n = 0
             elif self.rank <= 6:
                 n = 1
             else:
                 n = 2
-        for i in range(iTensor.T_BUFFER[n].size):
-            if not iTensor.T_BUFFER[n].in_use[i]:  
+        for i in range(iTensor.DATA_BUFFER_GPU[n].size):
+            if not iTensor.DATA_BUFFER_GPU[n].in_use[i]:  
                 self.buf_ref[0]=n
                 self.buf_ref[1]=i                
-                iTensor.T_BUFFER[n].in_use[i] = True 
-                if iTensor.T_BUFFER[n].T[i].size<data_size:
-                    iTensor.T_BUFFER[n].T[i] = np.empty(data_size, dtype=float)
+                iTensor.DATA_BUFFER_GPU[n].in_use[i] = True 
+                if iTensor.DATA_BUFFER_GPU[n].T[i].size<data_size:
+                    iTensor.DATA_BUFFER_GPU[n].T[i] = cp.empty(data_size, dtype=float)
                 
-                return iTensor.T_BUFFER[n].T[i].data
-        raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.T_BUFFER[0].in_use[:100], )))
+                return iTensor.DATA_BUFFER_GPU[n].T[i].data
+        raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.DATA_BUFFER_GPU[0].in_use[:100], )))
+    
+    
+   
     
     def set_data_entrance(self, order="F"):
         """
@@ -729,12 +768,12 @@ class iTensor(TensorBase):
             raise 
         return res
     
-    def unregister(self):
+    def unregister_del(self):
         """
-        unregister self from iTensor.T_BUFFER if iTensor.T_BUFFER was used
+        unregister self from iTensor.DATA_BUFFER if iTensor.DATA_BUFFER was used
         """
-        #if self.use_buf and (self.buf_ref[0]!=-1):
-        iTensor.T_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
+        
+        iTensor.DATA_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
     
     def __del__(self):
         """
@@ -746,8 +785,10 @@ class iTensor(TensorBase):
             in which __init__ didn’t finish running."
         """
         if self.use_buf and self.buf_ref[0]!=-1:
-            #if iTensor != None:
-            iTensor.T_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
+            if not self.use_gpu: 
+                iTensor.DATA_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
+            else:
+                iTensor.DATA_BUFFER_GPU[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
 
     @property
     def qsp_class(self): 
@@ -806,7 +847,7 @@ class iTensor(TensorBase):
     @classmethod
     def buff_free(cls):
         for i in range(3):
-            print(cls.T_BUFFER[i].in_use[:64])
+            print(cls.DATA_BUFFER[i].in_use[:64])
 
     def copy_struct(self, other=None, has_data=True, use_buf=False):
         """
@@ -815,7 +856,8 @@ class iTensor(TensorBase):
         QSp= [q.copy() for q in self.QSp]
         totQN = self.totQN.copy()
         other = iTensor(rank=self.rank, QSp=QSp, totQN=totQN, 
-                dtype=self.dtype, has_data=has_data, use_buf=use_buf)
+                dtype=self.dtype, has_data=has_data, use_buf=use_buf, 
+                use_gpu=self.use_gpu)
         other.type_name = self.type_name 
         return other
 
@@ -852,7 +894,7 @@ class iTensor(TensorBase):
         other = self.copy_struct(use_buf=use_buf)
         other.set_data_entrance(order="F")
         totDim = self.totDim
-        if use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
+        if use_buf:   #use internal DATA_BUFFER; else use external buffer or no buffer
             buffer = other.buffer_assign(data_size=self.totDim)
         other.data = np.ndarray(self.totDim, buffer=buffer, dtype=self.dtype, order="C")
         other.data[:totDim]=self.data[:totDim]
@@ -2163,9 +2205,10 @@ class iTensor(TensorBase):
             QSp = []  #QSp = [self.QSp[0].null()]
         
         dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-        matmul_func = dgemm if dtype == float else zgemm  
+        #matmul_func = dgemm if dtype == float else zgemm  
         
-        T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
+        T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, 
+                dtype=dtype, use_buf=use_buf, use_gpu=self.use_gpu)
         T3.data[:]=0.0   #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
         
         nidx3 = 0
@@ -2204,7 +2247,10 @@ class iTensor(TensorBase):
                 
                 
                 data3 = T3.get_block(iQN3[:T3.rank]).reshape((Dim1,Dim2), order='F')    
-                matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                
+                #matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                        dtype = dtype, use_gpu=self.use_gpu)
                 
                 #T3_data = T3.get_block(iQN3[:T3.rank])
                 #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
@@ -2299,6 +2345,7 @@ class iTensor(TensorBase):
             params:
                 Vi: of type np.ndarray(,"int")
                 Vp1,先记录了T1的外腿，后记录内腿指标； Vp2先记录了内腿，后记录了外腿指标
+                use_buf: use data buffer for T3
         """
         
         V1 = self.ind_labels if V1 is None else V1   #issue: when self contract with self but with different ind_labels, this cause problem
@@ -2389,13 +2436,13 @@ class iTensor(TensorBase):
             ind = args[i*2+1]
             o.ind_labels= ind 
     
-    def dot(self, other): 
+    def dot(self, other, data=None,  use_buf=False): 
         """
             mainly for compatible with numpy 
             multipyly tow rank-2 tensors 
         """
         assert self.rank == 2 and other.rank == 2    
-        return self.contract_core(other, div=1)
+        return self.contract_core(other, div=1, data=data, use_buf=use_buf)
     
     def norm(self): 
         #a = list(range(self.rank))
@@ -3349,112 +3396,32 @@ class iTensor(TensorBase):
         from merapy.tensor_svd import iTensor_rank2_operation
         assert self.rank == 2 
         return iTensor_rank2_operation.diag_rank2(self)
+    
+    def change_device(self, which):
+        if self.device == which:
+            return 
+        if which == 'gpu' :
+            self.data = cp.asarray(self.data)
+            self.use_gpu = 1
+        elif which == 'cpu' :
+            self.data = cp.asnumpy(self.data)
+            self.use_gpu = 0
+        else:
+            raise ValueError 
+    
+    @property
+    def device(self):
+        return 'cpu' if isinstance(self.data, np.ndarray) else 'gpu'
    
-class iTensor_new(TensorBase):
-    def __init__(self,rank,  QSp, totQN, shallow=None, use_buf=None):
-        """
-        status_1_verified
-        self.Dims[i]:  在leg i 对应的空间维数
-        
-        """
-        TensorBase.__init__(self,rank,[0]*rank)
-        use_buf0=False
-        shallow0=False
+   
 
-        self.use_buf=use_buf
-        self.shallow=shallow
-        if shallow!= None:
-            shallow0=shallow
-        if use_buf!=None:
-            use_buf0=use_buf
-        
-        if use_buf0:
-        #attention_omitted_something
-            self.use_buf=True
-            if self.buf_ref[0] ==-1:
-                self.use_Buffer(rank,QSp,totQN)
-                #attention_omitted_something
-
-        if self.use_buf:
-            pass
-            #attention_omitted_something
-
-        self.rank=rank
-        self.QSp=list(QSp[0:rank])
-        self.totQN= totQN
-
-        #self.quantum_number = [self.QSp[0].QNs[i] for i in xrange(2)]  #这里仅考虑Z2 symm，nQn=2
-        #self.qunt_num_comb = np.ndarray((self.rank, 2))
-
-        pTot =1
-        self.Dims=np.empty(rank,dtype=self.dtype)
-        self.Dims[0] =1
-        for i in range(rank):
-            pTot *= QSp[i].nQN
-            self.Dims[i]= QSp[i].totDim
-        self.idx_dim=pTot
-
-        if self.shallow:
-            print(r"#attention_omitted_something")
-
-        #if (not self.allocated) or (#self.max_ind_size >pTot):
-        #attention_omitted_something
-
-        
-        #self.idx=np.ndarray(self.idx_dim,"int")   #-1
-        #self.idx=np.array([-1L]*self.idx_dim,"int")   #-1        
-        #attention_this_may_be_wrong 在python中  -1对应着最后一个元素，而Fortran中什么也不对应, 所以改成下面的
-        self.idx=np.array([int(self.idx_dim)]*self.idx_dim,"int")   #-1                
-        
-        nidx=0
-        totDim=0
-        
-        if rank==0:
-            self.Dims[0]=1
-            self.totDim=1
-            self.QSp[1]= QSp_null
-            self.totQN = QN_idendity  #.copy()
-        
-        iQN=[0]*self.rank
-        #iQN[i]用作leg i 上的量子数 计数
-        tQN_r= self.totQN.copy()
-        tQN_r.reverse()
-
-        temp = [self.QSp[i].nQN for i in range(rank)]
-
-        self.data= np.ndarray(temp, dtype="object")
-
-        for p in range(pTot):
-            tQN = self.QSp[0].QNs[iQN[0]]
-            for i in range(1,rank):
-                tQN = tQN+self.QSp[i].QNs[iQN[i]]
-            
-            if tQN==tQN_r:
-                block_shape= [QSp[i].Dims[iQN[i]] for i in range(rank)]
-                self.data[tuple(iQN)] = np.empty(block_shape, dtype=self.dtype)
-            else:
-                self.data[tuple(iQN)] = 0
-
-            inc = 1
-            i = 0
-            #print "iii ", iQN,  tQN==tQN_r
-            while inc==1 and i<rank:
-                iQN[i] = iQN[i]+1
-                if iQN[i]<QSp[i].nQN :
-                    inc = 0
-                else:
-                    iQN[i] = 0
-                    i = i+1
-            
-        #self.nidx = nidx
-        #self.totDim = totDim
-
-class Tensor(iTensor, nTensor): 
+class Tensor_del(iTensor, nTensor): 
     def __new__(cls, qsp, tot_qn=None): 
         pass 
     
     def __init__(self, qsp): 
         pass 
+
 if 0:
     class test_iTensor(object):
         def __init__(self, symmetry, dim=None):
@@ -3506,8 +3473,8 @@ if 0:
         def use_buf():
             u=iTensor(4,[QSp_base.copy() for i in range(4)],QN_idendity.copy(), use_buf=True)
             print(u.data)
-            print(iTensor.T_BUFFER[0].T[0])
-            print(u.data.base is iTensor.T_BUFFER[0].T[0])
+            print(iTensor.DATA_BUFFER[0].T[0])
+            print(u.data.base is iTensor.DATA_BUFFER[0].T[0])
 
             return u
 
@@ -3556,8 +3523,8 @@ if 0:
             w = cls.w.copy()
             a=u.contract_core(u,2,use_buf=True)
             print(a.data)
-            print(iTensor.T_BUFFER[0].T[0])
-            print(a.data.base is iTensor.T_BUFFER[0].T[0])
+            print(iTensor.DATA_BUFFER[0].T[0])
+            print(a.data.base is iTensor.DATA_BUFFER[0].T[0])
 
         @classmethod
         def contract_core1(cls):
@@ -3670,7 +3637,7 @@ if 0:
             u.data[:]=np.arange(u.totDim)
             print(u.matrix_view(2))
             u1 = u.permutation([1, 0, 2, 3],use_buf=True)
-            print(iTensor.T_BUFFER[0].T[0])
+            print(iTensor.DATA_BUFFER[0].T[0])
             u2 = u.permutation([0, 1, 3, 2])
             print("\n", u1.matrix_view(2))
             print("\n", u2.matrix_view(2))
@@ -4558,7 +4525,7 @@ class Test_iTensor(unittest.TestCase):
             print_vars(vars(),  ['t.shape', 't2.shape'])
             self.assertTrue(t.shape==t2.shape)
 
-    def test_tensor_player_performance_large_tensor(self):
+    def xtest_tensor_player_performance_large_tensor(self):
         from merapy.tensor_py import iTensor, qsp_any
         #q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[20, 10, 10, 5, 5])
         q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
@@ -4588,7 +4555,7 @@ class Test_iTensor(unittest.TestCase):
         print_vars(vars(),  ['t1-t0'])
         print_vars(vars(),  ['t2-t1'])
         #tensor_player.STATE = 'stop'
-        print(TapeList[0])
+        #print(TapeList[0])
         print(tensor_player.the_tape.keys())
 
         
@@ -4599,7 +4566,8 @@ class Test_iTensor(unittest.TestCase):
         
 
     def test_temp(self): 
-        from merapy import QspZ2 
+        if 1:
+            pass
         
         if 0:  #pass 
             #qsp_class= QspU1
@@ -4783,8 +4751,8 @@ if __name__ == "__main__":
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
-           'test_tensor_player_performance_large_tensor', 
-           #'test_temp', 
+           #'xtest_tensor_player_performance_large_tensor', 
+           'test_temp', 
         ]
         
         

@@ -22,6 +22,15 @@ from scipy import linalg
 import platform
 import socket
 
+from scipy.linalg.blas import dgemm, sgemm, zgemm
+try:
+    import cupy as cp
+    #from cupy.cuda import cublas
+    import cupy.cublas as cublas 
+except:
+    pass
+
+
 from merapy.utilities import print_vars
 
 #import matplotlib.pyplot as plt
@@ -55,6 +64,18 @@ elif os1 == 'Windows':
 sometimes fort func don't require passing in "F" ordered arrays, such as matrix_direct_product; while someitmes it do  why?
 
 """
+
+
+def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=False, ):
+    
+    if not use_gpu:
+        if dtype == float:
+            dgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+        else:
+            zgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+    else:
+        cublas.gemm('N', 'N', a, b, out=c, alpha=1.0, beta=beta) 
+
 
 #dont delete this,  there is still some usefull things in it, rescure them first 
 class PickleDb(object):
@@ -306,7 +327,7 @@ class PickleDb(object):
         
         return x[:-2], dy
 
-def set_matrix_np(a, b, x, y, forward):
+def set_matrix_np_del(a, b, x, y, forward):
     x1, y1 = b.shape
     if forward:
         a[x:x+x1, y:y+y1] = b
@@ -523,9 +544,6 @@ class test_common(object):
         b1 = np.ones((3, 3), order='F')
         #x1, y1 = b.shape
         #a1[x:x+x1, y:y+y1] = b
-        set_matrix_np(a1, b1, x, y, forward=False)
-        print(a1)
-        print(b1)
 
 
 class TestCommon(unittest.TestCase):

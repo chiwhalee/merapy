@@ -23,6 +23,14 @@ import warnings
 
 
 from scipy.linalg.blas import dgemm, sgemm, zgemm
+try:
+    import cupy as cp
+    #from cupy.cuda import cublas
+    import cupy.cublas as cublas 
+except:
+    pass
+
+
 
 
 #from merapy import common_util
@@ -157,7 +165,8 @@ def tensor_player(which):
     def inner(func):
         if 1:   #define recorder and player
             def init_recorder(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
-                    buffer=None, use_buf=False, index_data=True, has_data=True, ):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, 
+                    use_gpu=False):
                 """
                     这种做法有些过于激进, 更安全的是下面的 data_entrance_recorder/player 
                     note1:
@@ -166,7 +175,8 @@ def tensor_player(which):
                 
                 """
                 func(self, rank=rank,  QSp=QSp, totQN=totQN, order="F",  dtype=dtype, 
-                    buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, )
+                    buffer=buffer, use_buf=use_buf, index_data=index_data, has_data=has_data, 
+                    use_gpu=use_gpu)
                 if 1:  #note1
                     struct_dict = self.__dict__.copy()   #here copy is NEED, or else self will lost data after pop 
                     if has_data:
@@ -174,31 +184,42 @@ def tensor_player(which):
                     #struct_dict.pop("buf_ref")
                 else:
                     struct_dict = self.__dict__
-                    
+                
+                #print_vars(vars(),  ['self.buf_ref'])
+                 
                 tensor_player.the_tape[tensor_player.the_tape.calls] = struct_dict
             
             #@profile
             def init_player(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
-                    buffer=None, use_buf=False, index_data=True, has_data=True, ):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, use_gpu=False):
                 """
                     note1:
                         following is not deepcopy, self and tape share same
                         value, but NOT share key. If this copy was removed, the
-                        program will not raise. Wowever 'data' will set to the
-                        tape, which would use much memory.
+                        program will not raise. However,  'data' will also be
+                        recorded in the tape, which would use much memory.
                 """
 
-                if 1:                
-                    self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()  #note1 
-                    self.buf_ref = np.array([-1, -1], np.int64)
-                    if has_data:
-                        if buffer is None and use_buf:   #use internal T_BUFFER; else use external buffer or no buffer
-                            buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2)  #else complex 
+                
+                self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()  #note1 
+                self.buf_ref = np.array([-1, -1], np.int64)
+                if has_data:
+                    if  buffer is None and use_buf:                    
+                        if not self.use_gpu:
+                            buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
+                        else:
+                            buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
+                    if not self.use_gpu:
                         self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
-                else:
-                    self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls]
-                    if self.dtype != dtype:   # It could happen that dtype change in later iterations, e.g. in TDVP algrithom
-                        self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered               
+                    else:
+                        #buffer = buffer if buffer is None else buffer.data
+                        if isinstance(buffer, cp.ndarray):
+                            buffer = buffer.data 
+                        self.data = cp.ndarray(self.totDim, memptr=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
+                
+                #self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls]
+                #if self.dtype != dtype:   # It could happen that dtype change in later iterations, e.g. in TDVP algrithom
+                #    self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered               
                     
 
             def data_entrance_recorder(self, order="F"):
@@ -306,7 +327,9 @@ def tensor_player(which):
                     totQN = self.totQN.copy()
 
                 #Tp=iTensor(rank, QSp, totQN, buffer=buffer, use_buf=use_buf)
-                Tp=self.__class__(rank, QSp, totQN, buffer=buffer, dtype=self.dtype, use_buf=use_buf)
+                Tp=self.__class__(rank, QSp, totQN, buffer=buffer, 
+                        dtype=self.dtype, use_buf=use_buf, 
+                        use_gpu = self.use_gpu)
                 pos=np.empty(self.rank,"int")
                 Dims=np.empty(self.rank,"int")
 
@@ -393,13 +416,11 @@ def tensor_player(which):
             
             def contract_core_recorder(self, T2, div, data=None, use_buf=False):
                 """
-                    see iTensor_Contraction2 in f90
                     把T1，和T2的非零block 如果量子数组合相等则收缩
                     locals:
                         div: num. of legs to be contracted for each tensor
                         buffer: use buffer to save data of T3
                 """
-                
                 rank1 = self.rank
                 rank2=T2.rank
                 rank3=rank1+rank2-div-div
@@ -413,7 +434,7 @@ def tensor_player(which):
                     QSp = self.QSp[:shift]
                     QSp.extend(T2.QSp[div:rank2])
                 
-                #T3= iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf)
+                
                 if rank3==0:
                     #QSp = self.QSp[0].null()
                     #QSp = [self.QSp[0].null()]
@@ -422,11 +443,11 @@ def tensor_player(which):
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
                 matmul_func = dgemm if dtype == float else zgemm  
                 
-                T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, use_buf=use_buf, dtype=dtype)
+                T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, 
+                        buffer=data, use_buf=use_buf, dtype=dtype, use_gpu=self.use_gpu)
                 T3.data[:]=0.0
                 
                 nidx3 = 0
-                alpha = 1.0; beta=1.0
                 iQN1=np.empty(self.rank + 1, np.int)
                 iQN2=np.empty(T2.rank + 1, np.int)        
                 iQN3=np.empty(T3.rank + 1, np.int) # +1 to avoid T3.rank=0
@@ -469,7 +490,11 @@ def tensor_player(which):
                         data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                         
                         data3 = T3.data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
-                        matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                        #matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                        
+                        common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                                dtype = dtype, use_gpu=self.use_gpu)
+                        
                         
                         #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
                         #T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')  
@@ -515,9 +540,20 @@ def tensor_player(which):
                     QSp = [self.QSp[0].null()]
                     
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-                matmul_func = dgemm if dtype == float else zgemm  
-                T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, dtype=dtype, use_buf=use_buf)
+                #matmul_func = dgemm if dtype == float else zgemm  
+                    
+                T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, 
+                        buffer=data, dtype=dtype, use_buf=use_buf)
+                #print_vars(vars(),  ['use_buf', 'T3.buf_ref', 'type(data)'])
                 T3.data[:]=0.0
+                self_data = self.data
+                T2_data = T2.data
+                T3_data = T3.data
+                #print_vars(vars(),  ['self.use_gpu'])
+                #if self.use_gpu:
+                #    self_data = cp.asarray(self_data)
+                #    T2_data = cp.asarray(T2_data)
+                #    T3_data = cp.asarray(T3_data)
                 
                 _, rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
                 
@@ -533,14 +569,20 @@ def tensor_player(which):
                 if 1:
                      for ind in range(num_rec):
                         p1, p2, p3, Dim1, Dim2, Dimc = rec[ind]
-                        data1 = self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
-                        data2 = T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
-                        data3 = T3.data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
-                        matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
-                        
+                        data1 = self_data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
+                        data2 = T2_data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
+                        data3 = T3_data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
+                        #if not self.use_gpu:
+                        #    matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
+                        #else:
+                        #    cublas.gemm('N', 'N', data1, data2, out=data3, alpha=1.0, beta=1.0) 
+                        common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                                dtype = dtype, use_gpu=self.use_gpu)
                         #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
                         #T3.data[p3:p3+Dim1*Dim2] += data3.ravel('F') 
-                        
+                #if self.use_gpu:
+                #    #T3.data = cp.asnumpy(T3_data) 
+                #    T3.data = T3_data.get()
                     
                 return T3
             
@@ -1020,16 +1062,29 @@ def set_STATE_end_simple(iter,  record_at=0, resume=False, power_on=True):
 
 
 class TestIt(unittest.TestCase): 
-    def setUp(self): 
+    
+    @classmethod 
+    def setUpClass(cls):
+        
+        from merapy.tensor_py import iTensor, qsp_any
+        #the following line is required 
+        iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
+        cls.iTensor = iTensor 
+        print(TapeList[0])
+    
+    def xsetUp(self): 
         pass 
         from merapy.tensor_py import iTensor, qsp_any
         #the following line is required 
         iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
         self.iTensor = iTensor 
-    
+        print(TapeList[0])
+ 
     def test_tensor_player(self): 
         from merapy import qsp_any
-        iTensor = self.iTensor
+        #iTensor = TestIt.iTensor
+        iTensor = self.__class__.iTensor
+        
         q0 = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
         q1 = q0.conj()
         qsp = [q0, q1]
@@ -1048,60 +1103,99 @@ class TestIt(unittest.TestCase):
         print_vars(vars(),  ['t.norm()'])
         self.assertAlmostEqual(t.norm(), 0.38622236988000797, 10)
         print(tensor_player.the_tape.keys())
-        set_player_state_manual('stop')
+        set_player_state_manual('stop', tape_id=0)
         tensor_player.STATE = 'stop'
             
-        #TapeList[0].reset()
+        TapeList[0].reset()
     
-    def xtest_tensor_player_performance(self):
+    def test_tensor_player_performance(self):
+       
+        
+        if 0:
+            n, m = 150, 100
+            a=cp.random.random((n, m))
+            #a = a + a.T 
+            ag = a.copy()
+            N = 2
+
+            t0 = time.time()
+            for i in range(N):
+                a.dot(a.T)
+                #cp.linalg.eigh(a)
+            t1 = time.time()
+            print('time by GPU:', t1-t0)
+        
         from merapy import qsp_any
-        iTensor = self.iTensor
-        #from merapy.tensor_py import iTensor, qsp_any
+        iTensor = self.__class__.iTensor
+
         #print_vars(vars(),  ['TapeList[0]'])
         #TapeList[0].reset()
+        print(TapeList[0])
+        
 
         # the following line is required 
         #iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
-        Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[200, 100, 100, 50, 50])
+        #Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[400, 100, 100, 50, 50])
+        Dl = qsp_any('U1', qns=[0, 1, -1, ], 
+                dims=[200, 130, 130, ])
         #Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
         Dr = Dl.conj()
         d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
-        qsp = [Dl, Dr, d]
-        t = iTensor(QSp=qsp)
-        tc = t.conj()
+        qsp = [Dl, Dr]
         
+        use_gpu = 0
+        
+        t = iTensor(QSp=qsp, use_gpu=use_gpu)
+        tc = t.copy()
         N = 100
         
-        t0 = time.time()
-        for i in range(N):
-            #print('i=', i)
-            
-            t.contract(tc, [0, 1, 2], [3, 1, 2])
-        t1 = time.time()
-        
         TapeList[1] = Tape()   #construct a default tape
-
-        for i in range(N):
-            #print('i=', i)
-            set_player_state_auto(iter=i, record_at=0, tape_id=1,  info=0)
-            t.contract(tc, [0, 1, 2], [3, 1, 2])
-            
-        t2 = time.time()
-            
-        print_vars(vars(),  ['t1-t0'])
-        print_vars(vars(),  ['t2-t1'])
-        tensor_player.STATE = 'stop'
-        #print(TapeList[0])
-        print(tensor_player.the_tape.keys())
-
+        data = cp.ndarray(t.data.size) if t.use_gpu else np.ndarray(t.data.size) 
         
-        set_player_state_manual('stop')
+        
+        t1 = time.time()
+        for i in range(N):
+            set_player_state_auto(iter=i, record_at=0, tape_id=0,  info=0)
+            t.dot(tc, data=data.data)
+            #t.dot(tc)
+            #t.dot(tc, use_buf=1)
+        t2 = time.time()
+        
+        
+        
+        print_vars(vars(),  ['t.data.size'])
+        print_vars(vars(),  ['t.use_gpu'])
             
+        print_vars(vars(),  ['t2-t1'])
+        print(TapeList[0].calls)
+        print(TapeList[1].calls)
+        print(tensor_player.the_tape.calls)
+        print(tensor_player.the_tape is TapeList[1])
+      
+        tensor_player.STATE = 'stop'
+        print(tensor_player.the_tape.keys())
+        set_player_state_manual('stop', tape_id=0)
+            
+        TapeList[0].reset()
            
         #tensor_player.STATE = 'stop'
         
     
     def test_temp(self): 
+        
+        print(dir(cublas))
+        
+        dgemm  =  cublas.gemm
+        a = np.ndarray((3, 3))
+        b = np.ndarray((3, 3))
+        c = np.ndarray((3, 3))
+        a = cp.asarray(a)
+        b = cp.asarray(b)
+        c = cp.asarray(c)
+        #dgemm(a)
+        print_vars(vars(),  ['dgemm.__doc__'])
+        raise  
+        
         from merapy.tensor_py import iTensor 
         if 1:
             print(iTensor.contract_core)
@@ -1136,7 +1230,7 @@ if __name__ == "__main__":
     else: 
         suite = unittest.TestSuite()
         add_list = [
-        'xtest_tensor_player_performance', 
+        'test_tensor_player_performance', 
         'test_tensor_player', 
         #'test_temp', 
         ]
