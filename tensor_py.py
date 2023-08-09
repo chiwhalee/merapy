@@ -62,6 +62,7 @@ from py3nj import (clebsch_gordan, wigner3j, wigner6j, wigner9j)
 
 
 import scipy
+
 try:
     import cupy as cp
 except:
@@ -1050,7 +1051,7 @@ class iTensor(TensorBase):
                 key_val_sep='=')
         
     @staticmethod
-    def unit_tensor(rank, QSp, totQN=None, dtype=float):
+    def unit_tensor(rank, QSp, totQN=None, dtype=float, use_gpu=False):
         """
             Q:  注意区分几种情况，
             
@@ -1070,7 +1071,7 @@ class iTensor(TensorBase):
         totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
         if rank%2 != 0:
             raise ValueError("rank shold be even, rank=%s"%(rank, ))
-        t = iTensor(rank, QSp, totQN, dtype=dtype) 
+        t = iTensor(rank, QSp, totQN, dtype=dtype, use_gpu=use_gpu) 
         pTot = 1
         
         rank1 =t.rank//2 #use t.rank/2 would yeild a float 2.0
@@ -1089,15 +1090,18 @@ class iTensor(TensorBase):
             d = 1
             for j in range(rank1):
                 d = d*t.QSp[j].Dims[pos[j]]
-
-            t.data[p:p+d**2] = np.identity(d,dtype=t.dtype).ravel()
+            if not use_gpu:
+                t.data[p:p+d**2] = np.identity(d,dtype=t.dtype).ravel()
+            else:
+                t.data[p:p+d**2] = cp.identity(d,dtype=t.dtype).ravel()
+                
         return t
     
     @staticmethod
-    def identity(qsp, dtype=float):
+    def identity(qsp, dtype=float, use_gpu=False):
         if hasattr(qsp, 'QNs'):
             qsp = qsp.copy_many(2, reverse=[1])
-        return iTensor.unit_tensor(2, qsp, dtype=dtype)
+        return iTensor.unit_tensor(2, qsp, dtype=dtype, use_gpu=use_gpu)
     
     def zeros(qsp, dtype=float, totQN=None):
         res = iTensor(QSp=qsp, dtype=dtype, totQN=totQN)
@@ -2147,7 +2151,6 @@ class iTensor(TensorBase):
         totQN = self.totQN
         res=iTensor(rank, QSp, totQN, buffer=buffer, 
                 dtype=self.dtype, use_buf=use_buf, use_gpu=self.use_gpu)
-
         pos=np.empty(self.rank, int)
         Dims=np.empty(self.rank, int)
         

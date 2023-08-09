@@ -1060,13 +1060,13 @@ class iTensorFactory(object):
         raise NotImplemented
 
     @staticmethod
-    def travial_tensor(rank, symmetry, dtype=float): 
+    def travial_tensor(rank, symmetry, dtype=float, use_gpu=False): 
         """
             scalar 1 with dummy indices 
         """
         qsp_class= symmetry_to_QspClass(symmetry)
         qsp = [qsp_class.null() for i in range(rank)]
-        res= iTensor(QSp=qsp, dtype=dtype)
+        res= iTensor(QSp=qsp, dtype=dtype, use_gpu=use_gpu)
         if dtype == float:  
             res.data[0] = 1.0
         else:  #complex type,  if not doing this, numpy would warn

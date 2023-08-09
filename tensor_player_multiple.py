@@ -392,7 +392,8 @@ def tensor_player(which):
                 totQN = self.totQN
                 
                 #since __init__ has been decorated, just do in following way                
-                Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
+                Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, 
+                        buffer=buffer, use_buf=use_buf, use_gpu=self.use_gpu)
                 
                 _, nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
                 if 0:

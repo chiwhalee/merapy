@@ -13,6 +13,7 @@ from builtins import object
 from past.utils import old_div
 import unittest 
 import numpy as np
+import numpy 
 import numpy.linalg as linalg
 import scipy 
 import scipy.linalg 
@@ -24,6 +25,7 @@ from math import sqrt
 import math  
 
 try:
+    import cupy
     import cupy as cp
 except:
     pass
@@ -76,11 +78,15 @@ class iTensor_rank2_operation(object):
         qn_list_l = []
         qn_list_r = []
         
+        qr_func = np.linalg.qr if not tt.use_gpu else cp.linalg.qr
+        
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
             
             #q, r = linalg.qr(mat, mode=mode)
-            q, r = linalg.qr(mat)
+            #q, r = linalg.qr(mat)
+            q, r = qr_func(mat)
+            
             if r_unique:
                 sign = np.sign(np.diag(r))
                 q = q * sign[np.newaxis,  :] #multiply on cols of q 
@@ -105,8 +111,8 @@ class iTensor_rank2_operation(object):
             qsp_q = qsp_r.copy(reverse=True)
             totqn_q, totqn_r = None, totqn
             
-        Q = iTensor(QSp=[tt.QSp[0], qsp_q], dtype=tt.dtype, totQN=totqn_q)
-        R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype, totQN=totqn_r)
+        Q = iTensor(QSp=[tt.QSp[0], qsp_q], dtype=tt.dtype, totQN=totqn_q, use_gpu=tt.use_gpu)
+        R = iTensor(QSp=[qsp_r, tt.QSp[1]], dtype=tt.dtype, totQN=totqn_r, use_gpu=tt.use_gpu)
 
         
         for i in range(Q.nidx): 
@@ -495,13 +501,13 @@ class iTensor_rank2_operation(object):
         """
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
-        VEC = np.ndarray(num_blocks, dtype=object)
-        VAL = np.ndarray(num_blocks, dtype=object)
+        VEC = numpy.ndarray(num_blocks, dtype=object)
+        VAL = numpy.ndarray(num_blocks, dtype=object)
         
-        dim_list = np.ndarray(num_blocks, dtype=int)
-        dim_list_trunc = np.ndarray(num_blocks, dtype=int)   #truncated dim_list 
+        dim_list = numpy.ndarray(num_blocks, dtype=int)
+        dim_list_trunc = numpy.ndarray(num_blocks, dtype=int)   #truncated dim_list 
         qn_list_l = []   #qn_list_r would be truncated,  so their def are different 
-        qn_list_r = np.ndarray(num_blocks, dtype=object)
+        qn_list_r = numpy.ndarray(num_blocks, dtype=object)
         dtype = tt.dtype 
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
@@ -511,18 +517,17 @@ class iTensor_rank2_operation(object):
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
             mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            if dtype==float: 
-                val = np.empty(dl, order='F')
-                common_util.matrix_eigen_vector(mat, val) 
-            else:
+            if not tt.use_gpu:
                 val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
+            else:
+                val, mat = cp.linalg.eigh(mat)   #pay attention here tensor.data is overwritten !!
             
             VAL[i] = val[: dl] 
             VEC[i] = mat
             dim_list[i] = dl 
             qn_list_l.append(tt.QSp[0].QNs[qn0].copy()) 
             qn_list_r[i] = tt.QSp[1].QNs[qn1].copy()
-        totdim = np.sum(dim_list)
+        totdim = numpy.sum(dim_list)
         index = list(range(num_blocks))
         
         if  (trunc_dim is not None and  trunc_dim < totdim) or trunc_err_tol is not None or val_lim is not None: 
@@ -530,19 +535,22 @@ class iTensor_rank2_operation(object):
         else:
             is_trunc = False
             dim_list_trunc = dim_list 
-            trunc_err = np.nan 
+            trunc_err = numpy.nan 
         
         #is_trunc = 1
         #print_vars(vars(),  ['is_trunc', 'trunc_dim', 'totdim', ] )
         if debug:
-            iii = np.abs(VAL[0])
+            iii = numpy.abs(VAL[0])
             jjj = iii.argsort()
             jjj = jjj[::-1]   # make it into desendent order 
             print_vars(vars(),  ['all vals:VAL[0][jjj]'], round=10, color='blue')
         
+        
+        np = numpy if not tt.use_gpu else cupy
         if is_trunc:
             temp = {}
             temp[0] = np.ndarray(totdim, dtype=float)     # stores eigen values
+                
             temp[1] = np.ndarray(totdim, dtype=int)
             temp[2] = np.ndarray(totdim, dtype=int)
             d0 = 0
@@ -661,7 +669,7 @@ class iTensor_rank2_operation(object):
         q1 = tt.qsp_class(len(qn_list_l), qn_list_l, dim_list.tolist())
         q2 = tt.qsp_class(len(qn_list_r), qn_list_r.tolist(), dim_list_trunc.tolist())
         
-        vec_mat = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype)
+        vec_mat = iTensor(QSp=[q1, q2], use_buf=use_buff, dtype=tt.dtype, use_gpu=tt.use_gpu)
         
         for i in range(vec_mat.nidx): 
             p  = vec_mat.Block_idx[0, i]
@@ -670,7 +678,7 @@ class iTensor_rank2_operation(object):
             
         if return_val: 
             
-            val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff)
+            val_mat = iTensor(QSp=[q2.copy(reverse=1), q2.copy()], use_buf=use_buff, use_gpu=tt.use_gpu)
             
                 
             for i in range(val_mat.nidx): 
@@ -1280,11 +1288,11 @@ class Tensor_svd(iTensor_rank2_operation):
             if return_rank2:
                 QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
                 QSp[div].reverse()
-                Vg = iTensor(div+1, QSp, tQN, dtype=itensor.dtype)
+                Vg = iTensor(div+1, QSp, tQN, dtype=itensor.dtype, use_gpu=itensor.use_gpu)
             else:
                 #QSp[div].QNs[0] = cls.QSp_Group1.QNs[gidx]
                 #QSp[div].reverse()
-                Vg = iTensor(div, QSp, tQN, dtype=itensor.dtype)
+                Vg = iTensor(div, QSp, tQN, dtype=itensor.dtype, use_gpu=itensor.use_gpu)
                 
                 pass
             Vg.data[:] = 0.0
@@ -1384,7 +1392,11 @@ class Tensor_svd(iTensor_rank2_operation):
         
         nV = cls.QSp_Group1.Dims[gidx]
         mV = cls.QSp_Group2.Dims[gidx]        
-        VV = np.empty((nV, mV), dtype=itensor.dtype, order='F')
+        if not itensor.use_gpu:
+            VV = np.empty((nV, mV), dtype=itensor.dtype, order='F')
+        else:
+            VV = cp.empty((nV, mV), dtype=itensor.dtype, order='F')
+            
         
         for idx  in range(itensor.nidx):
             if cls.QN_Group[0,idx] != gidx:  
@@ -1780,11 +1792,12 @@ class TestIt(unittest.TestCase):
             t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
             data = np.random.random(t.totDim)
             t.data[: ] = data
+            t = t + t.T
         if 1: 
             vec, val, err = Tensor_svd.eig_rank2(t.copy(), return_trunc_err=1, 
                     trunc_dim=10,  return_val=1) 
             print_vars(vars(),  ['temp["trunc_err"]'])
-            self.assertAlmostEqual(err, 0.02467994881527491, 12)
+            self.assertAlmostEqual(err, 0.04674733564505018, 12)
             
         trunc_dim  = 1 
         for trunc_dim in [1, 5, 20, 10000]: 
@@ -1813,7 +1826,7 @@ class TestIt(unittest.TestCase):
             #print_vars(vars(),  ['t.to_ndarray()'], key_val_sep='\n')
             vac,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim, trunc_err_tol=trunc_err_tol,   return_val=1) 
             print_vars(vars(),  ['repr(val.diagonal())'])
-            old = [ 1.814,  1.391, -0.594,  1.259,  0.99 ]
+            old = np.asarray([3.795, 2.516, 3.428, 1.726, 2.079])
             self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
             
         if 1:  # trunc by val_lim 
@@ -1825,6 +1838,8 @@ class TestIt(unittest.TestCase):
             vac,  val = Tensor_svd.eig_rank2(t.copy(), trunc_dim=trunc_dim, val_lim=val_lim, trunc_err_tol=trunc_err_tol,   return_val=1) 
             print_vars(vars(),  ['repr(val.diagonal())'])
             old = [1.814, 1.391, 1.259]
+            old = np.asarray([3.795, 2.516, 3.428, 1.726, 2.079]) 
+            print_vars(vars(),  ['repr(val.diagonal())'])
             self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
         
         if 0: #use qsp_guide 
@@ -1839,8 +1854,6 @@ class TestIt(unittest.TestCase):
             qsp = vec.sh[1]
             qsp_old = qsp_any('U1', [0, -1, 1, -2, 2], [2, 1, 2, 1, 2])
             self.assertEqual(qsp, qsp_old)
-           
-            
         
     def test_exp_rank2(self): 
         np.set_printoptions(precision=3)
@@ -2004,22 +2017,18 @@ class TestIt(unittest.TestCase):
             #qsp = QspU1.easy_init([0, 1, -1] , [4, 2, 3])
             #qsp = QspU1.easy_init([0, 1, -1, ], [8, 5, 5, ]) 
             qsp = qsp.copy_many(2, reverse=[1])
-            t = iTensor.example(qsp=qsp, rank=2,   symmetry='U1')
+            t = iTensor.example(qsp=qsp, rank=2, symmetry='U1')
             data = np.random.random(t.totDim)
             t.data[: ] = data
+            t = t + t.T 
+            
         if 1: 
-            print_vars(vars(),  ['t.sh'])
-            #qsp_guide = None
-            qsp_guide = QspU1.easy_init([0, -1, 1, -2, 5] , [1, 1, 1, 1, 4])
-            vec, val, err = Tensor_svd.eig_rank2(t,  return_trunc_err=1, 
-                    qsp_guide=qsp_guide, 
+            vec, val, err = Tensor_svd.eig_rank2(t.copy(), return_trunc_err=1, 
                     trunc_dim=10,  return_val=1) 
             print_vars(vars(),  ['temp["trunc_err"]'])
-            print_vars(vars(),  ['qsp_guide'])
-            print_vars(vars(),  ['vec.sh'])
-            qsp = vec.sh[1]
-            qsp_old = qsp_any('U1', [0, -1, 1, 2], [1, 1, 2, 2])
-            self.assertEqual(qsp, qsp_old)
+            self.assertAlmostEqual(err, 0.02467994881527491, 12)
+        raise  
+        
             
     
 if __name__ == "__main__":

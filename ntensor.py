@@ -1177,7 +1177,7 @@ def contract_tensors_new(X, Y, indX, indY, use_buff=False):
         a = - np.arange(1, 1 + len(indX))
         V1[indX] = a
         V2[indY] = a
-        return X.contract(Y, V1, V2, return_v3=True, use_buf=use_buff)[0]
+        return X.contract(Y, V1, V2, return_v3=True, use_buf=use_buff, )[0]
 
 class nTensor(np.ndarray, TensorBase):
     def __new__(cls, shape, dtype=float, buffer=None, offset=0,
