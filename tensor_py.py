@@ -4054,6 +4054,7 @@ class Test_iTensor(unittest.TestCase):
             self.assertTrue(t.shape==t2.shape)
 
     def test_itensor_gpu(self):
+        from merapy.tensor_svd import Tensor_svd
         try:
             type(cp)
         except:
@@ -4064,15 +4065,34 @@ class Test_iTensor(unittest.TestCase):
         d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
         qsp = [Dl, Dr, d]
         use_gpu = 1
+        #construction
         t = iTensor(QSp=qsp, use_gpu=use_gpu)
+        t.data = cp.random.random(t.data.size)-0.5
         assert t.device == 'gpu' 
+        
+        
+        #contract
+        tt = t.contract(t.conj(), (0, 1, 2), (3, 1, 2))
+        
+        #transpose
         tp = t.transpose((0, 2, 1))
         self.assertTrue(tp.device=='gpu')
         
+        #merge and split index
         t2 = t.merge_qsp((1, 2))
         t3 = t2.split_qsp(1, (Dr, d))
         self.assertTrue(t==t3)
-    
+        
+        #svd
+        u, s, v =Tensor_svd.svd_rank2(tt)
+        print_vars(vars(),  ['tt.sh'])
+        temp = u.dot(s).dot(v)
+        #print_vars(vars(),  ['temp==tt'])
+        self.assertTrue(temp.is_close_to(tt))
+        
+        
+        
+        
 
     def test_temp(self): 
         if 1:

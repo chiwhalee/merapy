@@ -23,6 +23,11 @@ import warnings
 from math import sqrt 
 import math  
 
+try:
+    import cupy as cp
+except:
+    pass
+
 
 from merapy.tensor import iTensor
 #from tensor_py import tensor_player
@@ -260,6 +265,9 @@ class iTensor_rank2_operation(object):
                     https://github.com/numpy/numpy/issues/1588
             
         """
+        
+        module = scipy if not tensor.use_gpu else cp 
+        
         trunc_dim = trunc_dim if trunc_dim is not None else 10000000
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
@@ -288,15 +296,17 @@ class iTensor_rank2_operation(object):
             else:
                 try:  # sometimes there is SVD not converge error
                     if compute_uv: 
-                        u, s, v=scipy.linalg.svd(mat, full_matrices=full_matrices)
+                        u, s, v=module.linalg.svd(mat, full_matrices=full_matrices)
                         uu[i], ss[i], vv[i] = u, s, v
                     else: 
-                        s = scipy.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
+                        s = module.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
                         ss[i] = s
-                except scipy.linalg.LinAlgError as err:  # see note1
+                except module.linalg.LinAlgError as err:  # see note1
                     msg = " scipy.linalg.svd not converge  use another version of SVD instead"
                     warnings.warn(msg)
                     print(msg)
+                    if tensor.use_gpu:
+                        raise  
                     u, s, v = common_util.matrix_svd(min(dl, dr), mat)
                     uu[i], ss[i], vv[i] = u, s, v
                 except Exception as err:
@@ -416,9 +426,9 @@ class iTensor_rank2_operation(object):
         qsp_l_rev = qsp_l.copy(); qsp_l_rev.reverse()
         qsp_r_rev = qsp_r.copy(); qsp_r_rev.reverse()
         
-        U = iTensor(QSp=[tt.QSp[0], qsp_l_rev], dtype=tt.dtype)
-        V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]], dtype=tt.dtype)
-        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=float)
+        U = iTensor(QSp=[tt.QSp[0], qsp_l_rev], dtype=tt.dtype, use_gpu=tensor.use_gpu)
+        V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]], dtype=tt.dtype, use_gpu=tensor.use_gpu)
+        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=float, use_gpu=tensor.use_gpu)
         if totqn != totqn.__class__.qn_id():  # when itensor carry non-travial totqn  
             if totqn_on_which == 's' : 
                 pass
@@ -1817,7 +1827,7 @@ class TestIt(unittest.TestCase):
             old = [1.814, 1.391, 1.259]
             self.assertTrue(np.allclose(val.diagonal(), old, 1e-3))
         
-        if 1: #use qsp_guide 
+        if 0: #use qsp_guide 
             
             qsp_guide = QspU1.easy_init([0, -1, 1, -2, 5] , [1, 1, 1, 1, 4])
             vec, val, err = Tensor_svd.eig_rank2(t.copy(),  return_trunc_err=1, 

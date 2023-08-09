@@ -284,7 +284,9 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
             print('ssh connection failed')
             pass
 
-def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, timeout=None,  info=0): 
+def rpyc_load(path, backend='sftp',  use_local_storage=False, 
+        host='local', 
+        compress=False, timeout=None,  info=0): 
     if not use_local_storage: 
         res= load(path)
     else:
@@ -332,7 +334,7 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, ti
                 #不直接obtain而是把str传输过来再loads的原因是，obtain内部使用了pickle，而它不支持pickle any thing 
                 s= load_local(path, decompress=False, as_str=1)
         elif backend == 'sftp' :
-            ssh = ssh_connect('local', backend='paramiko', timeout=timeout)
+            ssh = ssh_connect(host, backend='paramiko', timeout=timeout)
             ftp = ssh.open_sftp()
             try:
                 f=ftp.file(path, 'r', -1)
@@ -363,7 +365,9 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False, compress=False, ti
             
     return res
            
-def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=False, timeout=None): 
+def rpyc_save(path, obj, backend='auto',  use_local_storage=False, 
+        host='local', 
+        compress=False, timeout=None): 
     """
         comparison of speed  'scp' > 'paramiko.sftp' >'rpyc'
     """
@@ -400,7 +404,7 @@ def rpyc_save(path, obj, backend='auto',  use_local_storage=False, compress=Fals
             ##ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             #ssh.connect(LOCAL_IP, username='zhli')
             #ssh = ssh_connect('localhost', backend='paramiko')
-            ssh = ssh_connect('local', backend='paramiko', timeout=timeout)
+            ssh = ssh_connect(host, backend='paramiko', timeout=timeout)
             
             ftp = ssh.open_sftp()
             f=ftp.file(path, 'w', -1)
@@ -445,11 +449,17 @@ class TestIt(unittest.TestCase):
             self.assertTrue(a==obj)
     
     def test_save_and_load_sftp(self): 
+        """
+            this test passes only  on LOCAL_IP!
+        
+        """
+        
+        host = 'local'
         with make_temp_dir() as dd: 
             fn = dd + '/aaa'
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-            rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1, timeout=3)
-            a=rpyc_load(fn, backend='sftp', use_local_storage=1)
+            rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1, host=host,  timeout=3)
+            a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host)
             self.assertTrue(a==obj)
 
     def test_redirect(self):
@@ -497,9 +507,9 @@ if __name__ == '__main__' :
            #'test_temp', 
            #'xtest_ssh_connect', 
            #'xtest_save_and_load', 
-           #'test_save_and_load_sftp', 
+           'test_save_and_load_sftp', 
            #'xtest_rpyc_conn_local', 
-           'xtest_rpyc_conn_local_zero', 
+           #'xtest_rpyc_conn_local_zero', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
