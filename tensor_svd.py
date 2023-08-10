@@ -344,29 +344,29 @@ class iTensor_rank2_operation(object):
         
         if is_trunc:
             temp = {}
-            temp[0] = np.ndarray(totdim, dtype=float)
-            temp[1] = np.ndarray(totdim, dtype=int)
-            temp[2] = np.ndarray(totdim, dtype=int)
+            temp[0] = module.ndarray(totdim, dtype=float)
+            temp[1] = module.ndarray(totdim, dtype=int)
+            temp[2] = module.ndarray(totdim, dtype=int)
             
             d0 = 0
             for i, d in enumerate(dim_list):   #put together singular value for each quantum numbers, prepare for truncation
                 temp[0][d0: d0 + d] = ss[i]
                 temp[1][d0: d0 + d] = i
-                temp[2][d0: d0 + d] = np.arange(d, dtype=int)
+                temp[2][d0: d0 + d] = module.arange(d, dtype=int)
                 
                 d0 += d
             ind_sorted = temp[0].argsort() 
             ind_sorted = ind_sorted[: : -1]
             
-            norm_orig = np.linalg.norm(temp[0])   # this also equals norm of psi 
+            norm_orig = module.linalg.norm(temp[0])   # this also equals norm of psi 
                 
             if trunc_err_tol is not None:   # determin trunc_dim from trunc_err_tol
                 s_sorted = temp[0][ind_sorted]
                 if 1:  
                     s_sorted_normalized  =  s_sorted/norm_orig  #here enforce normalization of singular values, even if psi was not normalized 
-                s2_cumsum = np.cumsum(s_sorted_normalized**2)
+                s2_cumsum = module.cumsum(s_sorted_normalized**2)
                 #here substract 1e-15 is because if set trunc_err_tol=0, it gurranteens there is at leaset one element larger than the right so that np.nonzero wont return an empty list. this in effect constraint trunc_err_tol at least larger than 1e-15
-                arg = np.where(s2_cumsum>=1-trunc_err_tol)[0]
+                arg = module.where(s2_cumsum>=1-trunc_err_tol)[0]
                 try: 
                     dim = arg[0] + 1  
                 except IndexError:  # when arg = []
@@ -385,11 +385,12 @@ class iTensor_rank2_operation(object):
             
             
             
-            norm_trunced = np.linalg.norm(temp[0])
+            norm_trunced = module.linalg.norm(temp[0])
                 
             #trunc_err = 1-(norm_trunced)**2  
             #print_vars(vars(),  ['norm_trunced', 'norm_orig'])
             trunc_err = 1-(norm_trunced/norm_orig)**2  
+            trunc_err = float(trunc_err)  # if using GPU, force changing to normal float
             
             
             empty_list = []
@@ -459,14 +460,14 @@ class iTensor_rank2_operation(object):
             p  = S.Block_idx[0, i]
             size = S.Block_idx[1, i]
             if not full_matrices:
-                S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+                S.data[p: p + size] = module.diag(ss[i]).ravel(order='F')
             else:
                 if dim_list_l[i] ==  dim_list_r[i]:
-                    S.data[p: p + size] = np.diag(ss[i]).ravel(order='F')
+                    S.data[p: p + size] = module.diag(ss[i]).ravel(order='F')
                 else:
                     m, n = dim_list_l[i], dim_list_r[i]
-                    temp = np.zeros((m, n))
-                    temp[np.diag_indices(min(m, n))]=ss[i]
+                    temp = module.zeros((m, n))
+                    temp[module.diag_indices(min(m, n))]=ss[i]
                     S.data[p: p + size] = temp.ravel(order='F')
                 
         if not return_trunc_err:
@@ -1278,7 +1279,7 @@ class Tensor_svd(iTensor_rank2_operation):
                 common_util.matrix_eigen_vector(V_buf, E[: esize])
             else:
                 V_buf = V_buf.T  #this may be not needed as V_buf should be hermit, but, I do some tests in which it is not hernmit
-                warnings.warn('I changed here')
+                #warnings.warn('I changed here')
                 E, V_buf = np.linalg.eigh(V_buf)
                 #E, V_buf = np.linalg.eig(V_buf)
                 
@@ -1390,12 +1391,11 @@ class Tensor_svd(iTensor_rank2_operation):
         """ 
         """
         
+        np = numpy if not itensor.use_gpu else cupy 
+        
         nV = cls.QSp_Group1.Dims[gidx]
         mV = cls.QSp_Group2.Dims[gidx]        
-        if not itensor.use_gpu:
-            VV = np.empty((nV, mV), dtype=itensor.dtype, order='F')
-        else:
-            VV = cp.empty((nV, mV), dtype=itensor.dtype, order='F')
+        VV = np.empty((nV, mV), dtype=itensor.dtype, order='F')
             
         
         for idx  in range(itensor.nidx):
