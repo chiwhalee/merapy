@@ -529,21 +529,26 @@ def tensor_player(which):
                         bottle neck. 
                     
                 """
-                rank1 = self.rank
-                rank2 = T2.rank
-                rank3 = rank1+rank2-div-div
-                #tQN = self.totQN+T2.totQN
-                tQN = self.totQN.__add__(T2.totQN)
-                shift = rank1-div
-                
-                QSp = self.QSp[:shift]
-                QSp.extend(T2.QSp[div:rank2])
+                if 1:
+                    rank1 = self.rank
+                    rank2 = T2.rank
+                    rank3 = rank1+rank2-div-div
+                    #tQN = self.totQN+T2.totQN
+                    tQN = self.totQN.__add__(T2.totQN)
+                    shift = rank1-div
+                    
+                    QSp = self.QSp[:shift]
+                    QSp.extend(T2.QSp[div:rank2])
+                else:
+                    rank3 = None
+                    QSp = None
+                    tQN = None
                 
                 if rank3==0:
                     QSp = [self.QSp[0].null()]
                     
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-                #matmul_func = dgemm if dtype == float else zgemm  
+                
                     
                 T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, 
                         buffer=data, dtype=dtype, use_buf=use_buf)
@@ -1187,7 +1192,7 @@ class TestIt(unittest.TestCase):
         #tensor_player.STATE = 'stop'
     
     def test_tensor_player_performance(self):
-        if 0:
+        if 1:
             n, m = 150, 100
             a=cp.random.random((n, m))
             #a = a + a.T 
@@ -1213,21 +1218,19 @@ class TestIt(unittest.TestCase):
         #iTensor=decorate_methods(decorator=tensor_player, meth_names=None)(iTensor)
         #Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[400, 100, 100, 50, 50])
         Dl = qsp_any('U1', qns=[0, 1, -1, ], 
-                dims=[200, 130, 130, ])
+                dims=[500, 130, 130, ])
         #Dl = qsp_any('U1', qns=[0, 1, -1, 2, -2], dims=[4, 2, 2, 1, 1])
         Dr = Dl.conj()
         d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
         qsp = [Dl, Dr]
         
-        use_gpu = 0
+        use_gpu = 1
         
         t = iTensor(QSp=qsp, use_gpu=use_gpu)
         tc = t.copy()
-        N = 100
+        N = 10
         
-        TapeList[1] = Tape()   #construct a default tape
         data = cp.ndarray(t.data.size) if t.use_gpu else np.ndarray(t.data.size) 
-        
         
         t1 = time.time()
         for i in range(N):
@@ -1244,9 +1247,6 @@ class TestIt(unittest.TestCase):
             
         print_vars(vars(),  ['t2-t1'])
         print(TapeList[0].calls)
-        print(TapeList[1].calls)
-        print(tensor_player.the_tape.calls)
-        print(tensor_player.the_tape is TapeList[1])
       
         tensor_player.STATE = 'stop'
         print(tensor_player.the_tape.keys())
@@ -1305,7 +1305,7 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         add_list = [
         #'test_tensor_player_performance', 
-        #'test_tensor_player', 
+        'test_tensor_player', 
         'test_tensor_player_gpu', 
         #'test_tensor_player_2', 
         #'test_temp', 

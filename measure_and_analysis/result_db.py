@@ -978,11 +978,6 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         dir = dir.replace('dropbox', '')
         return dir 
     
-    def state_path(self, sh):
-        name = self.shape_to_backup_path(sh)
-        dir = self.state_parpath
-        res= '/'.join([dir, name])
-        return res 
     
     @property
     def dir_name(self):
@@ -3435,13 +3430,21 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         res = 'N=%(N)d-D=%(D)d.pickle'%vars()
         return res
     
-    def shape_path(self, sh): 
+    #def shape_path(self, sh): 
+    def state_path(self, sh): 
         fn = self.__class__.shape_to_backup_fn(sh)
         dir = self.parpath.replace('Dropbox', '').replace('dropbox', '')
         dir = dir.replace(RESULTDB_DIR, BACKUP_STATE_DIR)
         return '/'.join([dir, fn])
     
     shape_to_backup_path = state_path  # def shape_to_backup_path
+    
+    #def state_path(self, sh):
+    #    name = self.shape_to_backup_path(sh)
+    #    dir = self.state_parpath
+    #    res= '/'.join([dir, name])
+    #    return res 
+    
 
     def update_db_structure(self, update_what='all'):
         """
