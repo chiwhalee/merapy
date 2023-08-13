@@ -298,6 +298,8 @@ class iTensor(TensorBase):
     def __setstate__(self, d): 
         self.__dict__.update(d)
         self.buf_ref = np.array([-1, -1], int)   # this is important 
+        if not hasattr(self, 'use_gpu'):   # add at 2023/ 08/13
+            self.use_gpu = False
     
     def __eq__(self, other):
         """
