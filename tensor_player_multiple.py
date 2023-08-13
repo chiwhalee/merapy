@@ -381,18 +381,9 @@ def tensor_player(which):
 
             #@profile
             def permute_player(self, P, buffer=None, use_buf=False):
-                rank = self.rank
                 
-
-                #QSp=[self.QSp[P[i]].copy() for i in range(rank)]
-                #totQN = self.totQN.copy()
-                #copy is not needed
                 
-                QSp=[self.QSp[P[i]] for i in range(rank)]
-                totQN = self.totQN
-                
-                #since __init__ has been decorated, just do in following way                
-                Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, 
+                Tp=self.__class__(None, None, None, dtype=self.dtype, 
                         buffer=buffer, use_buf=use_buf, use_gpu=self.use_gpu)
                 
                 _, nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
@@ -437,7 +428,6 @@ def tensor_player(which):
                     QSp = self.QSp[:shift]
                     QSp.extend(T2.QSp[div:rank2])
                 
-                
                 if rank3==0:
                     #QSp = self.QSp[0].null()
                     #QSp = [self.QSp[0].null()]
@@ -467,7 +457,7 @@ def tensor_player(which):
                     
                     Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
                     Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=np.int)
-                    data2=T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F') 
+                    data2 = T2.data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F') 
                     
                     for idx1 in range(self.nidx):
                         iQN1[0] = 1 #!for rank=0
@@ -529,30 +519,12 @@ def tensor_player(which):
                         bottle neck. 
                     
                 """
-                if 1:
-                    rank1 = self.rank
-                    rank2 = T2.rank
-                    rank3 = rank1+rank2-div-div
-                    #tQN = self.totQN+T2.totQN
-                    tQN = self.totQN.__add__(T2.totQN)
-                    shift = rank1-div
-                    
-                    QSp = self.QSp[:shift]
-                    QSp.extend(T2.QSp[div:rank2])
-                else:
-                    rank3 = None
-                    QSp = None
-                    tQN = None
-                
-                if rank3==0:
-                    QSp = [self.QSp[0].null()]
                     
                 dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-                
                     
-                T3 = self.__class__(rank=rank3, QSp=QSp, totQN=tQN, 
+                T3 = self.__class__(rank=None, QSp=None, totQN=None, 
                         buffer=data, dtype=dtype, use_buf=use_buf)
-                #print_vars(vars(),  ['use_buf', 'T3.buf_ref', 'type(data)'])
+                
                 T3.data[:]=0.0
                 self_data = self.data
                 T2_data = T2.data
@@ -1174,7 +1146,7 @@ class TestIt(unittest.TestCase):
         for i in range(N):
             #print('i=', i)
             #set_player_state_auto(iter=i, record_at=1, info=1)    
-            set_player_state_auto(iter=i, record_at=0, tape_id='ttt',  info=0)
+            set_player_state_auto(iter=i, record_at=0, tape_id=0,  info=0)
             t.transpose((1, 0, 3, 2))
             t.contract(t, [0, 1, 2, 3], [2, 3, 4, 5])
             #t.contract(t, [0, 1], [1, 2])
@@ -1186,7 +1158,7 @@ class TestIt(unittest.TestCase):
         #print(TapeList[0])
         #print(tensor_player.the_tape.keys())
         
-        set_player_state_manual('stop', tape_id='ttt')
+        set_player_state_manual('stop', tape_id=0)
             
            
         #tensor_player.STATE = 'stop'
@@ -1298,7 +1270,7 @@ if __name__ == "__main__":
 
 
     warnings.filterwarnings('ignore')
-    if 0:
+    if 1:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     else: 
