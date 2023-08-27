@@ -50,8 +50,6 @@ import itertools
 import math 
 from collections import OrderedDict
 from multiprocessing import Pool 
-#from common_util import get_num_of_threads
-#import common_util
 
 
 from scipy.linalg.blas import dgemm, sgemm, zgemm
@@ -81,7 +79,7 @@ from merapy.quantum_number import *
 #from merapy import quantum_number_py
 
 from merapy import common_util
-#import merapy.common_util as common_util 
+
 
 from merapy import array_permutation
 #from merapy.set1 import *
@@ -210,8 +208,8 @@ class iTensor(TensorBase):
     """
     num_of_instance = 0
     #issue:  these buffer may not compatible with complex type 
-    DATA_BUFFER = [DataBuffer(size=100, dtype=float) for  i in range(2)]
-    DATA_BUFFER_GPU = [DataBuffer(size=100, dtype=float) for  i in range(2)]
+    DATA_BUFFER = [DataBuffer(size=20, dtype=float) for  i in range(2)]
+    DATA_BUFFER_GPU = [DataBuffer(size=20, dtype=float) for  i in range(2)]
     #BUFFER_ON = False
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
@@ -1119,17 +1117,16 @@ class iTensor(TensorBase):
                 idx3 = T3.idx[p3]
                 p3 = T3.Block_idx[0,idx3]
                 data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
-           
-            see iTensor_GetPosition in f90
             params: 
                 qn_ind_tuple: 量子数编号的组合
                 量子数的编号也是用的 前小后大的存储顺序
         """
         if len(qn_ind_tuple)==0: #this is for rank 0 tensor
             return 0
-        Dims=np.array([self.QSp[i].nQN for i in range(self.rank)], int)  #attention: this Dims is not self.Dims
-        p=common_util.matrix_get_position(qn_ind_tuple, Dims)
-        #assert p<self.idx_dim, (p, self.idx_dim)
+        
+        dims=tuple(self.QSp[i].nQN for i in range(self.rank)) 
+        p = np.ravel_multi_index(qn_ind_tuple, dims, order='F')
+        
         return p
     
     def get_idx(self, qn_id_tuple):
@@ -1153,14 +1150,15 @@ class iTensor(TensorBase):
         
     
     def get_position_rev(self, index_linear):
-        """ map a ind_linear to a tuple 
-            see iTensor_GetPosition_rev
+        """ 
+            map a ind_linear to a tuple 
+            
             Get Position in T, get iQN from pos
         
         """
-        Dims=np.array([self.QSp[i].nQN for i in range(self.rank)],"int")        
-        #pos=np.empty(self.rank,"int")
-        pos=common_util.matrix_get_position_rev(index_linear,Dims)
+        dims=tuple(self.QSp[i].nQN for i in range(self.rank)) 
+        pos = np.unravel_index(index_linear, dims, order='F')
+            
         return pos
 
     def set_element(self, qn_id_tuple, sub_ind, element):
@@ -2231,6 +2229,8 @@ class iTensor(TensorBase):
                 Dim2 = 1 
             else:
                 Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=int)
+            
+            #issue: the following may be replaced by np.tensordot
             Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=int)  # np.prod([])=1.0, so use dtype=np.int 
             
             data2 = T2.get_block(idx2)
@@ -2712,7 +2712,7 @@ class iTensor(TensorBase):
             block_pos_in_data= self.Block_idx[0,idx]
             qn_comb_pos = self.Block_idx[2,idx]            
             #qn_comb_pos is the position of QN, 线性坐标与多维坐标点转换
-            #pos=self.get_position_rev(qn_comb_pos)
+            
             #pos is coordinate of a set of quantum number 
             qn_coord=self.get_position_rev(qn_comb_pos)
             block_size=[self.QSp[i].Dims[qn_coord[i]] for i in range(rank)]
@@ -2836,142 +2836,6 @@ class iTensor(TensorBase):
         """
         pass
     
-    def direct_product_back_back_del(self, T2):
-        """
-        status_1_verified
-        this function was originally defined under Tensor class, now is moved here
-        see Direct_Product in f90
-
-        """
-        QSp=[QuantSpace() for i in range(self.rank)] 
-
-        T1=self
-        #attention: here the division may be incorrect
-        #q: why /2?
-        rank1 = T1.rank//2
-        rank2 = T2.rank//2      
-        rank3 = rank1+rank2
-        for i in range(rank1):
-            #q: attention: 注意这里还有下面从0开始计数,可能不对
-            #attention 这里应该用deepcopy？
-            QSp[i] = T1.QSp[i]
-            QSp[i+rank3] = T1.QSp[i+rank1]
-        
-        for i in range(rank2):
-            QSp[i+rank1] = T2.QSp[i]
-            QSp[i+rank1+rank3] = T2.QSp[i+rank2]
-        
-        totQN = T1.totQN+T2.totQN
-        #print 'ttt', totQN.val, T1.totQN.val, T2.totQN.val
-        #init_Tensor(T1.rank+T2.rank, QSp, totQN, T3)
-        #q: attention:  here may be incoorect
-        
-        T3= iTensor(T1.rank+T2.rank, QSp, totQN)
-        
-        T3.data[:] = 0.0
-        V1 = np.empty(self.rank, "int")
-        V2 = np.empty(self.rank, "int")
-        V3 = np.empty(self.rank, "int")
-        for idx1 in range(T1.nidx):
-            pidx1 = T1.Block_idx[0, idx1]
-            V1[0:T1.rank] = T1.Addr_idx[0:T1.rank,idx1]
-            nA=1; mA=1
-            for i in range(rank1):
-
-                nA = nA*T1.QSp[i].Dims[V1[i]]
-                mA = mA*T1.QSp[i+rank1].Dims[V1[i+rank1]]
-                V3[i] = V1[i]
-                V3[i+rank3] = V1[i+rank1]
-
-            for idx2 in range(T2.nidx):
-                pidx2 = T2.Block_idx[0, idx2]
-                V2[0:T2.rank] = T2.Addr_idx[0:T2.rank, idx2]
-                nB=1; mB=1
-                for i in range(rank2):
-                    nB = nB*T2.QSp[i].Dims[V2[i]]
-                    mB = mB*T2.QSp[i+rank2].Dims[V2[i+rank2]]
-                    V3[i+rank1] = V2[i]
-                    V3[i+rank1+rank3] = V2[i+rank2]
-                #idx3 linear position of  qn combination V3
-                idx3 = T3.get_position(V3[:rank3*2])   
-                
-                pidx3 = T3.Block_idx[0, T3.idx[idx3]]
-                    #print 'selffff.idx', T1.idx, T2.idx
-                #Matrix_DirectProduct[T1.data[pidx1], nA, mA, T2.data[pidx2], nB, mB, T3.data[pidx3]]
-                data1 = T1.data[pidx1:pidx1 + nA*mA].reshape((nA, mA))
-                data2 = T2.data[pidx2:pidx2 + nB*mB].reshape((nB, mB))                
-                T3.data[pidx3:pidx3 + nA*nB*mA*mB] = common_util.matrix_direct_product(data1, data2).ravel()
-        return T3
-    
-    def direct_product_bac_del(self, T2, order="F", use_buf=False):
-        """
-        this function was originally defined under Tensor class, now is moved here
-        see Direct_Product in f90
-        parameters:
-            T1^{I1}_{J1}, T2^{I2}_{J2}
-        returns:
-            T3^{I1I2}_{J1J2}
-            i.e. index(QSp) of T3 is ordered J1, J2, I1, I2 in sequel
-
-
-        """
-        QSp=[None for i in range(self.MaxRank)] 
-
-        T1=self
-        #attention: here the division may be incorrect
-        #q: why /2?
-        rank1 = T1.rank//2
-        rank2 = T2.rank//2      
-        rank3 = rank1+rank2
-        for i in range(rank1):
-            QSp[i] = T1.QSp[i].copy()
-            QSp[i+rank3] = T1.QSp[i+rank1].copy()
-        for i in range(rank2):
-            QSp[i+rank1] = T2.QSp[i].copy()
-            QSp[i+rank1+rank3] = T2.QSp[i+rank2].copy()
-        
-        #这里暗含了一个张量积标识fusion的过程
-        totQN = T1.totQN+T2.totQN
-        T3= iTensor(T1.rank+T2.rank, QSp, totQN, use_buf=use_buf)
-        #print 'ttt', totQN.val, T1.totQN.val, T2.totQN.val
-        
-        T3.data[:] = 0.0
-        V1 = np.empty(self.MaxRank, "int")
-        V2 = np.empty(self.MaxRank, "int")
-        V3 = np.empty(self.MaxRank, "int")
-        for idx1 in range(T1.nidx):
-            pidx1 = T1.Block_idx[0, idx1]
-            V1[0:T1.rank] = T1.Addr_idx[0:T1.rank,idx1]
-            nA=1; mA=1
-            for i in range(rank1):
-
-                nA = nA*T1.QSp[i].Dims[V1[i]]
-                mA = mA*T1.QSp[i+rank1].Dims[V1[i+rank1]]
-                V3[i] = V1[i]
-                V3[i+rank3] = V1[i+rank1]
-
-            for idx2 in range(T2.nidx):
-                pidx2 = T2.Block_idx[0, idx2]
-                V2[0:T2.rank] = T2.Addr_idx[0:T2.rank, idx2]
-                nB=1; mB=1
-                for i in range(rank2):
-                    nB = nB*T2.QSp[i].Dims[V2[i]]
-                    mB = mB*T2.QSp[i+rank2].Dims[V2[i+rank2]]
-                    V3[i+rank1] = V2[i]
-                    V3[i+rank1+rank3] = V2[i+rank2]
-                #idx3 linear position of  qn combination V3
-                idx3 = T3.get_position(V3[:rank3*2])   
-                
-                pidx3 = T3.Block_idx[0, T3.idx[idx3]]
-                    #print 'selffff.idx', T1.idx, T2.idx
-                #Matrix_DirectProduct[T1.data[pidx1], nA, mA, T2.data[pidx2], nB, mB, T3.data[pidx3]]
-                #data1 = T1.data[pidx1:pidx1 + nA*mA].reshape((nA, mA), order="F")
-                #data2 = T2.data[pidx2:pidx2 + nB*mB].reshape((nB, mB), order="F")                
-                data1 = T1.data[pidx1:pidx1 + nA*mA].reshape((nA, mA))
-                data2 = T2.data[pidx2:pidx2 + nB*mB].reshape((nB, mB))                
-                T3.data[pidx3:pidx3 + nA*nB*mA*mB] = common_util.matrix_direct_product(data1, data2).ravel(order=order)
-
-        return T3
 
     def direct_product(self, T2, order='F', use_buf=False):
         """
@@ -3114,7 +2978,7 @@ class iTensor(TensorBase):
                             iQN[i] = 0
                             i = i-1                
                 
-                #kkk= common_util.matrix_get_position_rev(p, ddd)
+                
                 #da = np.prod([self.QSp[i].Dims[kkk[i]] for i in xrange(n)])
         if round is None:
             return res
@@ -4095,13 +3959,40 @@ class Test_iTensor(unittest.TestCase):
         #print_vars(vars(),  ['temp==tt'])
         self.assertTrue(temp.is_close_to(tt))
         
-        
-        
-        
-
     def test_temp(self): 
+        from merapy import QspZ2 
         if 1:
-            pass
+            Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=[10, 5, 5, ])
+            Dr = Dl.conj()
+            d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
+            qsp = [Dl, Dr, d]
+            use_gpu = 0
+            #construction
+            t = iTensor(QSp=qsp, use_gpu=use_gpu)
+            
+            print_vars(vars(),  ['t.nidx', 't.idx_dim'])
+            print_vars(vars(),  ['t.Addr_idx.shape', 't.Block_idx.shape'])
+            print_vars(vars(),  ['t.idx.shape'])
+            print_vars(vars(),  ['t.idx'])
+            #Dims=np.array([t.QSp[i].nQN for i in range(t.rank)], int)  #attention: this Dims is not self.Dims
+            Dims=tuple(t.QSp[i].nQN for i in range(t.rank))
+            print_vars(vars(),  ['type(Dims)'])
+            
+            print_vars(vars(),  ['Dims'])
+            for i in range(t.nidx):
+                qn_id_tuple = t.Addr_idx[:, i]
+                
+                pos = t.get_position(qn_id_tuple)
+                
+                print_vars(vars(),  ['i', ])
+                if 1:
+                    
+                    #p=common_util.matrix_get_position(qn_ind_tuple, Dims)
+                    p = np.unravel_index(pos, Dims, order='F')
+                    print_vars(vars(),  ['qn_id_tuple', 'p'])
+                    p1  = np.ravel_multi_index(qn_id_tuple, Dims, order='F')
+                    print_vars(vars(),  ['pos', 'p1'])
+            raise  
         
         if 0:  #pass 
             #qsp_class= QspU1
@@ -4285,8 +4176,8 @@ if __name__ == "__main__":
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
-           'test_itensor_gpu'
-           #'test_temp', 
+           #'test_itensor_gpu'
+           'test_temp', 
         ]
         
         
