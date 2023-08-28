@@ -81,9 +81,9 @@ from merapy.quantum_number import *
 from merapy import common_util
 
 
-from merapy import array_permutation
-#from merapy.set1 import *
-#from merapy import crandom
+#from merapy import array_permutation
+
+
 from merapy.utilities import get_local
 
 from merapy.decorators import (tensor_player, decorate_methods, set_player_state_manual, set_player_state_auto)
@@ -2482,7 +2482,6 @@ class iTensor(TensorBase):
             for i  in range(rank2):
                 d = d*self.QSp[i].Dims[iQN[i]]
                 a=self.Block_idx[0,idx]
-            #X = X+common_util.matrix_trace(d, self.data[self.Block_idx[0,idx]])
             X+= self.data[a:a+d*d].reshape(d,d).trace()
         return X
     
@@ -2836,11 +2835,9 @@ class iTensor(TensorBase):
         """
         pass
     
-
     def direct_product(self, T2, order='F', use_buf=False):
         """
             this function was originally defined under Tensor class, now is moved here
-            see Direct_Product in f90
             parameters:
                 T1^{I1}_{J1}, T2^{I2}_{J2}
             returns:
@@ -2900,9 +2897,15 @@ class iTensor(TensorBase):
                 #Matrix_DirectProduct[T1.data[pidx1], nA, mA, T2.data[pidx2], nB, mB, T3.data[pidx3]]
                 data1 = T1.data[pidx1:pidx1 + nA*mA].reshape((nA, mA), order=order)
                 data2 = T2.data[pidx2:pidx2 + nB*mB].reshape((nB, mB), order=order)                
-                T3.data[pidx3:pidx3 + nA*nB*mA*mB] = common_util.matrix_direct_product(data1, data2).ravel(order="F")
+                if 0:
+                    T3.data[pidx3:pidx3 + nA*nB*mA*mB] = common_util.matrix_direct_product(data1, data2).ravel(order="F")
+                else:
+                    T3.data[pidx3:pidx3 + nA*nB*mA*mB] = np.kron(data2, data1).ravel(order="F")
 
         return T3
+    
+    tensor_prod = direct_product  # def tensor_prod
+
 
     def direct_sum(self, other):
         """
@@ -2912,8 +2915,6 @@ class iTensor(TensorBase):
         raise NotImplemented
         pass
 
-    def tensor_prod(self, T2, order="F"):
-        return self.direct_product(T2, order)
 
     def matrix_view(self, n=None, order='C', data_order='F', round=None):
         """
@@ -3105,15 +3106,25 @@ class iTensor(TensorBase):
             idx2 = T2.idx[pidx2]
             p2 = T2.Block_idx[0,idx2] #-1
             # above find the start address p1 and p2 for corresonding blocks
-            for i  in range(rank):
-                Dims1[i] = self.QSp[i].Dims[iQN[i]]
-                Dims2[i] = T2.QSp[i].Dims[iQN[i]]
+            if 0:
+                for i  in range(rank):
+                    Dims1[i] = self.QSp[i].Dims[iQN[i]]
+                    Dims2[i] = T2.QSp[i].Dims[iQN[i]]
+            else:
+                Dims1 = tuple((self.QSp[i].Dims[iQN[i]] for i in range(self.rank)))
+                Dims2 = tuple((T2.QSp[i].Dims[iQN[i]] for i in range(T2.rank)))
             
             #within each dense block, transvers elements
             for ip1 in range(self.Block_idx[1,idx]):
                 #ip1 is linear index, ip1->pos
-                pos = common_util.matrix_get_position_rev(ip1, Dims1)
-                ip2 = common_util.matrix_get_position(pos, Dims2)
+                
+                if 0:
+                    pos = common_util.matrix_get_position_rev(ip1, Dims1)
+                    ip2 = common_util.matrix_get_position(pos, Dims2)
+                else:
+                    pos = np.unravel_index(ip1, Dims1, order='F')
+                    ip2 = np.ravel_multi_index(pos, Dims2, order='F')
+                    
                 T2.data[p2+ip2] = self.data[p1+ip1]
         return T2
 
@@ -3961,38 +3972,18 @@ class Test_iTensor(unittest.TestCase):
         
     def test_temp(self): 
         from merapy import QspZ2 
+        
         if 1:
-            Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=[10, 5, 5, ])
-            Dr = Dl.conj()
-            d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
-            qsp = [Dl, Dr, d]
-            use_gpu = 0
-            #construction
-            t = iTensor(QSp=qsp, use_gpu=use_gpu)
+            q0 = QspZ2.easy_init([1, -1], [2, 4])
+            q1 = QspZ2.easy_init([1, -1], [2, 3])
+            q2 = QspZ2.easy_init([1, -1], [3, 2])
+            q3 = QspZ2.easy_init([1, -1], [2, 2])
             
-            print_vars(vars(),  ['t.nidx', 't.idx_dim'])
-            print_vars(vars(),  ['t.Addr_idx.shape', 't.Block_idx.shape'])
-            print_vars(vars(),  ['t.idx.shape'])
-            print_vars(vars(),  ['t.idx'])
-            #Dims=np.array([t.QSp[i].nQN for i in range(t.rank)], int)  #attention: this Dims is not self.Dims
-            Dims=tuple(t.QSp[i].nQN for i in range(t.rank))
-            print_vars(vars(),  ['type(Dims)'])
-            
-            print_vars(vars(),  ['Dims'])
-            for i in range(t.nidx):
-                qn_id_tuple = t.Addr_idx[:, i]
-                
-                pos = t.get_position(qn_id_tuple)
-                
-                print_vars(vars(),  ['i', ])
-                if 1:
-                    
-                    #p=common_util.matrix_get_position(qn_ind_tuple, Dims)
-                    p = np.unravel_index(pos, Dims, order='F')
-                    print_vars(vars(),  ['qn_id_tuple', 'p'])
-                    p1  = np.ravel_multi_index(qn_id_tuple, Dims, order='F')
-                    print_vars(vars(),  ['pos', 'p1'])
-            raise  
+            t = iTensor(QSp=[q0, q1, q2, q3])
+            t.data = np.arange(t.data.size)
+            t2 = t.tensor_prod(t)
+            print_vars(vars(),  ['t2.data[40:50]'])
+        raise  
         
         if 0:  #pass 
             #qsp_class= QspU1
