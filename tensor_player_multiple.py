@@ -194,13 +194,14 @@ def tensor_player(which):
                     buffer=None, use_buf=False, index_data=True, has_data=True, use_gpu=False):
                 """
                     note1:
-                        following is not deepcopy, self and tape share same
-                        value, but NOT share key. If this copy was removed, the
-                        program will not raise. However,  'data' will also be
-                        recorded in the tape, which would use much memory.
+                        Although one may remove .copy, which sould still work.
+                        But, adding a .copy() is safer and better.  If not copy
+                        here, 'data' will also refered to by the tape. This
+                        will cause problem in a few circumstances. For example:
+                        1) If tape is stored, then data will be sotred also. 2)
+                        if make contraction recursively,  like t =
+                        t.contract(t),  it will yeild wrong results. So,  I use copy here.
                 """
-
-                
                 self.__dict__ = tensor_player.the_tape[tensor_player.the_tape.calls].copy()  #note1 
                 self.buf_ref = np.array([-1, -1], np.int64)
                 if has_data:
@@ -1086,12 +1087,14 @@ class TestIt(unittest.TestCase):
             set_player_state_auto(iter=i, record_at=0, info=1)
             t=t.dot(t)
         t1 = time.time()
-        print_vars(vars(),  ['t.data'], round=10)
         print_vars(vars(),  ['t.norm()'])
         self.assertAlmostEqual(t.norm(), 0.38622236988000797, 10)
         print(tensor_player.the_tape.keys())
         set_player_state_manual('stop', tape_id=0)
         tensor_player.STATE = 'stop'
+        tape = TapeList[0]
+        print_vars(vars(),  ['tape.keys()'])
+        tape.show()
             
         TapeList[0].reset()
 
@@ -1270,7 +1273,7 @@ if __name__ == "__main__":
 
 
     warnings.filterwarnings('ignore')
-    if 1:
+    if 0:
         TestIt.test_temp=unittest.skip("skip test_temp")(TestIt.test_temp) 
         unittest.main()
     else: 
@@ -1278,7 +1281,7 @@ if __name__ == "__main__":
         add_list = [
         #'test_tensor_player_performance', 
         'test_tensor_player', 
-        'test_tensor_player_gpu', 
+        #'test_tensor_player_gpu', 
         #'test_tensor_player_2', 
         #'test_temp', 
         ]
