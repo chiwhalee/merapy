@@ -294,29 +294,24 @@ class iTensor_rank2_operation(object):
             size  = tt.Block_idx[1, i]
             assert dl*dr == size, (dl, dr, size) 
             mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            if 0:
-                #issue225 #issue: if mat is of shape (1, 1), 那么经过svd，mat的值会被修改成 1.0 ！！！ 还不知道为什么，可能是f2py的bug
-                #暂时先不用它，而改用numpy
+            
+            try:  # sometimes there is SVD not converge error
+                if compute_uv: 
+                    u, s, v=module.linalg.svd(mat, full_matrices=full_matrices)
+                    uu[i], ss[i], vv[i] = u, s, v
+                else: 
+                    s = module.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
+                    ss[i] = s
+            except module.linalg.LinAlgError as err:  # see note1
+                msg = " scipy.linalg.svd not converge  use another version of SVD instead"
+                warnings.warn(msg)
+                print(msg)
+                if tensor.use_gpu:
+                    raise  
                 u, s, v = common_util.matrix_svd(min(dl, dr), mat)
                 uu[i], ss[i], vv[i] = u, s, v
-            else:
-                try:  # sometimes there is SVD not converge error
-                    if compute_uv: 
-                        u, s, v=module.linalg.svd(mat, full_matrices=full_matrices)
-                        uu[i], ss[i], vv[i] = u, s, v
-                    else: 
-                        s = module.linalg.svd(mat, full_matrices=full_matrices, compute_uv=False)
-                        ss[i] = s
-                except module.linalg.LinAlgError as err:  # see note1
-                    msg = " scipy.linalg.svd not converge  use another version of SVD instead"
-                    warnings.warn(msg)
-                    print(msg)
-                    if tensor.use_gpu:
-                        raise  
-                    u, s, v = common_util.matrix_svd(min(dl, dr), mat)
-                    uu[i], ss[i], vv[i] = u, s, v
-                except Exception as err:
-                    raise 
+            except Exception as err:
+                raise 
             
             #dim_list[i] = s.size 
             if compute_uv:
@@ -1272,16 +1267,11 @@ class Tensor_svd(iTensor_rank2_operation):
             if  cls.QSp_Group1.QNs[gidx] !=  totQN:  
                 continue
             V_buf = cls.get_block1(itensor, gidx)
-            if 0:
-                esize = int(sqrt(V_buf.size))
-                #E = np.empty(esize, order='F')
-                E = np.empty(esize)
-                common_util.matrix_eigen_vector(V_buf, E[: esize])
-            else:
-                V_buf = V_buf.T  #this may be not needed as V_buf should be hermit, but, I do some tests in which it is not hernmit
-                #warnings.warn('I changed here')
-                E, V_buf = np.linalg.eigh(V_buf)
-                #E, V_buf = np.linalg.eig(V_buf)
+            
+            V_buf = V_buf.T  #this may be not needed as V_buf should be hermit, but, I do some tests in which it is not hernmit
+            #warnings.warn('I changed here')
+            E, V_buf = np.linalg.eigh(V_buf)
+            #E, V_buf = np.linalg.eig(V_buf)
                 
             V_buf = V_buf.ravel(order="F")
 
@@ -1411,7 +1401,7 @@ class Tensor_svd(iTensor_rank2_operation):
                 temp[:,:] = itensor.data[p:p+nT*mT].reshape((nT, mT)) #[:, :]
             else:
                 temp = itensor.data[p:p+nT*mT].reshape((nT, mT), order='F')
-            #common_util.set_matrix(VV,temp , x,y,  True)
+            
             VV[x:x + nT, y:y + mT] = temp
         return VV
     
@@ -1444,11 +1434,7 @@ class Tensor_svd(iTensor_rank2_operation):
             x = cls.QNG_Addr1[1,p1]; y = cls.QNG_Addr2[1,p2]
             p = itensor.Block_idx[0,idx]
             temp = np.ndarray((nT, mT), order='F')
-            if 0:
-                common_util.set_matrix(VV, temp, x,y,  False )
-            else:
-                #common_util.set_matrix(VV, temp, x,y,  False )
-                temp[:, :] = VV[x:x + nT, y:y + mT]
+            temp[:, :] = VV[x:x + nT, y:y + mT]
 
             #attention_here  fortran order must be used
             itensor.data[p:p+nT*mT] = temp.ravel('F')
@@ -1466,11 +1452,7 @@ class Tensor_svd(iTensor_rank2_operation):
             x = cls.QNG_Addr1[1,p1]; y = cls.QNG_Addr2[1,p2]
             p = itensor.Block_idx[0,idx]
             temp = np.ndarray((nT, mT), order='F')
-            if 0:
-                common_util.set_matrix(VV, temp, x,y,  False )
-            else:
-                #common_util.set_matrix(VV, temp, x,y,  False )
-                temp[:, :] = VV[x:x + nT, y:y + mT]
+            temp[:, :] = VV[x:x + nT, y:y + mT]
 
             #attention_here  fortran order must be used
             itensor.data[p:p+nT*mT] = temp.ravel('F')

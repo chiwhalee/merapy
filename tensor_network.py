@@ -545,7 +545,6 @@ class TensorNetwork(object):
                     TNet.edges_right[0:rank, nRight] = legs[0:rank]
                 TNet.tlink[G.size-1] = TNet.tlink_right[nRight].shallow_copy()
                 
-                #common_util.ishift(ord2, 1, -1)
 
                 #ord1.insert(2,G.size-1)
                 ord2.pop(0)

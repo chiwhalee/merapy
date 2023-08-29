@@ -19,8 +19,6 @@ import os.path
 import warnings
 #import pprocess
 
-#from merapy import common_util
-import merapy.common_util as common_util
 
 from merapy import array_permutation
 from merapy.context_util import redirect

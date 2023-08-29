@@ -22,8 +22,6 @@ import numpy as np
 from merapy.utilities import print_vars
 from merapy.main import Main
 from merapy.decorators import profileit, tensor_player
-#import common_util
-from merapy import common_util
 from merapy.config import CFG_ISING_BASIC, CFG_HEISBG_BASIC, CFG_POTTS_BASIC
 from merapy.updaters_all import  updaters_z2, updaters_u1
 

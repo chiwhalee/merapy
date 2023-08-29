@@ -3096,8 +3096,8 @@ class iTensor(TensorBase):
         T2 = iTensor(rank, QSp, self.totQN.copy())
         T2.data[:] = 0.0
         iQN = np.ndarray(rank, int)
-        Dims1 = np.ndarray(rank, int)
-        Dims2 = np.ndarray(rank, int)
+        #Dims1 = np.ndarray(rank, int)
+        #Dims2 = np.ndarray(rank, int)
         #transvers all dense blocks
         for idx  in range(self.nidx):
             p1 = self.Block_idx[0,idx] #-1
@@ -3106,24 +3106,15 @@ class iTensor(TensorBase):
             idx2 = T2.idx[pidx2]
             p2 = T2.Block_idx[0,idx2] #-1
             # above find the start address p1 and p2 for corresonding blocks
-            if 0:
-                for i  in range(rank):
-                    Dims1[i] = self.QSp[i].Dims[iQN[i]]
-                    Dims2[i] = T2.QSp[i].Dims[iQN[i]]
-            else:
-                Dims1 = tuple((self.QSp[i].Dims[iQN[i]] for i in range(self.rank)))
-                Dims2 = tuple((T2.QSp[i].Dims[iQN[i]] for i in range(T2.rank)))
+            Dims1 = tuple((self.QSp[i].Dims[iQN[i]] for i in range(self.rank)))
+            Dims2 = tuple((T2.QSp[i].Dims[iQN[i]] for i in range(T2.rank)))
             
             #within each dense block, transvers elements
             for ip1 in range(self.Block_idx[1,idx]):
                 #ip1 is linear index, ip1->pos
                 
-                if 0:
-                    pos = common_util.matrix_get_position_rev(ip1, Dims1)
-                    ip2 = common_util.matrix_get_position(pos, Dims2)
-                else:
-                    pos = np.unravel_index(ip1, Dims1, order='F')
-                    ip2 = np.ravel_multi_index(pos, Dims2, order='F')
+                pos = np.unravel_index(ip1, Dims1, order='F')
+                ip2 = np.ravel_multi_index(pos, Dims2, order='F')
                     
                 T2.data[p2+ip2] = self.data[p1+ip1]
         return T2

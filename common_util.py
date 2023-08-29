@@ -41,6 +41,7 @@ hostname = socket.gethostname()
 os1 = platform.system()
 IS_PY3 = sys.version_info.major>2
 
+
 if os1 == 'Linux':
     if IS_PY3:
         #from merapy.lib.linux_py3.common_64_ifort import *
@@ -54,10 +55,6 @@ if os1 == 'Linux':
 elif os1 == 'Windows':
     from merapy.lib.win.common_gfort import *
 
-#if hostname == 'VirtualBox-Lab' and 0:
-#    from merapy.lib.common_64_ifort_virtual import *
-#else:
-#    from merapy.lib.common_64_ifort import *
 
 
 """
