@@ -21,6 +21,7 @@ import numpy as np
 from scipy import linalg
 import platform
 import socket
+import mkl 
 
 from scipy.linalg.blas import dgemm, sgemm, zgemm
 try:
@@ -41,26 +42,59 @@ hostname = socket.gethostname()
 os1 = platform.system()
 IS_PY3 = sys.version_info.major>2
 
+if 1:
+    if os1 == 'Linux':
+        if IS_PY3:
+            #from merapy.lib.linux_py3.common_64_ifort import *
+            try:
+                from merapy.lib.linux_py3.common import *
+            except ImportError:
+                from merapy.lib.linux_py3.common_gfort import *
+        else:
+            from merapy.lib.linux_py2.common_64_ifort import *
+        #from merapy.lib.common_64_ifort import *
+    elif os1 == 'Windows':
+        from merapy.lib.win.common_gfort import *
+    
+    _set_num_of_threads = set_num_of_threads
+else:
+    _set_num_of_threads is None
 
-if os1 == 'Linux':
-    if IS_PY3:
-        #from merapy.lib.linux_py3.common_64_ifort import *
-        try:
-            from merapy.lib.linux_py3.common import *
-        except ImportError:
-            from merapy.lib.linux_py3.common_gfort import *
+def set_num_of_threads(n, info=1):
+    """
+        a simple wrapper 
+        refs:
+            https://stackoverflow.com/questions/29559338/set-max-number-of-threads-at-runtime-on-numpy-openblas
+            https://github.com/numpy/numpy/issues/11826
+                    It depends on the BLAS that is being used, but in
+                    most cases, yes it is possible. Using ctypes it
+                    shouldn't be hard, especially if you know which
+                    BLAS you are using. Putting an as reliable as
+                    possible utility function into numpy has its tricky
+                    parts (plus for ATLAS and maybe Accelerate it just
+                    is not possible to adjust threads).  But, most
+                    users end up using either OpenBLAS or MKL (via
+                    Anaconda) and if you do not aim for perfect
+                    reliability I think creating a function that works
+                    for your system is very straight forward.
+                    
+            https://github.com/joblib/threadpoolctl
+                    threadpoolctl does not attempt to limit the size of
+                    Python multiprocessing pools (threads or processes)
+                    or set operating system-level CPU affinity
+                    constraints: threadpoolctl only interacts with
+                    native libraries via their public runtime APIs.            
+                
+        other ways:
+            import mkl
+            mkl.set_num_threads(n)
+    """
+    if info:
+        print('set_num_of_threads to %d'%n)
+    if _set_num_of_threads is not None: 
+        _set_num_of_threads(n)
     else:
-        from merapy.lib.linux_py2.common_64_ifort import *
-    #from merapy.lib.common_64_ifort import *
-elif os1 == 'Windows':
-    from merapy.lib.win.common_gfort import *
-
-
-
-"""
-sometimes fort func don't require passing in "F" ordered arrays, such as matrix_direct_product; while someitmes it do  why?
-
-"""
+        mkl.set_num_threads(n)
 
 
 def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=False, ):
@@ -73,287 +107,6 @@ def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=False, ):
     else:
         cublas.gemm('N', 'N', a, b, out=c, alpha=1.0, beta=beta) 
 
-
-#dont delete this,  there is still some usefull things in it, rescure them first 
-class PickleDb(object):
-    """
-        not implemented
-    """
-    def __init__(self, fn=None, path=None):
-
-        if fn is not None:
-            path = os.path.abspath(fn); path = fn[-1::-1];  n = path.find("/");   
-            path = path[n:]; path = path[-1::-1]
-            self.fn_only = path[:n]
-        elif path is not None:
-            x = self.find_max_dim_file(path)
-            print("file with max layer and trunx_dim is %s"%x)
-            #fn=path + x
-            self.fn_only = x
-            fn = "%s%s"%(path, x) if path[-1]=="/" else "%s/%s"%(path, x)
-        else:
-            raise Exception
-        self.path = path
-        #print fn, path
-        inn = open(fn, "rb")
-        self.obj = pickle.load(inn)
-    
-    def find_max_dim_file(self, path):
-        nlist = os.listdir(path)
-        #print nlist
-        pickle_files = [i for i in nlist if "pickle" in i]
-        print("all pickle files under specified path are %s"%pickle_files)
-        
-        def _parse_name(fn):
-            if "transition" in fn: #'12-transition.pickle'
-                dim = "0"
-            elif "_" in fn:  #like "5_13.pickle or 5_13-4lay.pickle"
-                dim = fn.split("-")[0].split("_")[1].split(".")[0]
-            else:
-                if "lay" in fn: #"like "8-4lay.pickle""
-                    dim = fn.split("-")[0]
-                else:   
-                     #like "8.pickle"
-                    dim = fn.split(".")[0]
-            
-            i = fn.find("lay")
-            layer = fn[i-1] if i>0 else "3"
-            #print "ddd", [dim, layer]
-            return eval(dim), eval(layer)
-
-        temp = []
-        for i in pickle_files:
-            #print i, _parse_name(i)
-            try:
-                dim, layer = _parse_name(i)
-            except:
-                raise Exception(i)
-            temp.append((layer, dim, i))
-        temp.sort(key=lambda x:x[:2], reverse=True)
-        res= temp[0][2]
-        return res
-        
-    def _plot(self, *args, **kwargs):
-        plt.plot(*args, **kwargs)
-        plt.grid(True)
-        plt.show()
-    
-    def _scaling_dim_exact(self):
-        exact = {}
-
-        exact["xx"] = {
-                0:(0.0, ) + (1.0, )*4   +  (2.0, )*8, 
-                1:(0.25,) + (1.25, )*4  +  (2.25, )*8 , 
-                2:          (1.0, )*4  + (2.0, )*8}
-        
-        exact["Ising"] = {
-                1:(0, ) + (1, )   +  (2, )*4, 
-                -1:(1/8.,) + (1 + 1/8., )*2  +  (2+1/8., )*3 
-                }
-        exact["heisbg_long"] = {
-                0:(0, ) + (0.5, )*2  + (1.0, )*2  + (1.5, )*2, 
-                1:(0.5, ) + (1, )*2  + (1.5, )*2, 
-                2:(2.0, )*3, 
-                }
-        exact["heisbg"] = exact['heisbg_long']
-
-        ee = self.obj.energy_exact
-        mapper = {-1.2732:"xx", -1.6077:"heisbg_NNN", -1.6449:"heisbg_long", -1.7725:'heisbg'}
-        for i in mapper:
-            if abs(i-ee)<1e-2:
-                model = mapper[i]
-        exact_val = exact[model]
-        if self.obj.model == "Ising": 
-            exact_val = exact["Ising"]
-
-        return exact_val
-
-    def plot_scaling_dim(self, qns=None, num_of_fields=None, calc_err=False):
-        """
-            one rec is like this:
-            {1025:
-                [(0, [0.0, 1.0, 1.16326228, 1.19447544, 1.19447544, 1.23058869, 1.6277161, 1.6277161, 1.82188553, 1.82188553]),
-                 (1, [0.87008947, 1.08398164, 1.12192732, 1.50196967, 1.63179961, 1.74482795, 1.88535985, 2.0160677, 2.13870443, 2.13870443]),
-                 (2, [1.0722275, 1.78260076, 2.37668506, 2.60884736, 2.60884736, 2.800528, 2.800528, 2.85390176, 2.93886244, 2.93886244])
-                 ]
-             } or
-             {1025:
-                [(1, [-0.0, 1.00009277, 1.99996219, 1.99997006, 2.00000392, 2.00289768, 2.72124425, 2.72124425, 2.72266868, 2.72266868]), 
-                [(-1, [0.1250008, 1.12503901, 1.12508933, 2.12244868, 2.12717037, 2.12830034, 2.35310428, 2.35310428, 2.35354695, 2.35354695])}
-            
-        """
-        num_of_fields = num_of_fields if num_of_fields is not None else 2
-        try:
-            rec = self.obj.scaling_dim_record
-        except AttributeError:
-            rec = self.obj.conformal_dim_record
-        
-        if calc_err:
-            exact_val = self._scaling_dim_exact()
-            print(exact_val)
-
-        x = list(rec.keys())
-        x.sort()
-        fig = plt.figure()
-        ax = fig.add_subplot(111)
-        
-        ax1 = fig.add_subplot(111)
-        
-        xy = self.get_energy_err()
-        ax1.plot(*xy, linestyle="dashed")
-
-        xy = self.get_energy_diff()
-        ax1.plot(*xy, linestyle="dashed")
-        #ax1.xlim(xmin=x[0])
-        
-        if qns is None:
-            if self.obj.symmetry == "U1":
-                qns = list(range(3))
-            elif self.obj.symmetry == "Z2":
-                qns= [1, -1]
-            else:
-                qns= [1]
-        fontP = FontProperties()
-        fontP.set_size('small')
-   
-        legend = ["eng_err"]
-        color_map = {0:"red", 1:"blue", 2:"green"}
-        line_sty_map = {0:"solid", 1:"dashed", 2:"dotted"}
-
-        for qn in qns:
-            for i in range(num_of_fields):
-                qn_ = qns.index(qn)
-                if qn_ == 0 and num_of_fields== 1: i = 1
-                linewidth = 3.5 if (qn_, i) in [(0, 1), (1, 0), (2, 0)] else 1.0
-                y1 = np.array([(rec[ii][qn][i]) for ii in x])
-                
-                if calc_err:
-                    try:
-                        y1 = y1-exact_val[qn][i]
-                        y1 = np.log10(np.abs(y1))
-                    except IndexError:
-                        print("index qn=%d, i=%d not found in exact_val, omit it "%(qn, i))
-                        continue
-                ax.plot(x, y1, "o", linewidth=linewidth,  
-                        color=color_map[qn_], linestyle="solid", marker=None)
-                
-                #if (qn_, i) in [(0, 1), (1, 0), (2, 0)]:
-                legend.append("%d, %d"%(qn, i))
-        box = ax.get_position()
-        box1 = ax1.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-        ax1.set_position([box.x0, box1.y0, box.width * 0.8, box.height])
-
-        # Put a legend to the right of the current axis
-        ax.legend(legend, loc='center left', bbox_to_anchor=(1, 0.5), prop=fontP)
-        plt.xlim(xmin=x[0])
-        #plt.ylim(ymin=-0.1)
-        #plt.tick_params()
-        #plt.minor_tickson()
-        #plt.legend(legend, loc=3)
-        plt.grid(True)
-        
-        print("ssss\n", rec[x[-1]])
-        if hasattr(self.obj, "log"):
-            print("llll\n", self.obj.log)
-        x = "_err" if calc_err else ""
-        y = self.fn_only.split(".")[0]
-        fn=self.path + "scaling_dim-%s--%s.png"%(x, y)
-        plt.savefig(fn ,bbox_inches='tight') # save as png
-        os.popen("display " + fn)
-
-    def plot_energy(self):
-        """
-            one record is like this:
-            {1:(-0.093284875794309885, 1366290999.381305, 529.42)}
-        """
-        recs = self.obj.energy_record
-        ee = self.obj.energy_exact
-        x = list(recs.keys())
-        x.sort()
-        y = [recs[i][0] for i in x]
-        y = np.array(y)
-        y = np.log10(y-ee)
-        #print recs[1]
-        self._plot(x, y,"o", color='red',linestyle='dashed')
-
-    def get_energy_err(self):
-        """
-            one record is like this:
-            {1:(-0.093284875794309885, 1366290999.381305, 529.42)}
-        """
-        recs = self.obj.energy_record
-        ee = self.obj.energy_exact
-        x = list(recs.keys())
-        x.sort()
-        y = [recs[i][0] for i in x]
-        y = np.array(y)
-        y = np.log10(y-ee)
-        #print recs[1]
-        #self._plot(x, y,"o", color='red',linestyle='dashed')
-        return x, y
-    
-    def plot_energy_diff(self):
-        """
-        one record is like this:
-        {1:(-0.093284875794309885, 1366290999.381305, 529.42)}
-        
-        """
-        recs= self.obj.energy_record
-        x = list(recs.keys())
-        x.sort()
-        dy = np.array([recs[i+1][0] - recs[i][0] for i in x[:-2]])
-        dy = np.log10(-dy)
-        #print recs[1]
-        self._plot(x[:-2], dy,"o", color='red',linestyle='dashed')
-
-    def get_energy_diff(self):
-        """
-        one record is like this:
-        {1:(-0.093284875794309885, 1366290999.381305, 529.42)}
-        
-        """
-        recs= self.obj.energy_record
-        x = list(recs.keys())
-        x.sort()
-        #dy = np.array([recs[i+1][0] - recs[i][0] for i in x[:-2]])
-        dy = np.array([recs[x[i+1]][0] - recs[x[i]][0] for i in range(len(x)-2)])
-        dy = np.log10(-dy)
-        #print recs[1]
-        #self._plot(x[:-2], dy,"o", color='red',linestyle='dashed')
-        
-        return x[:-2], dy
-
-def set_matrix_np_del(a, b, x, y, forward):
-    x1, y1 = b.shape
-    if forward:
-        a[x:x+x1, y:y+y1] = b
-    else:
-        b[:, :] = a[x:x + x1, y:y + y1]
-
-def timer_del(func):
-    import time
-    from timeit import timeit
-    def wraper(*args, **kargs):
-        t1=time.clock()
-        ta = time.time()
-
-        res= func(*args, **kargs)
-        t2=time.clock()
-        tb = time.time()
-        q_iter = 1
-        print("cpu time", old_div((t2-t1),q_iter),  "\t wall time", old_div((tb-ta),q_iter), "\t", func.__name__)
-        return res 
-    return wraper
-
-_set_num_of_threads = set_num_of_threads
-def set_num_of_threads(n, info=1):
-    """
-        a simple wrapper 
-    """
-    if info:
-        print('set_num_of_threads to %d'%n)
-    _set_num_of_threads(n)
 
 
 class test_common(object):
