@@ -457,7 +457,8 @@ def send_email(msg):
     smtp.quit()
 
 
-class OrderedSet(collections.MutableSet):
+class OrderedSet_del():
+#class OrderedSet(collections.MutableSet):
     """
         taken from 
             http://stackoverflow.com/questions/1653970/does-python-have-an-ordered-set

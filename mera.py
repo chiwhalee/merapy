@@ -30,7 +30,7 @@ from .graphics import Graphics
 from .tensor import *
 from .tensor_svd import *
 #from random_64 import mrandom
-from . import crandom
+#from . import crandom
 from .tensor_reflection import TensorReflect
 
 

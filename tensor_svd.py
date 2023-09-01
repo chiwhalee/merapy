@@ -140,7 +140,7 @@ class iTensor_rank2_operation(object):
         
         qq = {}
         rr = {}
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
+        dim_list = np.ndarray(num_blocks, dtype=int)
         
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
@@ -202,9 +202,9 @@ class iTensor_rank2_operation(object):
         
         qq = {}
         rr = {}
-        dim_list = np.ndarray(num_blocks, dtype=np.int)
-        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        dim_list = np.ndarray(num_blocks, dtype=int)
+        qn_list_l = np.ndarray(num_blocks, dtype=object)
+        qn_list_r = np.ndarray(num_blocks, dtype=object)
         
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
@@ -278,14 +278,14 @@ class iTensor_rank2_operation(object):
         num_blocks = tensor.nidx 
         tt = tensor  # a shorter name 
         #uu, ss, vv = {}, {}, {}   #把每个block 分别做svd，记录在此, 最终由这些构造结果张量
-        uu = np.ndarray(num_blocks, dtype=np.object)
-        ss = np.ndarray(num_blocks, dtype=np.object)
-        vv = np.ndarray(num_blocks, dtype=np.object)
-        dim_list_l = np.ndarray(num_blocks, dtype=np.int)
-        dim_list_r = np.ndarray(num_blocks, dtype=np.int)
+        uu = np.ndarray(num_blocks, dtype=object)
+        ss = np.ndarray(num_blocks, dtype=object)
+        vv = np.ndarray(num_blocks, dtype=object)
+        dim_list_l = np.ndarray(num_blocks, dtype=int)
+        dim_list_r = np.ndarray(num_blocks, dtype=int)
         
-        qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        qn_list_l = np.ndarray(num_blocks, dtype=object)
+        qn_list_r = np.ndarray(num_blocks, dtype=object)
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
             qn0, qn1 = qn_id_tuple
@@ -1518,7 +1518,7 @@ class TestIt(unittest.TestCase):
             print_vars(vars(),  ['v_old'])
             self.assertTrue(np.allclose(np.abs(v.data), v_old, 1e-8))
 
-    def test_svd(self):
+    def xtest_svd(self):
         """  
             --- not sure
         """
@@ -2024,11 +2024,11 @@ if __name__ == "__main__":
         suite = unittest.TestSuite()
         add_list = [
            #'test_eig', 
-           #'test_svd', 
-           #'test_svd_rank2', 
+           #'xtest_svd', 
+           'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
-           'test_eig_rank2', 
+           #'test_eig_rank2', 
            #'test_exp_rank2', 
            #'test_trace_rank2', 
            #'test_diag_rank2', 

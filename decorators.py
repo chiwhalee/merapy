@@ -20,7 +20,7 @@ import warnings
 #import pprocess
 
 
-from merapy import array_permutation
+
 from merapy.context_util import redirect
 
 #import tensor_py

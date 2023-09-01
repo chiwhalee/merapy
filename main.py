@@ -50,7 +50,7 @@ from merapy.hamiltonian import System
 from merapy.tensor_py import iTensor
 from merapy.scale_invariant import ScaleInvar
 from merapy import common_util
-from merapy import crandom
+#from merapy import crandom
 import merapy.schedule
 from merapy.schedule import copy_schedule, schedule_scale_invar, schedule_prod_state
 from merapy.decorators import * #tensor_player
