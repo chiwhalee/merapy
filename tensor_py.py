@@ -55,8 +55,10 @@ from multiprocessing import Pool
 from scipy.linalg.blas import dgemm, sgemm, zgemm
 from numpy.lib.stride_tricks import as_strided
 import numpy.core.numeric as _nx
-        
-from py3nj import (clebsch_gordan, wigner3j, wigner6j, wigner9j)
+try:        
+    from py3nj import (clebsch_gordan, wigner3j, wigner6j, wigner9j)
+except:
+    warnings.warn('py3nj is not installed')
 
 
 import scipy
