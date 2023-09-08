@@ -2326,7 +2326,7 @@ class iTensor(TensorBase):
             
             if self.Dims[pos1] != T2.Dims[pos2]:  #note this checking is still not complete. One should check qsp1 == qsp2.conj() instead  
             #if self.QSp[pos1] != T2.QSp[pos2].conj():
-                print_vars(vars(),  ['pos1', 'pos2'])
+                #print_vars(vars(),  ['pos1', 'pos2'])
                 msg ="""error, dim of index to be contracted not equal: 
                     {0.type_name}, {1.type_name}
                     ind_label_1={V1}, ind_label_2={V2}, ind_label_1n2={V_1n2}
@@ -2427,7 +2427,7 @@ class iTensor(TensorBase):
                     t = iTensor.contract_tensor_list(t)
                 head = head.contract(t)
         except Exception:
-            print_vars(vars(),  ['head.ind_labels', 't.ind_labels'])
+            #print_vars(vars(),  ['head.ind_labels', 't.ind_labels'])
             raise  
         if final_ind_labels is not None:
             ll = list(head.ind_labels)  # head.ind_labels may be np.ndarray, convert it to list

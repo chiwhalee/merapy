@@ -25,7 +25,7 @@ except:
 #LOCAL_HOSTNAME = 'qtgc30'
 
 #LOCAL_IP = '192.168.50.1'
-LOCAL_IP = '202.200.96.101'
+LOCAL_IP = '202.200.98.239'
 
 
 #LOCAL_IP = '202.200.98.230'
@@ -374,8 +374,11 @@ class Config(dict):
                 
         allow = True 
         N = 0 if alg == 'idmrg' else cfg['N']
+        if cfg.get('is_2d'):
+            Lx, Ly = cfg['Lx'], cfg['Ly']
+            N = (Lx, Ly)
         
-        msg = [os.path.basename(parpath), 'N=%d'%N,  
+        msg = [os.path.basename(parpath), f'N={N}',  
                 'threads=%d'%cfg['NUM_OF_THREADS']]
         if alg == 'vmps' :
             which_minimize = cfg.get('which_minimize', '1site')

@@ -1310,9 +1310,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         
         """
         
-        if isinstance(N, tuple):  
-            N = N[0] 
-            return_N = True
+        #if isinstance(N, tuple):  
+        #    N = N[0] 
+        #    return_N = True
         if N == 'max' :
             temp=self.get_shape_list(from_energy_rec=from_energy_rec, only_return_N=1)        
             N = max(temp) if temp else -1
@@ -3427,7 +3427,13 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     @staticmethod
     def shape_to_backup_fn(sh): 
         N, D = sh
-        res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        if isinstance(N, int):
+            res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        elif isinstance(N, tuple):
+            Lx, Ly = N
+            res = f'N={Lx},{Ly}-D={D}'
+        else:
+            raise  
         return res
     
     #def shape_path(self, sh): 
@@ -3814,8 +3820,15 @@ class ResultDB_vmps(ResultDB):
     @staticmethod
     def shape_to_backup_fn(sh): 
         N, D = sh
-        res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        if isinstance(N, int):
+            res = 'N=%(N)d-D=%(D)d.pickle'%vars()
+        elif isinstance(N, tuple):
+            Lx, Ly = N
+            res = f'N={Lx},{Ly}-D={D}'
+        else:
+            raise  
         return res
+    
     backup_fn_gen = shape_to_backup_fn 
     
     def update_db_structure(self): 
@@ -5232,35 +5245,6 @@ class TestResultDB(unittest.TestCase):
         if 0: 
             self.db = ResultDB(parpath)
         
-    def test_temp(self): 
-        
-        from mps_wigner_crystal.analysis import an_exact_diag 
-        
-        
-        
-        if 1:
-            v = 0.0
-            #from vmps.run_heisenberg.analysis import an_tdvp 
-            from mps_wigner_crystal.analysis import an_tdvp 
-            xx = an_tdvp.an_dynamics.an_random_spin
-            db=xx(nu=0.5, alpha=1.0, V=64.0,  dt=0.5, surfix='fix_err_1em12')
-            sh=('max', 'max')
-            tt=np.arange(1., 180, 1.0)
-            ii=range(80)
-            tt, data = db.get_magnetization(sh, tt, return_t=1,)
-            
-            print_vars(vars(),  ['tt'])  
-            raise  
-           
-           
-            data = db.calc_mag_inhomogeneous(sh)
-            print_vars(vars(),  ['data'])
-            raise  
-            print_vars(vars(),  ['data.shape'])
-        
-       
-        raise  
-       
         
     def test_insert_and_fetch(self): 
         a = [1, 2, 3, 4]
@@ -5297,6 +5281,74 @@ class TestResultDB(unittest.TestCase):
         self.db.add_key_list(xx, val='xxx')
         self.assertTrue(self.db.has_key_list(xx ))
         self.assertFalse(self.db.has_key_list(xx + [5]))
+
+    def test_temp(self): 
+        if 1:
+            from vmps.run_experiment.analysis import an_ising_2d_vmps
+            xx = an_ising_2d_vmps.an_main_1site
+            #xx.reset()
+            aa  = xx.filter_alpha(J=-1.0)
+            for a in aa:
+                db = xx[a]
+                N = (12, 14)
+                sh=N, 'max'
+                sh = N, 80
+                dmax = db.get_dim_max_for_N(N, update_db=1)
+                v = db.fetch_easy('variance', sh)
+                print_vars(vars(),  ['a.h', 'dmax', 'v'])
+                
+
+            raise  
+            #fig, ax = xx.fig_layout()
+            x=[a.h for a in aa]
+            #y=[]
+
+            sh=(6, 8), 40
+            NN=[  (8, 10)]
+            db = xx(J=-1.0, h=1.0)
+            N = (8, 10)
+            sh=N, 'max'
+            dmax = db.get_dim_max_for_N(N, update_db=1)
+            print_vars(vars(),  ['dmax'])
+            print_vars(vars(),  ['db["energy"].keys()'])
+            mag = db.fetch_easy('magnetization', sh, sub_key_list=['z'])            
+            print_vars(vars(),  ['mag'])
+            
+            raise  
+            for N in NN:
+                y=[]
+                for a in aa[:1]:
+                    db=xx[a]
+                    print_vars(vars(),  ['db.keys()'])
+                    mag = db.fetch_easy('magnetization', sh, sub_key_list=['z'])            
+                    print_vars(vars(),  ['mag'])
+        
+        raise  
+    
+        from mps_wigner_crystal.analysis import an_exact_diag 
+        if 1:
+            v = 0.0
+            #from vmps.run_heisenberg.analysis import an_tdvp 
+            from mps_wigner_crystal.analysis import an_tdvp 
+            xx = an_tdvp.an_dynamics.an_random_spin
+            db=xx(nu=0.5, alpha=1.0, V=64.0,  dt=0.5, surfix='fix_err_1em12')
+            sh=('max', 'max')
+            tt=np.arange(1., 180, 1.0)
+            ii=range(80)
+            tt, data = db.get_magnetization(sh, tt, return_t=1,)
+            
+            print_vars(vars(),  ['tt'])  
+            raise  
+           
+           
+            data = db.calc_mag_inhomogeneous(sh)
+            print_vars(vars(),  ['data'])
+            raise  
+            print_vars(vars(),  ['data.shape'])
+        
+       
+        raise  
+       
 
 
 if __name__ == '__main__': 

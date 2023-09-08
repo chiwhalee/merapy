@@ -1,15 +1,6 @@
 #!/usr/bin/env python
 #coding=utf8
 #PYTHON_ARGCOMPLETE_OK 
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import str
-from builtins import *
-from builtins import object
 import numpy as np 
 import unittest
 import argparse, argcomplete
@@ -139,7 +130,8 @@ def store_result_decorator(measure_func, state=None, state_path=None,
     if param is None: 
         param = {}
     
-    print('meassuring %s at %s '%(path, shape))
+    
+    print(f'meassuring {path} at {shape}')
     if not allow_measure and not force: 
         print('\tstate is not converged. not allowing measure. return None')
         return 
@@ -293,33 +285,8 @@ def measure_S(S=None, parpath=None, path=None,
         else: 
             algorithm = 'mera'
         
-        if algorithm == 'mera':  
-            all_func = all_mera
-            from merapy.hamiltonian import System 
-            if sys.version_info.major<3:
-                propt = System.key_property.__func__(S)
-            else:
-                propt = System.key_property(S)
-            #propt = S.key_property()
-            dim,  layer = propt['trunc_dim'], propt['num_of_layer']
-            nqn = len(propt['qns'])
-            iter = S.iter
-            if 1: 
-                #fn = System.backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
-                fn = backup_fn_gen(dim=dim, layer=layer-1, nqn = len(propt['qns']))
-
-               
-            path = parpath + '/' + fn
             
-            if nqn <= 3: 
-                shape = (dim, layer)
-            else: 
-                shape = (dim, layer, nqn)
-            
-            rdb_class= ResultDB_mera 
-            
-            
-        elif algorithm in ['mps', 'tdvp', 'vmps']: 
+        if algorithm in ['mps', 'tdvp', 'vmps']: 
             mps= S['mps']
             #N, D = mps.N, mps.D
             #if algorithm == 'tdvp' and mps.is_purification_state == True:
@@ -332,9 +299,15 @@ def measure_S(S=None, parpath=None, path=None,
                 D = mps.bond_dim_max 
             if algorithm == 'tdvp' and 'trunc_dim' in S:
                 D = S['trunc_dim']
-            fn = "N=%d-D=%d.pickle"%(N, D)
-            path = '/'.join([parpath, fn])
+            if mps.is_2d:
+                N = mps.Lx, mps.Ly
             shape =  N,  D
+            if not mps.is_2d:
+                fn = "N=%d-D=%d.pickle"%(N, D)
+            else:
+                fn = f"N={mps.Lx},{mps.Ly}-D={D}.pickle"
+                
+            path = '/'.join([parpath, fn])
             if algorithm in ['mps', 'vmps']:
                 all_func = all_mps
                 rdb_class= ResultDB_vmps
@@ -405,7 +378,8 @@ def measure_S(S=None, parpath=None, path=None,
    
     #------------------------  start measureing ----------------------------------------#
     
-    print('meassuring %s at %s'%(path, shape))
+    
+    print(f'meassuring {path} at {shape}')
     if not allow_measure and not force: 
         print('\tstate is not converged. not allowing measure. return None')
         return 

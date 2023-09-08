@@ -46,7 +46,7 @@ import socket
 import types
 from numpy import inf
 
-from merapy.utilities import print_vars, OrderedSet 
+from merapy.utilities import print_vars #, OrderedSet 
 from merapy.hamiltonian import System
 #from .tabulate import tabulate
 from merapy.measure_and_analysis.measurement import mera_backup_dir_finder,  measure_all as measure_all_orig
