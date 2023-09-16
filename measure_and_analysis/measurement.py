@@ -287,7 +287,9 @@ def measure_S(S=None, parpath=None, path=None,
         
             
         if algorithm in ['mps', 'tdvp', 'vmps']: 
-            mps= S['mps']
+            #print_vars(vars(),  ['S.keys()'])
+            mps = S['mps']
+            is_2d = S['is_2d']
             #N, D = mps.N, mps.D
             #if algorithm == 'tdvp' and mps.is_purification_state == True:
             #    assert N%2  == 0  
@@ -299,10 +301,11 @@ def measure_S(S=None, parpath=None, path=None,
                 D = mps.bond_dim_max 
             if algorithm == 'tdvp' and 'trunc_dim' in S:
                 D = S['trunc_dim']
-            if mps.is_2d:
-                N = mps.Lx, mps.Ly
+            if is_2d:
+                N = S['Lx'], S['Ly']
             shape =  N,  D
-            if not mps.is_2d:
+            #if not mps.is_2d:
+            if not is_2d:
                 fn = "N=%d-D=%d.pickle"%(N, D)
             else:
                 fn = f"N={mps.Lx},{mps.Ly}-D={D}.pickle"

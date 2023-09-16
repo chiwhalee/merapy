@@ -3431,7 +3431,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
             res = 'N=%(N)d-D=%(D)d.pickle'%vars()
         elif isinstance(N, tuple):
             Lx, Ly = N
-            res = f'N={Lx},{Ly}-D={D}'
+            res = f'N={Lx},{Ly}-D={D}.pickle'
         else:
             raise  
         return res
@@ -3824,7 +3824,7 @@ class ResultDB_vmps(ResultDB):
             res = 'N=%(N)d-D=%(D)d.pickle'%vars()
         elif isinstance(N, tuple):
             Lx, Ly = N
-            res = f'N={Lx},{Ly}-D={D}'
+            res = f'N={Lx},{Ly}-D={D}.pickle'
         else:
             raise  
         return res
@@ -4793,6 +4793,7 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             return None, None
         temp = ts.values()
         tt = [i['the_time'] for i in temp]
+        #print_vars(vars(),  ['tt'])
         #val = [i[field_name] for i in temp]
         val = [i.get(field_name, None) for i in temp]
         tt = np.asarray(tt)
@@ -5284,12 +5285,22 @@ class TestResultDB(unittest.TestCase):
 
     def test_temp(self): 
         if 1:
-            from vmps.run_experiment.analysis import an_ising_2d_vmps
-            xx = an_ising_2d_vmps.an_main_1site
+            from vmps.run_experiment.analysis import an_ising_2d_tdvp 
+            xx = an_ising_2d_tdvp.an_finite_T.an_main_2site
             #xx.reset()
-            aa  = xx.filter_alpha(J=-1.0)
-            for a in aa:
-                db = xx[a]
+            
+            db = xx(h=2.0)
+            print_vars(vars(),  ['db.keys()'])
+            sh = (8, 11), 160
+            tt = [-1.0j]
+            ts= db.get_time_serials(sh)
+            print_vars(vars(),  ['ts.keys()'])
+            print_vars(vars(),  ['ts[1]["magnetization"]'])
+            tt, data = db.get_magnetization(sh, tt, return_t=1)
+            print_vars(vars(),  ['data'])
+            
+            
+            if 0:    
                 N = (12, 14)
                 sh=N, 'max'
                 sh = N, 80
