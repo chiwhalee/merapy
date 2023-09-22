@@ -1616,7 +1616,8 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                 if self.ALGORITHM == 'mera' : 
                     sub_key_list = [0, 1]
                 elif self.ALGORITHM == 'vmps' : 
-                    sub_key_list = ['EE', sh[0]//2, 1] 
+                    N = sh[0] if isinstance(sh[0], int) else sh[0][0]*sh[0][1]  # 2d system for the later
+                    sub_key_list = ['EE', N//2, 1] 
                 else: 
                     raise NotImplemented
             else: 
@@ -3341,7 +3342,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     e.g. which='energy', which=['energy', 'variance']
         """
         from merapy.measure_and_analysis.measurement import measure_S 
-        from mypy.brokest.task_center import submit_one, LOCAL_IP
+        from brokest.task_center import submit_one, LOCAL_IP
         if isinstance(which, list) and len(which)==1:
             print_vars(vars(),  ['which'])
             which = which[0]
@@ -4793,7 +4794,10 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             return None, None
         temp = ts.values()
         tt = [i['the_time'] for i in temp]
-        #print_vars(vars(),  ['tt'])
+        
+        if tt and tt[-1].imag != 0:   # imag evolution
+            tt = [-t.imag for t in tt]
+        
         #val = [i[field_name] for i in temp]
         val = [i.get(field_name, None) for i in temp]
         tt = np.asarray(tt)
@@ -4844,8 +4848,6 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
                 assert len(ind) == 1, (t, tt)
                 ii.append(ind[0])
             
-            #tt = [tt[i].real for i in ii]
-            #tt = np.asarray(tt)
             tt = tt[ii].real 
             mag = mag[ii, :]
             
@@ -5292,12 +5294,13 @@ class TestResultDB(unittest.TestCase):
             db = xx(h=2.0)
             print_vars(vars(),  ['db.keys()'])
             sh = (8, 11), 160
-            tt = [-1.0j]
+            tt = [1.0]
             ts= db.get_time_serials(sh)
+            print_vars(vars(),  ['db.get_shape_list()', 'db["dim_max"]'])
             print_vars(vars(),  ['ts.keys()'])
-            print_vars(vars(),  ['ts[1]["magnetization"]'])
             tt, data = db.get_magnetization(sh, tt, return_t=1)
-            print_vars(vars(),  ['data'])
+            db.measure([sh], which=['entanglement'], submit=0)
+            raise  
             
             
             if 0:    
@@ -5365,7 +5368,7 @@ class TestResultDB(unittest.TestCase):
 if __name__ == '__main__': 
     
     warnings.filterwarnings('once')  #warnings.filterwarnings('ignore')
-    if 1: 
+    if 0: 
         FIELD_NAME_LIST = [
             'energy', 
         'central_charge', 'scaling_dim', 'correlation', 'correlation_extra',  

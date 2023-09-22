@@ -290,6 +290,7 @@ def measure_S(S=None, parpath=None, path=None,
             #print_vars(vars(),  ['S.keys()'])
             mps = S['mps']
             is_2d = S['is_2d']
+            Lx, Ly = S['Lx'], S['Ly']
             #N, D = mps.N, mps.D
             #if algorithm == 'tdvp' and mps.is_purification_state == True:
             #    assert N%2  == 0  
@@ -308,7 +309,7 @@ def measure_S(S=None, parpath=None, path=None,
             if not is_2d:
                 fn = "N=%d-D=%d.pickle"%(N, D)
             else:
-                fn = f"N={mps.Lx},{mps.Ly}-D={D}.pickle"
+                fn = f"N={Lx},{Ly}-D={D}.pickle"
                 
             path = '/'.join([parpath, fn])
             if algorithm in ['mps', 'vmps']:

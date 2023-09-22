@@ -415,6 +415,24 @@ class iTensorFactory(object):
     def pauli_mat_1site(symmetry):
         qspclass=symmetry_to_Qsp(symmetry)
         qn_identity, qsp_base, qsp_null = qspclass.set_base()
+        if 0:  # in future using the following code 
+            q_up = make_qsp('Z2', [1, -1], [1, 1])  
+            totqn = QnZ2(1)
+            up = iTensor(QSp=[q_up], totQN=totqn)
+            up.data[:] = [1.0]
+            up = up.insert_1d_qsp(1)
+            up_c = up.conj().T
+            
+            q_dn = make_qsp('Z2', [1, -1], [1, 1])  
+            totqn = QnZ2(-1)
+            dn = iTensor(QSp=[q_dn], totQN=totqn)
+            dn.data[:] = [1.0]
+            dn = dn.insert_1d_qsp(1)
+            dn_c = dn.conj().T
+            
+            sigma_x = up.dot(dn_c)  +  dn.dot(up_c)
+            sigma_z = up.dot(up_c)  -  dn.dot(dn_c)
+            
         if symmetry  == "Z2": 
             temp = lambda: (2, qsp_base.copy_many(2, reverse=[1]),  qn_identity.copy())
 
@@ -1255,8 +1273,33 @@ class TestIt(unittest.TestCase):
 
     def test_temp(self):
         from merapy import qsp_any, QspZ2, Tensor_svd
-        symm = 'Travial'
-        #symm = 'U1'
+        
+        q_up = make_qsp('Z2', [1, -1], [1, 1])  
+        totqn = QnZ2(1)
+        up = iTensor(QSp=[q_up], totQN=totqn)
+        up.data[:] = [1.0]
+        up = up.insert_1d_qsp(1)
+        up_c = up.conj().T
+        
+        q_dn = make_qsp('Z2', [1, -1], [1, 1])  
+        totqn = QnZ2(-1)
+        dn = iTensor(QSp=[q_dn], totQN=totqn)
+        dn.data[:] = [1.0]
+        dn = dn.insert_1d_qsp(1)
+        dn_c = dn.conj().T
+        
+        sigma_x = up.dot(dn_c)  +  dn.dot(up_c)
+        sigma_z = up.dot(up_c)  -  dn.dot(dn_c)
+        
+        print_vars(vars(),  ['sigma_x.sh'])
+        print_vars(vars(),  ['sigma_x'])
+        print_vars(vars(),  ['sigma_z'])
+        
+        
+        
+        #sx = up.dot
+        raise  
+        
         op =  iTensorFactory.any_op('sigma_p',  symmetry=symm, nmax=None)
         print_vars(vars(),  ['op.matrix_view()'])
         raise  
@@ -1313,9 +1356,9 @@ if __name__ == "__main__":
         #'test_diagonal_tensor_rank2', 
         #'test_spin_one_mat', 
         #'test_fermion_op', 
-        'test_boson_op', 
+        #'test_boson_op', 
         #'test_base_states', 
-        #'test_temp', 
+        'test_temp', 
         
             ]
   
