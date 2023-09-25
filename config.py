@@ -25,7 +25,7 @@ except:
 #LOCAL_HOSTNAME = 'qtgc30'
 
 #LOCAL_IP = '192.168.50.1'
-LOCAL_IP = '202.200.96.143'
+LOCAL_IP = '202.200.97.252'
 
 
 #LOCAL_IP = '202.200.98.230'
@@ -428,22 +428,35 @@ class Config(dict):
             if db.has_shape(sh, from_energy_rec=from_energy_rec):
                 allow = False
         elif alg == 'tdvp' :
-            trunc_dim, the_time_lim = cfg['trunc_dim'], cfg['the_time_lim']
-            msg.insert(2, 'td=%d, tlim=%s'%(trunc_dim, the_time_lim))
+            trunc_dim = cfg['trunc_dim']
             sh = (N, trunc_dim)
+            
+            dt = cfg['dt']
+            real_time = True if dt.imag == 0 else False 
             the_time = db.fetch_easy('the_time', sh, default=0)
-            if info>0:
-                print(the_time, db.get('the_time'))
-            #if abs(the_time ) >=  the_time_lim:
-            #    allow = False 
-            #else:
-            #    allow = True
+            #print(dt, real_time)
+            if real_time:
+                the_time_lim = cfg['the_time_lim']
+                msg.insert(2, 'td=%d, tlim=%s'%(trunc_dim, the_time_lim))
+                if info>0:
+                    print(the_time, db.get('the_time'))
+            else:  # simulation of equilibruim state at finite T
+                the_temperature_lim = cfg['the_temperature_lim']
+                msg.insert(2, f'td={trunc_dim}, Tlim={the_temperature_lim}')
+                the_time_lim = 1/the_temperature_lim/2
+                if info>0:
+                    print(the_time, the_time_lim, the_time>=the_time_lim)
+                
             allow = False if  abs(the_time ) >=  the_time_lim else True
+            
+                
+                
         elif alg == 'exact_diag':
             trunc_dim, the_time_lim = cfg['num_lanczos_vec'], cfg['the_time_lim']
             msg.insert(2, 'lanczos_m=%d, tlim=%s'%(trunc_dim, the_time_lim))
             sh = (N, trunc_dim)
             the_time = db.fetch_easy('the_time', sh, default=0)
+            print('the_time')
             allow = False if  abs(the_time ) >=  the_time_lim else True
         else:
             raise  ValueError(alg)
