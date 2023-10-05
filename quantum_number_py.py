@@ -1107,7 +1107,12 @@ class QspSU2(QuantSpaceBase):
                 #res.add_to_quant_space(qn, d)
         return res
 
-
+class QspU1Z2(QuantSpaceBase):
+    """
+        Simultaniously U1 and Z2 (spin inversion) symmetry. The XXZ model at
+        Mz=0 satisfy these symmetries. 
+    """
+    pass # to be implemented 
 
 
 def symmetry_to_Qn(symmetry):
