@@ -3471,6 +3471,33 @@ class Test_iTensor(unittest.TestCase):
         
         #status = iTensor.get_player_status()
         #print_vars(vars(),  ['status'])
+        if 0:
+            pass
+            if tensor_player.version == 'single':
+                return 
+            if 1:
+                print(iTensor.contract_core)
+                print(iTensor.__init__)
+            
+            for i in range(10):
+                print_vars(vars(),  ['i'], '', ' ')
+                rank = 4
+                set_player_state_auto(iter=i, record_at=0, verbose=1, info=1)    
+                #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
+                u = iTensor.example()
+                #u.contract_core(u, 2)
+                u.permutation([1, 3, 2, 0])
+                
+            #tensor_player.STATE = 'stop'
+            print((type(tensor_player.the_tape)))
+            print((tensor_player.the_tape))
+            raise  
+            print_vars(globals(),  ['tensor_player.the_tape.values()'])
+            print(tensor_player.the_tape.keys())
+            print(tensor_player.the_tape.get(1))
+            set_player_state_manual('stop')
+            
+        
         
         def test_get_element_and_set_element():
             #print w.__repr__()  #['Addr_idx']
@@ -3962,120 +3989,11 @@ class Test_iTensor(unittest.TestCase):
         temp = u.dot(s).dot(v)
         #print_vars(vars(),  ['temp==tt'])
         self.assertTrue(temp.is_close_to(tt))
-        
-    def test_temp(self): 
-        from merapy import QspZ2 
-        
-        if 1:
-            q0 = QspZ2.easy_init([1, -1], [2, 4])
-            q1 = QspZ2.easy_init([1, -1], [2, 3])
-            q2 = QspZ2.easy_init([1, -1], [3, 2])
-            q3 = QspZ2.easy_init([1, -1], [2, 2])
-            
-            t = iTensor(QSp=[q0, q1, q2, q3])
-            t.data = np.arange(t.data.size)
-            t2 = t.tensor_prod(t)
-            print_vars(vars(),  ['t2.data[40:50]'])
-        raise  
-        
-        if 0:  #pass 
-            #qsp_class= QspU1
-            qsp_class= QspZ2
-            qa = qsp_class.easy_init([1, -1],  [2, 2])
-            qb = qsp_class.easy_init([1, -1],  [3, 2])
-            qc = qsp_class.easy_init([1, -1],  [2, 3])
-            qd = qsp_class.easy_init([1, -1],  [2, 3])
-            qe = qsp_class.easy_init([1, -1],  [2, 3])
-            
-            t = iTensor(QSp=[qa*qb, qc, qd*qe]); t.data[:] = np.arange(t.size)
-            t2=t.split_qsp(0, [qa, qb], 2, [qd, qe])
-            c2 = t.contract(t, [0, 100, 1], [0, 1000, 1])
-            c3 = t2.contract(t2, [0, 1, 100, 2, 3], [0, 1, 1000, 2, 3])
-            #c2.show_data()
-            #c3.show_data()
-            print_vars(vars(),  ['c2.data', 'c3.data'])
-            self.assertTrue(np.all(c2.data==c3.data))
-
-        from merapy import QspZ2 
-        if 1:
-            q0 = QspZ2.easy_init([1, -1], [2, 4])
-            q1 = QspZ2.easy_init([1, -1], [2, 3])
-            q2 = QspZ2.easy_init([1, -1], [3, 2])
-            
-            t3 = iTensor(QSp=[q0, q1, q2])
-            #print_vars(vars(),  ['t3.QNs'])
-            #raise  
-            
-            #t2 = t3.merge_3to2((0, 1))
-            #print_vars(vars(),  ['t3.sh', 't2.sh'])
-            #print_vars(vars(),  ['t3.sh'])
-            #print_vars(vars(),  ['t3'])
-            t3.transpose([2, 0, 1])
-            raise  
-            
-            c3 = t3.contract(t3.copy(), [0, 1, 2], [0, 1, 3])
-            
-        
-        raise  
     
-    
-        if 1:
-            pass
-            if tensor_player.version == 'single':
-                return 
-            if 1:
-                print(iTensor.contract_core)
-                print(iTensor.__init__)
-            
-            for i in range(10):
-                print_vars(vars(),  ['i'], '', ' ')
-                rank = 4
-                set_player_state_auto(iter=i, record_at=0, verbose=1, info=1)    
-                #set_STATE_end_1(iter=i, record_at=0, stop_at=10000000, power_on=True) 
-                u = iTensor.example()
-                #u.contract_core(u, 2)
-                u.permutation([1, 3, 2, 0])
-                
-            #tensor_player.STATE = 'stop'
-            print((type(tensor_player.the_tape)))
-            print((tensor_player.the_tape))
-            raise  
-            print_vars(globals(),  ['tensor_player.the_tape.values()'])
-            print(tensor_player.the_tape.keys())
-            print(tensor_player.the_tape.get(1))
-            set_player_state_manual('stop')
-            
-        
-        if 1:
-            #from quantum_number import QnU1
-            from merapy.quantum_number import QnU1, QspU1
-            qn = QnU1(1)
-           
-            #raise  
-            q0 = QspU1.easy_init([1, -1], [2, 4])
-            q1 = QspU1.easy_init([1, -1], [2, 3])
-            #q2 = QspU1.easy_init([1, -1], [3, 2])
-            q2 = q0.tensor_prod(q1); q2.reverse()
-            
-            t3 = iTensor(QSp=[q0, q1, q2])
-            q = t3
-            
-            q = qn
-            
-            path = '/tmp/accbabca'
-            if 0:
-                save(q, path)
-                #rpyc_save(path, q)
-            else:
-                q1=load(path)
-                print_vars(vars(),  ['q1'])
-                print(q1.QSp[0].__class__.__module__)
-            raise  
-
-
+    def dev_test_su2_symm(self):
+        pass
             
         if 0:
-
             q0 = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[2, 2, 2, 2])
             q1 = qsp_any('SU2', qns=[(0, 0), (1, -1), (1, 0), (1, 1)], dims=[2, 2, 2, 2])
 
@@ -4083,7 +4001,6 @@ class Test_iTensor(unittest.TestCase):
             print_vars(vars(),  ['t'])
             
         if 0:  #rank-3
-
             q0 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
             q1 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
             q2 = qsp_any('SU2', qns=[(0, 0), (2, 0),  (2, 2)], dims=[2, 2, 1])
@@ -4098,9 +4015,7 @@ class Test_iTensor(unittest.TestCase):
             print_vars(vars(),  ['t'])
             print_vars(vars(),  ['t.cg_coeff'])
             
-            
         if 0:  #rank-4
-
             q0 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
             q1 = qsp_any('SU2', qns=[(0, 0), (2, -2), (2, 0), (2, 2)], dims=[2, 2, 2, 1])
             q2 = qsp_any('SU2', qns=[(0, 0), (2, 0),  (2, 2)], dims=[2, 2, 1])
@@ -4109,21 +4024,46 @@ class Test_iTensor(unittest.TestCase):
             t = iTensor(QSp=[q0, q1, q2, q3])
             #print_vars(vars(),  ['t'])
             print_vars(vars(),  ['t.cg_coeff'])
-        if 0:
-            import time
-            q0 = QspZ2.easy_init([0, 1, -1, 2, -2], [4, 3, 2, 1, 1])
-            q1 = QspZ2.easy_init([0, -1, 1, 2, -1], [4, 3, 2, 1, 1] )
-            q2 = QspZ2.easy_init([1, -1], [3, 2])
-            t0 = time.time()
-            for i in range(5000):
-                #set_player_state_auto(iter=i, record_at=0, info=0)    
-                t3 = iTensor(QSp=[q0, q1, q2])
-                
-            t1 = time.time()
-            print_vars(vars(),  ['t1-t0'])
-        if 1:
-            tqn = QspU1.qn_id()
-            t3 = iTensor(rank=0, QSp=[], totQN=tqn)
+    
+    def test_temp(self): 
+        from merapy.tensor_svd import Tensor_svd
+        
+        dims  =  [2, 1, 1]
+        for n in [10, 50, 100, 500, 1000, ]:
+            _dims= [n*i for i in dims]
+            
+            Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=_dims)
+            Dr = Dl.conj()
+            d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
+            qsp = [Dl, Dr, d]
+            
+            print(f'\nqsp is Dl={Dl}')
+            
+            for use_gpu in [1, 0]:
+                t = iTensor(QSp=qsp, use_gpu=use_gpu)
+                if use_gpu == 1:
+                    xp = cp
+                    device = 'GPU'
+                else:
+                    xp = np
+                    device = 'CPU'
+                xp = np if not use_gpu else cp 
+                t.data = xp.random.random(t.data.size)-0.5
+                tc = t.conj()
+                t0 = time.time()
+                for i in range(100):
+                    t.contract(tc, (0, 1, 2), (3, 1, 2), use_buf=1)
+                t1 = time.time()
+
+                print(f'time for iTensor contraction on {device}: {t1-t0}')
+            
+        
+            
+        
+        
+        
+    
+        
             
 
 
@@ -4161,6 +4101,7 @@ if __name__ == "__main__":
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
            #'test_itensor_gpu'
+           #'dev_test_su2_symm', 
            'test_temp', 
         ]
         

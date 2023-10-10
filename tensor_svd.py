@@ -272,7 +272,7 @@ class iTensor_rank2_operation(object):
             
         """
         
-        module = scipy if not tensor.use_gpu else cp 
+        module = np if not tensor.use_gpu else cp 
         
         trunc_dim = trunc_dim if trunc_dim is not None else 10000000
         num_blocks = tensor.nidx 
@@ -355,7 +355,7 @@ class iTensor_rank2_operation(object):
             
             norm_orig = module.linalg.norm(temp[0])   # this also equals norm of psi 
                 
-            if trunc_err_tol is not None:   # determin trunc_dim from trunc_err_tol
+            if trunc_err_tol is not None and trunc_err_tol>0:   # determin trunc_dim from trunc_err_tol
                 s_sorted = temp[0][ind_sorted]
                 if 1:  
                     s_sorted_normalized  =  s_sorted/norm_orig  #here enforce normalization of singular values, even if psi was not normalized 
@@ -526,7 +526,7 @@ class iTensor_rank2_operation(object):
         totdim = numpy.sum(dim_list)
         index = list(range(num_blocks))
         
-        if  (trunc_dim is not None and  trunc_dim < totdim) or trunc_err_tol is not None or val_lim is not None: 
+        if  (trunc_dim is not None and  trunc_dim < totdim) or trunc_err_tol  or val_lim is not None: 
             is_trunc = True 
         else:
             is_trunc = False
@@ -565,15 +565,19 @@ class iTensor_rank2_operation(object):
                 dim = len(arg)
                 trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
             
-            if trunc_err_tol is not None:   # determin trunc_dim from trunc_err_tol
+            if trunc_err_tol:   # determin trunc_dim from trunc_err_tol
                 #s_sorted = temp[0][ind_sorted]
                 s_sorted = temp0_abs[ind_sorted]
+                
+                #print_vars(vars(),  ['repr(s_sorted)', 'np.sum(s_sorted)'])
+                #s_sorted/np.sum(s_sorted)
                 
                 if s_sorted[0] <1e-15:   # I use this method in TDVP increase_D for 1site algorithm,  It can happen rho haing all zero eigenvalues 
                     trunc_dim = 0    
                 else:
                     if 1:
                         # here I assume vals are all positive, or else sum is meaningless
+                        # here can be warning of 'underflow' when some s values are extremely small; they can be safely ignored
                         s_cumsum = np.cumsum(s_sorted/np.sum(s_sorted))  # if all val are 0 then this would through an error 
                         arg = np.where(s_cumsum>=1-trunc_err_tol)[0]
                     else:
@@ -2014,7 +2018,7 @@ class TestIt(unittest.TestCase):
             
     
 if __name__ == "__main__":
-    if 0: #examine
+    if 1: #examine
                 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    

@@ -386,12 +386,12 @@ class Main(object):
             job_status = 'FAILED'
         except Exception as exception:
             print(exception)
-            traceback.print_exc()
+            #traceback.print_exc()
             job_status = 'FAILED'
             raise
         finally: 
             #msg += ' EXIT chiled for %s.\n final status is %s'%(config.get('model_param'), job_status)
-            msg += ' EXIT.\n final status is %s'%(job_status)
+            msg += ' \n final status is %s. EXIT.'%(job_status)
             print(msg)
             if is_registered:  
                 parpath = config['backup_parpath_local']
