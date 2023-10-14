@@ -97,15 +97,37 @@ def set_num_of_threads(n, info=1):
         mkl.set_num_threads(n)
 
 
-def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=False, ):
-    
-    if not use_gpu:
+def gemm_all_bac(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=0, transfer_data=False):
+    if use_gpu  == 0 :
         if dtype == float:
             dgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
         else:
             zgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
     else:
+        if not transfer_data:
+            cublas.gemm('N', 'N', a, b, out=c, alpha=1.0, beta=beta) 
+        else:
+            a = cp.asarray(a)
+            b = cp.asarray(b)
+            out = cublas.gemm('N', 'N', a, b, alpha=1.0, beta=beta) 
+            out.get(order='F', out=c)
+            
+            
+def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=0, transfer_data=False):
+    if use_gpu  == 0 :
+        if dtype == float:
+            dgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+        else:
+            zgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+    elif use_gpu == 2:
+        a = cp.asarray(a)
+        b = cp.asarray(b)
+        out = cublas.gemm('N', 'N', a, b, alpha=1.0, beta=beta) 
+        out.get(order='F', out=c)
+    elif use_gpu == 1:
         cublas.gemm('N', 'N', a, b, out=c, alpha=1.0, beta=beta) 
+    else:
+        raise ValueError(use_gpu) 
 
 
 

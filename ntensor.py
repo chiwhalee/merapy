@@ -84,21 +84,6 @@ class TensorBase(object):
         res=self.data.reshape((dim1, dim2), order=order)
         return res
 
-    def randomize_data(self):
-        """
-        status_1_with_problem 
-        see Random_Tensor in f90
-        this method is not reasonable,  since totDim and data are not defined for TensorBase
-        """
-        #try:
-            #self.data[:] = np.random.rand(self.totDim, dtype=self.dtype)
-            #attention_this_may_be_wrong  rand does not support dtype
-            #self.data[:self.totDim] = np.random.random(self.totDim)
-
-        #self.data[:self.totDim] = [crandom.rand()-0.5 for i in range(self.totDim)]
-        self.data[:self.totDim] = [np.random.random()-0.5 for i in range(self.totDim)]
-
-        #except: print "error, self.data is not materialized"
 
     def scale(self,alpha,inplace=False):
         """
@@ -503,7 +488,7 @@ def test_TensorBase():
         #mrandom.csrand(1)
         t.totDim = 10
         t.data = np.arange(t.totDim, dtype=t.dtype)
-        t.randomize_data()
+        #t.randomize_data()
         print(t.data)
     #test_randomize_data()
 

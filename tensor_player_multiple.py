@@ -166,7 +166,7 @@ def tensor_player(which):
         if 1:   #define recorder and player
             def init_recorder(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
                     buffer=None, use_buf=False, index_data=True, has_data=True, 
-                    use_gpu=False):
+                    use_gpu=0):
                 """
                     这种做法有些过于激进, 更安全的是下面的 data_entrance_recorder/player 
                     note1:
@@ -191,7 +191,7 @@ def tensor_player(which):
             
             #@profile
             def init_player(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
-                    buffer=None, use_buf=False, index_data=True, has_data=True, use_gpu=False):
+                    buffer=None, use_buf=False, index_data=True, has_data=True, use_gpu=0):
                 """
                     note1:
                         Although one may remove .copy, which sould still work.
@@ -206,11 +206,11 @@ def tensor_player(which):
                 self.buf_ref = np.array([-1, -1], np.int64)
                 if has_data:
                     if  buffer is None and use_buf:                    
-                        if not self.use_gpu:
+                        if self.use_gpu != 1:
                             buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
                         else:
                             buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
-                    if not self.use_gpu:
+                    if self.use_gpu != 1:
                         self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
                     else:
                         #buffer = buffer if buffer is None else buffer.data
@@ -484,14 +484,20 @@ def tensor_player(which):
                         data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                         
                         data3 = T3.data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
-                        #matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
                         
+                        #use_gpu = self.use_gpu
+                        #transfer_data = False
+                        #if self.USE_GPU_FOR_BLOCK and data3.size >= self.USE_GPU_MUL_LIM:
+                        #    use_gpu = True
+                        #    transfer_data = True
+                        #common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                        #        dtype = dtype, use_gpu=use_gpu, transfer_data=transfer_data)
+                        
+                        use_gpu = self.use_gpu
+                        if self.use_gpu == 2 and data3.size < self.USE_GPU_MUL_LIM:
+                            use_gpu = 0
                         common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
-                                dtype = dtype, use_gpu=self.use_gpu)
-                        
-                        
-                        #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
-                        #T3.data[p3:p3+Dim1*Dim2]  += data3.ravel('F')  
+                                dtype = dtype, use_gpu=use_gpu)
                         
                         
                 
@@ -553,14 +559,23 @@ def tensor_player(which):
                         data1 = self_data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
                         data2 = T2_data[p2:p2+Dim2*Dimc].reshape((Dimc,Dim2), order='F')    
                         data3 = T3_data[p3:p3+Dim1*Dim2].reshape((Dim1,Dim2), order='F')    
-                        #if not self.use_gpu:
-                        #    matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
-                        #else:
-                        #    cublas.gemm('N', 'N', data1, data2, out=data3, alpha=1.0, beta=1.0) 
+                        
+                        #use_gpu = self.use_gpu
+                        #transfer_data = False
+                        #if self.USE_GPU_FOR_BLOCK and data3.size >= self.USE_GPU_MUL_LIM:
+                        #    use_gpu = True
+                        #    transfer_data = True
+                        #common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                        #        dtype = dtype, use_gpu=use_gpu, transfer_data=transfer_data)
+                        
+                        use_gpu = self.use_gpu
+                        if self.use_gpu == 2 and data3.size < self.USE_GPU_MUL_LIM:
+                            use_gpu = 0
                         common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
-                                dtype = dtype, use_gpu=self.use_gpu)
-                        #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
-                        #T3.data[p3:p3+Dim1*Dim2] += data3.ravel('F') 
+                                dtype = dtype, use_gpu=use_gpu)
+                        
+                        
+                
                 #if self.use_gpu:
                 #    #T3.data = cp.asnumpy(T3_data) 
                 #    T3.data = T3_data.get()
@@ -1205,7 +1220,7 @@ class TestIt(unittest.TestCase):
         tc = t.copy()
         N = 10
         
-        data = cp.ndarray(t.data.size) if t.use_gpu else np.ndarray(t.data.size) 
+        data = cp.ndarray(t.data.size) if t.use_gpu ==1 else np.ndarray(t.data.size) 
         
         t1 = time.time()
         for i in range(N):

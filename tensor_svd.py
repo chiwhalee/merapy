@@ -78,7 +78,7 @@ class iTensor_rank2_operation(object):
         qn_list_l = []
         qn_list_r = []
         
-        qr_func = np.linalg.qr if not tt.use_gpu else cp.linalg.qr
+        qr_func = np.linalg.qr if tt.use_gpu != 1 else cp.linalg.qr
         
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
@@ -272,7 +272,7 @@ class iTensor_rank2_operation(object):
             
         """
         
-        module = np if not tensor.use_gpu else cp 
+        module = np if tensor.use_gpu != 1 else cp 
         
         trunc_dim = trunc_dim if trunc_dim is not None else 10000000
         num_blocks = tensor.nidx 
@@ -306,7 +306,7 @@ class iTensor_rank2_operation(object):
                 msg = " scipy.linalg.svd not converge  use another version of SVD instead"
                 warnings.warn(msg)
                 print(msg)
-                if tensor.use_gpu:
+                if tensor.use_gpu == 1:
                     raise  
                 u, s, v = common_util.matrix_svd(min(dl, dr), mat)
                 uu[i], ss[i], vv[i] = u, s, v
@@ -372,7 +372,7 @@ class iTensor_rank2_operation(object):
             
             if trunc_dim_min is not None:
                 trunc_dim = max(trunc_dim, trunc_dim_min)
-            #print_vars(vars(),  ['trunc_dim']) 
+            
             ind_largest = ind_sorted[:trunc_dim]
             #temp = temp[:, ind_largest]
             for i in range(3): 
@@ -472,7 +472,7 @@ class iTensor_rank2_operation(object):
 
     @staticmethod
     def eig_rank2(tensor, trunc_dim=None, trunc_err_tol=None, val_lim=None, qsp_guide=None, 
-            return_trunc_err=False, return_val=False,   overwrite_data=False,  use_buff=False, debug=0):
+                  trunc_dim_min = None, return_trunc_err=False, return_val=False,   overwrite_data=False,  use_buff=False, debug=0):
         """ 
             exact diagonalizetion of a rank-2 symmetric tensor given a hermit
             matrix A, find V and lam such that 
@@ -513,7 +513,7 @@ class iTensor_rank2_operation(object):
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
             mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
-            if not tt.use_gpu:
+            if tt.use_gpu != 1:
                 val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
             else:
                 val, mat = cp.linalg.eigh(mat)   #pay attention here tensor.data is overwritten !!
@@ -542,7 +542,7 @@ class iTensor_rank2_operation(object):
             print_vars(vars(),  ['all vals:VAL[0][jjj]'], round=10, color='blue')
         
         
-        np = numpy if not tt.use_gpu else cupy
+        np = numpy if tt.use_gpu != 1 else cupy
         if is_trunc:
             temp = {}
             temp[0] = np.ndarray(totdim, dtype=float)     # stores eigen values
@@ -588,6 +588,9 @@ class iTensor_rank2_operation(object):
                     trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
                 
                 #norm_trunced = math.sqrt(s_cumsum[trunc_dim-1])
+            if trunc_dim_min is not None:
+                trunc_dim = max(trunc_dim, trunc_dim_min)
+                
             if trunc_dim == 0:   # all vectors are truncated 
                 #return {'vec_mat': None, 'val_mat': None, 'trunc_err': None}                   
                 if not return_trunc_err:
@@ -1385,7 +1388,7 @@ class Tensor_svd(iTensor_rank2_operation):
         """ 
         """
         
-        np = numpy if not itensor.use_gpu else cupy 
+        np = numpy if itensor.use_gpu != 1 else cupy 
         
         nV = cls.QSp_Group1.Dims[gidx]
         mV = cls.QSp_Group2.Dims[gidx]        

@@ -107,13 +107,13 @@ class DataBuffer(object):
     the point of tBUffer is :当tensor用过自动garbage collect后，只要把tensor使用
     的buff标记in_use改为-1，而buff并未必删除，可以继续使用
     """
-    def __init__(self, size, dtype, use_gpu=False):
+    def __init__(self, size, dtype, use_gpu=0):
         """
             size: number of tensors
         """
         #self.T=[Tensor() for i in xrange(size)]
         #make self.T simpliy a place holder
-        if not use_gpu:
+        if use_gpu != 1:
             self.T=[np.ndarray(0, dtype=dtype) for i in range(size)]
         else:
             self.T=[cp.ndarray(0, dtype=dtype) for i in range(size)]
@@ -212,11 +212,14 @@ class iTensor(TensorBase):
     #issue:  these buffer may not compatible with complex type 
     DATA_BUFFER = [DataBuffer(size=20, dtype=float) for  i in range(2)]
     DATA_BUFFER_GPU = [DataBuffer(size=20, dtype=float) for  i in range(2)]
-    #BUFFER_ON = False
+    
+    #USE_GPU_FOR_BLOCK = False
+    USE_GPU_MUL_LIM = 100*00          # used when use_gpu = 2
+    USE_GPU_EIG_LIM = 400*400
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
             buffer=None, use_buf=False, index_data=True, 
-            has_data=True, init_data=None, use_gpu=False):
+            has_data=True, init_data=None, use_gpu=0):
         """
             params: 
                 totQN : 
@@ -230,6 +233,13 @@ class iTensor(TensorBase):
                 buf_ref: 
                     buf_ref[0]---which iTensor.DATA_BUFFER, buf_ref[1]---which tensor in the iTensor.DATA_BUFFER
                     default -1 means not using iTensor.DATA_BUFFER
+                use_gpu:
+                    can take value in [0, 1, 2]. 
+                        0 means not use gpu  
+                        1 means use gpu  
+                        2 means use gpu for certain large blocks of data.
+                            When to use gpu depend on USE_GPU_MUL_LIM, USE_GPU_EIG_LIM
+                    
             issue:
                 in future, QSp only searve as a way to construct iTensor, forbit it being modified, because modifying qsp alone
                 is meanless and dangeous if not copyed.
@@ -283,12 +293,12 @@ class iTensor(TensorBase):
 
         if has_data:
             if buffer is None and use_buf:   #use internal DATA_BUFFER; else use external buffer or no buffer
-                if not self.use_gpu:
+                if self.use_gpu != 1:
                     buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
                 else:
                     buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
                    
-            if not self.use_gpu:
+            if self.use_gpu != 1:
                 self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
             else:
                 if isinstance(buffer, cp.ndarray):
@@ -299,7 +309,7 @@ class iTensor(TensorBase):
         self.__dict__.update(d)
         self.buf_ref = np.array([-1, -1], int)   # this is important 
         if not hasattr(self, 'use_gpu'):   # add at 2023/ 08/13
-            self.use_gpu = False
+            self.use_gpu = 0
     
     def __eq__(self, other):
         """
@@ -786,7 +796,7 @@ class iTensor(TensorBase):
             in which __init__ didn’t finish running."
         """
         if self.use_buf and self.buf_ref[0]!=-1:
-            if not self.use_gpu: 
+            if self.use_gpu != 1: 
                 iTensor.DATA_BUFFER[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
             else:
                 iTensor.DATA_BUFFER_GPU[self.buf_ref[0]].in_use[self.buf_ref[1]]=False
@@ -1053,7 +1063,7 @@ class iTensor(TensorBase):
                 key_val_sep='=')
         
     @staticmethod
-    def unit_tensor(rank, QSp, totQN=None, dtype=float, use_gpu=False):
+    def unit_tensor(rank, QSp, totQN=None, dtype=float, use_gpu=0):
         """
             Q:  注意区分几种情况，
             
@@ -1092,7 +1102,7 @@ class iTensor(TensorBase):
             d = 1
             for j in range(rank1):
                 d = d*t.QSp[j].Dims[pos[j]]
-            if not use_gpu:
+            if use_gpu != 1:
                 t.data[p:p+d**2] = np.identity(d,dtype=t.dtype).ravel()
             else:
                 t.data[p:p+d**2] = cp.identity(d,dtype=t.dtype).ravel()
@@ -1100,7 +1110,7 @@ class iTensor(TensorBase):
         return t
     
     @staticmethod
-    def identity(qsp, dtype=float, use_gpu=False):
+    def identity(qsp, dtype=float, use_gpu=0):
         if hasattr(qsp, 'QNs'):
             qsp = qsp.copy_many(2, reverse=[1])
         return iTensor.unit_tensor(2, qsp, dtype=dtype, use_gpu=use_gpu)
@@ -2255,17 +2265,22 @@ class iTensor(TensorBase):
                 iQN3[0:shift] = iQN1[0:shift]  #iQN3[0] = 1 #!for rank=1
                 iQN3[shift:rank3] = iQN2[div:rank2]
                 
-                
                 data3 = T3.get_block(iQN3[:T3.rank]).reshape((Dim1,Dim2), order='F')    
                 
-                #matmul_func(1.0, data1, data2, beta=1.0, c=data3, overwrite_c=True)
-                common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
-                        dtype = dtype, use_gpu=self.use_gpu)
+                #use_gpu = self.use_gpu
+                #transfer_data = False
+                #if self.USE_GPU_FOR_BLOCK and data3.size >= self.USE_GPU_MUL_LIM:
+                #    use_gpu = True
+                #    transfer_data = True
+                #common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                #        dtype = dtype, use_gpu=use_gpu, transfer_data=transfer_data)
                 
-                #T3_data = T3.get_block(iQN3[:T3.rank])
-                #data3 = np.matmul(data1, data2, order='F', dtype=dtype)
-                #T3_data += data3.ravel('F')[:]   
-                    
+                use_gpu = self.use_gpu
+                if self.use_gpu == 2 and data3.size < self.USE_GPU_MUL_LIM:
+                    use_gpu = 0
+                common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                        dtype = dtype, use_gpu=use_gpu)
+                
         
         return T3
 
@@ -3154,6 +3169,14 @@ class iTensor(TensorBase):
     
     def set_data_to_zero(self): 
         self.data[: ] = 0.0
+    
+    def set_data_random(self):
+        """
+        """
+        if self.use_gpu != 1:  
+            self.data[:] = np.random.random(self.data.size)-0.5
+        else:
+            self.data[:] = cp.random.random(self.data.size)-0.5
         
     def reduce_1d_qsp(self, i):   # def reduce_dummy_index
         """
@@ -3284,6 +3307,7 @@ class iTensor(TensorBase):
             self.use_gpu = 0
         else:
             raise ValueError 
+    
     
     @property
     def device(self):
@@ -4028,34 +4052,31 @@ class Test_iTensor(unittest.TestCase):
     def test_temp(self): 
         from merapy.tensor_svd import Tensor_svd
         
-        dims  =  [2, 1, 1]
+        
         for n in [10, 50, 100, 500, 1000, ]:
-            _dims= [n*i for i in dims]
-            
+            dims  =  [2.7, 1.2, 1]
+            _dims = [int(n*i) for i in dims]
             Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=_dims)
-            Dr = Dl.conj()
+
+            dims  =  [3, 1.2, 1]
+            _dims = [int(n*i) for i in dims]
+            Dr = qsp_any('U1', qns=[0, 1, -1, ], dims=_dims)
             d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
             qsp = [Dl, Dr, d]
             
             print(f'\nqsp is Dl={Dl}')
             
-            for use_gpu in [1, 0]:
+            for use_gpu in [0,  1,  2]:
+                #iTensor.USE_GPU_FOR_BLOCK = use_gpu
                 t = iTensor(QSp=qsp, use_gpu=use_gpu)
-                if use_gpu == 1:
-                    xp = cp
-                    device = 'GPU'
-                else:
-                    xp = np
-                    device = 'CPU'
-                xp = np if not use_gpu else cp 
-                t.data = xp.random.random(t.data.size)-0.5
+                t.set_data_random()
                 tc = t.conj()
                 t0 = time.time()
-                for i in range(100):
+                for i in range(1):
                     t.contract(tc, (0, 1, 2), (3, 1, 2), use_buf=1)
                 t1 = time.time()
 
-                print(f'time for iTensor contraction on {device}: {t1-t0}')
+                print(f'time for iTensor contraction on {use_gpu}: {t1-t0}')
             
         
             
