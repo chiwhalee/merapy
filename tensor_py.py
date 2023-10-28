@@ -214,8 +214,8 @@ class iTensor(TensorBase):
     DATA_BUFFER_GPU = [DataBuffer(size=20, dtype=float) for  i in range(2)]
     
     #USE_GPU_FOR_BLOCK = False
-    USE_GPU_MUL_LIM = 100*00          # used when use_gpu = 2
-    USE_GPU_EIG_LIM = 400*400
+    USE_GPU_MUL_LIM = 100**3   # used when use_gpu = 2
+    USE_GPU_EIG_LIM = None 
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
             buffer=None, use_buf=False, index_data=True, 
@@ -2276,11 +2276,10 @@ class iTensor(TensorBase):
                 #        dtype = dtype, use_gpu=use_gpu, transfer_data=transfer_data)
                 
                 use_gpu = self.use_gpu
-                if self.use_gpu == 2 and data3.size < self.USE_GPU_MUL_LIM:
+                if self.use_gpu == 2 and (Dim1*Dim2*Dimc) < self.USE_GPU_MUL_LIM:
                     use_gpu = 0
                 common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
                         dtype = dtype, use_gpu=use_gpu)
-                
         
         return T3
 
@@ -4051,7 +4050,6 @@ class Test_iTensor(unittest.TestCase):
     
     def test_temp(self): 
         from merapy.tensor_svd import Tensor_svd
-        
         
         for n in [10, 50, 100, 500, 1000, ]:
             dims  =  [2.7, 1.2, 1]

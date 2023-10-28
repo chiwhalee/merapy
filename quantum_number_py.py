@@ -739,6 +739,17 @@ class QuantSpaceBase(object):
     def qn_id(cls:Type[T])->Tqn:
         return cls.QnClass.qn_id()
     
+    def shift_qn(self, qn_delta):
+        """
+           change all the qns by qn_delta, not changing dim; an inplace operation
+        """
+        n= self.nQN
+        #if not isinstance(qn_delta, int):
+        #    qn_delta = qn_delta._val
+        for i in range(n):
+            #self.QNs[i]._val += qn_delta 
+            self.QNs[i] = self.QNs[i] + qn_delta 
+    
 
 class QspTravial(QuantSpaceBase):
     MaxQNNum = 1

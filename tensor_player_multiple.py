@@ -494,7 +494,7 @@ def tensor_player(which):
                         #        dtype = dtype, use_gpu=use_gpu, transfer_data=transfer_data)
                         
                         use_gpu = self.use_gpu
-                        if self.use_gpu == 2 and data3.size < self.USE_GPU_MUL_LIM:
+                        if self.use_gpu == 2 and (Dim1*Dim2*Dimc) < self.USE_GPU_MUL_LIM:
                             use_gpu = 0
                         common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
                                 dtype = dtype, use_gpu=use_gpu)
@@ -569,8 +569,9 @@ def tensor_player(which):
                         #        dtype = dtype, use_gpu=use_gpu, transfer_data=transfer_data)
                         
                         use_gpu = self.use_gpu
-                        if self.use_gpu == 2 and data3.size < self.USE_GPU_MUL_LIM:
+                        if self.use_gpu == 2 and (Dim1*Dim2*Dimc) < self.USE_GPU_MUL_LIM:
                             use_gpu = 0
+                            
                         common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
                                 dtype = dtype, use_gpu=use_gpu)
                         
