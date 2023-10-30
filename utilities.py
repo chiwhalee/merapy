@@ -369,7 +369,7 @@ def print_vars(dic, var_name_list=None,  head=None, sep=', ', key_val_sep='=', c
         #    return  str(res)
         #else: 
         #    return  str(x) + key_val_sep + str(res)
-        if round is not None and isinstance(res, np.ndarray): # and res.dtype==float:
+        if round is not None and isinstance(res, np.ndarray) and res.dtype in [float, complex]: # and res.dtype==float:
             res= res.round(round)
         res_str = str(res)
         if isinstance(res, np.ndarray) and res.ndim>1:

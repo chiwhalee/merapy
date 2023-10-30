@@ -342,7 +342,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
         k = param_list.index(param)
         x = [a[k] for a in aa]
         x = list(set(x))
-        x.sort()
+        try:
+            x.sort() #some times it can not be sorted,  due to not different format of alpha in the list
+        except TypeError as err:
+            warnings.warn(str(err))
         #x=np.array(x)
         return x
 
@@ -403,7 +406,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             elif '<' in surfix or '>' in surfix:
                 func = lambda x: eval(surfix.replace('surfix', x[-1]))
                 aa = list(filter(func, aa))
-                
+            
             else:
                 aa = [x for x in aa if x[-1]==surfix]
             
@@ -421,12 +424,14 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 continue
             i = param_list.index(k)
             
-            if isinstance(v, (float, int)): 
+            if isinstance(v, (float, int, complex)): 
                 #if hasattr(aa[0], '__iter__'): 
                 #    func = lambda x: x[i]== v
                 #else:
                 #    func = lambda x: (x, )[i]== v
-                v = '%s==%f'%(k, v)
+                
+                #v = '%s==%f'%(k, v)
+                v = f'{k}=={v}'
             #elif isinstance(v, str): 
             if 1: 
                 if hasattr(aa[0], '__iter__'): 
@@ -546,60 +551,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
             
         return alpha_parpath_dict
 
-    def parse_dir_name_bac(self, fn, surfix=''):
-        """
-            parpath name to alpha 
-        
-        """
-        def parse1(term): 
-            if '=' in term: 
-                key, val = term.split('=')
-                if 'm' == val[0]:  #change 'm' to minus sign
-                    val = '-'  + val[1: ]
-                try: 
-                    val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
-                except: 
-                    val = val
-                return (key, val)
-            else: 
-                return ('surfix', term) # term is surfix 
-            
-        def parse2(xx): 
-            if '=' in xx: 
-                xx = xx.split('=')[1]
-                #print('xxxxxxxxxxxxxxxxx', xx)
-                if 'm' == xx[0]:  #change 'm' to minus sign
-                    xx = '-'  + xx[1: ]
-            else: 
-                return xx   # xx is surfix 
-            try: 
-                res=float(xx)
-                #res=(float(xx), )   #todo:  make alpha always a tuple 
-            except: 
-                res= xx
-            return res
-        
-        if self.Alpha is not None:  
-            nn = fn.split('-')
-            temp = [parse1(a) for a in nn]
-            if 1:
-                if temp[-1][0] != 'surfix' :  #no surfix
-                    alpha = self.Alpha(** dict(temp))
-                    alpha = tuple(alpha)
-                else:
-                    surfix = temp[-1][1]
-                    alpha = self.Alpha(** dict(temp[:-1]))
-                    alpha += (surfix, ) 
-            if 0:
-                alpha = self.Alpha(** dict(temp))
-                
-        else:
-            aa = fn.split('-')
-            alpha = tuple([parse2(a) for a in aa])   #no mater one or many param,  use tuple as key uniformly 
-            if surfix != '': 
-                alpha = str(alpha) + '-' +  surfix
-        return alpha 
-
     def parse_dir_name(self, fn, surfix=''):
         """
             parpath name to alpha 
@@ -612,7 +563,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
                     val = '-'  + val[1: ]
                 try: 
                     #val = float(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
-                    val = float(val) if ('.' in val or val=='inf') else int(val)  #val=(float(val), )   #todo:  make alpha always a tuple 
+                    val = (
+                            (float(val) if val[-1]!='j' else complex(val)) 
+                                if ('.' in val or val=='inf') 
+                                else int(val))  #val=(float(val), )   #todo:  make alpha always a tuple 
                 except: 
                     val = val
                 return (key, val)
@@ -750,7 +704,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
         if alpha_list is not None: 
             part_update = 1
             
-        alpha_list = alpha_list if alpha_list is not None else  sorted(self.alpha_parpath_dict)
+        #alpha_list = alpha_list if alpha_list is not None else  sorted(self.alpha_parpath_dict)
+        alpha_list = alpha_list if alpha_list is not None else  self.alpha_parpath_dict
         alpha_list = [a if isinstance(a, tuple) else (a, )  for a in alpha_list]
         error = []
         for a in alpha_list: 
@@ -788,7 +743,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
             warnings.warn(msg)
             dic = {}
             
-        
         self.alpha_parpath_dict.update(dic)
         
         if info>1: 

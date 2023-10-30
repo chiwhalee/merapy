@@ -618,7 +618,7 @@ class AnalysisTools(object):
         yy = np.sign(y)*magnitude  + center 
         self._plot.__func__(None, x, yy, ax=ax, **kwargs)
     
-    def compare_two_lines(self, line1, line2, plot_sign=False, **kwargs): 
+    def compare_two_lines(self, line1, line2, abs_diff=False, plot_sign=False, **kwargs): 
         """
            plot y1-y2 
         """
@@ -632,6 +632,8 @@ class AnalysisTools(object):
             y12 = y1[ind12]
             y21 = y2[ind21]
             y_diff = y12 -y21
+            if abs_diff:
+                y_diff = np.abs(y_diff)
         #axes= line1.get_axes()   
         axes= line1.axes
         if 'ylabel' not in kwargs: 
