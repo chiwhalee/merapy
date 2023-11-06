@@ -507,6 +507,7 @@ class iTensorFactory(object):
             sigma_m=iTensor(rank, qsp, totqn)
             sigma_m.data[:] = [0.0, 0.0, 1.0, 0.0]
             i, z, x, y, p, m = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
+            I, sx, sy, sz = sigma_0.copy(), sigma_x.copy(), sigma_y.copy(), sigma_z.copy()    
             I, Z, X, Y, P, M = sigma_0, sigma_z, sigma_x, sigma_y, sigma_p, sigma_m
             I, sp, sm, sz = sigma_0, sigma_p, sigma_m, sigma_z    
             
@@ -811,7 +812,8 @@ class iTensorFactory(object):
                 vec['u'].data[:] = [1.0]
                 vec['d'].data[:] = [1.0]
                 #raise NotImplemented   # todo these code are not tested
-        
+            
+            
         elif which == 'fermion':
             names = ['0', 'u', 'd', 'ud']
             if symmetry ==  "Travial":

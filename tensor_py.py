@@ -2926,6 +2926,8 @@ class iTensor(TensorBase):
     def direct_sum(self, other):
         """
             intro:
+            
+            in MPS.direct_sum there is a direct_sum, but still lacks a general one
                
         """
         raise NotImplemented
