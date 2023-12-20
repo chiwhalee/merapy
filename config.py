@@ -448,9 +448,8 @@ class Config(dict):
                     print(the_time, the_time_lim, the_time>=the_time_lim)
                 
             allow = False if  abs(the_time ) >=  the_time_lim else True
-            
-                
-                
+        
+        # below are ED algorithm         
         elif alg == 'exact_diag':
             trunc_dim, the_time_lim = cfg['num_lanczos_vec'], cfg['the_time_lim']
             msg.insert(2, 'lanczos_m=%d, tlim=%s'%(trunc_dim, the_time_lim))
@@ -458,6 +457,12 @@ class Config(dict):
             the_time = db.fetch_easy('the_time', sh, default=0)
             print('the_time')
             allow = False if  abs(the_time ) >=  the_time_lim else True
+        elif alg == 'ED_full_diag':
+            if 'dim_max' in db.keys():
+                allow = False
+            else:
+                allow = True
+            
         else:
             raise  ValueError(alg)
         

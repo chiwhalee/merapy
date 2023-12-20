@@ -369,8 +369,8 @@ class AnalysisTools(object):
                 
         """
         ll = list(ax.lines)
-        #which_lines = list(range(len(ll))) if which_lines is None else which_lines 
-        #which_lines = list(range(len(ll))) if which_lines is None else which_lines 
+        if which_lines== 'all' :
+            which_lines = range(len(ll))
         if which_lines is not None:
             if isinstance(which_lines[0], int):
                 ll = [ll[i] for i in which_lines]
@@ -427,7 +427,9 @@ class AnalysisTools(object):
                 args.update(color=color, marker=marker)
                 _ = self._plot.__func__(None, res['x'], res['y'], 
                         ax=ax, **args)
-                
+        
+        if add_text:
+            ax.legend()
         return temp 
     
     def fig_layout(self, ncol=1, nrow=1, size=(5, 4), dim=2): 
@@ -4801,7 +4803,7 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             tt = [-t.imag for t in tt]
         
         #val = [i[field_name] for i in temp]
-        val = [i.get(field_name, None) for i in temp]
+        val = [i.get(field_name, np.nan) for i in temp]
         tt = np.asarray(tt)
         val = np.asarray(val)
         if integrate:
@@ -5129,8 +5131,6 @@ class ResultDB_tdvp(ResultDB_time_evo):
             aver0 = np.average(x0, axis=1, weights=data[:, xmin:xmax])
             return tt, aver0
 
-
-
 class ResultDB_ed(ResultDB_tdvp): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
@@ -5150,6 +5150,38 @@ class ResultDB_ed(ResultDB_tdvp):
         temp.sort()
         return temp[i]
 
+    def get_spectrum(self, sh, force=False):
+        if sh[0] == 'max' :
+            N = self.get_N_max()
+            sh = (N, sh[1])
+        
+        if 'spectrum' in self: 
+            sp = self['spectrum'].get(sh)
+        else: 
+            self['spectrum'] = {}
+            sp= None 
+        if sp is None or force : 
+            s= self.load_S(sh)
+            if s is None:
+                return None 
+            sp= s['vals']
+            if 0:
+                sp = pd.DataFrame(sp).T
+                self['time_serials'][sh] = sp 
+                self.commit()
+            else:
+                self['spectrum'][sh] = sp 
+        res = sp 
+        return res 
+    
+    def calc_mean_level_spacing(self, sh, which=1,  cut=None,  return_r=False):
+        from ed_quspin.measure import mean_level_spacing
+        sp = self.get_spectrum(sh)
+        if sp is None:
+            return None 
+        res = mean_level_spacing(sp, which=which,  cut=cut,  return_r=return_r)
+        return res
+        
 
 class ResultDB_proj_qmc(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -5288,6 +5320,18 @@ class TestResultDB(unittest.TestCase):
         self.assertFalse(self.db.has_key_list(xx + [5]))
 
     def test_temp(self): 
+        parpath  =  '/home/ws/resultdb_dir/run-xxz_v1v2/ED_full_diag/full_diag/temp/v1=4.124-v2=2.062-sz_tot=0-Nup=None-k=0-p=None/'
+        parpath = '/home/ws/resultdb_dir/run-xxz_v1v2/ED_full_diag//v1=4.0-v2=2.0-sz_tot=0-Nup=None-k=0-p=None/'
+        db = ResultDB_ed(parpath)
+        S= db.load_S(('max', 0))
+        
+       
+        sh = ('max', 0) 
+        
+        m = db.calc_mean_level_spacing(sh, cut=0.8)
+        print_vars(vars(),  ['vals'])
+        print_vars(vars(),  ['m'])
+        raise  
         if 1:
             from vmps.run_experiment.analysis import an_ising_2d_tdvp 
             xx = an_ising_2d_tdvp.an_finite_T.an_main_2site

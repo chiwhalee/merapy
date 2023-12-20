@@ -474,11 +474,22 @@ class Main(object):
             task_center_server=None, 
             servers=None, func=None, need_confirm=True,  **kwargs): 
         """
-            status: workable now!
-                I dont know why cant run run_many_dist under main.py.
-                This will cause problem in serialization  
-                so Iam not able to unittest it under __main__ 
+            I dont know why cant run run_many_dist under main.py.
+            This will cause problem in serialization  
+            so Iam not able to unittest it under __main__ 
+            
+            There are two ways to use this func:
+                1. not use task_center_server,  i.e. set submit = False
+                    example:
+                        servers=['localhost', 'qtg7501'] or servers= 'all'
+                        Main.run_many_dist(config_group, surbmit=0,  servers=servers, try_period=30*1)
                 
+                2. use task_center_server,  set submit = True
+                    example:
+                        Main.run_many_dist(
+                            config_group, 
+                            task_center_server = ('127.0.0.1', 6780), 
+                            job_info = dict( job_group_name='xxz_v1v2/dynamics/szsz', submit=1, priority=1, delay_send=20))
         """
         if func is None: 
             func = cls.run_one

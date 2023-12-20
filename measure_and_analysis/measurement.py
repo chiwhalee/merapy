@@ -285,7 +285,7 @@ def measure_S(S=None, parpath=None, path=None,
         else: 
             algorithm = 'mera'
         
-            
+        all_func = None   
         if algorithm in ['mps', 'tdvp', 'vmps']: 
             #print_vars(vars(),  ['S.keys()'])
             mps = S['mps']
@@ -344,11 +344,16 @@ def measure_S(S=None, parpath=None, path=None,
             
             rdb_class= ResultDB_idmrg 
         
+        # below are ED algorithm
         elif algorithm == 'exact_diag':
             rdb_class = ResultDB_ed
             N, D = S['N'], S['num_lanczos_vec']
             shape = N, D
             all_func = all_time_evo   # I use tdvp's measure functions !
+        elif algorithm  ==  'ED_full_diag':
+            rdb_class = ResultDB_ed
+            N, D = S['N'], 0
+            shape = N, D
         else:
             raise  ValueError('algorithm "{}" not found'.format(algorithm))
             
@@ -363,8 +368,8 @@ def measure_S(S=None, parpath=None, path=None,
     if exclude_which:
         print('exlude this from measure_S: ', exclude_which)
         which = [i for i  in which if i not in exclude_which]
-    
-    if measure_func is None: 
+   
+    if measure_func is None :
         func = {i: all_func.__getattribute__(i) for i in which}
     else: 
         func = {measure_func.__name__: measure_func}
@@ -455,7 +460,7 @@ def measure_S(S=None, parpath=None, path=None,
                 _rdb['algorithm'] = algorithm
                 changed = True
                 
-            if algorithm in ['mps', 'tdvp', 'idmrg', 'exact_diag']: 
+            if algorithm in ['mps', 'tdvp', 'idmrg', 'exact_diag', 'ED_full_diag']: 
                 N = shape[0]
                 D = shape[1]
                 if 'dim_max' not in _rdb: 
