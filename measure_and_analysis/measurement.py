@@ -42,6 +42,7 @@ try:
     import vmps.measure_and_analysis.measurement_idmrg_mcc as all_idmrg_mcc
     import vmps.measure_and_analysis.measurement_vmps as all_mps 
     import vmps.measure_and_analysis.measurement_tmps as all_time_evo
+    import ed_quspin.measure as all_ed_quspin
     
     #import vmps.measure_and_analysis.all as all_mps
 except ImportError as err: 
@@ -354,6 +355,7 @@ def measure_S(S=None, parpath=None, path=None,
             rdb_class = ResultDB_ed
             N, D = S['N'], 0
             shape = N, D
+            all_func = all_ed_quspin
         else:
             raise  ValueError('algorithm "{}" not found'.format(algorithm))
             

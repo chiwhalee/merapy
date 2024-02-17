@@ -432,7 +432,7 @@ class AnalysisTools(object):
             ax.legend()
         return temp 
     
-    def fig_layout(self, ncol=1, nrow=1, size=(5, 4), dim=2): 
+    def fig_layout(self, ncol=1, nrow=1, size=(4, 3), dim=2): 
         if size is None and ncol == 1 and nrow == 1: 
             size = (6, 5)
         #size= size if size is not None else (3.5, 2.5)
@@ -4788,7 +4788,7 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
         #ResultDB.__init__(self, parpath,  **kwargs)
         super(ResultDB_time_evo, self).__init__(parpath, **kwargs)
     
-    def get_t_vs_field(self, field_name, sh, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
+    def get_t_vs_field(self, field_name, sh, tlist=None, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
         """
              
         """
@@ -4803,6 +4803,7 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             tt = [-t.imag for t in tt]
         
         #val = [i[field_name] for i in temp]
+        #print_vars(vars(),  ['temp'])
         val = [i.get(field_name, np.nan) for i in temp]
         tt = np.asarray(tt)
         val = np.asarray(val)
@@ -4813,7 +4814,28 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             arg = np.where(tt<tlim)
             tt = tt[arg]
             val = val[arg]
+        
+        if tlist is not None: 
+            tmax = abs(max(tt))
+            if isinstance(tlist,  float) or isinstance(tlist, int):
+                tlist = [tlist]
+            tlist = [t for t in tlist if t < tmax]
+            ii = []
+            for t in tlist:
+                ind = np.where(tt==t)[0]
+                assert len(ind) == 1, (t, tt)
+                ii.append(ind[0])
             
+            tt = tt[ii].real 
+            val = val[ii]
+            
+            #if len(tlist)==1:
+            #    val = val[0]
+            
+            if len(val)==0:
+                val = None
+         
+         
         if kac_rescale is not None:
             tt = tt/kac_rescale
             
@@ -4867,7 +4889,8 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             return tt, mag
         else:
             return mag
-
+    
+    
     def calc_mag_inhomogenity(self, sh, tlist=None, tlim=None,  time_aver=0, normalize=True,  boundary_cond='PBC'):
         """
             ref:
@@ -5064,7 +5087,6 @@ class ResultDB_tdvp(ResultDB_time_evo):
             return tt[:-1], z 
     
     calc_diffuse_const   = calc_transport_exponent  = calc_dynamical_exponent
-        
     
     def calc_diffuse_coeff(self, sh, tlist, force=False):
         """
@@ -5105,6 +5127,51 @@ class ResultDB_tdvp(ResultDB_time_evo):
             
         return DD
 
+    def get_dynamical_correlator_by_magnet_junction(self, sh, tlist=None, tlim=None):
+        """
+            ref:
+                Ljubotina 2019 eq.7 
+        """
+        tt, mag = self.get_magnetization(sh, tlist=tlist, tlim=tlim,  return_t=1)
+        #print_vars(vars(),  ['len(tt)', 'mag.shape'])
+        
+        
+        if tt is None:
+            return None, None, None
+        
+        #N_half = sh[0]//2
+        #ii = range(N_half)
+        #mag = mag[:, :N_half]
+        N = sh[0]
+        if 0:
+            mag = mag[:, :N//2 + 1]
+            ii = list(range(N//2))
+        else:
+            ii = list(range(N))
+            
+        mu = self.param.mu
+        
+        #mag *= 0.5  # magnetization was measure with sigma_z. Here multiply 0.5 to match with the def of the current 
+        mag_diff = -np.diff(mag, prepend=mu)
+        #print_vars(vars(),  ['mag_diff'])
+        
+        data = mag_diff/(2*mu)
+        data = data.T 
+        if 0:
+            if offset: # use midpoint of t + 0.5dt as the time for the current 
+                tt = tt[:-1]
+                tt += 0.5*t_diff
+                current_aver = np.insert(current_aver, 0, 0)  # I assume at t=0 the current_aver=0
+                tt = np.insert(tt, 0, 0)
+            else:
+                current_aver = np.insert(current_aver, 0, 0)
+        
+            if integrate:
+                current_aver = scipy.integrate.cumtrapz(current_aver, tt, initial=0)
+        
+        return ii, tt,  data 
+        
+    
 
     def get_ball_center(tt, data, tmin=None, tmax=None, xmin=None, xmax=None):
             arg = None
@@ -5150,7 +5217,7 @@ class ResultDB_ed(ResultDB_tdvp):
         temp.sort()
         return temp[i]
 
-    def get_spectrum(self, sh, force=False):
+    def get_spectrum(self, sh, force=False, rescale=False):
         if sh[0] == 'max' :
             N = self.get_N_max()
             sh = (N, sh[1])
@@ -5171,6 +5238,13 @@ class ResultDB_ed(ResultDB_tdvp):
                 self.commit()
             else:
                 self['spectrum'][sh] = sp 
+        if sp is not None and rescale: 
+            eng = sp
+            eng_min = eng[0]
+            eng_max = eng[-1]
+            eng = (eng-eng_min)/(eng_max-eng_min)
+            sp = eng
+                
         res = sp 
         return res 
     
@@ -5181,7 +5255,23 @@ class ResultDB_ed(ResultDB_tdvp):
             return None 
         res = mean_level_spacing(sp, which=which,  cut=cut,  return_r=return_r)
         return res
+    
+    def get_EE_vs_energy(self, sh, rescale_energy=True):
+        """
+            ref: chen chun 2023 
         
+        """
+        eng = self.get_spectrum(sh, rescale=rescale_energy)
+        
+        ee = self.fetch_easy('entanglement_all', sh)
+        if eng is None or ee is None:
+            return None,  None
+        #if rescale_energy:
+        #    eng_min = eng[0]
+        #    eng_max = eng[-1]
+        #    eng = (eng-eng_min)/(eng_max-eng_min)
+        return ee, eng
+
 
 class ResultDB_proj_qmc(ResultDB): 
     def __init__(self, parpath,  **kwargs): 
@@ -5320,72 +5410,20 @@ class TestResultDB(unittest.TestCase):
         self.assertFalse(self.db.has_key_list(xx + [5]))
 
     def test_temp(self): 
-        parpath  =  '/home/ws/resultdb_dir/run-xxz_v1v2/ED_full_diag/full_diag/temp/v1=4.124-v2=2.062-sz_tot=0-Nup=None-k=0-p=None/'
-        parpath = '/home/ws/resultdb_dir/run-xxz_v1v2/ED_full_diag//v1=4.0-v2=2.0-sz_tot=0-Nup=None-k=0-p=None/'
-        db = ResultDB_ed(parpath)
-        S= db.load_S(('max', 0))
-        
-       
-        sh = ('max', 0) 
-        
-        m = db.calc_mean_level_spacing(sh, cut=0.8)
-        print_vars(vars(),  ['vals'])
-        print_vars(vars(),  ['m'])
-        raise  
-        if 1:
-            from vmps.run_experiment.analysis import an_ising_2d_tdvp 
-            xx = an_ising_2d_tdvp.an_finite_T.an_main_2site
-            #xx.reset()
-            
-            db = xx(h=2.0)
-            print_vars(vars(),  ['db.keys()'])
-            sh = (8, 11), 160
-            tt = [1.0]
-            ts= db.get_time_serials(sh)
-            print_vars(vars(),  ['db.get_shape_list()', 'db["dim_max"]'])
-            print_vars(vars(),  ['ts.keys()'])
-            tt, data = db.get_magnetization(sh, tt, return_t=1)
-            db.measure([sh], which=['entanglement'], submit=0)
-            raise  
-            
-            
-            if 0:    
-                N = (12, 14)
-                sh=N, 'max'
-                sh = N, 80
-                dmax = db.get_dim_max_for_N(N, update_db=1)
-                v = db.fetch_easy('variance', sh)
-                print_vars(vars(),  ['a.h', 'dmax', 'v'])
-                
-
-            raise  
-            #fig, ax = xx.fig_layout()
-            x=[a.h for a in aa]
-            #y=[]
-
-            sh=(6, 8), 40
-            NN=[  (8, 10)]
-            db = xx(J=-1.0, h=1.0)
-            N = (8, 10)
-            sh=N, 'max'
-            dmax = db.get_dim_max_for_N(N, update_db=1)
-            print_vars(vars(),  ['dmax'])
-            print_vars(vars(),  ['db["energy"].keys()'])
-            mag = db.fetch_easy('magnetization', sh, sub_key_list=['z'])            
-            print_vars(vars(),  ['mag'])
-            
-            raise  
-            for N in NN:
-                y=[]
-                for a in aa[:1]:
-                    db=xx[a]
-                    print_vars(vars(),  ['db.keys()'])
-                    mag = db.fetch_easy('magnetization', sh, sub_key_list=['z'])            
-                    print_vars(vars(),  ['mag'])
-        
+        from vmps.run_heisenberg.analysis import an_tdvp
+        xx  =  an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
+        db = xx(Jzz=2.0, mu=0.01, dt=1.0, surfix='fix_err_1em12')
+        #aa = xx.filter_alpha(Jzz=2.0, surfix=None)
+        #print_vars(vars(),  ['aa'])
+        #raise  
+        print_vars(vars(),  ['db'])
+        sh = (128, 'max')
+        ii, tt,  data = db.get_dynamical_correlator_by_magnet_junction(sh, )
+        print_vars(vars(),  ['len(tt)', 'len(ii)', 'data.shape'])
+        print_vars(vars(),  ['tt'])
         raise  
     
-        from mps_wigner_crystal.analysis import an_exact_diag 
+        
         if 1:
             v = 0.0
             #from vmps.run_heisenberg.analysis import an_tdvp 
