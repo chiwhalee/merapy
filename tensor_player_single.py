@@ -154,7 +154,7 @@ def tensor_player(which):
                 #following is not deepcopy, self and tape share same value, but NOT share key
                 self.__dict__ = inner.tape[inner.calls].copy()
                 
-                self.buf_ref = np.array([-1, -1], np.int)
+                self.buf_ref = np.array([-1, -1], int)
                 
                 #print 'ssss', self.dtype 
                 if has_data:
@@ -347,7 +347,7 @@ def tensor_player(which):
                 """
                 
                 #contract_record_1 = {}
-                contract_record_1 = np.ndarray((self.nidx*T2.nidx, 6), np.int)
+                contract_record_1 = np.ndarray((self.nidx*T2.nidx, 6), int)
                 ind_count = 0
                 
                 rank1 = self.rank
@@ -375,17 +375,17 @@ def tensor_player(which):
                 
                 nidx3 = 0
                 alpha = 1.0; beta=1.0
-                iQN1=np.empty(self.rank + 1, np.int)
-                iQN2=np.empty(T2.rank + 1, np.int)        
-                iQN3=np.empty(T3.rank + 1, np.int) # +1 to avoid T3.rank=0
+                iQN1=np.empty(self.rank + 1, int)
+                iQN2=np.empty(T2.rank + 1, int)        
+                iQN3=np.empty(T3.rank + 1, int) # +1 to avoid T3.rank=0
 
                 for idx2 in range(T2.nidx):
                     iQN2[0] = 0  #!for rank=0
                     iQN2[0:rank2]=T2.Addr_idx[0:rank2,idx2]
                     p2 = T2.Block_idx[0,idx2]
                     
-                    Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=np.int)
-                    Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=np.int)
+                    Dim2 = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div, rank2)], dtype=int)
+                    Dimc = np.prod([T2.QSp[i].Dims[iQN2[i]] for i in range(div)], dtype=int)
                     
                     for idx1 in range(self.nidx):
                         iQN1[0] = 1 #!for rank=0
@@ -395,7 +395,7 @@ def tensor_player(which):
                         if not iseq:
                             #如果量子数组合相等则收缩
                             continue
-                        Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)], dtype=np.int)
+                        Dim1 = np.prod([self.QSp[i].Dims[iQN1[i]] for i in range(shift)], dtype=int)
                         
                         iQN3[0] = 1 #!for rank=1
                         iQN3[0:shift] = iQN1[0:shift]
@@ -406,7 +406,7 @@ def tensor_player(which):
                         
                         contract_record_1[ind_count][:] = (p1, p2, p3, Dim1, Dim2, Dimc)
                         ind_count  += 1  
-                        #contract_record_1[idx2, idx1] = np.array((p1, p2, p3, Dim1, Dim2, Dimc), np.int)
+                        #contract_record_1[idx2, idx1] = np.array((p1, p2, p3, Dim1, Dim2, Dimc), int)
                         #contract_record_1[idx2, idx1] = (p1, p2, p3, Dim1, Dim2, Dimc)
                 
 

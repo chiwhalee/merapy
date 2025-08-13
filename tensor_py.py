@@ -40,7 +40,6 @@ from builtins import range
 from builtins import *
 from builtins import object
 import unittest
-import nose
 import warnings
 import pickle
 import pprint
@@ -1605,8 +1604,8 @@ class iTensor(TensorBase):
         in2 = min(ind)
         print(ind1, ind2, in1, in2)
         
-        qsp_  = np.array([q.copy() for q in self.QSp], np.object)
-        qsp = np.ndarray(self.rank-1, np.object)
+        qsp_  = np.array([q.copy() for q in self.QSp], object)
+        qsp = np.ndarray(self.rank-1, object)
         qsp[in1] = qsp_[ind1]
         qsp[in2] = qsp_[ind2[0]].add(qsp_[ind2[1]])
         qsp = qsp.tolist()
@@ -2758,12 +2757,15 @@ class iTensor(TensorBase):
                 print(round(self.data[block_pos_in_data+dat_pos_in_blk],10))
         return Tp
     
-    def to_ndarray(self, data_order='F'): 
+    def to_ndarray(self, qn_val_tuple=None,  data_order='F'): 
         """
+            
             converge a symm iTensor instance to a 
             dense np.ndarray instance 
             this func should be invaluable in dev and debug 
             not for production use 
+            param:
+                qn_val_tuple: only select a block with given qns
             note:
                 运行以下code
                     from tensor import iTensorFactory 
@@ -2795,6 +2797,9 @@ class iTensor(TensorBase):
                实质有差别， iTensor.reshape 包含了将量子数指标的合并 
             
         """
+        if qn_val_tuple is not None:
+            #todo: implement this. I use this mainly for doing ED,  selecting specific sector
+            raise NotImplemented 
         #res=nTensor(self.rank,self.Dims)
         #res = np.ndarray(self.Dims, dtype=self.dtype, order=order)
         res = np.ndarray(self.Dims, dtype=self.dtype) 
@@ -2839,6 +2844,13 @@ class iTensor(TensorBase):
                 
             
         return res 
+   
+    def to_matrix(self):
+        """
+            only for rank-2 tensor, and taking use of to_ndarray
+        """
+        assert self.rank == 2 
+        raise NotImplemented 
    
     def from_ndarray(self, array, qsp): 
         raise NotImplemented('todo: to be implemented')

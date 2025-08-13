@@ -27,6 +27,10 @@ import random
 import gzip 
 import zlib 
 #from merapy.decorators import timer
+import smtplib
+from email.message import EmailMessage
+import email.mime.text
+
 
 IS_PY3 = sys.version_info.major>2
 
@@ -400,15 +404,13 @@ def dict_to_object(dic):
     return OBJECT(**dic)
 
 
-def send_email(msg): 
+def send_email(msg):   
     """
     issue: not secure to save password in a file
         find solution refer to 
         https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=python%20email%20encrypt%20password
         http://stackoverflow.com/questions/157938/hiding-a-password-in-a-python-script
     """
-    import smtplib
-    import email.mime.text
     # my test mail
     mail_username = 'zhihuali@ustc.edu.cn'
     s= ''
@@ -423,6 +425,8 @@ def send_email(msg):
     #HOST = 'smtp.gmail.com'
     HOST = 'smtp.ustc.edu.cn'
     PORT = 25
+
+
 
     # Create SMTP Object
     smtp = smtplib.SMTP()
@@ -455,6 +459,71 @@ def send_email(msg):
     
     smtp.sendmail(from_addr,to_addrs,the_email.as_string())
     smtp.quit()
+
+def send_email_new(msg):   # using SSL
+    """
+    issue: not secure to save password in a file
+        find solution refer to 
+        https://www.google.com/webhp?sourceid=chrome-instant&ion=1&espv=2&ie=UTF-8#q=python%20email%20encrypt%20password
+        http://stackoverflow.com/questions/157938/hiding-a-password-in-a-python-script
+    """
+
+    
+    s= ''
+    with open('./p.txt', 'r') as f:   #issue: this is risky to put it in a file, fix this!
+        s=f.readline()[:-1]
+    password = s
+    
+    from_addr = 'zhihuali@ustc.edu.cn'
+    to_addrs=('chiwhalee@gmail.com')
+    # HOST & PORT
+    #HOST = 'smtp.gmail.com'
+    #HOST = 'smtp.ustc.edu.cn'
+    HOST = 'mail.ustc.edu.cn'
+    PORT = 465
+    if 0:
+        # Create SMTP Object
+        smtp = smtplib.SMTP()
+        print('connecting ...')
+
+        # show the debug log
+        smtp.set_debuglevel(1)
+
+        # connet
+        try:
+            print(smtp.connect(HOST,PORT))
+        except:
+            print('CONNECT ERROR ****')
+        # gmail uses ssl
+        #smtp.starttls()
+        # login with username & password
+        try:
+            print('loginning ...')
+            smtp.login(mail_username, mail_password)
+        except:
+            print('LOGIN ERROR ****')
+        smtp.sendmail(from_addr,to_addrs,the_email.as_string())
+        smtp.quit()
+            
+    if 1: 
+        # fill content with MIMEText's object 
+        the_email = email.mime.text.MIMEText('send from merapy')
+        the_email['From'] = from_addr
+        the_email['To'] = ';'.join(to_addrs)
+        the_email['Subject'] = msg.get('subject', 'no subject')
+        #print(the_email.as_string())
+        
+    print('---------------------------------------------------------')
+    
+    #with smtplib.SMTP_SSL(HOST, PORT) as smtp:
+    if 1:
+        smtp = smtplib.SMTP_SSL(HOST, PORT) 
+        aaa = smtp.ehlo()
+        print(f'aaa={aaa} ', password)
+        smtp.login(from_addr, password, initial_response_ok=True) 
+        smtp.sendmail(from_addr, to_addrs, the_email.as_string())
+        print('Email sent!')
+        smtp.close()
 
 
 class OrderedSet_del():
@@ -574,8 +643,8 @@ if __name__ == "__main__":
         
         add_list = [
         #'test_temp', 
-        #'xtest_send_email', 
-        'test_save_load', 
+        'xtest_send_email', 
+        #'test_save_load', 
           
         ]
         for a in add_list: 

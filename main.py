@@ -527,6 +527,9 @@ class Main(object):
                     if c.get('algorithm')=='tdvp':
                         sh = c.get('N'), c.get('trunc_dim')
                         c['job_description'] = (fn, sh, c.get('the_time_lim'))
+                    if c.get('algorithm')=='exact_diag':
+                        c['job_description'] = (fn, c.get('N'), c.get('the_time_lim'))
+                        
                 num_of_threads = c['NUM_OF_THREADS'] 
                 status=submit_one(func, 
                         args=(c, ),

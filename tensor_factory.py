@@ -846,6 +846,8 @@ class iTensorFactory(object):
                 vec['d'].data[:] = [0.0, 1.0]
                 vec['ud'].data[:] = [1.0]
             else:
+                #raise ValueError(f'symmetry={symmetry} not allowed')
+                print_vars(vars(),  ['type(symmetry)'])
                 raise ValueError
         
         elif which == 'boson':

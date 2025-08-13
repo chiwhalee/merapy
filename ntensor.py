@@ -269,7 +269,7 @@ def generalized_matrix_multiply(A, B, mul, null=0.0,  A_nzb=None, B_nzb=None):
     M = A.shape[0] 
     K = A.shape[1]
     N = B.shape[1]
-    res = np.ndarray((M, N), dtype=np.object)
+    res = np.ndarray((M, N), dtype=object)
     if A_nzb is None: 
         for i in range(M): 
             for j in range(N): 
@@ -360,7 +360,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
             X=X.transpose(indXl+indX)
             X=X.reshape((np.prod(sizeXl), np.prod(sizeX)))
             Y=Y.transpose(indY )
-            Y=Y.reshape(np.prod(sizeY, dtype=np.int), np.prod(sizeYr, dtype=np.int))
+            Y=Y.reshape(np.prod(sizeY, dtype=int), np.prod(sizeYr, dtype=int))
             Zsize =  sizeXl
             if out is None: 
                 Z = X.dot(Y)
@@ -375,7 +375,7 @@ def contract_tensors(X, numindX, indX, Y, numindY, indY, out=None):
     
     #print X.shape, indXl, indX,  indXl + indX
     X=X.transpose(indXl+indX)
-    X=X.reshape((np.prod(sizeXl, dtype=np.int), np.prod(sizeX, dtype=np.int)))
+    X=X.reshape((np.prod(sizeXl, dtype=int), np.prod(sizeX, dtype=int)))
     Y=Y.transpose(indY+indYr)
     Y=Y.reshape((np.prod(sizeY),np.prod(sizeYr)))
     #print X.shape,Y.shape

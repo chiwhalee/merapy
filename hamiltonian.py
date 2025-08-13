@@ -2140,13 +2140,13 @@ class System(IterativeOptimize):
             #for l in range(res.mera.num_of_layer):
             #    for i in temp1:
             #        try:
-            #            #res.mera.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
-            #            res['mera']__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
+            #            #res.mera.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], int)
+            #            res['mera']__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], int)
             #        except: raise
             #        #except: AttributeError
             #    for i in temp2:
             #        try:
-            #            res[i][l][0].buf_ref = np.array([-1, -1], np.int)
+            #            res[i][l][0].buf_ref = np.array([-1, -1], int)
             #        except: pass
             #    
         
@@ -2164,12 +2164,12 @@ class System(IterativeOptimize):
         for l in range(res.mera.num_of_layer):
             for i in temp1:
                 try:
-                    res.mera.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
+                    res.mera.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], int)
                 except: raise
                 #except: AttributeError
             for i in temp2:
                 try:
-                    res.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], np.int)
+                    res.__getattribute__(i)[l][0].buf_ref = np.array([-1, -1], int)
                 except: pass
         
         #temperory 

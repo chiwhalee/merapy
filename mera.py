@@ -799,7 +799,7 @@ class Mera(object):
         this method is never used
         """
         iQN = np.ndarray(W.rank, "int")
-        Dims= np.ndarray(W.rank, np.int)
+        Dims= np.ndarray(W.rank, int)
         W.data[:] = 0.0
         rank = W.rank
         for idx  in range(W.nidx):

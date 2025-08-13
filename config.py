@@ -455,17 +455,19 @@ class Config(dict):
             msg.insert(2, 'lanczos_m=%d, tlim=%s'%(trunc_dim, the_time_lim))
             sh = (N, trunc_dim)
             the_time = db.fetch_easy('the_time', sh, default=0)
-            print('the_time')
+            #print('ttttttttttttt', the_time)
             allow = False if  abs(the_time ) >=  the_time_lim else True
         elif alg == 'ED_full_diag':
-            if 'dim_max' in db.keys():
+            #print('kkkkkkkkkkkkkkk', db.keys(), db['dim_max'])
+            dim_max = db.get('dim_max', {})
+            #if 'dim_max' in db.keys():
+            if N in dim_max:
                 allow = False
             else:
                 allow = True
             
         else:
             raise  ValueError(alg)
-        
         
         if not cfg.get('auto_resume', True):
             allow = True

@@ -281,7 +281,7 @@ class TensorNetwork(object):
         if final_order is not None:              
             final_order = np.asarray(final_order)
             rank = G.nodes[G.size-1] #number of legs  of final tensor
-            P=np.ndarray(rank, np.int)
+            P=np.ndarray(rank, int)
             #print_vars(vars(),  ['repr(legs)', 'repr(final_order)', 'P', 'rank'])
             for i in range(rank): #TNet.graph.nodes[TNet.graph.size]):
                 #j=final_order.index(legs[i])
@@ -294,7 +294,7 @@ class TensorNetwork(object):
             if exception >= 0:  
                 rank = G.nodes[G.size-1]  
                 
-                P=np.ndarray(rank, np.int)
+                P=np.ndarray(rank, int)
                 for i in range(rank):
                     
                     j=np.where(G.edges[:rank, exception]==legs[i])
@@ -392,7 +392,7 @@ class TensorNetwork(object):
             if final_order is not None:              
                 raise NotImplemented 
                 rank = G.nodes[G.size-1] #number of legs  of final tensor
-                P = np.ndarray(rank, np.int)
+                P = np.ndarray(rank, int)
                 for i in range(rank): #TNet.graph.nodes[TNet.graph.size]):
                     #j=final_order.index(legs[i])
                     j = np.where(final_order==legs[i])
@@ -608,7 +608,7 @@ class TensorNetwork(object):
         P = None 
         if final_order is not None:              
             rank = G.nodes[G.size-1] #number of legs  of final tensor
-            P=np.ndarray(rank, np.int)
+            P=np.ndarray(rank, int)
             for i in range(rank): #TNet.graph.nodes[TNet.graph.size]):
                 #j=final_order.index(legs[i])
                 j = np.where(final_order==legs[i])
@@ -619,7 +619,7 @@ class TensorNetwork(object):
             if exception >= 0:  
                 rank = G.nodes[G.size-1]  
                 
-                P=np.ndarray(rank, np.int)
+                P=np.ndarray(rank, int)
                 for i in range(rank):
                     
                     j=np.where(G.edges[:rank, exception]==legs[i])

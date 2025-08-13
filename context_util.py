@@ -11,7 +11,6 @@ from builtins import *
 import unittest
 import pickle as pickle
 from contextlib import contextmanager
-import nose
 import sys
 import os
 #from tempfile import mkdtemp
@@ -494,7 +493,6 @@ class TestIt(unittest.TestCase):
 
 if __name__ == '__main__' : 
     pass
-    #nose.run()
 
     if 0: #examine
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)

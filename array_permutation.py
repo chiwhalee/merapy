@@ -94,8 +94,8 @@ except ImportError:
 __all__ = ["array_permutation", "array_permutation_np"]
 
 #for better performance
-#Dims_ = np.ndarray(32, np.int)
-#order_ = np.ndarray(32, np.int)
+#Dims_ = np.ndarray(32, int)
+#order_ = np.ndarray(32, int)
 
 
 #@profile  #used for line_profiler
@@ -113,11 +113,11 @@ def array_permutation(a, rank, Dims, order, out=None):
         #把这一句话改成下面numpy的做法后，真个mera程序速度提高1倍!!
         
     #在f90中，dims，order都是固定长度为32的array，so I make the following
-    Dims_=np.ndarray(rank, np.int)
+    Dims_=np.ndarray(rank, int)
     Dims_[:rank]=Dims[:rank]
     
-    #order_=np.ndarray(32, np.int)
-    order_=np.ndarray(rank, np.int)
+    #order_=np.ndarray(32, int)
+    order_=np.ndarray(rank, int)
     order_[:rank]=order[:rank]
     
     if out is None: 
@@ -152,11 +152,11 @@ def array_permutation_inplace(a, rank, Dims, order, b):
     #把这一句话改成下面numpy的做法后，真个mera程序速度提高1倍!!
     
     #在f90中，dims，order都是固定长度为32的array，so I make the following
-    #Dims_=np.ndarray(32,np.int)
+    #Dims_=np.ndarray(32,int)
     Dims_ = np.ndarray(rank, int)
     Dims_[:]=Dims[:rank]
     
-    #order_=np.ndarray(32, np.int)
+    #order_=np.ndarray(32, int)
     order_ = np.ndarray(rank, int)
     order_[:]=order[:rank]
     

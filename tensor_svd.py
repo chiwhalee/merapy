@@ -71,10 +71,9 @@ class iTensor_rank2_operation(object):
         
         qq = {}
         rr = {}
-        #dim_list = np.ndarray(num_blocks, dtype=np.int)
         dim_list = []
-        #qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        #qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        #qn_list_l = np.ndarray(num_blocks, dtype=object)
+        #qn_list_r = np.ndarray(num_blocks, dtype=object)
         qn_list_l = []
         qn_list_r = []
         
@@ -738,9 +737,8 @@ class iTensor_rank2_operation(object):
         
         uu = {}
         pp = {}
-        #dim_list = np.ndarray(num_blocks, dtype=np.int)
-        #qn_list_l = np.ndarray(num_blocks, dtype=np.object)
-        #qn_list_r = np.ndarray(num_blocks, dtype=np.object)
+        #qn_list_l = np.ndarray(num_blocks, dtype=object)
+        #qn_list_r = np.ndarray(num_blocks, dtype=object)
         dim_list = []
         qn_list_l = []
         qn_list_r = []
@@ -1557,7 +1555,9 @@ class TestIt(unittest.TestCase):
             U, S, V=Tensor_svd.svd_rank2(t, trunc_dim=7)
             #print_vars(vars(), ['t.shape', 'U.shape', 'S.shape', 'V.shape', 'repr(V.data)', 'S.data']) 
             V_old = np.array([-0.4847991142639 ,  0.23290875129277, -0.044051212802  , -0.48705950022753, -0.8724290630502 , -0.00866150155038, -0.59494397532567,  0.34460444158915,  0.60174128416965, -0.41687471531714,  0.25664922044225, -0.79742830145878, -0.62198761202164,  0.78302708158251, -0.78302708158251, -0.62198761202164, -0.68010581731849, -0.7331139592516 ,  1.              ])
-            self.assertTrue(np.allclose(V.data, V_old, atol=1e-12))
+            V_old = abs(V_old) 
+            # svd in different version of numpy will not fix the sign of vectors
+            self.assertTrue(np.allclose(abs(V.data), V_old, atol=1e-12))
             print('test svd_rank2 for cases qn of dim=0 is removed  -- pass')
         
         if 1: #test complex dtype   
@@ -2020,7 +2020,7 @@ if __name__ == "__main__":
         add_list = [
            #'test_eig', 
            #'xtest_svd', 
-           #'test_svd_rank2', 
+           'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
            #'test_eig_rank2', 
@@ -2032,7 +2032,7 @@ if __name__ == "__main__":
            #'test_qr_rank2', 
            #'test_polar_rank2', 
            #'test_null_space_rank2', 
-           'test_temp', 
+           #'test_temp', 
         ]
         for a in add_list: 
             suite.addTest(TestIt(a))
