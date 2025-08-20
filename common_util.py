@@ -42,7 +42,7 @@ hostname = socket.gethostname()
 os1 = platform.system()
 IS_PY3 = sys.version_info.major>2
 
-if 1:
+if 0:
     if os1 == 'Linux':
         if IS_PY3:
             #from merapy.lib.linux_py3.common_64_ifort import *
