@@ -4,7 +4,7 @@ from __future__ import division
 from __future__ import absolute_import
 from future import standard_library
 standard_library.install_aliases()
-from builtins import *
+#from builtins import *
 import unittest
 import warnings
 import os, argparse
@@ -18,14 +18,13 @@ try:
 except:
     warnings.warn('config_local.py not found')
 
-# add a line test git push
 
-#LOCAL_IP = '210.45.74.88'
-#LOCAL_USERNAME = 'zhli' 
-#LOCAL_HOSTNAME = 'qtgc30'
+#LOCAL_IP = '202.200.97.182'
+LOCAL_IP = '10.103.242.53'
 
-#LOCAL_IP = '192.168.50.1'
-LOCAL_IP = '202.200.97.182'
+temp = os.getenv('LOCAL_IP')   # envirenmental var will override the above 
+if temp:
+    LOCAL_IP = temp 
 
 
 #LOCAL_IP = '202.200.98.230'
