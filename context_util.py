@@ -13,6 +13,7 @@ import pickle as pickle
 from contextlib import contextmanager
 import sys
 import os
+import uuid
 #from tempfile import mkdtemp
 import tempfile
 import unittest
@@ -343,7 +344,8 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False,
             #f.flush()
             ftp.close()
             ssh.close()           
-        
+        elif backend == 'scp':
+            raise NotImplemented
         #first transfer string then decompress, this is of course faster!
         head = s[:10]
         if sys.version_info.major>2:
@@ -452,14 +454,24 @@ class TestIt(unittest.TestCase):
             this test passes only  on LOCAL_IP!
         
         """
+
         
         host = 'local'
         #with make_temp_dir() as dd: 
         if 1:
-            dd = '/tmp'
-            fn = dd + '/aaa'
+            name = str(uuid.uuid4())
+            fn = '/tmp/'  + name 
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
             rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1, host=host,  timeout=3)
+            a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host)
+            self.assertTrue(a==obj)
+
+        if 1:
+            name = str(uuid.uuid4())
+            fn = '/tmp/'  + name 
+            obj = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+            rpyc_save(fn, obj, backend='scp', compress=1,  use_local_storage=1, host=host,  timeout=3)
+            #a=rpyc_load(fn, backend='scp', use_local_storage=1, host=host)
             a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host)
             self.assertTrue(a==obj)
 
