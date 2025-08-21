@@ -454,7 +454,9 @@ class TestIt(unittest.TestCase):
         """
         
         host = 'local'
-        with make_temp_dir() as dd: 
+        #with make_temp_dir() as dd: 
+        if 1:
+            dd = '/tmp'
             fn = dd + '/aaa'
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
             rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1, host=host,  timeout=3)
