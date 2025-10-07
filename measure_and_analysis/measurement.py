@@ -350,7 +350,8 @@ def measure_S(S=None, parpath=None, path=None,
             rdb_class = ResultDB_ed
             N, D = S['N'], S['num_lanczos_vec']
             shape = N, D
-            all_func = all_time_evo   # I use tdvp's measure functions !
+            #all_func = all_time_evo   # I use tdvp's measure functions !
+            all_func = all_ed_quspin # I use tdvp's measure functions !
         elif algorithm  ==  'ED_full_diag':
             rdb_class = ResultDB_ed
             N, D = S['N'], 0
