@@ -285,8 +285,12 @@ def rpyc_conn(hostname, conn_type='classic',  port=17013):
             pass
 
 def rpyc_load(path, backend='sftp',  use_local_storage=False, 
-        host='local', 
+        host='local', bypass_localhost=True, 
         compress=False, timeout=None,  info=0): 
+    name = socket.gethostname()
+    if name == LOCAL_HOSTNAME:
+        use_local_storage = False
+    
     if not use_local_storage: 
         res= load(path)
     else:
@@ -367,11 +371,15 @@ def rpyc_load(path, backend='sftp',  use_local_storage=False,
     return res
            
 def rpyc_save(path, obj, backend='auto',  use_local_storage=False, 
-        host='local', 
+        host='local', bypass_localhost=True, 
         compress=False, timeout=None): 
     """
         comparison of speed  'scp' > 'paramiko.sftp' >'rpyc'
     """
+    name = socket.gethostname()
+    if name == LOCAL_HOSTNAME:
+        use_local_storage = False
+    
     if not use_local_storage: 
         save(obj, path, compress)
     else: 
@@ -463,7 +471,9 @@ class TestIt(unittest.TestCase):
             fn = '/tmp/'  + name 
             obj = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaa'
             rpyc_save(fn, obj, backend='sftp', compress=1,  use_local_storage=1, host=host,  timeout=3)
-            a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host)
+            a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host, 
+                        bypass_localhost = 0, 
+                        )
             self.assertTrue(a==obj)
 
         if 1:
@@ -472,7 +482,9 @@ class TestIt(unittest.TestCase):
             obj = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbb'
             rpyc_save(fn, obj, backend='scp', compress=1,  use_local_storage=1, host=host,  timeout=3)
             #a=rpyc_load(fn, backend='scp', use_local_storage=1, host=host)
-            a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host)
+            a=rpyc_load(fn, backend='sftp', use_local_storage=1, host=host, 
+                        bypass_localhost = 0, 
+                        )
             self.assertTrue(a==obj)
 
     def test_redirect(self):

@@ -299,6 +299,7 @@ class TextColor:
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'
     FAIL = '\033[91m'
+    GREY = '\033[90m'
     
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
