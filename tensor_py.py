@@ -804,6 +804,10 @@ class iTensor(TensorBase):
     def qsp_class(self): 
         return self.QSp[0].__class__
     
+    @property 
+    def qn_id(self):
+        return self.qsp_class.QnClass.qn_id()
+            
     @property
     def name(self):
         return self.type_name
