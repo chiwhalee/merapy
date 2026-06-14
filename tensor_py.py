@@ -209,8 +209,8 @@ class iTensor(TensorBase):
     """
     num_of_instance = 0
     #issue:  these buffer may not compatible with complex type 
-    DATA_BUFFER = [DataBuffer(size=20, dtype=float) for  i in range(2)]
-    DATA_BUFFER_GPU = [DataBuffer(size=20, dtype=float) for  i in range(2)]
+    DATA_BUFFER = [DataBuffer(size=20, dtype=np.float64) for  i in range(2)]
+    DATA_BUFFER_GPU = [DataBuffer(size=20, dtype=np.float64) for  i in range(2)]
     
     #USE_GPU_FOR_BLOCK = False
     USE_GPU_MUL_LIM = 100**3   # used when use_gpu = 2
@@ -293,9 +293,11 @@ class iTensor(TensorBase):
         if has_data:
             if buffer is None and use_buf:   #use internal DATA_BUFFER; else use external buffer or no buffer
                 if self.use_gpu != 1:
-                    buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
+                    buffer = self.buffer_assign(data_size=self.totDim 
+                                                if dtype==float else self.totDim*2) 
                 else:
-                    buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
+                    buffer = self.buffer_assign_gpu(data_size=self.totDim 
+                                                    if dtype==float else self.totDim*2)  
                    
             if self.use_gpu != 1:
                 self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
@@ -349,7 +351,7 @@ class iTensor(TensorBase):
                 self.buf_ref[1]=i                
                 iTensor.DATA_BUFFER[n].in_use[i] = True 
                 if iTensor.DATA_BUFFER[n].T[i].size<data_size:
-                    iTensor.DATA_BUFFER[n].T[i] = np.empty(data_size, dtype=float)
+                    iTensor.DATA_BUFFER[n].T[i] = np.empty(data_size, dtype=np.float64)
                 
                 return iTensor.DATA_BUFFER[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.DATA_BUFFER[0].in_use[:100], )))
@@ -370,7 +372,7 @@ class iTensor(TensorBase):
                 self.buf_ref[1]=i                
                 iTensor.DATA_BUFFER_GPU[n].in_use[i] = True 
                 if iTensor.DATA_BUFFER_GPU[n].T[i].size<data_size:
-                    iTensor.DATA_BUFFER_GPU[n].T[i] = cp.empty(data_size, dtype=float)
+                    iTensor.DATA_BUFFER_GPU[n].T[i] = cp.empty(data_size, dtype=np.float64)
                 
                 return iTensor.DATA_BUFFER_GPU[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.DATA_BUFFER_GPU[0].in_use[:100], )))
@@ -2225,8 +2227,23 @@ class iTensor(TensorBase):
         if rank3==0:
             QSp = []  #QSp = [self.QSp[0].null()]
         
-        dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-        #matmul_func = dgemm if dtype == float else zgemm  
+        
+        #dtype = np.result_type(self.dtype, T2.dtype)  # 自动根据 self.dtype 和 T2.dtype 推导最精准的输出类型（完美支持 32位/64位 和 实数/复数）
+        
+        dt1, dt2 = np.dtype(self.dtype), np.dtype(T2.dtype)
+        is_complex = (dt1.kind == 'c' or dt2.kind == 'c')
+        is_double = (dt1.itemsize == 8 or dt2.itemsize == 8)
+        if is_complex:
+            dtype = np.complex128 if is_double else np.complex64
+        else:
+            dtype = np.float64 if is_double else np.float32
+
+
+        
+        
+        
+        
+        
         
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, 
                 dtype=dtype, use_buf=use_buf, use_gpu=self.use_gpu)
@@ -4068,9 +4085,15 @@ class Test_iTensor(unittest.TestCase):
             print_vars(vars(),  ['t.cg_coeff'])
     
     def test_temp(self): 
-        from merapy.tensor_svd import Tensor_svd
+        warnings.filterwarnings("ignore")
         
-        for n in [10, 50, 100, 500, 1000, ]:
+        from merapy.tensor_svd import Tensor_svd
+
+        dtype= np.float32
+        print_vars(vars(),  ['dtype'])
+
+        for n in [10, 50, 100, 500, 1000, 2000]:
+        #for n in [8, 9, 32, 33, 64, 65, 128, 129, 256, 257, 512, 513, 1024, 1025]:
             dims  =  [2.7, 1.2, 1]
             _dims = [int(n*i) for i in dims]
             Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=_dims)
@@ -4083,9 +4106,11 @@ class Test_iTensor(unittest.TestCase):
             
             print(f'\nqsp is Dl={Dl}')
             
-            for use_gpu in [0,  1,  2]:
+            
+            #for use_gpu in [0,  1,  2]:
+            for use_gpu in [0,  1,  ]:
                 #iTensor.USE_GPU_FOR_BLOCK = use_gpu
-                t = iTensor(QSp=qsp, use_gpu=use_gpu)
+                t = iTensor(QSp=qsp, use_gpu=use_gpu, dtype=dtype)
                 t.set_data_random()
                 tc = t.conj()
                 t0 = time.time()

@@ -23,7 +23,7 @@ import platform
 import socket
 import mkl 
 
-from scipy.linalg.blas import dgemm, sgemm, zgemm
+from scipy.linalg.blas import dgemm, sgemm, zgemm, cgemm 
 try:
     import cupy as cp
     #from cupy.cuda import cublas
@@ -113,12 +113,27 @@ def gemm_all_bac(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=0, transfer
             out.get(order='F', out=c)
             
             
-def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=0, transfer_data=False):
-    if use_gpu  == 0 :
-        if dtype == float:
+def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=np.float64,  use_gpu=0, transfer_data=False):
+    #if use_gpu  == 0 :
+    #    if dtype == float:
+    #        dgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+    #    else:
+    #        zgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+
+    dt = np.dtype(dtype)
+
+    if use_gpu == 0:
+        if dt == np.float64:
             dgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
-        else:
+        elif dt == np.float32:
+            sgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+        elif dt == np.complex128:
             zgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+        elif dt == np.complex64:
+            cgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
+        else:
+            raise TypeError(f"Expokit 暂不支持当前的物理数据类型: {dtype}")
+            
     elif use_gpu == 2:
         a = cp.asarray(a, dtype=dtype)
         b = cp.asarray(b, dtype=dtype)
@@ -126,6 +141,7 @@ def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=float,  use_gpu=0, transfer_dat
         #out.get(order='F', out=c)
         c += out.get(order='F') 
     elif use_gpu == 1:
+        #assert isinstance(a, cp.ndarray), "use_gpu=1 时，输入必须已经是 CuPy 显存数组"
         cublas.gemm('N', 'N', a, b, out=c, alpha=1.0, beta=beta) 
     else:
         raise ValueError(use_gpu) 

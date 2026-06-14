@@ -67,7 +67,7 @@ class iTensorFactory(object):
         return iTensor(rank, qsp, qn)
     
     @staticmethod
-    def random(qsp, totqn=None, dtype=float): 
+    def random(qsp, totqn=None, dtype=np.float64): 
         """
             create an iTensor whose data is randomized 
         """
@@ -646,11 +646,11 @@ class iTensorFactory(object):
             sy=iTensor(rank, qsp, totqn)
             #note this is not standard sy, rather sy/i
             sy_complex = 1/np.sqrt(2)*np.array([[0, -1j, 0], [1j, 0, -1j], [0, 1j, 0]], dtype=np.complex128).ravel(order='F')
-            sy.data[:] = np.asarray(sy_complex/1j, dtype=float)
+            sy.data[:] = np.asarray(sy_complex/1j, dtype=np.float64)
 
             rank, qsp, totqn = temp()
             sp=iTensor(rank, qsp, totqn)
-            sp.data[:] = np.asarray(sx.data + 1j*sy_complex, dtype=float)
+            sp.data[:] = np.asarray(sx.data + 1j*sy_complex, dtype=np.float64)
             sm = sp.conjugate(1)
             i, z, x, y, p, m = s0, sz, sx, sy, sp, sm
             I, Z, X, Y, P, M = s0, sz, sx, sy, sp, sm

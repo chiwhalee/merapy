@@ -338,7 +338,7 @@ class iTensor_rank2_operation(object):
         
         if is_trunc:
             temp = {}
-            temp[0] = module.ndarray(totdim, dtype=float)
+            temp[0] = module.ndarray(totdim, dtype=np.float64)
             temp[1] = module.ndarray(totdim, dtype=int)
             temp[2] = module.ndarray(totdim, dtype=int)
             
@@ -535,7 +535,7 @@ class iTensor_rank2_operation(object):
         np = numpy if tt.use_gpu != 1 else cupy
         if is_trunc:
             temp = {}
-            temp[0] = np.ndarray(totdim, dtype=float)     # stores eigen values
+            temp[0] = np.ndarray(totdim, dtype=np.float64)     # stores eigen values
             temp[1] = np.ndarray(totdim, dtype=int)
             temp[2] = np.ndarray(totdim, dtype=int)
             d0 = 0
@@ -1179,7 +1179,7 @@ class Tensor_svd(iTensor_rank2_operation):
                 VAL a dict whose value is a list of vals
         """
         #把VAL中的奇异值 连接起来用temp 这一ndarray存储
-        temp = np.zeros((3, totdim), dtype=float)
+        temp = np.zeros((3, totdim), dtype=np.float64)
         d0 = 0
         for i, d in enumerate(dim_list): 
             temp[0, d0: d0 + d] = VAL[i]
