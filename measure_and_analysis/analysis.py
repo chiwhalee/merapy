@@ -45,6 +45,7 @@ import itertools
 import socket 
 import types
 from numpy import inf
+import textwrap
 
 from merapy.utilities import print_vars #, OrderedSet 
 from merapy.hamiltonian import System
@@ -59,7 +60,7 @@ from merapy.measure_and_analysis.result_db import (ResultDB,
         ResultDB_proj_qmc, ResultDB_bethe_ansatz, 
         BACKUP_STATE_DIR, RESULTDB_DIR, RESULTDB_ROOT, LOCAL_HOSTNAME)
 from  merapy.measure_and_analysis.result_db import (  MARKER_CYCLE, 
-        AnalysisTools, AnalyticFormular
+        AnalysisTools, AnalyticFormular, AnalysisGraphs
         )
 
 
@@ -71,7 +72,12 @@ mpl.rcParams.update(MATPLOTLIBRC)
 
 IS_PY3 = sys.version_info.major>2
 
-__all__ = ['Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 'Analysis_exact_diag', 'Analysis_tdvp', 
+__all__ = [
+        'Analysis', 
+        'Analysis_mera', 'Analysis_vmps', 'Analysis_idmrg', 'Analysis_proj_qmc', 
+           'Analysis_exact_diag', 'Analysis_tdvp', 'Analysis_exact_diag', 
+           'RESULTDB_ROOT', 
+           'ResultDB_bethe_ansatz', 
          'MARKER_CYCLE', ]
 
 class OrderedDictLazy(OrderedDict): 
@@ -151,7 +157,7 @@ class AlphaList(list):
             param_name_id = None 
         return param_name, param_name_id 
 
-class Analysis(AnalysisTools, AnalyticFormular):
+class Analysis(AnalysisTools, AnalyticFormular, AnalysisGraphs):
     """
     """
     #REMOTE_HOST = 'zhihuali@211.86.151.102:'
@@ -163,6 +169,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
             param_name_list=None, 
             param_value_list=None, 
             default_resolution=None, 
+            allow_none_in_alpha = False, 
             Alpha=None, 
             result_db_class=None, result_db_args=None, algorithm='all'):
         """
@@ -194,6 +201,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         self.default_resolution = default_resolution 
         self.result_db_class = result_db_class if result_db_class is not None else ResultDB
         self.result_db_args = {'analysis_class':self}
+        self.allow_none_in_alpha = allow_none_in_alpha
         if result_db_args is not None:
             self.result_db_args.update(result_db_args)
        
@@ -293,9 +301,9 @@ class Analysis(AnalysisTools, AnalyticFormular):
         except TypeError as err:
             print('self.Alpha:', self.Alpha._fields)
             raise err 
-        
-        if None in alpha:
-            raise ValueError('arg missing in {}'.format(alpha)) 
+        if not self.allow_none_in_alpha:
+            if None in alpha:
+                raise ValueError('arg missing in {}'.format(alpha)) 
         #if sur:
         #    alpha = alpha + (sur, )
         return self[alpha]
@@ -559,6 +567,7 @@ class Analysis(AnalysisTools, AnalyticFormular):
         def parse1(term): 
             if '=' in term: 
                 key, val = term.split('=')
+                #assert len(val)>0,  term
                 if 'm' == val[0]:  #change 'm' to minus sign
                     val = '-'  + val[1: ]
                 try: 
@@ -1500,8 +1509,10 @@ class Analysis(AnalysisTools, AnalyticFormular):
         else: 
             raise ValueError("alowed which_plot=%s"%(['contourf', 'imshow', 'surface']))
        
-        if 'title' in kwargs and ax.is_first_row(): 
-            ax.set_title(kwargs.get('title')) 
+        if 'title' in kwargs and ax.get_subplotspec().is_first_row(): 
+            title =  str(kwargs.get('title'))
+            title = textwrap.fill(title, 20)   # auto wrap long title 
+            ax.set_title(title) 
         
         temp = ['xlabel', 'ylabel', 'xlim', 'ylim', 'xscale', 'yscale']
         for t in temp: 
@@ -2979,7 +2990,8 @@ class Analysis(AnalysisTools, AnalyticFormular):
     def submit_job(self, N=None):
         pass
     
-    def average_mag_inhomogenity(self, aa, sh, t=None, tlim=None, time_aver=False, return_sample_size=False):
+    def average_mag_inhomogenity(self, aa, sh, t=None, tlim=None, 
+                                 time_aver=False, return_sample_size=False):
         """
             note1: if data is array, they should have same length
         """
@@ -2991,7 +3003,6 @@ class Analysis(AnalysisTools, AnalyticFormular):
             db=xx[a]
             tt, data = db.calc_mag_inhomogenity(sh, time_aver=time_aver, tlim=tlim)   # note1
             if data is not None:
-                #tt_not_none=tt_not_none if len(tt_not_none>=tt) else tt
                 if len(tt)> len(tt_not_none):
                     tt_not_none = tt
                 res.append(data)
@@ -3023,8 +3034,54 @@ class Analysis(AnalysisTools, AnalyticFormular):
                 return 0, res, sample_size
             else:
                 return 0, res
-        
     
+    def average_for_t_vs_field(self, aa, sh, field_name, t=None, 
+            return_sample_size=False, **kwargs):
+        """
+            this is usually used for disordered models,  to average over different realizations
+        """
+        
+        res=[]
+        tt_not_none=[]
+        t1=0
+        
+        for a in aa:
+            db=self[a]
+            tt, data = db.get_t_vs_field(field_name, sh, allow_nan=0)        
+            if data is not None:
+                if len(tt)> len(tt_not_none):
+                    tt_not_none = tt
+                res.append(data)
+                t1=max(len(tt_not_none), t1)
+        if not res:
+            if return_sample_size:
+                return None, None, 0
+            else:
+                return None, None 
+        sample_size_0 = len(res)
+        res=[i for i in res if len(i)==t1]
+        sample_size = len(res)
+        if sample_size != sample_size_0:
+            print(f'{sample_size-sample_size_0}  samples are omitted due to shortter time')
+        res=np.asarray(res)
+        res = np.mean(res, axis=0)
+        if len(tt_not_none)==0:
+            tt_not_none=None
+        if t is  None:
+            if return_sample_size:
+                return tt_not_none, res, sample_size
+
+            else:
+                return tt_not_none, res 
+        else:
+            arg=np.where(tt_not_none==t)[0][0]
+            res=res[arg]
+            if return_sample_size:
+                return 0, res, sample_size
+            else:
+                return 0, res
+    
+
 
 class Analysis_mera(Analysis): 
     def __init__(self, **kwargs): 
@@ -3090,14 +3147,132 @@ class Analysis_proj_qmc(Analysis):
         Analysis.__init__(self, **kwargs)
 
 class Analysis_tdvp(Analysis): 
-     def __init__(self, **kwargs): 
+    def __init__(self, **kwargs): 
         kwargs.update(algorithm='tdvp', result_db_class=ResultDB_tdvp)
         Analysis.__init__(self, **kwargs)
-
+    
+    def get_dynamical_correlator(self, aa,  sh, tlist, use_reflection=False, surfix=None):
+        """
+            get the results for <sz(j, t)sz(N/2, 0)> 
+            param:
+                use_reflection: in theory the data is symmetric about j = N/2.
+                    I have checked this numerically that this is indeed true. 
+                    So 
+                        for j<N/2
+                        data[:, j]  =  data[:, N-j]
+            
+        
+        """
+        #aa = self.filter_alpha(surfix=surfix)
+        N = sh[0]
+        jj = range(N)  # one should have used N+1 sites, because j=0 is identicle with j=N; but I still use N sites
+        
+        data = np.ndarray((len(tlist), len(jj)), dtype=complex)
+        data[:, :] = np.nan 
+        for a in aa:
+            db = self[a]
+            j = db.param.j 
+            if use_reflection and j>N/2:
+                continue 
+            
+            tt, corr = db.get_t_vs_field('correlator', sh, tlist=tlist)
+            #print_vars(vars(),  ['j, corr'])
+            if tt is None:
+                continue 
+            #print_vars(vars(),  ['j', 'len(corr)', 'corr'])
+            
+            data[:, j] = corr
+            if use_reflection:
+                j1 = N-j 
+                if j != 0 and j!= N/2:  
+                    data[:, j1] = corr
+        data = data.T 
+        if data.shape[0] == 1 or data.shape[1]  == 1:  #this happens when tlist is only one time slice
+            data = data.ravel()
+        return jj, tlist, data
+    
+    def get_mean_square_displacement(self, ii, tt, correlator):
+        """
+            one needs to calc correlator in advance 
+            ref:
+                kloss 2019 eq.8 
+        """
+        N = max(ii) + 1
+        x = np.asarray(ii)
+        x = x - N/2
+        if 1:
+            arg = ~np.isnan(correlator)
+            arg = np.all(arg, axis=1)
+            #print_vars(vars(),  ['arg', 'len(arg)'])
+            #raise  
+            x = x[arg]
+            #print_vars(vars(),  ['x'])
+            correlator = correlator[arg, :]
+            #print_vars(vars(),  ['correlator'])
+            #print_vars(vars(),  ['correlator.shape'])
+            
+        msd = 0.5* np.einsum('ij, i', correlator, x**2)   # calc 1/2*sum{x^2*C(x, t)}
+        return msd 
+    
+    def get_time_dependent_diffuse_const(self, ii, tt,  correlator):
+        """
+        """
+        msd = self.get_mean_square_displacement(ii, tt, correlator)
+        D = np.diff(msd)/np.diff(tt)
+        return D
+        
 class Analysis_exact_diag(Analysis): 
-     def __init__(self, **kwargs): 
-        kwargs.update(algorithm='exact_diag', result_db_class=ResultDB_ed)
+    def __init__(self, algorithm='exact_diag',  **kwargs): 
+        kwargs.update(algorithm=algorithm, result_db_class=ResultDB_ed)
         Analysis.__init__(self, **kwargs)
+
+    @staticmethod
+    def aver_mag_sector_for_conductivity(db_list, sh, only_return_current=0, fault_tol=True,  **conductivity_ac_args):
+        """
+            for a k sector, sum over each Nup sector. 
+            Update:
+                average not only for mag sector,  but also for other symmetry sectors
+        """
+        N=sh[0]
+        #nn=range(N//2)
+        dd=db_list
+        #dd=[xx(v1, v1*r, dt=0.1,  Nup=nup, k=k,  seed=0) for nup in nn]
+        temp = []
+        for k, db in dd.items():
+            try:
+                size = db.get_basis_size(sh)
+                temp.append((k, size))
+            except Exception as err: #KeyError or AttributeError:
+                print(f'db not found for {k} quit.')
+                if fault_tol:
+                    return None, None
+                else:
+                    print(f'db is {db.param}')
+                    print(f'error {err}')
+                    raise  
+            dim_list = dict(temp)
+        
+        dim_tot=sum(dim_list.values())
+        
+        yy=0
+        #for i in range(len(nn)):
+         #for db in dd.values()  
+        for i in dd:
+            db=dd[i]
+            dim=dim_list[i]
+            #db=xx(v1, v1*r, dt=0.1,  Nup=nup, k=0,  seed=0)
+            x, y = db.get_conductivity_ac(sh, only_return_current=only_return_current,
+                                          **conductivity_ac_args)
+            if x is None: 
+                print(f'Error: Nup={i} is not found. Quit.')
+                return None, None
+            sh_max=db.get_dim_max(sh[0], return_N=1)
+            weight = dim/dim_tot
+            #if i != N//2:  # the weight doubles except half filling
+            #    weight *= 2
+            yy = yy+ y*weight
+        return x, yy 
+
 
 
 class TestAnalsysis(unittest.TestCase): 
@@ -3105,10 +3280,79 @@ class TestAnalsysis(unittest.TestCase):
         pass
     
     def test_temp(self): 
-        #from merapy.run_heisbg.analysis import an_tdvp 
-        #from merapy.run_heisbg.analysis import an_vmps
-        from mps_wigner_crystal.analysis import an_exact_diag 
+        
+        #
+        if 1:
+            from vmps.run_experiment.analysis import an_xxz_v1v2_exact_diag
+            xx = an_xxz_v1v2_exact_diag.an_dynamics.an_jj_corr.an_first_ord_res
+            #xx.reset()
 
+            fig, ax=xx.fig_layout( )
+
+            v1= 1
+            #v1=8
+            r=0.25
+
+            v2=v1*r if (v1<np.inf or r==0.5) else r
+
+
+            db=xx(v1=v1, v2=v2, dt=0.1, k=0,  seed=0)
+             
+            db = xx(v1, v2, dt=0.1,  Nup=0, k=0,  seed=0)
+            #print_vars(vars(),  ['db["basis_size"]'])
+          
+            tlim= 20
+
+            NN=[24, 26, 28, 30, 32, 34]
+            NN=[34]
+
+            for N in NN:
+                #sh=(64, 'max')
+                sh=(N, 0)
+                oo=np.linspace(0, 20, 100)
+                oo=np.logspace(-3, 1, 100)
+                if N<=28:
+                    x, y = db.get_conductivity_ac(sh, only_return_current=0,  tlim=tlim, omega_list=oo)
+                    if y is None: continue    
+                    sh_max=db.get_dim_max(sh[0], return_N=1)
+
+                else:
+                    sh=(N, 0)
+                    dd={}
+                    for Nup in range(0, N):
+                        nup= Nup if Nup<=N//2 else N-Nup
+                        dd[Nup] = xx(v1, v2, dt=0.1,  Nup=nup, k=0,  seed=0)
+                        #print(dd[Nup].get('basis_size'))
+                        #print(N, Nup, db.keys())
+                    x, y0 =  xx.aver_mag_sector_for_conductivity(dd, sh, omega_list=[0],
+                                                                 fault_tol = 0, 
+                                            only_return_current=0, tlim=tlim)    
+                    oo=np.logspace(-3, 1, 100)
+                    x, y =  xx.aver_mag_sector_for_conductivity(dd, sh, omega_list=oo,
+                                            only_return_current=0, tlim=tlim)
+                
+                _ = db._plot(x.real, y, 
+                         yfunc= lambda x: x.real/sh[0],
+                          marker=None, 
+                             label=f'{sh}, tlim={tlim}',
+                         #ylim=(0, 0.13),
+                         ax=ax)
+        xx.show_fig()
+        raise          
+        
+
+
+        #from merapy.run_heisbg.analysis import an_vmps
+        #from mps_wigner_crystal.analysis import an_exact_diag 
+        
+        xx  =  an_tdvp.an_finite_T.an_dynamics.an_szsz.an_all_site
+        sh = (64, 'max')
+        tlist = range(0, 10, 1)
+        tlist = [1, ]
+        aa = xx.filter_alpha( j='30<j<35', surfix=None)
+        print_vars(vars(),  ['aa'])
+        xx.get_dynamical_correlator(aa, sh, tlist)
+        raise  
         
         xx = an_exact_diag.an_dynamics.an_random_spin
         

@@ -28,13 +28,21 @@ from collections import (OrderedDict, namedtuple)
 from operator import itemgetter
 import time
 import scipy.integrate
+from pyvis.network import Network
+import networkx as nx 
+import uuid
 
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.lines import Line2D
+from matplotlib import gridspec
+import numpy.fft as fft 
 
-from scipy.signal import savgol_filter
+
+#from scipy.signal import savgol_coeffs # savgol_filter
+#import scipy.signal
+#raise  
 
 import itertools 
 from mpl_toolkits.mplot3d import Axes3D
@@ -100,8 +108,26 @@ def html_border(s, fontsize=20):
     return sss
 
 def set_matplotlib_style():
+    """
+        note1:
+            Mathematical expressions (anything inside $ $) are handled by a
+            separate engine called mathtext, which defaults to a font called
+            "DejaVu Sans" (or a generic serif) regardless of what you set for your
+            main text.  To make your math match your Times New Roman text, you need
+            to sync the mathtext.fontset.
+    """
     mpl.rcParams['figure.figsize'] = (4, 3)
     mpl.rcParams['axes.labelsize'] = 16
+    #mpl.rcParams["font.family"] = "Times New Roman"
+    ##mpl.rcParams['font.family'] = 'DeJavu Serif'
+    #mpl.rcParams['font.serif'] = ['Times New Roman']   
+    mpl.rcParams.update({
+        "font.family": "serif",
+        "font.serif": ["Times New Roman"],
+        "mathtext.fontset": "stix",    #note 1
+        
+        })
+    
     #mpl.rcParams['legend.frameon'] = False  # whether or not to draw a frame around legend   
     v = mpl.__version__
     #if platform.system()=='Windows':
@@ -180,6 +206,96 @@ def set_matplotlib_style():
 MARKER_LIST, MARKER_CYCLE, MATPLOTLIBRC = set_matplotlib_style()
 
 
+class AnalysisGraphs():
+    """
+        analysis of networkx graphs 
+    """
+    def find_all_rings(G, compose_new_graph=False):
+        """
+            find all ring subgraph
+        
+        """
+        cc = nx.connected_components(G)
+        cc=list(cc)
+        cc_1 = [c for c in cc if len(c)>1]  # filter out froen states
+        all_rings=[]
+        for c in cc_1:
+            dd=G.degree(c)
+            dd=[d for _, d in dd]
+            dd=np.asarray(dd, dtype=int)
+            if np.all(dd==2):
+                #print(dd)
+                all_rings.append(c)
+        #print(all_rings)
+        if compose_new_graph:
+            gg=[G.subgraph(g) for g in all_rings]
+            G_all_rings = nx.compose_all(gg)
+            return G_all_rings
+        else:
+            return all_rings 
+
+    def plot_graph(G, backend='pyvis'):
+        if backend == 'matplotlib':
+            print("Drawing the graph...")
+
+            labels = {i: data['label'] for i, data in G.nodes(data=True)}
+            pos = nx.spring_layout(G, seed=42) # Use a spring layout for better visualization of connections.  # For consistent layout
+
+            plt.figure(figsize=(10, 8))
+            nx.draw_networkx_nodes(G, pos, node_color='#63b3ed', node_size=70)
+            nx.draw_networkx_edges(G, pos, edge_color='red', width=2)
+            nx.draw_networkx_labels(G, pos, labels, font_size=10, )
+                                    #font_color='#1a202c')
+            plt.title(f"Spin State Connectivity Graph ", fontsize=16, color='red')
+            plt.axis('off')
+            plt.show()
+        elif backend == 'pyvis' :
+            net = Network(notebook=True, height="750px", width="100%", cdn_resources='remote')   # Create a Pyvis network
+            
+            #nx.set_edge_attributes(G, values = 1, name = 'weight')  # pyvis only allow edge values to be float numbers 
+
+            net.from_nx(G)
+            for node in net.nodes:   # Customize node titles (labels on hover)
+                node['title'] = node['state_str'] # Pyvis uses 'title' for hover text
+            for e in net.edges:
+                e['title'] = e['width']
+            #print_vars(vars(),  ['net.edges'])
+            
+            fn = '/tmp/' + str(uuid.uuid4()) + '.html'
+            #net.show("/tmp/interactive_graph.html", notebook=0)
+            net.show(fn, notebook=0)
+            #import webbrowser
+            #webbrowser.open("my_graph.html")    
+        elif backend == 'plotly' :
+            import plotly.graph_objects as go
+            
+            edge_trace = go.Scatter(
+                x=edge_x, y=edge_y,
+                line=dict(width=0.5, color='#888'),
+                hoverinfo='none',
+                mode='lines')
+
+            node_trace = go.Scatter(
+                x=node_x, y=node_y,
+                mode='markers',
+                hoverinfo='text',
+                text=node_labels,
+                marker=dict(
+                    showscale=False,
+                    colorscale='YlGnBu',
+                    size=10,
+                    line_width=2))
+
+            fig = go.Figure(data=[edge_trace, node_trace],
+                            layout=go.Layout(
+                                showlegend=False,
+                                hovermode='closest',
+                                margin=dict(b=20, l=5, r=5, t=40),
+                                xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+                                yaxis=dict(showgrid=False, zeroline=False, showticklabels=False))
+                            )
+
+            fig.show()
 
 
 class AnalysisTools(object): 
@@ -189,9 +305,12 @@ class AnalysisTools(object):
     
     def filter_array(self, x, x_min=None, x_max=None, period=None, x1=None) :  
         """
+            params:
+                x1: if not None,  return position of elements of x which are in x1
             returns:
                 arg
         """
+        assert len(x)>0
         r = x1 
         if r is None: 
             if x_min is None: 
@@ -202,8 +321,9 @@ class AnalysisTools(object):
             temp = np.logical_and(x>=x_min, x<=x_max)
             #if period != 1:
             if period is not None: 
-                #print_vars(vars(),  ['x-x_min', '(x-x_min)%period'])
-                temp = np.logical_and(temp, (x-x_min)%period==0)
+                #temp = np.logical_and(temp, (x-x_min)%period==0)
+                y = np.asarray((x - x_min)*10000, dtype=int) 
+                temp = np.logical_and(y, y%int(period*10000)==0)
             arg = np.argwhere(temp).ravel()
         else:
             #arg = np.argwhere()
@@ -361,6 +481,7 @@ class AnalysisTools(object):
         
         return res 
     
+    
     def fit_lines_many(self, ax, func=None, which_lines=None, plot_fit=True,  
             add_text=False, return_all_params=False, x_extra=None, plot_range=None,  rounding=4, fault_tol=True,  **kwargs): 
         """
@@ -373,7 +494,10 @@ class AnalysisTools(object):
             which_lines = range(len(ll))
         if which_lines is not None:
             if isinstance(which_lines[0], int):
-                ll = [ll[i] for i in which_lines]
+                try:
+                    ll = [ll[i] for i in which_lines]
+                except IndexError:
+                    print(f'waring of error in fit_lines_many: which_lines={which_lines} out of range')
             elif isinstance(which_lines[0], mpl.lines.Line2D):
                 ll = which_lines
             else:
@@ -467,12 +591,20 @@ class AnalysisTools(object):
                 bars.append((i, a))
         n1 = len(temp)
         
+        
         if direct == 'h' : 
-            if 1: 
-                fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
-                for i, ax in enumerate(fig.axes): 
-                    ax.change_geometry(1, n+1, i+1)
-                ax = fig.add_subplot(1, n + 1, n + 1)
+            
+            gs = gridspec.GridSpec(1, n+1)
+            fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
+            for i, ax in enumerate(fig.axes): 
+                ax.set_position(gs[i].get_position(fig))
+                ax.set_subplotspec(gs[i])                    
+                #ax.change_geometry(1, n+1, i+1)
+                #ax.set_subplotspec((1, n+1, i+1))
+            #ax = fig.add_subplot(1, n + 1, n + 1)
+            
+            ax = fig.add_subplot(gs[n])
+            
             if 0: 
                 n = n1
                 #fig.set_figwidth(fig.get_figwidth()*(n + 1.)/n)
@@ -501,10 +633,16 @@ class AnalysisTools(object):
                 print_vars(vars(),  ['fig.get_figwidth()'])
                 
         elif direct == 'v' : 
+            gs = gridspec.GridSpec(n+1, 1)
+            
             fig.set_figheight(fig.get_figheight()*(n + 1.)/n)
             for i, ax in enumerate(fig.axes): 
-                ax.change_geometry(n+1, 1, i+1)
-            ax = fig.add_subplot(n+1, 1, n + 1)
+                #ax.change_geometry(n+1, 1, i+1)
+                ax.set_position(gs[i].get_position(fig))
+                ax.set_subplotspec(gs[i])                    
+                
+            #ax = fig.add_subplot(n+1, 1, n + 1)
+            ax = fig.add_subplot(gs[n])
         
         return ax 
         
@@ -551,13 +689,22 @@ class AnalysisTools(object):
     plot_diff = plot_derivative #def plot_diff
 
     def find_lines_extreme(self, ax, which='max', add_text=True, 
-            find_range=None, 
+            find_range=None, which_lines='all', 
             zoom_scale=None, font_dict=None, rounding=3):    # find peak,  bottom
+        """
+            params:
+                find_range: find in range of x axis 
+        
+        """
         temp=[]        
         fd = {'color': 'r', 'size': 14} 
         if font_dict is not None: 
             fd.update(font_dict)
-        for l in ax.lines:
+        if which_lines == 'all' :
+            ll = ax.lines
+        else:
+            ll = [ax.lines[l] for l in which_lines]
+        for l in ll:
             x, y= l.get_data()
             if find_range is not None: 
                 x_ = np.logical_and(x>=find_range[0], x<=find_range[1])
@@ -744,7 +891,7 @@ class AnalysisTools(object):
         return x, y
 
     def smooth(self, data, window_size, order):
-        res = savgol_filter(data, window_size, order)
+        res = scipy.signal.savgol_filter(data, window_size, order)
         return res 
     
     def reset_marker_cycle(self,  start='o'):
@@ -761,7 +908,16 @@ class AnalysisTools(object):
             #print_vars(vars(),  ['m'])
             if m == last:
                 break 
-        
+    
+    def fourier_trans(y, x, k, sign=1, dx=None):
+        """
+            fourier trans of function 
+                f(x) -> \hat f(k)
+        """
+        pass
+        raise  NotImplemented
+        sigma = lambda omega: np.trapezoid(y*np.exp(1j*sign*k*x), x=x)
+    
 
 class AnalyticFormular(object):
     """
@@ -871,7 +1027,7 @@ class AnalyticFormular(object):
             
         return res 
 
-class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools): 
+class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools, AnalysisGraphs): 
     """
         a DB to store measurement results 
         
@@ -1030,6 +1186,10 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         temp.append(str(list(self.keys())))
         res= '\n'.join(temp)
         return res 
+    
+    def __repr__(self):
+        return self.__str__()
+        
     
     def __reduce__(self):
         """
@@ -1383,6 +1543,11 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         path = self.path
         if use_local_storage:
             path = self.parpath_map(path)
+        pop_field = ['time_serials']
+        for p in pop_field:  # fields only temporary loaded,  not allowd to be saved 
+            if p in self:
+                print(f'{p} is removed from db before saving')
+                self.pop(p)
         rpyc_save(path, OrderedDict(self), use_local_storage=use_local_storage)
         if info>0: 
             temp = str(path)
@@ -1633,6 +1798,9 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
         """
             remove param iter
         """
+        if sh[1] == 'max' : 
+            sh = sh[0], self['dim_max'].get(sh[0], 0)
+        
         
         if field_name not in self: 
             self[field_name] = OrderedDict()
@@ -2367,7 +2535,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
     
     def _plot(self, x, y, show_nan=False, **kwargs): 
         figsize = kwargs.get('figsize')
-        figsize = (4, 3) if figsize is None else figsize
+        figsize = (3.5, 2.5) if figsize is None else figsize
         fig = kwargs.get('fig', None)
         ax = kwargs.get('ax', None)
         fig_type = kwargs.get('fig_type')
@@ -2417,6 +2585,7 @@ class ResultDB(OrderedDict, AnalyticFormular,  AnalysisTools):
                     'label': '', 
                     #'color': None,   #color默认值不知到应该是什么， 才使其随机变化
                     'lw': 1,  
+                    'alpha':1.0, #transparency 
                     }    
             dic = style_dic.copy()
         
@@ -4788,8 +4957,12 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
         #ResultDB.__init__(self, parpath,  **kwargs)
         super(ResultDB_time_evo, self).__init__(parpath, **kwargs)
     
-    def get_t_vs_field(self, field_name, sh, tlist=None, tlim=None, ts=None, integrate=False,  kac_rescale=None,  force=False):
+    def get_t_vs_field(self, field_name, sh, tlist=None, tlim=None, dt=None, 
+                       ts=None, integrate=False,  allow_nan=1, 
+                       kac_rescale=None,  force=False):
         """
+            params:
+                dt: if not None,  only retun tlist which has intervals of dt
              
         """
         if ts is None:
@@ -4804,7 +4977,11 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
         
         #val = [i[field_name] for i in temp]
         #print_vars(vars(),  ['temp'])
+        
         val = [i.get(field_name, np.nan) for i in temp]
+        if not allow_nan and any([i is np.nan for i in val]):
+            return None, None
+            
         tt = np.asarray(tt)
         val = np.asarray(val)
         if integrate:
@@ -4834,8 +5011,12 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
             
             if len(val)==0:
                 val = None
-         
-         
+        
+        if dt is not None and len(tt)>0:
+            arg = self.filter_array(tt, period=dt)
+            tt = tt[arg]
+            val = val[arg]
+        
         if kac_rescale is not None:
             tt = tt/kac_rescale
             
@@ -4890,8 +5071,8 @@ class ResultDB_time_evo(ResultDB):  #this is for general time evolution
         else:
             return mag
     
-    
-    def calc_mag_inhomogenity(self, sh, tlist=None, tlim=None,  time_aver=0, normalize=True,  boundary_cond='PBC'):
+    def calc_mag_inhomogenity(self, sh, tlist=None, tlim=None,  
+                              time_aver=0, normalize=True,  boundary_cond='PBC'):
         """
             ref:
                 Schiulaz  2015 eq. 7
@@ -5127,8 +5308,14 @@ class ResultDB_tdvp(ResultDB_time_evo):
             
         return DD
 
-    def get_dynamical_correlator_by_magnet_junction(self, sh, tlist=None, tlim=None):
+    def get_dynamical_correlator_by_magnet_junction(self, sh,  
+                j=None, tlist=None, tlim=None, shift_origin=False):
         """
+            Calculate 
+                C(j, t; N//2, 0)
+            through magnet junction protocol. 
+            params:
+                shift_origin: if true,  put origin at N//2, and return C(j-N//2, t; 0, 0)
             ref:
                 Ljubotina 2019 eq.7 
         """
@@ -5157,6 +5344,12 @@ class ResultDB_tdvp(ResultDB_time_evo):
         
         data = mag_diff/(2*mu)
         data = data.T 
+        if shift_origin:
+            ii = [i-N//2 for i in ii]
+        if j is not None:
+            if shift_origin:
+                j += N//2 
+            data = data[j].ravel()
         if 0:
             if offset: # use midpoint of t + 0.5dt as the time for the current 
                 tt = tt[:-1]
@@ -5171,7 +5364,6 @@ class ResultDB_tdvp(ResultDB_time_evo):
         
         return ii, tt,  data 
         
-    
 
     def get_ball_center(tt, data, tmin=None, tmax=None, xmin=None, xmax=None):
             arg = None
@@ -5198,6 +5390,103 @@ class ResultDB_tdvp(ResultDB_time_evo):
             aver0 = np.average(x0, axis=1, weights=data[:, xmin:xmax])
             return tt, aver0
 
+    def get_conductivity_ac(self, sh, T=None, omega_list=None, tlim=None, 
+                            dt = None, tt=None, jj=None,  only_return_real=True, 
+                            only_return_current=False, return_integrate=False, 
+                            use_fft=False, shift=False, window=None, which_int='trapz', 
+                            ):
+        """
+            calc a.c. conductivity through Kubo fomular, through Fourier trans
+            of current-current correlator <J(t)j_i(0)>.  
+            params:
+                return_integrate: return the integrated conductivity to test sum rules
+                use_fft:
+                    using np.fft to do the transform 
+            ref:
+                Karrasch 2014 eq.5 
+        """
+        if tt is None and jj is None:
+            tt, jj = self.get_t_vs_field('correlator',  sh,  tlim=tlim, dt=dt)
+        else:
+            if tlim is not None:
+                assert tt is not None 
+                arg = np.where(tt<tlim)
+                tt = tt[arg]
+                jj = jj[arg]
+            if dt is not None:
+                arg = self.filter_array(tt, period=dt)
+                tt = tt[arg]
+                jj = jj[arg]
+
+        #if 1:
+        #    if self.__class__ == ResultDB_ed: 
+        #        N = sh[0]
+        #        print_vars(vars(),  ['tt.real'])
+        #        print_vars(vars(),  ['jj.real/N'])
+        #    else:
+        #        print_vars(vars(),  ['tt.real'])
+        #        print_vars(vars(),  ['jj.real'])
+
+            #print_vars(vars(),  ['list(zip(tt.real, jj.real))'])
+            
+        if tt is None:
+            return None, None
+        if only_return_current:
+            return tt, jj 
+        if omega_list is None:
+            omega_list = np.arange(0, 5, 0.02)
+        if not use_fft:
+            #may be simpson is better than trapezoid
+            if which_int == 'simpson' :
+                sigma = lambda omega: scipy.integrate.simpson(jj*np.exp(1j*omega*tt), x=tt)
+            elif which_int ==  'trapz':
+                sigma = lambda omega: np.trapezoid(jj*np.exp(1j*omega*tt), x=tt)
+            else:
+                raise  
+            sigma_list = np.asarray([ sigma(o) for o in omega_list], dtype=complex)
+        else:
+            assert dt is not None 
+            #one must make sure that jj is calculated at equal dt !!
+            n = len(jj)
+            if window is not None:
+                if window == 'hamming' :
+                    ww = np.hamming(n)
+                elif window == 'hanning' :
+                    ww = np.hanning(n)
+                jj = jj* ww
+                    
+            sigma_list = fft.fft(jj,)
+            omega_list = fft.fftfreq(len(jj), d=dt)
+            
+            sigma_list *= dt   # fft is a discrete summation, after devided by the interval dt,  it corresponds to a integration 
+            omega_list *= 2*pi   # the convention of fft in numpy differ by 2pi with usual def
+            if not shift:
+                n = len(jj)//2  #only retain the positive frequencies
+                sigma_list = sigma_list[:n]
+                omega_list = omega_list[:n]
+            else:
+                omega_list = fft.fftshift(omega_list)
+                sigma_list = fft.fftshift(sigma_list)                
+        
+        if T is None:
+            assert hasattr(self.param, 'T')
+            T = self.param.T
+        if T == np.inf:
+            a = 1
+        else:
+            exp = np.exp 
+            beta = 1/T 
+            f = lambda omega:  T* (1-exp(-beta*omega))/omega  if omega != 0 else 1  # when omega->0,  the former expression -> 1
+            a = np.asarray([f(o) for o in omega_list])
+        sigma_list = a*sigma_list
+        
+        if only_return_real:
+            sigma_list = sigma_list.real 
+        if return_integrate and not only_return_current:
+            tot =  scipy.integrate.trapz(sigma_list, omega_list)        
+            return  tot
+        return omega_list, sigma_list 
+        
 class ResultDB_ed(ResultDB_tdvp): 
     def __init__(self, parpath,  **kwargs): 
         kwargs['version'] = 1.0
@@ -5271,6 +5560,79 @@ class ResultDB_ed(ResultDB_tdvp):
         #    eng_max = eng[-1]
         #    eng = (eng-eng_min)/(eng_max-eng_min)
         return ee, eng
+
+    def generate_basis(self, sh):
+        """
+            Only applicable for spin basis at the moment. 
+            Not for general purpose.
+        
+        """
+        from quspin.basis import spin_basis_general, spin_basis_1d
+        
+        L = sh[0]
+        try:
+            sz_tot = self.param.sz_tot if self.param.sz_tot != 'None' else None
+            Nup = self.param.Nup if self.param.Nup != 'None' else None 
+            kblock = self.param.k if self.param.k != 'None' else None 
+            pblock = self.param.p if self.param.p != 'None' else None 
+            #print_vars(vars(),  ['sz_tot', 'Nup'])
+        except AttributeError as err:
+            warnings.warn(f'{err}')
+            return None
+        try:
+            basis = spin_basis_1d(L, m=sz_tot, kblock=kblock,  Nup=Nup, pblock=pblock,  pauli=1, )   
+        except Exception as err:
+            print(f'failed to generate_basis L={L},  sz_tot={sz_tot}, Nup={Nup}, kblock={kblock}, pblock={pblock}')
+            raise  
+            
+        return basis
+    
+    def get_basis_size(self, sh, force=0):
+        if sh[1] == 'max' :
+            sh = sh[0], self.get_dim_max_for_N(sh[0]) 
+        
+        ##try:
+        #    if force:
+        #        raise KeyError
+            #res  =  self['basis_size'][sh]
+        res = self.fetch_easy('basis_size', sh)
+        
+        
+        if res is None or force:
+            S = self.load_S(sh)
+            if S is None:
+                return None 
+            if 'basis' in S:
+                res = S['basis'].Ns
+            elif 'basis_size' in S:
+                res = S['basis_size']
+            elif 'basis_info' in S:
+                basis= eval(S['basis_info'])
+                res = basis.Ns
+            else:
+                raise  
+                basis = self.generate_basis(sh)
+                res = basis.Ns
+            self.insert('basis_size', sh, res )
+            self.commit(info=1)
+        return res 
+
+    def aver_symm_sectors(self, aa, sh, rec_getter, rec_getter_args) :
+        raise NotImplemented 
+        temp = []
+        dd = []
+        for a in aa:
+            db =self[a]  
+            dim = db.get_basis_size(sh)
+            dd.append(dim)
+            rec = rec_getter(db, sh, **rec_getter_args)
+            temp.append(rec)
+        n = len(aa)
+        s= np.sum(dd)
+        res = [dd[i]/s*temp[i] for i in range(aa)]
+        raise  NotImplemented
+            
+        pass
 
 
 class ResultDB_proj_qmc(ResultDB): 
@@ -5410,42 +5772,96 @@ class TestResultDB(unittest.TestCase):
         self.assertFalse(self.db.has_key_list(xx + [5]))
 
     def test_temp(self): 
-        from vmps.run_heisenberg.analysis import an_tdvp
-        xx  =  an_tdvp.an_finite_T.an_dynamics.an_magnet_junction
-        db = xx(Jzz=2.0, mu=0.01, dt=1.0, surfix='fix_err_1em12')
-        #aa = xx.filter_alpha(Jzz=2.0, surfix=None)
-        #print_vars(vars(),  ['aa'])
-        #raise  
-        print_vars(vars(),  ['db'])
-        sh = (128, 'max')
-        ii, tt,  data = db.get_dynamical_correlator_by_magnet_junction(sh, )
-        print_vars(vars(),  ['len(tt)', 'len(ii)', 'data.shape'])
-        print_vars(vars(),  ['tt'])
-        raise  
-    
+        from vmps.run_experiment.analysis import  an_xxz_v1v2_exact_diag, an_xxz_v1v2_tdvp
+
+        #
+
+        xx = an_xxz_v1v2_tdvp.an_finite_T.an_dynamics.an_jj_corr
+        temp=[]
+        tlim=20
+        N=32
+
+        fig,ax=xx.fig_layout()
+
+        v1=np.inf
+        #v1=4
+        r=0
+        v2=v1*r if v1<np.inf else r
+        mm=np.arange(1, 10, 1)
+        mm = [5]
+        yy=[]
+        db=xx(v1=v1, v2=v2, T=np.inf, dt=0.05,   surfix='Jji')
+        sh=(N, 320)
+
+        for tlim in mm:
+            x, y = db.get_conductivity_ac(sh, only_return_current=1, tlim=tlim, 
+                                          #dt=0.1, 
+                                       # which_int='simpson',
+                                          omega_list=[0])
+            #if y is None: continue
+            #print(y[0])
+            yy.append(y[0])
+            #print_vars(vars(),  ['x', 'y'])
         
+        _ = db._plot( mm, yy, 
+                     #xfunc=lambda x:x/2, 
+                    yfunc=lambda x:x*2, 
+                    
+                 #yfunc= lambda x: np.abs(x)/sh_max[0],
+                  #marker=None, 
+                     label=f'TDVP, {sh}, Nup={db.param.Nup}',
+                 #ylim=(0, 0.13),
+                 ax=ax)
+        ax.set_xlabel('$t_{max}$')
+        ax.set_ylabel('$\\alpha$')
+        xx.show_fig()
+        raise  
+
+        xx = an_xxz_v1v2_exact_diag.an_dynamics.an_jj_corr 
+
+        #xx.reset()
+
+        v1= 4
+        r= 0. 
+
+        #mm=np.arange(0, 40, 0.2)
+        k=0
+         
+        N=28
         if 1:
-            v = 0.0
-            #from vmps.run_heisenberg.analysis import an_tdvp 
-            from mps_wigner_crystal.analysis import an_tdvp 
-            xx = an_tdvp.an_dynamics.an_random_spin
-            db=xx(nu=0.5, alpha=1.0, V=64.0,  dt=0.5, surfix='fix_err_1em12')
-            sh=('max', 'max')
-            tt=np.arange(1., 180, 1.0)
-            ii=range(80)
-            tt, data = db.get_magnetization(sh, tt, return_t=1,)
+            Nup=N//2
+            Nup='None'
+            v2 = v1*r if (v1<np.inf  ) else r
+            print(v1, v2, r,  )
+            db=xx(v1, v2, Nup=Nup, k=k, dt=0.1,  seed=0,   surfix='')
+            yy=[]
+            sh=(N, 0)
+            for tlim in mm:
+                x, y = db.get_conductivity_ac(sh, T=np.inf, only_return_current=1, 
+                                              #dt=0.1, use_fft=1,
+                                              #which_int='simpson',
+                                              tlim=tlim, omega_list=[0])
+                if y is None: continue
+                yy.append(y[0])
+            print_vars(vars(),  ['x', 'y/N'])
             
-            print_vars(vars(),  ['tt'])  
-            raise  
-           
-           
-            data = db.calc_mag_inhomogeneous(sh)
-            print_vars(vars(),  ['data'])
-            raise  
-            print_vars(vars(),  ['data.shape'])
+            _ = db._plot(mm, yy, 
+                     yfunc= lambda x: (x)/sh[0],
+                     #marker=None, 
+                         label=f'{sh}, Nup={db.param.Nup}, k={k}',
+                        #facecolor='0.2', 
+                     ax=ax)
         
+        
+            
+        if 1:
+            ax.set_title(f'v1={v1},  r={r},Nup=N/2')
+            ax.set_ylabel(rf'$<J(t)ji>$')
+            ax.set_xlabel(rf'$t$')        
+            ax.set_ylim(0, 0.3)
+            xx.show_fig()
        
-        raise  
+       
        
 
 
