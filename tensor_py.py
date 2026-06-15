@@ -2228,22 +2228,7 @@ class iTensor(TensorBase):
             QSp = []  #QSp = [self.QSp[0].null()]
         
         
-        #dtype = np.result_type(self.dtype, T2.dtype)  # 自动根据 self.dtype 和 T2.dtype 推导最精准的输出类型（完美支持 32位/64位 和 实数/复数）
-        
-        dt1, dt2 = np.dtype(self.dtype), np.dtype(T2.dtype)
-        is_complex = (dt1.kind == 'c' or dt2.kind == 'c')
-        is_double = (dt1.itemsize == 8 or dt2.itemsize == 8)
-        if is_complex:
-            dtype = np.complex128 if is_double else np.complex64
-        else:
-            dtype = np.float64 if is_double else np.float32
-
-
-        
-        
-        
-        
-        
+        dtype = np.result_type(self.dtype, T2.dtype)  # 自动根据 self.dtype 和 T2.dtype 推导最精准的输出类型（完美支持 32位/64位 和 实数/复数）
         
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, 
                 dtype=dtype, use_buf=use_buf, use_gpu=self.use_gpu)
