@@ -164,7 +164,7 @@ def tensor_player(which):
     #tensor_player.the_tape = TapeList[0]   #load default tape 
     def inner(func):
         if 1:   #define recorder and player
-            def init_recorder(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
+            def init_recorder(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=np.float64, 
                     buffer=None, use_buf=False, index_data=True, has_data=True, 
                     use_gpu=0):
                 """
@@ -190,7 +190,7 @@ def tensor_player(which):
                 tensor_player.the_tape[tensor_player.the_tape.calls] = struct_dict
             
             #@profile
-            def init_player(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=float, 
+            def init_player(self, rank=None,  QSp=None, totQN=None, order="F",  dtype=np.float64, 
                     buffer=None, use_buf=False, index_data=True, has_data=True, use_gpu=0):
                 """
                     note1:

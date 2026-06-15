@@ -419,7 +419,11 @@ class iTensor_rank2_operation(object):
         
         U = iTensor(QSp=[tt.QSp[0], qsp_l_rev], dtype=tt.dtype, use_gpu=tensor.use_gpu)
         V = iTensor(QSp=[qsp_r_rev, tt.QSp[1]], dtype=tt.dtype, use_gpu=tensor.use_gpu)
-        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=float, use_gpu=tensor.use_gpu)
+        
+        dtype_common = np.result_type(U, V)
+        dtype = np.float64 if dtype_common in (np.float64, np.complex128) else np.float32
+        
+        S = iTensor(QSp=[qsp_l, qsp_r], totQN=totqn.copy(), dtype=dtype, use_gpu=tensor.use_gpu)
         if totqn != totqn.__class__.qn_id():  # when itensor carry non-travial totqn  
             if totqn_on_which == 's' : 
                 pass
@@ -1489,7 +1493,7 @@ class TestIt(unittest.TestCase):
     def test_eig(self):
         if 1: 
             rank = 4
-            u = iTensor.example(rank=4, dtype=complex)
+            u = iTensor.example(rank=4, dtype=np.complex128)
             totqn = self.qn_identity.copy()
             v, e=Tensor_svd.eig(u, totqn)
             print_vars(vars(),  ['e'])
@@ -1561,7 +1565,7 @@ class TestIt(unittest.TestCase):
             print('test svd_rank2 for cases qn of dim=0 is removed  -- pass')
         
         if 1: #test complex dtype   
-            t = iTensor.example(rank=2, symmetry='U1', dtype=complex)
+            t = iTensor.example(rank=2, symmetry='U1', dtype=np.complex128)
             t.data[: ] = np.random.random(t.totDim)  +  1j*np.random.random(t.totDim)  
             U, S, V=Tensor_svd.svd_rank2(t)
             print(U.dot(S).dot(V) == t)

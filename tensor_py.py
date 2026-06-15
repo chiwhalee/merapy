@@ -216,7 +216,7 @@ class iTensor(TensorBase):
     USE_GPU_MUL_LIM = 100**3   # used when use_gpu = 2
     USE_GPU_EIG_LIM = None 
     
-    def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=float, 
+    def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=np.float64, 
             buffer=None, use_buf=False, index_data=True, 
             has_data=True, init_data=None, use_gpu=0):
         """
@@ -753,7 +753,7 @@ class iTensor(TensorBase):
         self.data[p: p + size] = data[:]  # this checks dtype, the above dont
     
     @staticmethod 
-    def example(qsp=None, rank=4, totqn=None, symmetry='Z2', dtype=float, rand_seed=None): 
+    def example(qsp=None, rank=4, totqn=None, symmetry='Z2', dtype=np.float64, rand_seed=None): 
         """
             convenient method for testing 
         """
@@ -772,12 +772,12 @@ class iTensor(TensorBase):
         res= iTensor(QSp=qsp, dtype=dtype, totQN=totqn)
         if rand_seed is not None :
             np.random.seed(rand_seed)
-        if dtype == float:  
+        if dtype == np.float64:  
             res.data[:] = np.random.random(res.data.size)-0.5
-        elif dtype == complex: 
+        elif dtype == np.complex128: 
             res.data[:] = np.random.random(res.data.size)- 1j* np.random.random(res.data.size)
         else: 
-            raise 
+            raise ValueError(dtype)
         return res
     
     def unregister_del(self):
@@ -1068,7 +1068,7 @@ class iTensor(TensorBase):
                 key_val_sep='=')
         
     @staticmethod
-    def unit_tensor(rank, QSp, totQN=None, dtype=float, use_gpu=0):
+    def unit_tensor(rank, QSp, totQN=None, dtype=np.float64, use_gpu=0):
         """
             Q:  注意区分几种情况，
             
@@ -1115,12 +1115,12 @@ class iTensor(TensorBase):
         return t
     
     @staticmethod
-    def identity(qsp, dtype=float, use_gpu=0):
+    def identity(qsp, dtype=np.float64, use_gpu=0):
         if hasattr(qsp, 'QNs'):
             qsp = qsp.copy_many(2, reverse=[1])
         return iTensor.unit_tensor(2, qsp, dtype=dtype, use_gpu=use_gpu)
     
-    def zeros(qsp, dtype=float, totQN=None):
+    def zeros(qsp, dtype=np.float64, totQN=None):
         res = iTensor(QSp=qsp, dtype=dtype, totQN=totQN)
         res.data[:] = 0.0
         return res 
@@ -3563,7 +3563,7 @@ class Test_iTensor(unittest.TestCase):
         t.permutation([2, 1, 0, 3])
         
         #complex dtype 
-        t = iTensor.example(rank=2, dtype=complex)
+        t = iTensor.example(rank=2, dtype=np.complex128)
         tp=t.permutation([1, 0])
         np.set_printoptions(4)
         print_vars(vars(),  ['t.to_ndarray()', 'tp.to_ndarray()'], '', ' ')
@@ -4117,7 +4117,7 @@ class Test_iTensor(unittest.TestCase):
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
-    if 0: 
+    if 1: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
