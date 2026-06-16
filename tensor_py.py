@@ -101,7 +101,7 @@ from merapy.decorators import (tensor_player, decorate_methods, set_player_state
 __all__ = ['TensorBase', 'nTensor', 'iTensor', ]
 
 
-class DataBuffer(object):
+class DataBuffer_bac(object):
     """
     the point of tBUffer is :当tensor用过自动garbage collect后，只要把tensor使用
     的buff标记in_use改为-1，而buff并未必删除，可以继续使用
@@ -128,6 +128,40 @@ class DataBuffer(object):
         self.in_use[:] = False
         sef.size = 0
         self.T = []
+
+class DataBuffer(object):
+    """
+    the point of tBUffer is :当tensor用过自动garbage collect后，只要把tensor使用
+    的buff标记in_use改为-1，而buff并未必删除，可以继续使用
+    """
+    def __init__(self, size, use_gpu=0):
+        """
+            size: number of tensors
+            note1:
+                np.uint8 is 1 Byte (8 bit); Then float32 is 4*unint8,  float64
+                is 8*unint8,  ....  This makes the DataBuffer not bind to
+                certain dtypes. 
+        """
+        #self.T=[Tensor() for i in xrange(size)]
+        #make self.T simpliy a place holder
+        if use_gpu != 1:
+            self.T=[np.ndarray(0, dtype=np.uint8) for i in range(size)]  #note1
+        else:
+            self.T=[cp.ndarray(0, dtype=np.uint8) for i in range(size)]
+            
+        #for i in xrange(size): self.T[i].nullify()
+        self.in_use=np.ndarray(1024, dtype=bool)
+        self.in_use[:] = False
+        self.size=size   
+        
+    def delete(size):
+        for i  in range(tB.size):
+            tB.T[i].delete()
+        self.in_use[:] = False
+        sef.size = 0
+        self.T = []
+
+
 
 class ndindex:
     """
@@ -209,8 +243,8 @@ class iTensor(TensorBase):
     """
     num_of_instance = 0
     #issue:  these buffer may not compatible with complex type 
-    DATA_BUFFER = [DataBuffer(size=20, dtype=np.float64) for  i in range(2)]
-    DATA_BUFFER_GPU = [DataBuffer(size=20, dtype=np.float64) for  i in range(2)]
+    DATA_BUFFER = [DataBuffer(size=20) for  i in range(2)]
+    DATA_BUFFER_GPU = [DataBuffer(size=20) for  i in range(2)]
     
     #USE_GPU_FOR_BLOCK = False
     USE_GPU_MUL_LIM = 100**3   # used when use_gpu = 2
@@ -289,21 +323,25 @@ class iTensor(TensorBase):
                 self.set_data_entrance(order=order )
             else:
                 self.set_data_entrance_non_Abelian(order=order )
-
+        
+        
         if has_data:
             if buffer is None and use_buf:   #use internal DATA_BUFFER; else use external buffer or no buffer
                 if self.use_gpu != 1:
-                    buffer = self.buffer_assign(data_size=self.totDim 
-                                                if dtype==float else self.totDim*2) 
+                    #buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
+                    buffer = self.buffer_assign(data_size=self.totDim, item_size=np.dtype(dtype).itemsize) 
                 else:
-                    buffer = self.buffer_assign_gpu(data_size=self.totDim 
-                                                    if dtype==float else self.totDim*2)  
+                    #buffer = self.buffer_assign_gpu(data_size=self.totDim 
+                    #                                if dtype==float else self.totDim*2)  
+                    buffer = self.buffer_assign_gpu(data_size=self.totDim, item_size=np.dtype(dtype).itemsize) 
                    
             if self.use_gpu != 1:
                 self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
             else:
                 if isinstance(buffer, cp.ndarray):
                     buffer = buffer.data 
+                else:
+                    assert buffer is None
                 self.data = cp.ndarray(self.totDim, memptr=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
     
     def __setstate__(self, d): 
@@ -330,7 +368,7 @@ class iTensor(TensorBase):
         """
         return self.contract(other, return_v3=False)
     
-    def buffer_assign(self, data_size, n=None):
+    def buffer_assign(self, data_size, item_size,  n=None):
         """
             let self point to a iTensor.DATA_BUFFER
             n: which buff to use
@@ -350,13 +388,15 @@ class iTensor(TensorBase):
                 self.buf_ref[0]=n
                 self.buf_ref[1]=i                
                 iTensor.DATA_BUFFER[n].in_use[i] = True 
-                if iTensor.DATA_BUFFER[n].T[i].size<data_size:
-                    iTensor.DATA_BUFFER[n].T[i] = np.empty(data_size, dtype=np.float64)
+                num_of_bytes = data_size * item_size
+                if iTensor.DATA_BUFFER[n].T[i].size<num_of_bytes:
+                    #iTensor.DATA_BUFFER[n].T[i] = np.empty(data_size, dtype=np.float64)
+                    iTensor.DATA_BUFFER[n].T[i] = np.empty(num_of_bytes, dtype=np.uint8)
                 
                 return iTensor.DATA_BUFFER[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.DATA_BUFFER[0].in_use[:100], )))
     
-    def buffer_assign_gpu(self, data_size, n=None):
+    def buffer_assign_gpu(self, data_size, item_size,  n=None):
         """
         """
         if n is None:  
@@ -371,8 +411,9 @@ class iTensor(TensorBase):
                 self.buf_ref[0]=n
                 self.buf_ref[1]=i                
                 iTensor.DATA_BUFFER_GPU[n].in_use[i] = True 
+                num_of_bytes = data_size * item_size
                 if iTensor.DATA_BUFFER_GPU[n].T[i].size<data_size:
-                    iTensor.DATA_BUFFER_GPU[n].T[i] = cp.empty(data_size, dtype=np.float64)
+                    iTensor.DATA_BUFFER_GPU[n].T[i] = cp.empty(num_of_bytes, dtype=np.uint8)
                 
                 return iTensor.DATA_BUFFER_GPU[n].T[i].data
         raise Exception('Error, All buffer elements are in use, stop %s\n '%(str(iTensor.DATA_BUFFER_GPU[0].in_use[:100], )))
@@ -911,7 +952,7 @@ class iTensor(TensorBase):
         other.set_data_entrance(order="F")
         totDim = self.totDim
         if use_buf:   #use internal DATA_BUFFER; else use external buffer or no buffer
-            buffer = other.buffer_assign(data_size=self.totDim)
+            buffer = other.buffer_assign(data_size=self.totDim, item_size=np.dtype(self.dtype).itemsize)
         other.data = np.ndarray(self.totDim, buffer=buffer, dtype=self.dtype, order="C")
         other.data[:totDim]=self.data[:totDim]
         return other
@@ -3317,6 +3358,7 @@ class iTensor(TensorBase):
         return iTensor_rank2_operation.diag_rank2(self)
     
     def change_device(self, which):
+        assert which in ('cpu', 'gpu')
         if self.device == which:
             return 
         if which == 'gpu' :
@@ -4148,9 +4190,9 @@ if __name__ == "__main__":
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
-           #'test_itensor_gpu'
+           'test_itensor_gpu'
            #'dev_test_su2_symm', 
-           'test_temp', 
+           #'test_temp', 
         ]
         
         
