@@ -500,7 +500,7 @@ class iTensor_rank2_operation(object):
         dim_list_trunc = numpy.ndarray(num_blocks, dtype=int)   #truncated dim_list 
         qn_list_l = []   #qn_list_r would be truncated,  so their def are different 
         qn_list_r = numpy.ndarray(num_blocks, dtype=object)
-        dtype = tt.dtype 
+        
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
             qn0, qn1 = qn_id_tuple
@@ -508,11 +508,16 @@ class iTensor_rank2_operation(object):
             assert dl == dr  
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
+            
             mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
+            
+            #if cp.isnan(mat).any() or cp.isinf(mat).any():
+            #        raise ValueError(f"i={i} 块包含 NaN/Inf，导致 CUSOLVER 崩溃")
+            
             if tt.use_gpu != 1:
                 val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
             else:
-                val, mat = cp.linalg.eigh(mat)   #pay attention here tensor.data is overwritten !!
+                val, mat = cp.linalg.eigh(mat)   
             
             VAL[i] = val[: dl] 
             VEC[i] = mat
@@ -539,7 +544,15 @@ class iTensor_rank2_operation(object):
         np = numpy if tt.use_gpu != 1 else cupy
         if is_trunc:
             temp = {}
-            temp[0] = np.ndarray(totdim, dtype=np.float64)     # stores eigen values
+            
+            if tt.dtype in (np.float64, np.complex128):
+                dtype = np.float64
+            elif tt.dtype in (np.float32, np.complex64): 
+                dtype = np.float32
+            else:
+                raise  ValueError(tt.dtype)
+            
+            temp[0] = np.ndarray(totdim, dtype=dtype)     # stores eigen values
             temp[1] = np.ndarray(totdim, dtype=int)
             temp[2] = np.ndarray(totdim, dtype=int)
             d0 = 0

@@ -207,9 +207,13 @@ def tensor_player(which):
                 if has_data:
                     if  buffer is None and use_buf:                    
                         if self.use_gpu != 1:
-                            buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
+                            #buffer = self.buffer_assign(data_size=self.totDim if dtype==float else self.totDim*2) 
+                            buffer = self.buffer_assign(data_size=self.totDim, item_size=np.dtype(dtype).itemsize) 
+                            
                         else:
-                            buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
+                            #buffer = self.buffer_assign_gpu(data_size=self.totDim if dtype==float else self.totDim*2)  
+                            buffer = self.buffer_assign_gpu(data_size=self.totDim, item_size=np.dtype(dtype).itemsize) 
+                            
                     if self.use_gpu != 1:
                         self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
                     else:
@@ -388,14 +392,15 @@ def tensor_player(which):
                         buffer=buffer, use_buf=use_buf, use_gpu=self.use_gpu)
                 
                 _, nidx, tape_ind, tape_dim, tape_ord = tensor_player.the_tape[tensor_player.the_tape.calls]
+                
                 if 0:
-                    if self.data.dtype == float: 
+                    if self.data.dtype == np.float64: 
                         array_permutation.permute_player_fort(
                                     tape_ind, tape_dim, tape_ord, self.data, Tp.data)
                     else:  #complex 
                         array_permutation.complex_permute_player_fort(
                                     tape_ind, tape_dim, tape_ord, self.data, Tp.data)
-                else:
+                if 1:
                     for ind in range(nidx):
                         pidx, qidx, totDim  = tape_ind[ind]
                         dims = tape_dim[ind]
@@ -434,8 +439,7 @@ def tensor_player(which):
                     #QSp = [self.QSp[0].null()]
                     QSp = []
 
-                dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-                matmul_func = dgemm if dtype == float else zgemm  
+                dtype = np.result_type(self.dtype, T2.dtype)
                 
                 T3= self.__class__(rank=rank3, QSp=QSp, totQN=tQN, 
                         buffer=data, use_buf=use_buf, dtype=dtype, use_gpu=self.use_gpu)
@@ -527,8 +531,9 @@ def tensor_player(which):
                     
                 """
                     
-                dtype = complex if self.dtype == complex or T2.dtype == complex else float 
-                    
+                
+                dtype = np.result_type(self.dtype, T2.dtype)
+                   
                 T3 = self.__class__(rank=None, QSp=None, totQN=None, 
                         buffer=data, dtype=dtype, use_buf=use_buf)
                 
@@ -545,7 +550,7 @@ def tensor_player(which):
                 _, rec, num_rec = tensor_player.the_tape[tensor_player.the_tape.calls]
                 
                 if 0:
-                    if dtype == float:  
+                    if dtype == np.float64:  
                         common_util.contract_core_player_fort(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                         #common_util.contract_core_player_fort_paralell_critical(self.data, T2.data, T3.data, rec, num_rec=num_rec)
                         #common_util.contract_core_player_fort_paralell_ordered(self.data, T2.data, T3.data, rec, num_rec=num_rec)

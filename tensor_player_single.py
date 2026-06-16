@@ -327,7 +327,7 @@ def tensor_player(which):
                 Tp=self.__class__(rank, QSp, totQN, dtype=self.dtype, buffer=buffer, use_buf=use_buf)
                 
                 nidx, tape_ind, tape_dim, tape_ord = inner.tape[inner.calls]
-                if self.data.dtype == float: 
+                if self.data.dtype == np.float64: 
                     #print('ppppp', self.data.size, Tp.data.size)
                     array_permutation.permute_player_fort(self.rank, 
                                 tape_ind, tape_dim, tape_ord, self.data, Tp.data, nidx, Tp.data.size)

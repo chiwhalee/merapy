@@ -76,11 +76,14 @@ class iTensorFactory(object):
         res = iTensor(QSp=qsp, totQN=totqn, dtype=dtype)
         #issue:  maybe here need devide total size?
         n = res.data.size
-        if dtype == float: 
-            res.data[: ] = np.random.random(n) - 0.5 
-        elif dtype == complex:
-            res.data[: ] = (np.random.random(n) - 0.5  + 
-                    1j*(np.random.random(n) - 0.5))
+        kind = np.dtype(dtype).kind
+        #if dtype == np.float64: 
+        if kind =='f':
+            res.data[: ] = np.random.random(n).astype(dtype) - 0.5 
+        #elif dtype == complex:
+        elif kind =='c':
+            res.data[: ] = (np.random.random(n).astype(dtype) - 0.5  + 
+                    1j*(np.random.random(n).astype(dtype) - 0.5))
         else:
             raise  
         return res 
