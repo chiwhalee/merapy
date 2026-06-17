@@ -125,7 +125,34 @@ def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=np.float64,  use_gpu=0, transfe
     else:
         raise ValueError(use_gpu) 
 
-
+def examine_cupy_array(t, ):
+    """ 
+        Exammine a cupy ndarray memory
+    """
+    import cupy as cp
+    if not isinstance(t.data, cp.ndarray):
+        return
+        
+    # 1. 提取低级 CUDA 内存指针对象
+    memptr = t.data.data  # cupy.cuda.MemoryPointer
+    mem_block = memptr.mem  # cupy.cuda.Memory
+    
+    ptr_start = memptr.ptr        # 数据的起始绝对物理地址
+    element_size = t.data.itemsize # 每个元素占的字节数 (complex64=8, complex128=16)
+    view_bytes = t.data.size * element_size # 视图期望的字节大小
+    
+    print(f"\n==== 🔍 显存审计报告: {t.name} ====")
+    print(f"数据类型 (dtype)  : {t.data.dtype}")
+    print(f"形状与步长(Shape/Strides): {t.data.shape} / {t.data.strides}")
+    print(f"元素总数 (size)   : {t.data.size}")
+    print(f"视图占据字节(Bytes) : {view_bytes} 字节")
+    print(f"物理首地址 (Pointer): {hex(ptr_start)}")
+    print(f"底层内存块总大小    : {mem_block.size} 字节")
+    print(f"内存物理连续性标志  : C_Contig={t.data.flags['C_CONTIGUOUS']}, F_Contig={t.data.flags['F_CONTIGUOUS']}")
+    
+    # 核心物理对账：你承诺的视图大小，绝对不能超过底层物理块的大小
+    if view_bytes > mem_block.size:
+        print("🚨 [硬件级越界] 严重警告：该视图需要的字节数超过了底层 CUDA 物理分配块！")
 
 
 class TestCommon(unittest.TestCase):

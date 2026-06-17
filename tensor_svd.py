@@ -12,8 +12,8 @@ from builtins import *
 from builtins import object
 from past.utils import old_div
 import unittest 
-import numpy as np
 import numpy 
+import numpy as np
 import numpy.linalg as linalg
 import scipy 
 import scipy.linalg 
@@ -488,6 +488,22 @@ class iTensor_rank2_operation(object):
                 qsp_guide:
                     Only for using in TDVP.increase_D. But this is not successful 
                     
+            note1:
+                cuda.eigh 在底层采用分治算法（Divide and Conquer）,
+                该算法存在潜在数值不稳定问题。这发生在对角矩阵元很小或特征值为负的情况。   
+                这尤其发生在低精度float32下。
+                并且，由于gpu的并发特性，该不稳定不会普通的raise，而是引发
+                "假性非法内存访问" 报错  CUDA_ERROR_ILLEGAL_ADDRESS, 导致整个 cublas
+                 context hange up. 
+                这是cuSolver 的官方技术文档和 CUDA 的生态里，这是一个臭名昭著的现象.
+                
+                为解决该问题，使用混合精度(mixed precision)，当不稳定时，切换回双精度。
+                
+                注意：类似的迭代算法, 如svd，都会发生这样的问题。
+                而像gemm等其他算法，则绝对不会。
+                
+                
+                    
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 100000000
         
@@ -500,6 +516,7 @@ class iTensor_rank2_operation(object):
         dim_list_trunc = numpy.ndarray(num_blocks, dtype=int)   #truncated dim_list 
         qn_list_l = []   #qn_list_r would be truncated,  so their def are different 
         qn_list_r = numpy.ndarray(num_blocks, dtype=object)
+        is_fp32 = tt.dtype in (numpy.float32, numpy.complex64)
         
         for i in range(tt.nidx):   # 遍历非零blocks
             qn_id_tuple = tt.Addr_idx[:, i]
@@ -509,15 +526,38 @@ class iTensor_rank2_operation(object):
             p  = tt.Block_idx[0, i]
             size = tt.Block_idx[1, i]
             
-            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
             
-            #if cp.isnan(mat).any() or cp.isinf(mat).any():
-            #        raise ValueError(f"i={i} 块包含 NaN/Inf，导致 CUSOLVER 崩溃")
+            mat = tt.data[p: p+dl*dr].reshape(dl, dr, order='F')
             
             if tt.use_gpu != 1:
                 val, mat = scipy.linalg.eigh(mat, overwrite_a=overwrite_data)   #pay attention here tensor.data is overwritten !!
             else:
-                val, mat = cp.linalg.eigh(mat)   
+                
+                if not is_fp32:
+                    val, mat = cp.linalg.eigh(mat)
+                else:  # note1 
+                    # 提取对角线元素（密度矩阵的对角线代表概率项，物理上必须严格大于0）
+                    diag_elements = cp.abs(cp.diag(mat))
+                    min_diag = cp.min(diag_elements).item() # 拉回 CPU 变成普通 float
+                    max_diag = cp.max(diag_elements).item()
+                    
+                    #  核心分流判据：
+                    # 1. 最小对角元触碰了单精度精度生死线 (1e-6)
+                    # 2. 或者对角线最大与最小元素跨度超过了 10^5 倍（单精下极其容易造成分治法发散）
+                    is_ill_conditioned = (min_diag < 1e-6) or (max_diag / (min_diag + 1e-12) > 1e5)
+                    
+                    if is_ill_conditioned:
+                        target_dtype = cp.complex128 if mat.dtype in (cp.complex64, cp.complex128) else cp.float64
+                        mat_double = tt.data[p: p+dl*dr].reshape(dl, dr, order='F').astype(target_dtype)
+                        val_double, mat_double = cp.linalg.eigh(mat_double)
+                        val = val_double.astype(cp.float32)
+                        mat = mat_double.astype(cp.float32)
+                    else:
+                        #mat += cp.eye(dl, dr, dtype=cp.float32) * 1e-7
+                        #if cp.isnan(mat).any() or cp.isinf(mat).any():
+                        #        raise ValueError(f"i={i} 块包含 NaN/Inf，导致 CUSOLVER 崩溃")
+                        val, mat = cp.linalg.eigh(mat)
+            
             
             VAL[i] = val[: dl] 
             VEC[i] = mat
@@ -2037,10 +2077,10 @@ if __name__ == "__main__":
         add_list = [
            #'test_eig', 
            #'xtest_svd', 
-           'test_svd_rank2', 
+           #'test_svd_rank2', 
            #'test_svd_rank2_2', 
            #'test_svd_rank2_fix_err', 
-           #'test_eig_rank2', 
+           'test_eig_rank2', 
            #'test_exp_rank2', 
            #'test_trace_rank2', 
            #'test_diag_rank2', 
