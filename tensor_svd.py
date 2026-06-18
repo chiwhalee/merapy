@@ -27,6 +27,11 @@ import math
 try:
     import cupy
     import cupy as cp
+    import cupyx 
+    from cupyx.scipy.linalg import expm as cu_expm 
+
+    #
+    
 except:
     pass
 
@@ -502,8 +507,6 @@ class iTensor_rank2_operation(object):
                 注意：类似的迭代算法, 如svd，都会发生这样的问题。
                 而像gemm等其他算法，则绝对不会。
                 
-                
-                    
         """
         trunc_dim = trunc_dim if trunc_dim is not None else 100000000
         
@@ -581,34 +584,34 @@ class iTensor_rank2_operation(object):
             print_vars(vars(),  ['all vals:VAL[0][jjj]'], round=10, color='blue')
         
         
-        np = numpy if tt.use_gpu != 1 else cupy
+        xp = numpy if tt.use_gpu != 1 else cupy
         if is_trunc:
             temp = {}
             
-            if tt.dtype in (np.float64, np.complex128):
-                dtype = np.float64
-            elif tt.dtype in (np.float32, np.complex64): 
-                dtype = np.float32
+            if tt.dtype in (xp.float64, xp.complex128):
+                dtype = xp.float64
+            elif tt.dtype in (xp.float32, xp.complex64): 
+                dtype = xp.float32
             else:
                 raise  ValueError(tt.dtype)
             
-            temp[0] = np.ndarray(totdim, dtype=dtype)     # stores eigen values
-            temp[1] = np.ndarray(totdim, dtype=int)
-            temp[2] = np.ndarray(totdim, dtype=int)
+            temp[0] = xp.ndarray(totdim, dtype=dtype)     # stores eigen values
+            temp[1] = xp.ndarray(totdim, dtype=int)
+            temp[2] = xp.ndarray(totdim, dtype=int)
             d0 = 0
             for i, d in enumerate(dim_list): 
                 temp[0][d0: d0 + d] = VAL[i]
                 temp[1][d0: d0 + d] = i   # i is indix of data block 
-                temp[2][d0: d0 + d] = np.arange(d, dtype=int)   # numbering each data block 
+                temp[2][d0: d0 + d] = xp.arange(d, dtype=int)   # numbering each data block 
                 d0 += d
             
-            temp0_abs = np.abs(temp[0])  # sort according to abs value, 和svd不同，不需要square
+            temp0_abs = xp.abs(temp[0])  # sort according to abs value, 和svd不同，不需要square
             ind_sorted = temp0_abs.argsort()
             ind_sorted = ind_sorted[::-1]   # make it into desendent order 
             #print_vars(vars(),  ['temp[0][ind_sorted]'], round=5)
             if val_lim is not None:
                 #assert not trunc_err_tol  #should not use val_lim and trunc_err_tol at the same time
-                arg = np.where(temp0_abs>=val_lim)[0]
+                arg = xp.where(temp0_abs>=val_lim)[0]
                 dim = arg.size  #note here no need to let size+1
                 trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
             
@@ -620,8 +623,8 @@ class iTensor_rank2_operation(object):
                 else:
                     # here I assume vals are all positive, or else this sum is meaningless
                     # here can be warning of 'underflow' when some s values are extremely small; they can be safely ignored
-                    s_cumsum = np.cumsum(temp0_abs_sorted/np.sum(temp0_abs_sorted))  # if all val are 0 then this would through an error 
-                    arg = np.where(s_cumsum>=1-trunc_err_tol)[0]
+                    s_cumsum = xp.cumsum(temp0_abs_sorted/xp.sum(temp0_abs_sorted))  # if all val are 0 then this would through an error 
+                    arg = xp.where(s_cumsum>=1-trunc_err_tol)[0]
                     dim = arg[0]+1 if arg.size else temp0_abs_sorted.size   #reason for  +1: arg is smaller than dim by 1
                     
                     trunc_dim = dim if trunc_dim is None else min(trunc_dim, dim)  #if dim <= trunc_dim,  trunc_dim is overided 
@@ -642,13 +645,13 @@ class iTensor_rank2_operation(object):
             for i in range(3): 
                 temp[i] = temp[i][arg_large]
             
-            sum_tot = np.sum(temp0_abs)  # if rho is not corrected sum_tot=1.0
-            trunc_err = 1-np.sum(np.abs(temp[0]))/sum_tot
+            sum_tot = xp.sum(temp0_abs)  # if rho is not corrected sum_tot=1.0
+            trunc_err = 1-xp.sum(xp.abs(temp[0]))/sum_tot
             
                 
             empty_list = []
             for i in range(len(dim_list)): 
-                ind = temp[2][np.where(temp[1]==i)]
+                ind = temp[2][xp.where(temp[1]==i)]
                 D = ind.size   # dim retained after truncation
                 if qsp_guide is None:
                     if D>0: 
@@ -723,7 +726,7 @@ class iTensor_rank2_operation(object):
                 for i in range(val_mat.nidx): 
                     p  = val_mat.Block_idx[0, i]
                     size  = val_mat.Block_idx[1, i]
-                    val_mat.data[p: p + size] = np.diag(VAL[i]).ravel(order='F')
+                    val_mat.data[p: p + size] = xp.diag(VAL[i]).ravel(order='F')
             else:
                 if is_trunc:
                     val_mat = temp[0]
@@ -732,7 +735,7 @@ class iTensor_rank2_operation(object):
                     for v in VAL:
                         val_mat.extend(v.tolist())
                     val_mat.sort(reverse=True)   # issue: this is slow, change this to numpy in future
-                    val_mat = np.asarray(val_mat)
+                    val_mat = xp.asarray(val_mat)
         else: 
             val_mat = None
             
@@ -762,7 +765,11 @@ class iTensor_rank2_operation(object):
         res = tt.shallow_copy()
         for i in range(tt.nidx):   # 遍历非零blocks
             mat = tt.get_block(i, linear=False)
-            mat_exp = scipy.linalg.expm(mat)
+            if itensor.use_gpu != 1:
+                mat_exp = scipy.linalg.expm(mat)
+            else:
+                mat_exp = cu_expm(mat)
+               
             mat_exp=mat_exp.ravel(order='F')
             tt.set_block(i, mat_exp)
         return res 
@@ -840,11 +847,14 @@ class iTensor_rank2_operation(object):
         """
         tt = itensor # a shorter name 
         tot_size = np.sum(np.sqrt(tt.Block_idx[1, :tt.nidx]))
-        res = np.zeros(int(tot_size), tt.dtype)
+        
+        xp = np if itensor.use_gpu != 1 else cp 
+        
+        res = xp.zeros(int(tot_size), tt.dtype)
         k = 0
         for i in range(tt.nidx):   # 遍历非零blocks
             data = tt.get_block(i, linear=False)
-            diag = np.diagonal(data)
+            diag = xp.diagonal(data)
             size = diag.size 
             res[k:k+size] = diag
             k += size 

@@ -231,7 +231,6 @@ class ndindex:
 #meth_names= ["__init__", "set_data_entrance", "contract_core", "permutation"]
 #meth_names.pop(0)
 
-#print( 'DISABLED DECORATOR '*10)
 @decorate_methods(decorator=tensor_player, meth_names=None)
 class iTensor(TensorBase):
     """
@@ -249,6 +248,8 @@ class iTensor(TensorBase):
     #USE_GPU_FOR_BLOCK = False
     USE_GPU_MUL_LIM = 100**3   # used when use_gpu = 2
     USE_GPU_EIG_LIM = None 
+    
+    USE_BATCHED_GEMM_FOR_GPU = 0  # in contract_core_player under tensor_player, using this to switch for normal gemm or BatchedGemm. 
     
     def __init__(self, rank=None, QSp=None, totQN=None, order='F', dtype=np.float64, 
             buffer=None, use_buf=False, index_data=True, 
@@ -306,6 +307,7 @@ class iTensor(TensorBase):
         self.QSp = QSp  #NO COPYING CONVENTION 
         self.ind_labels = None 
         self.totQN = totQN if totQN is not None else QSp[0].QnClass.qn_id()
+        
           
         self.ndiv = None   #ndiv 实际是把协变反变腿分开 一个(ndiv, rank-ndiv) tensor
         self.use_buf=use_buf
@@ -338,10 +340,12 @@ class iTensor(TensorBase):
             if self.use_gpu != 1:
                 self.data = np.ndarray(self.totDim, buffer=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
             else:
-                if isinstance(buffer, cp.ndarray):
+                if isinstance(buffer, cp.ndarray):  # cupy.cuda.memory.MemoryPointer
                     buffer = buffer.data 
+                elif isinstance(buffer, cp.cuda.memory.MemoryPointer):
+                    pass
                 else:
-                    assert buffer is None
+                    assert buffer is None, "error info {type(buffer)}"
                 self.data = cp.ndarray(self.totDim, memptr=buffer, dtype=dtype, order="C")   #as a mater of fact, 1D array is both C and F ordered
     
     def __setstate__(self, d): 
@@ -862,6 +866,12 @@ class iTensor(TensorBase):
     @property
     def dtype(self):
         return self.data.dtype
+    
+    def change_dtype(self, dtype):
+        if self.use_gpu != 1:
+            self.data = np.asarray(self.data, dtype=dtype)
+        else:
+            self.data = cp.asarray(self.data, dtype=dtype)
     
     @property
     def nbytes(self):
@@ -2236,6 +2246,7 @@ class iTensor(TensorBase):
                 #data = as_strided(data, shape)   # this seems not needed, because reshape should not allocate memory 
                 data1 = data.reshape(shape, order='F')
                 data2 = data1.transpose(P)
+                
                 #note: reshape and transpose won't allocate memory, which can be checked by shares_memory. So this code is enough efficient.
                 #assert np.shares_memory(data, data1)
                 #assert np.shares_memory(data1, data2)
@@ -2268,11 +2279,15 @@ class iTensor(TensorBase):
         if rank3==0:
             QSp = []  #QSp = [self.QSp[0].null()]
         
-        
-        dtype = np.result_type(self.dtype, T2.dtype)  # 自动根据 self.dtype 和 T2.dtype 推导最精准的输出类型（完美支持 32位/64位 和 实数/复数）
+        dtype = np.promote_types(self.dtype, T2.dtype)  # 自动根据 self.dtype 和 T2.dtype 推导最精准的输出类型（完美支持 32位/64位 和 实数/复数）
+        if self.dtype != dtype:
+            self.change_dtype(dtype)
+        if T2.dtype != dtype:
+            T2.change_dtype(dtype)
         
         T3 = iTensor(rank=rank3, QSp=QSp, totQN=tQN, buffer=data, 
                 dtype=dtype, use_buf=use_buf, use_gpu=self.use_gpu)
+        #print_vars(vars(),  ['T3.dtype', 'T3.data.size', 'T3.device'])
         T3.data[:]=0.0   #T3.data=np.zeros(T3.totDim)  #this is really bad, need to re-allocate space for data
         
         nidx3 = 0
@@ -4142,16 +4157,11 @@ class Test_iTensor(unittest.TestCase):
                 tc = t.conj()
                 t0 = time.time()
                 for i in range(1):
-                    t.contract(tc, (0, 1, 2), (3, 1, 2), use_buf=1)
+                    t.contract(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
                 t1 = time.time()
 
                 print(f'time for iTensor contraction on {use_gpu}: {t1-t0}')
             
-        
-            
-        
-        
-        
     
         
             
@@ -4159,7 +4169,7 @@ class Test_iTensor(unittest.TestCase):
 
 if __name__ == "__main__":
     #warnings.filterwarnings("ignore")
-    if 1: 
+    if 0: 
         #suite = unittest.TestLoader().loadTestsFromTestCase(TestIt)
         #unittest.TextTestRunner(verbosity=0).run(suite)    
         unittest.main()
@@ -4190,9 +4200,9 @@ if __name__ == "__main__":
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
-           'test_itensor_gpu'
+           #'test_itensor_gpu'
            #'dev_test_su2_symm', 
-           #'test_temp', 
+           'test_temp', 
         ]
         
         

@@ -99,7 +99,6 @@ def set_num_of_threads(n, info=1):
 
             
 def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=np.float64,  use_gpu=0, transfer_data=False):
-
     if use_gpu == 0:
         if dtype == np.float64:
             dgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
@@ -111,6 +110,12 @@ def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=np.float64,  use_gpu=0, transfe
             cgemm(alpha, a, b, beta=beta, c=c, overwrite_c=True)
         else:
             raise TypeError(f"不支持当前的物理数据类型: {dtype}")
+    
+    elif use_gpu == 1:
+        assert isinstance(b, cp.ndarray), "use_gpu=1 时，输入必须已经是 CuPy 显存数组"
+        #print_vars(vars(),  ['a.dtype', 'b.dtype', 'c.dtype'])
+        #print_vars(vars(),  ['a.device', 'b.device', 'c.device'])
+        cublas.gemm('N', 'N', a, b, out=c, alpha=alpha, beta=beta) 
             
     elif use_gpu == 2:
         a = cp.asarray(a, dtype=dtype)
@@ -118,10 +123,6 @@ def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=np.float64,  use_gpu=0, transfe
         out = cublas.gemm('N', 'N', a, b, alpha=alpha, beta=beta) 
         #out.get(order='F', out=c)
         c += out.get(order='F') 
-    elif use_gpu == 1:
-        #assert isinstance(a, cp.ndarray), "use_gpu=1 时，输入必须已经是 CuPy 显存数组"
-        #print_vars(vars(),  ['a.dtype', 'b.dtype', 'c.dtype'])
-        cublas.gemm('N', 'N', a, b, out=c, alpha=alpha, beta=beta) 
     else:
         raise ValueError(use_gpu) 
 
