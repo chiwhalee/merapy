@@ -36,7 +36,15 @@ try:
     import triton.language as tl
     import torch
 except:
-    triton = None
+    class triton:
+        def jit(var):
+            pass
+    class tl:
+        constexpr = None
+        
+    class torch:
+        pass
+    torch.float32 = None
     pass
    
 
