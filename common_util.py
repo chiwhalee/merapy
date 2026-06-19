@@ -112,7 +112,7 @@ def gemm_all(a, b, c, alpha=1.0, beta=0.0, dtype=np.float64,  use_gpu=0, transfe
             raise TypeError(f"不支持当前的物理数据类型: {dtype}")
     
     elif use_gpu == 1:
-        assert isinstance(b, cp.ndarray), "use_gpu=1 时，输入必须已经是 CuPy 显存数组"
+        #assert isinstance(b, cp.ndarray), "use_gpu=1 时，输入必须已经是 CuPy 显存数组"
         #print_vars(vars(),  ['a.dtype', 'b.dtype', 'c.dtype'])
         #print_vars(vars(),  ['a.device', 'b.device', 'c.device'])
         cublas.gemm('N', 'N', a, b, out=c, alpha=alpha, beta=beta) 

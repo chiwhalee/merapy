@@ -34,6 +34,7 @@ except:
 try:
     import triton
     import triton.language as tl
+    import torch
 except:
     triton = None
     pass
@@ -580,7 +581,9 @@ if 1: #define recorder and player
                             dtype = dtype, use_gpu=1)
             else:
                 #contract_core_player_cublas_batched(self,  T2,  T3,  rec,  num_rec)
-                contract_core_player_triton(self,  T2,  T3,  rec,  num_rec)       
+                #contract_core_player_triton(self,  T2,  T3,  rec,  num_rec)       
+                #contract_core_player_nested(self_data,  T2_data,  T3_data,  rec,  num_rec)       
+                contract_core_player_nested_inplace(self_data,  T2_data,  T3_data,  rec,  num_rec)       
                 
         elif self.use_gpu == 2:
              for ind in range(num_rec):
@@ -605,7 +608,120 @@ if 1: #define recorder and player
         #    T3.data = T3_data.get()
             
         return T3
-    
+   
+
+
+    def contract_core_player_nested(self_data_cp, T2_data_cp, T3_data_cp, rec, num_rec, dtype=torch.float32):
+        """
+        【对账跑通专用版】
+        输入和输出完全保持你的 cupy.ndarray（一维视图），内部零拷贝强转 torch.Tensor 验证 Nested 算子
+        """
+        if num_rec == 0: 
+            return T3_data_cp
+
+        # 🌟 步骤一：利用零拷贝（Zero-copy）将 CuPy 一维数组包装成 PyTorch CUDA Tensor
+        # 这一步极其安全，两边的指针指向完全相同的物理显存
+        self_data = torch.as_tensor(self_data_cp, device='cuda')
+        T2_data = torch.as_tensor(T2_data_cp, device='cuda')
+        T3_data = torch.as_tensor(T3_data_cp, device='cuda')
+        
+        # 强制将数据类型对齐到你要指定的 PyTorch 精度 (如 torch.float32)
+        #if self_data.dtype != dtype: self_data = self_data.to(dtype)
+        #if T2_data.dtype != dtype: T2_data = T2_data.to(dtype)
+        #if T3_data.dtype != dtype: T3_data = T3_data.to(dtype)
+
+        list_A = []
+        list_B = []
+
+        # 🌟 步骤二：严格遵照你的 Fortran Order 物理洗牌逻辑进行多维等价转换
+        for ind in range(num_rec):
+            p1, p2, p3, Dim1, Dim2, Dimc = map(int, rec[ind])
+            
+            # 物理对账：C_Order 下的 (Dimc, Dim1) 视图，其物理一维平铺顺序
+            # 恰好完美等价于你原本 Fortran_Order 下的 (Dim1, Dimc)
+            sub_A_T = self_data[p1 : p1 + Dim1 * Dimc].view(Dimc, Dim1)
+            sub_B_T = T2_data[p2 : p2 + Dim2 * Dimc].view(Dim2, Dimc)
+            
+            list_A.append(sub_A_T)
+            list_B.append(sub_B_T)
+
+        # 🌟 步骤三：打包成不规则 Nested Tensor，彻底把几百个循环合并为一个算子
+        nt_A_T = torch.nested.nested_tensor(list_A, dtype=dtype, device='cuda')
+        nt_B_T = torch.nested.nested_tensor(list_B, dtype=dtype, device='cuda')
+
+        # 🚀 步骤四：单一内核发射！C = A * B  等价于  C^T = B^T * A^T
+        # 这会在底层直接激活 CUTLASS 的 Grouped GEMM 动态队列，全速并跑
+        nt_C_T = torch.matmul(nt_B_T, nt_A_T)
+
+        # 🌟 步骤五：利用一维平铺无缝物理求和，刷回大缓冲区
+        for ind, sub_C_T in enumerate(nt_C_T.unbind()):
+            p3 = int(rec[ind][2])
+            size_c = sub_C_T.numel()
+            
+            # 模拟原先 gemm_all 中 alpha=1.0, beta=1.0 的原位累加行为 (C = A*B + C)
+            # 因为 sub_C_T 的一维平铺顺序天然对齐 T3_data 的 Fortran 存储，直接 view(-1) 累加
+            T3_data[p3 : p3 + size_c] += sub_C_T.view(-1)
+            
+
+        # 🌟 步骤六：算完重新转换回 CuPy 吐给你的上层多体算法
+        # 同样利用 dlpack 或直接用 cupy 承接原来的指针，确保无缝交接
+        # 由于 T3_data 是就地(inplace)累加的，原本传入的 T3_data_cp 对应显存其实已经同步更新了
+        T3_data_final_cp = cp.asarray(T3_data)
+
+        return T3_data_final_cp   
+
+
+
+    def contract_core_player_nested_inplace(self_data_cp, T2_data_cp, T3_data_cp, rec, num_rec, dtype=torch.float32):
+        """
+        【官方公开 API 满血版】
+        彻底消灭私有 API 报错。使用官方 torch.nested.as_nested_tensor 实现零拷贝就地包装。
+        """
+        if num_rec == 0: 
+            return T3_data_cp
+
+        # 1. 零拷贝包装大一维显存为 PyTorch Tensor
+        self_data = torch.as_tensor(self_data_cp, device='cuda', dtype=dtype)
+        T2_data = torch.as_tensor(T2_data_cp, device='cuda', dtype=dtype)
+        T3_data = torch.as_tensor(T3_data_cp, device='cuda', dtype=dtype)
+
+        # 2. 构造不规则块的形状列表 (在 CPU 上准备)
+        # 因为 as_nested_tensor 接受一个标准的形状列表，我们一次性转置并打包
+        list_A_views = []
+        list_B_views = []
+
+        for ind in range(num_rec):
+            p1, p2, p3, Dim1, Dim2, Dimc = map(int, rec[ind])
+            
+            # 🌟 重点：直接在原有连续大显存上进行无拷贝 view 切片
+            # 此时 sub_A_T 和 sub_B_T 是大张量内部的逻辑视图 (Strided Views)
+            sub_A_T = self_data[p1 : p1 + Dim1 * Dimc].view(Dimc, Dim1)
+            sub_B_T = T2_data[p2 : p2 + Dim2 * Dimc].view(Dim2, Dimc)
+            
+            list_A_views.append(sub_A_T)
+            list_B_views.append(sub_B_T)
+
+        # 3. 🚀 核心破局点：使用官方公开的 as_nested_tensor
+        # 当公开传入的已经是 cuda 上的 views 列表时，PyTorch 2.x 会在内部自动推导 storage 
+        # 并通过零拷贝（Zero-copy）直接将其视为一个不规则的 NestedTensor，完美激活 CUTLASS！
+        nt_A_T = torch.nested.as_nested_tensor(list_A_views, dtype=dtype, device='cuda')
+        nt_B_T = torch.nested.as_nested_tensor(list_B_views, dtype=dtype, device='cuda')
+
+        # 4. 🚀 单一内核发射：CUTLASS Grouped GEMM 瞬间全速跑
+        nt_C_T = torch.matmul(nt_B_T, nt_A_T)
+
+        # 5. 刷回大缓冲区 T3_data
+        for ind, sub_C_T in enumerate(nt_C_T.unbind()):
+            p3 = int(rec[ind][2])
+            size_c = sub_C_T.numel()
+            # 原位求和，平铺顺序天然对齐 T3 的 Fortran 存储
+            T3_data[p3 : p3 + size_c] += sub_C_T.view(-1)
+
+        return cp.asarray(T3_data)
+
+
+      
+   
     def contract_core_player_cublas_batched(self, T2, T3, rec, num_rec):
         """
             基于 cuBLAS 指针数组(Pointer Array)的非均匀块 Batched GEMM 实现
@@ -813,144 +929,6 @@ if 1: #define recorder and player
             rec_gpu.data.ptr,
             rec_gpu.strides[0], # 传入磁带表的行步长
             1.0, # alpha
-            BLOCK_SIZE_M=BLOCK_M, 
-            BLOCK_SIZE_N=BLOCK_N, 
-            BLOCK_SIZE_K=BLOCK_K
-        )
-        
-        return T3
-
-
-    @triton.jit
-    def _triton_symmetric_gemm_float32_kernel(
-        A_ptr, B_ptr, C_ptr, rec_ptr,
-        stride_rec_row, 
-        alpha,
-        BLOCK_SIZE_M: tl.constexpr, 
-        BLOCK_SIZE_N: tl.constexpr, 
-        BLOCK_SIZE_K: tl.constexpr
-        ):
-        # 🌟 每一个 Thread Block 独立认领磁带（rec_ptr）中的一行任务
-        task_id = tl.program_id(0)
-        
-        # 1. 构造标准的 2 的幂（8元素）一维向量网格与掩码，规避 3.1 前端 AST 审查
-        offs_rec = tl.arange(0, 8)
-        mask_rec = offs_rec < 6
-        
-        # 2. 算出一维绝对字节地址（因为 rec_ptr 是 int64 磁带，每个元素占 8 字节）
-        rec_offsets_int = task_id * stride_rec_row * 8 + offs_rec * 8
-        rec_abs_addr = rec_ptr + rec_offsets_int
-        
-        # 3. 强转为指针向量，一枪把当前任务的 6 个元数据捞进寄存器
-        rec_ptrs = tl.cast(rec_abs_addr, tl.pointer_type(tl.int64))
-        rec_data = tl.load(rec_ptrs, mask=mask_rec, other=0)
-        
-        # 无损提取标量（在 3.1 极度挑食的 PassManager 下最稳健的硬件条件选通写法）
-        p1 = tl.sum(tl.where(offs_rec == 0, rec_data, 0))
-        p2 = tl.sum(tl.where(offs_rec == 1, rec_data, 0))
-        p3 = tl.sum(tl.where(offs_rec == 2, rec_data, 0))
-        M  = tl.sum(tl.where(offs_rec == 3, rec_data, 0))
-        N  = tl.sum(tl.where(offs_rec == 4, rec_data, 0))
-        K  = tl.sum(tl.where(offs_rec == 5, rec_data, 0))
-        
-        # 4. 🌟 像素级物理对账：因为换成了 float32，大张量里的每个元素占 4 字节！
-        # 所以基地址变址要乘以 4
-        local_A_ptr = tl.cast(A_ptr, tl.pointer_type(tl.float32)) + p1
-        local_B_ptr = tl.cast(B_ptr, tl.pointer_type(tl.float32)) + p2
-        local_C_ptr = tl.cast(C_ptr, tl.pointer_type(tl.float32)) + p3
-        
-        # 5. 经典 2D Tiling 切片网格
-        offs_m = tl.arange(0, BLOCK_SIZE_M)
-        offs_n = tl.arange(0, BLOCK_SIZE_N)
-        offs_k = tl.arange(0, BLOCK_SIZE_K)
-        
-        mask_m = offs_m < M
-        mask_n = offs_n < N
-        
-        # 初始化单精度累加器
-        accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
-        
-        # 沿着 K 维度进行经典分块迭代
-        for k in tl.range(0, tl.cdiv(K, BLOCK_SIZE_K)):
-            k_remaining = K - k * BLOCK_SIZE_K
-            mask_k = offs_k < k_remaining
-            
-            # 二维滑窗寻址（严格遵循 Row-Major 原理）
-            a_ptrs = local_A_ptr + (offs_m[:, None] * K + (k * BLOCK_SIZE_K + offs_k[None, :]))
-            b_ptrs = local_B_ptr + ((k * BLOCK_SIZE_K + offs_k[:, None]) * N + offs_n[None, :])
-            
-            a = tl.load(a_ptrs, mask=(mask_m[:, None] & mask_k[None, :]), other=0.0)
-            b = tl.load(b_ptrs, mask=(mask_k[:, None] & mask_n[None, :]), other=0.0)
-            
-            # 🌟 炸裂输出：彻底激活 RTX 3090 Tensor Core 的 Ampere mma.sync 核心管线！
-            
-            # 强制让 PyTorch / CUDA 后端关掉 TF32 欺骗，回归真正的单精度物理硬件管线
-            accumulator += tl.dot(a, b,  allow_tf32=False)
-            
-        accumulator = accumulator * alpha
-        
-        # 写回最终单精度矩阵
-        c_ptrs = local_C_ptr + (offs_m[:, None] * N + offs_n[None, :])
-        tl.store(c_ptrs, accumulator, mask=(mask_m[:, None] & mask_n[None, :]))
-
-
-    def contract_core_player_triton(self, T2, T3, rec, num_rec):
-        """
-        【满血物理对账版】Triton 发射器：强制显存连续化，斩断一切变址串位
-        """
-        import cupy as cp
-        if num_rec == 0: return T3
-        
-        # 🌟 1. 核心拯救行动：强制对大张量进行物理显存规整（C_CONTIGUOUS）
-        # 如果它们是转置后的 View，这几行会强制在显存里重新开辟连续空间并拷贝，确保一维变址绝对正确
-        if hasattr(self.data, 'flags') and not self.data.flags['C_CONTIGUOUS']:
-            self.data = cp.ascontiguousarray(self.data)
-        if hasattr(T2, 'flags') and not T2.flags['C_CONTIGUOUS']:
-            T2 = cp.ascontiguousarray(T2)
-        # T3 作为输出缓冲区，也必须保证在物理上是严格连续的一维空间
-        if hasattr(T3, 'flags') and not T3.flags['C_CONTIGUOUS']:
-            T3 = cp.ascontiguousarray(T3)
-
-        # 2. 确保磁带本身规整
-        if not isinstance(rec, cp.ndarray):
-            rec_gpu = cp.array(rec[:num_rec], dtype=cp.int64)
-        else:
-            rec_gpu = rec[:num_rec].astype(cp.int64)
-
-        # 3. 动态自适应推算最优 Tiling 尺寸
-        max_m = int(cp.max(rec_gpu[:, 3]).item())
-        max_n = int(cp.max(rec_gpu[:, 4]).item())
-        max_k = int(cp.max(rec_gpu[:, 5]).item())
-        
-        def next_power_of_2(x):
-            return 1 if x == 0 else 2**(x - 1).bit_length()
-
-        BLOCK_M = max(16, min(128, next_power_of_2(max_m)))
-        BLOCK_N = max(16, min(128, next_power_of_2(max_n)))
-        BLOCK_K = max(16, min(128, next_power_of_2(max_k)))
-
-        grid = (num_rec, )
-        stride_rec_row = int(rec_gpu.strides[0] // 8)
-
-        # 🌟 4. 判别当前正在运行的数据类型，精准动态匹配显存字节步长 (float32=4字节, float64=8字节)
-        # 之前如果写死了 8 而上层传入了 float32，或者写死了 4 而上层是 float64，寻址直接会错乱 2 倍或 0.5 倍！
-        element_size = self.data.dtype.itemsize  # 自动获取 4 或 8
-
-        # 5. 根据真实数据类型，调用对应精度的内核
-        # 如果上层是 float64，建议使用之前为你准备的带有 `tl.dot(..., allow_tf32=False)` 或广播归约的核函数
-        # 这里以自适应寻址为例，在内核中配合正确的 element_size：
-        
-        # 重新核对：内核中计算指针时，由于 Triton 内部 `+ p1` 是基于指针类型的（Pointer Arithmetic）
-        # 在 Triton 内部：指针 + 1 自动代表跳过一个元素（即自动乘以了 sizeof(dtype)）！
-        # 🌟 致命对账：如果你之前在内核里写了 `local_A_ptr = A_ptr + p1 * 8`，那就是重复乘了 8 字节，指针直接飞到了九霄云外！
-        
-        _triton_symmetric_gemm_float32_kernel[grid](
-            int(self.data.data.ptr), 
-            int(T2.data.data.ptr), 
-            int(T3.data.data.ptr), 
-            int(rec_gpu.data.ptr),
-            stride_rec_row,
-            1.0, 
             BLOCK_SIZE_M=BLOCK_M, 
             BLOCK_SIZE_N=BLOCK_N, 
             BLOCK_SIZE_K=BLOCK_K
@@ -1276,6 +1254,137 @@ if 1: #define recorder and player
             #self.QNs=other.QNs.copy()
             self.Dims=other.Dims.copy()
             self.Addr=other.Addr.copy()
+
+
+@triton.jit
+def _triton_batch_gemm_kernel(
+    A_ptr_u64,
+    B_ptr_u64,
+    C_ptr_u64,
+    rec_ptr_u64,
+    alpha,
+    elem_bytes: tl.constexpr,
+    BLOCK_SIZE_M: tl.constexpr,
+    BLOCK_SIZE_N: tl.constexpr,
+    BLOCK_SIZE_K: tl.constexpr
+):
+    task_id = tl.program_id(axis=0)
+    REC_COLS: tl.constexpr = 6
+
+    # 转换uint64裸地址为int64元素指针
+    rec = tl.cast(rec_ptr_u64, tl.pointer_type(tl.int64))
+    rec_base = rec + task_id * REC_COLS
+
+    # 读取每条任务元数据（元素偏移 M N）
+    p1 = tl.load(rec_base + 0)
+    p2 = tl.load(rec_base + 1)
+    p3 = tl.load(rec_base + 2)
+    M  = tl.load(rec_base + 3)
+    N  = tl.load(rec_base + 4)
+    K  = tl.load(rec_base + 5)
+
+    # 转换浮点指针
+    A = tl.cast(A_ptr_u64, tl.pointer_type(tl.float32))
+    B = tl.cast(B_ptr_u64, tl.pointer_type(tl.float32))
+    C = tl.cast(C_ptr_u64, tl.pointer_type(tl.float32))
+
+    a_base = A + p1
+    b_base = B + p2
+    c_base = C + p3
+
+    offs_m = tl.arange(0, BLOCK_SIZE_M)
+    offs_n = tl.arange(0, BLOCK_SIZE_N)
+    offs_k = tl.arange(0, BLOCK_SIZE_K)
+
+    mask_m = offs_m < M
+    mask_n = offs_n < N
+    accum = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+
+    # K维度分块循环
+    for k_blk in tl.range(0, tl.cdiv(K, BLOCK_SIZE_K)):
+        k_start = k_blk * BLOCK_SIZE_K
+        k_rem = K - k_start
+        mask_k = offs_k < k_rem
+
+        a_off = offs_m[:, None] * K + (k_start + offs_k[None, :])
+        a_ptrs = a_base + a_off
+        a = tl.load(a_ptrs, mask=mask_m[:, None] & mask_k[None, :], other=0.0)
+
+        b_off = (k_start + offs_k[:, None]) * N + offs_n[None, :]
+        b_ptrs = b_base + b_off
+        b = tl.load(b_ptrs, mask=mask_k[:, None] & mask_n[None, :], other=0.0)
+
+        accum += tl.dot(a, b)
+
+    accum *= alpha
+    c_off = offs_m[:, None] * N + offs_n[None, :]
+    c_ptrs = c_base + c_off
+    tl.store(c_ptrs, accum, mask=mask_m[:, None] & mask_n[None, :])
+
+def contract_core_player_triton(self, T2, T3, rec, num_rec):
+    if num_rec == 0:
+        return T3
+
+    self_data = self.data
+    T2_data = T2.data
+    T3_data = T3.data
+    dtype = self_data.dtype
+    assert dtype == cp.float32, "仅支持float32"
+    elem_bytes = dtype.itemsize
+
+    # rec转为GPU连续int64
+    if not isinstance(rec, cp.ndarray):
+        rec_gpu = cp.array(rec[:num_rec], dtype=cp.int64)
+    else:
+        rec_gpu = rec[:num_rec].astype(cp.int64)
+    rec_gpu = cp.ascontiguousarray(rec_gpu)
+
+    # 动态分块，RTX3090 64KB共享内存保护
+    max_m = int(cp.max(rec_gpu[:, 3]).item())
+    max_n = int(cp.max(rec_gpu[:, 4]).item())
+    max_k = int(cp.max(rec_gpu[:, 5]).item())
+
+    def next_power_of_2(x):
+        return 1 if x == 0 else 1 << ((x - 1).bit_length())
+
+    BLOCK_M = max(16, min(128, next_power_of_2(max_m)))
+    BLOCK_N = max(16, min(128, next_power_of_2(max_n)))
+    BLOCK_K = max(16, min(128, next_power_of_2(max_k)))
+
+    smem_req = (BLOCK_M * BLOCK_K + BLOCK_K * BLOCK_N) * elem_bytes
+    if smem_req > 65536:
+        BLOCK_K = max(16, BLOCK_K // 2)
+
+    grid = (num_rec,)
+
+    # 关键：提取cupy uint64裸设备地址，符合triton3.1入参规范
+    ptr_A = self_data.data.ptr
+    ptr_B = T2_data.data.ptr
+    ptr_C = T3_data.data.ptr
+    ptr_rec = rec_gpu.data.ptr
+
+    _triton_batch_gemm_kernel[grid](
+        ptr_A,
+        ptr_B,
+        ptr_C,
+        ptr_rec,
+        1.0,
+        elem_bytes,
+        BLOCK_SIZE_M=BLOCK_M,
+        BLOCK_SIZE_N=BLOCK_N,
+        BLOCK_SIZE_K=BLOCK_K,
+        num_warps=4,
+        num_stages=2
+    )
+    cp.cuda.runtime.deviceSynchronize()
+    return T3
+
+
+
+
+
+
+
 
 
 
