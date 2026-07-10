@@ -106,8 +106,114 @@ class Tape(dict):
         print(res)
 
         return res 
+
+if 0:  # Using CUDA Graph to accelerate the contraction of tensor blocks on GPU.
+
+    class GraphCache:
+        def __init__(self):
+            self.graph = None
+            self.stream = None
+
+    def contract_core_player_graph(self, T2, div, rec, num_rec, graph_cache, data=None, use_buf=False):
+        dtype = np.promote_types(self.dtype, T2.dtype)
+        T3 = self.__class__(rank=None, QSp=None, totQN=None,
+                buffer=data, dtype=dtype, use_buf=use_buf)
+
+        self_data, T2_data, T3_data = self.data, T2.data, T3.data
+
+        def _replay_body():
+            T3_data[:] = 0.0
+            for ind in range(num_rec):
+                p1, p2, p3, Dim1, Dim2, Dimc = rec[ind]
+                data1 = self_data[p1:p1+Dim1*Dimc].reshape((Dim1, Dimc), order='F')
+                data2 = T2_data[p2:p2+Dim2*Dimc].reshape((Dimc, Dim2), order='F')
+                data3 = T3_data[p3:p3+Dim1*Dim2].reshape((Dim1, Dim2), order='F')
+                common_util.gemm_all(data1, data2, data3, alpha=1.0, beta=1.0,
+                        dtype=dtype, use_gpu=1)
+
+        if graph_cache.graph is None:
+            # First call for this tape: capture instead of just running
+            stream = cp.cuda.Stream(non_blocking=True)
+            graph_cache.stream = stream
+            with stream:
+                stream.begin_capture()
+                _replay_body()
+                graph_cache.graph = stream.end_capture()
+            graph_cache.graph.launch(stream=stream)
+            stream.synchronize()
+        else:
+            graph_cache.graph.launch(stream=graph_cache.stream)
+            graph_cache.stream.synchronize()
+
+        return T3
+
+    import cupy as cp
+    from collections import defaultdict
+
+    def contract_core_player_multistream(self_data, T2_data, T3_data, rec, num_rec,
+                                           n_streams=8, dtype=None):
+        T3_data[:] = 0.0
+
+        # 按目标 block (p3) 分组：写入同一个 p3 的必须放进同一个 stream，保证累加顺序
+        groups = defaultdict(list)
+        for ind in range(num_rec):
+            p1, p2, p3, Dim1, Dim2, Dimc = rec[ind]
+            groups[p3].append((p1, p2, p3, Dim1, Dim2, Dimc))
+
+        streams = [cp.cuda.Stream(non_blocking=True) for _ in range(n_streams)]
+
+        # 简单轮询分配：每个"目标 block 组"整体分到一个 stream,
+        # 组内天然串行（同一 stream），组间在不同 stream 上并发
+        for i, (p3, entries) in enumerate(groups.items()):
+            stream = streams[i % n_streams]
+            with stream:
+                for (p1, p2, p3_, Dim1, Dim2, Dimc) in entries:
+                    data1 = self_data[p1:p1+Dim1*Dimc].reshape((Dim1, Dimc), order='F')
+                    data2 = T2_data[p2:p2+Dim2*Dimc].reshape((Dimc, Dim2), order='F')
+                    data3 = T3_data[p3_:p3_+Dim1*Dim2].reshape((Dim1, Dim2), order='F')
+                    # 用支持 stream 的 gemm 调用（cupy 的算子会用当前 stream context）
+                    data3 += cp.matmul(data1, data2)
+
+        # 等所有 stream 完成
+        for s in streams:
+            s.synchronize()
+
+
+    def build_transpose_index_map(tensor, perm_axes):
+        """
+            不仅是 block 顺序重排，还包括 block 内部的元素重排
+        对一个 block-sparse 张量,给定新的轴顺序 perm_axes (等价于 Vp1/Vp2),
+        计算一张 flat index map: new_flat_data[i] = old_flat_data[idx_map[i]]
+        只需在结构不变时算一次,可以缓存复用(类似 recorder 阶段产出的 rec)
         
         
+        然后用一次 gather kernel（cupy 里就是花式索引 new_data =
+        old_data[idx]，或者 cp.take(old_data, idx)）一次性完成所有 block
+        的转置，跟 block 数量、block 形状是否统一完全无关。
+            
+        """
+        idx_map = np.empty(tensor.data.size, dtype=np.int64)
+        
+        #idx_map = np.empty(tensor.data.size, dtype=np.int32)  # 而非 int64,  may be better !
+
+        new_offset = 0
+
+        for idx in range(tensor.nidx):
+            old_offset = tensor.Block_idx[0, idx]
+            old_shape = tuple(tensor.QSp[i].Dims[tensor.Addr_idx[i, idx]] for i in range(tensor.rank))
+            block_size = np.prod(old_shape)
+
+            # 这个 block 内、按原始(F order)展平的局部索引,重新排列到新轴顺序后的局部索引
+            local_idx = np.arange(block_size).reshape(old_shape, order='F')
+            local_idx_new = local_idx.transpose(perm_axes).reshape(-1, order='F')
+
+            idx_map[new_offset : new_offset + block_size] = old_offset + local_idx_new
+            new_offset += block_size
+
+        return idx_map  # 上传到 GPU 一次: idx_map_gpu = cp.asarray(idx_map)
+
+
+
 #TapeList = [Tape()]   # at least one tape 
 TapeList = OrderedDict()
 TapeList[0] = Tape()   #construct a default tape

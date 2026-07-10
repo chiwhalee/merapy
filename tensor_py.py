@@ -26,25 +26,30 @@
         get_position_rev --> np.unravel_index(linear_ind, shape)
 
 """
-from __future__ import division
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
+#from __future__ import division
+#from __future__ import unicode_literals
+#from __future__ import print_function
+#from __future__ import absolute_import
+#from future import standard_library
+#standard_library.install_aliases()
+#
+#
+#from builtins import str
+#from builtins import map
+#from builtins import range
+#from builtins import *
+#from builtins import object
 
-
-from builtins import str
-from builtins import map
-from builtins import range
-from builtins import *
-from builtins import object
 import unittest
 import warnings
 import pickle
 import pprint
 import time 
 import numpy as np
+
+# 让 NumPy 的标量打印回归传统模式（不带类型前缀）
+#np.set_printoptions(legacy="1.21")
+
 import itertools 
 import math 
 from collections import OrderedDict
@@ -71,7 +76,7 @@ except:
 from merapy.utilities import (print_vars, save, load)
 from merapy.ntensor import TensorBase, nTensor 
 #from merapy.quantum_number import *  
-
+  
 #from merapy.quantum_number_py  import (QspU1, QspZ2, QspTravial, qsp_any, symmetry_to_Qsp, make_qsp)
 #from merapy.quantum_number_py  import (QspU1, QspZ2, QspTravial, qsp_any, make_qsp)
 #from quantum_number_py import (QspU1, QspZ2, QspTravial, qsp_any, symmetry_to_Qsp, make_qsp)
@@ -752,23 +757,6 @@ class iTensor(TensorBase):
         self.get_block(temp)
         return self.get_block(temp), sh 
     
-    def ravel_qn_id_tuple(self, qn_id_tuple):
-        """
-            from 量子数组合 的多维编号 to 一维编号的映射
-            it may be used as follows: 
-                temp = self.ravel_qn_id_tuple(qn_id_tuple)
-                i = self.idx[temp]
-                i is the id of the qn_id_tuple  in self.Addr_idx, self.Block_idx 
-                can use it to self.get_block(i),  etc 
-        """
-        pq = 0     
-        assert len(qn_id_tuple)==self.rank 
-        for i in range(self.rank-1, 0 , -1):
-            pq = (pq+qn_id_tuple[i])*self.QSp[i-1].nQN
-        pq = pq+qn_id_tuple[0]
-        
-        return pq 
-    
     def get_block(self, i, linear=True, order='F'): 
         """
             params:
@@ -783,9 +771,10 @@ class iTensor(TensorBase):
             return self.data[p: p + size] 
         else:
             sh = self.get_block_shape(i)
+            #return  self.data[p: p+size].reshape(sh, order=order, copy=False)    # cupy has not param copy
             return  self.data[p: p+size].reshape(sh, order=order)            
     
-    def get_block_shape(self, i):
+    def get_block_shape(self, i:int):
         qn_id_tuple = self.Addr_idx[:, i]
         return [self.QSp[i].Dims[qn_id_tuple[i]] for i in range(self.rank)]
     
@@ -1003,7 +992,6 @@ class iTensor(TensorBase):
                         d = self.Block_idx[1, i]
                         qn_id_tuple= self.Addr_idx[:, i]
                         qn_id_linear = self.Block_idx[0, i]
-                        #qn_id_linear = self.ravel_qn_id_tuple(qn_id_tuple)
                         #temp += '%d '%i + str(qn_id_tuple) + ": "
                         temp += ''.join(['%d '%i, str(qn_id_tuple), 
                             '*'.join(map(str, self.get_block_shape(i))), 
@@ -1176,12 +1164,13 @@ class iTensor(TensorBase):
         res.data[:] = 0.0
         return res 
     
-    def get_position(self, qn_ind_tuple):
+    def ravel_qn_ind_tuple(self, qn_ind_tuple):
         """
-            map a rank-dim index to linear index 
+            
+            from 量子数组合 的多维编号 to 一维编号的映射
             
             this func is used in following way: 
-                p3=T3.get_position(iQN3[:T3.rank])
+                p3=T3.ravel_multi_index(iQN3[:T3.rank])
                 idx3 = T3.idx[p3]
                 p3 = T3.Block_idx[0,idx3]
                 data1=self.data[p1:p1+Dim1*Dimc].reshape((Dim1,Dimc), order='F')    #attention_here fortran order
@@ -1192,13 +1181,22 @@ class iTensor(TensorBase):
         if len(qn_ind_tuple)==0: #this is for rank 0 tensor
             return 0
         
-        dims=tuple(self.QSp[i].nQN for i in range(self.rank)) 
-        p = np.ravel_multi_index(qn_ind_tuple, dims, order='F')
+        strides = tuple(self.QSp[i].nQN for i in range(self.rank))  
+        p = np.ravel_multi_index(qn_ind_tuple, strides, order='F')
+        
+        ###equivlent to the following code (, but may be 'C' order)
+        #p = 0     
+        #for i in range(self.rank-1, 0 , -1):
+        #    p = (p+qn_id_tuple[i])*self.QSp[i-1].nQN
+        #p = p+qn_id_tuple[0]
         
         return p
+   
+    get_position = ravel_qn_ind_tuple  # def get_position another name 
+    
     
     def get_idx(self, qn_id_tuple):
-        p = self.get_position(qn_id_tuple)
+        p = self.ravel_qn_ind_tuple(qn_id_tuple)
         if p >= self.idx_dim:  # wrong qn_id_tuple
             return -1 
         i = self.idx[p]
@@ -1831,7 +1829,7 @@ class iTensor(TensorBase):
                 lower_qn_id = res.QSp[0].QNs.index(lower_qn)
                 upper_qn_id = res.QSp[1].QNs.index(upper_qn)
                 qn_id = [lower_qn_id, upper_qn_id]
-                temp = res.get_position(qn_id)
+                temp = res.ravel_qn_ind_tuple(qn_id)
                 pos = res.idx[temp]
                 print(pos)
                 #res.data[pos]
@@ -2258,6 +2256,41 @@ class iTensor(TensorBase):
     #def transpose 
     transpose = permutation   # compatible with numpy 
     
+    def get_idx_permute(block_id: int, order):
+        """
+            If an iTensor is transposed, the bock_id are mapped to new values 
+            params:
+                order:  of lenght self.rank 
+        """
+        if self.rank==0:
+            return 0
+        qn_ind_tuple = self.Addr_idx[0:rank, block_id]  # qn number index 
+        qn_ind_tuple_new = [qn_ind_tuple[order[i]] for i in range(rank)]
+        return  self.get_idx(qn_ind_tuple_new)
+    
+    def transpose_view(self, P) -> list[int]:
+        """
+            Only return a view or necessisary data for transpose, without copy
+            of data.  This is meant to be more efficent than the normal
+            transpose. In particular to be combined with contract.   
+        
+        """
+        return [self.get_idx_permute(block_id,  P) for block_id in range(self.nidx)]
+
+        qn_ind_tuple = np.empty(self.rank, int)
+        block_id_map = np.empty(self.nidx, int)
+        
+        #after transpose we map  block_id -> block_id_new
+        for block_id  in range(self.nidx):
+            qn_ind_tuple[0] = 0  # for rank=0
+            qn_ind_tuple[0:rank] = self.Addr_idx[0:rank, block_id]  # qn number index 
+            qn_ind_tuple_new = [qn_ind_tuple[P[i]] for i in range(rank)]
+            block_id_new = self.get_idx(qn_ind_tuple_new)
+            block_id_map[ block_id ] = block_id_new
+        
+        return block_id_map
+        
+   
     def contract_core(self, T2, div, preserve_qsp=False, data=None, use_buf=False):
         """
             把T1，和T2的非零block 如果量子数组合相等则收缩
@@ -2313,8 +2346,14 @@ class iTensor(TensorBase):
                 iQN1[0] = 1 #!for rank=0
                 iQN1[0:rank1]=self.Addr_idx[0:rank1,idx1]
                 iseq = np.all(iQN1[shift:shift+div] == iQN2[0:div])  #注意这里写得不适当，准确地，如果是U1 symm 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定....写不清楚啊
+                
+                
                 if not iseq:  #如果量子数组合相等则收缩
                     continue
+                #print_vars(vars(),  ['idx2', 'iQN2[:rank2]',  'T2.get_block(idx2, linear=1)'])
+                #print_vars(vars(),  ['idx1', 'iQN1[:rank1]',  'self.get_block(idx1, linear=1)'])
+                #print('-'*30)
+                
                 if shift == 0: 
                     Dim1 = 1   #when shift = 1.0,  np.prod yields 1.0, should be converted to int 
                 else:
@@ -2327,7 +2366,7 @@ class iTensor(TensorBase):
                 iQN3[shift:rank3] = iQN2[div:rank2]
                 
                 data3 = T3.get_block(iQN3[:T3.rank]).reshape((Dim1,Dim2), order='F')    
-                
+
                 #use_gpu = self.use_gpu
                 #transfer_data = False
                 #if self.USE_GPU_FOR_BLOCK and data3.size >= self.USE_GPU_MUL_LIM:
@@ -2343,7 +2382,6 @@ class iTensor(TensorBase):
                         dtype = dtype, use_gpu=use_gpu)
         
         return T3
-
     
     def prepare_leg(self,T2, V1, V2, info=0):
         """
@@ -2418,7 +2456,7 @@ class iTensor(TensorBase):
                 j += 1 
         return V_1n2, Vp1, Vp2, V3 
 
-    def contract(self, T2, V1=None, V2=None, final_ind_labels=None, 
+    def contract_v1(self, T2, V1=None, V2=None, final_ind_labels=None, 
             out_Vc=False, data=None, use_buf=False, 
             return_v3 = False, 
             preserve_qsp=False, track_name=0,  info=0):
@@ -2431,6 +2469,178 @@ class iTensor(TensorBase):
                 Vi: of type np.ndarray(,"int")
                 Vp1,先记录了T1的外腿，后记录内腿指标； Vp2先记录了内腿，后记录了外腿指标
                 use_buf: use data buffer for T3
+                
+            For profiling the code for GPU, one may use the following code:
+                
+                import cupy as cp
+                with cp.cuda.profile():
+                    T3 = T1.contract(T2, ...)
+                cp.cuda.Stream.null.synchronize() 
+                
+                
+                nsys profile -o profile_out python your_script.py
+                nsys stats profile_out.nsys-rep
+                
+                
+                t_wall = time.perf_counter()  # around the whole player loop
+                cp.cuda.Stream.null.synchronize()  # then sum actual kernel durations from nsys
+                If wall time is, say, 5x the sum of actual kernel durations, that gap is your ceiling for graph-capture improvement — and it suggests a large win is plausible
+                
+                
+            
+            THE BOTTLE NECK OF THE GPU CODE:
+                is the many small kernel launches,
+            
+                A single CUDA kernel launch costs roughly 5–20 μs
+                of fixed overhead (Python-side cupy dispatch +
+                driver + queue), regardless of how much actual work
+                the kernel does. Compare that to the actual compute
+                time of one block's GEMM:
+
+                A block of size Dim1=Dim2=Dimc=50: ~2·50³ ≈ 250,000 FLOPs. On a modern GPU
+                (~10+ TFLOPS), that's ~0.025 μs of real compute — completely dwarfed by the ~10
+                μs launch overhead. Here, launch overhead is 400x the actual work. A block of
+                size 500×500×500: ~2.5×10⁸ FLOPs → ~25 μs of compute — now comparable to or
+                larger than launch overhead. 
+            
+            TODO: FOR FUTRUAL OPTIMIZATION OF THE GPU CODE. 
+                I may try the following ways:
+                1.  use a batched or strided-batched GEMM, like the following, 
+                            A_batch = cp.stack(data1_list)   # shape (batch, Dim1, Dimc)
+                            B_batch = cp.stack(data2_list)   # shape (batch, Dimc, Dim2)
+
+                            # cupy.matmul broadcasts over leading batch dims and uses cuBLAS batched gemm internally
+                            C_batch = cp.matmul(A_batch, B_batch)   # shape (batch, Dim1, Dim2)
+
+                            # accumulate into T3 blocks
+                            for i, block_view in enumerate(data3_list):
+                                block_view += C_batch[i]
+                    But I guess this may has little use. 
+                2. Use CUDA Graphs to capture the whole sequence of kernel
+                launches once and replay it, eliminating almost all per-call
+                Python + launch overhead: 
+                stream = cp.cuda.Stream(non_blocking=True)
+                        with stream:
+                            stream.begin_capture()
+                            # ... run one full contract_core call here ...
+                            graph = stream.end_capture()
+
+                        # later, just replay:
+                        graph.launch()
+                    This is the single most effective GPU-specific fix if your loop
+                    structure is truly repeated with fixed shapes — it eliminates
+                    the "many small launches" problem entirely rather than trying
+                    to reduce launch count via batching.             
+                    
+                    This may be the most promising way to optimize the GPU code. 
+                    
+                    How to do it?
+                        Incoperate the CUDA graph capture with the the
+                        contract_core_recorder/player. 
+                    
+                        Once rec exists, the sequence and shape of GPU operations
+                        is entirely deterministic — no if branches depending on
+                        tensor values, no dynamic control flow. That's precisely
+                        the constraint CUDA graphs require: the captured graph is
+                        a fixed DAG of kernel launches with fixed pointers/shapes:
+                        replaying it just resubmits the same kernels with the same
+                        arguments, at a tiny fraction of the CPU-side dispatch
+                        cost.
+                        
+                        Graph capture removes host-side launch/dispatch
+                        overhead (Python loop, per-call cuBLAS setup) — it does
+                        not reduce the number of kernels actually run on the
+                        GPU. If you have many small same-shape blocks, batching
+                        them into one strided-batched GEMM (from my earlier
+                        suggestion) still helps by reducing device-side kernel
+                        count too. The two are complementary and stack.
+                        
+                        That combination — batch by shape, then graph-capture
+                        the batched sequence — is close to the practical
+                        ceiling for this architecture without moving to
+                        cuquantum/cuTensorNet.
+                        
+                    Estimate the speedup:
+                        
+                        DMRG/TEBD bond dimensions get further subdivided by
+                        quantum-number blocks, so individual block sizes are
+                        often in the tens-to-low-hundreds range, especially for
+                        symmetric/multi-quantum-number systems. If that's your
+                        regime, your current player loop is likely spending far
+                        more wall-clock time on Python-loop + per-call cuBLAS
+                        dispatch overhead than on actual multiplication — which
+                        is exactly the regime where CUDA graphs give dramatic,
+                        not incremental, speedups (often 3–10x on the
+                        contraction step alone, sometimes more, since graph
+                        replay collapses hundreds of ~10μs-overhead calls into
+                        back-to-back kernels with near-zero gap between them).
+                        If instead your typical blocks are large (compute-bound
+                        already), graphs will only shave off Python/dispatch
+                        overhead at the margins — maybe 10–20%, still worth
+                        having but not transformative. 
+                    
+                        
+                    Certain risks:
+                        1. Make sure that for the player path specifically,
+                        self.data, T2.data, T3.data are the same persistent GPU
+                        allocations every time this tape is replayed, just
+                        overwritten with new values. 
+                        
+                        2. The zeroing step must be inside the captured region.
+                            T3.data[:]=0.0 (or its equivalent) has to be captured too, since your accumulation uses beta=1.0
+                            If it's outside the graph, either duplicate it
+                            into the capture or issue it as a separate,
+                            also-captured memset kernel just before the gemm
+                            sequence.
+                        3.  No allocation inside the captured path.
+                            Any cp.empty(...)/reshape that isn't a true view (i.e. triggers a
+                            copy/allocation) inside the loop will break capture or force a slow fallback.
+                            Your .reshape(..., order='F') on slices should be pure views in cupy as long as
+                            strides are compatible — worth explicitly asserting .flags['OWNDATA'] is False
+                            in a debug run to confirm no hidden copy is happening. 
+                    
+                    
+                
+                3. NVIDIA's cuTensorNet/cuquantum is purpose-built for
+                exactly this problem (contracting tensors with many
+                symmetry-graded blocks, avoiding explicit permutation copies
+                via internal strided-kernel fusion, and batching heterogeneous
+                block contractions efficiently) 
+                
+                     native block-sparse support in cuTENSOR is very new and still
+                     experimental. NVIDIA's own release notes show block-sparse
+                     contraction support was only recently added as beta
+                     functionality (cutensorCreateBlockSparseContraction),
+                     alongside general improvements to block-sparse contraction
+                     performance.
+                     
+                     you might get more direct benefit from testing NVIDIA's
+                     new cutensorCreateBlockSparseContraction (via cupy's
+                     cuTENSOR bindings if exposed, or raw ctypes/nvmath-python
+                     bindings to cuTENSOR) than from CUDA graphs alone, since
+                     it's purpose-built for exactly your problem shape. Worth a
+                     quick spike to see whether cupy or nvmath-python exposes
+                     this beta API yet — if it does, it may give you cuTENSOR's
+                     fused block-sparse kernel without you needing to hand-roll
+                     batching/graph-capture logic at all.
+                
+                4. 多stream：真正能带来提升的手段
+                    把互相独立的 block-pair 分散到多个 CUDA stream 上，GPU 的
+                    Hyper-Q 调度器就可以让这些小
+                    kernel并发执行（而不是排队串行），从而更好地填满
+                    SM。这是对"很多小
+                    kernel"场景最直接有效的硬件级技巧，前提是：
+
+                    block 之间确实独立（不写入同一个 T3 block，否则有
+                    write-after-write 竞争，必须靠 stream
+                    内串行或显式同步保证顺序）； block
+                    大小不能小到连并发调度的开销都盖不住（极端情况下退化为
+                    launch 开销主导，这时候多 stream 帮助有限，CUDA graph
+                    才是正解
+
+
+                
+            
         """
         
         V1 = self.ind_labels if V1 is None else V1   #issue: when self contract with self but with different ind_labels, this cause problem
@@ -2484,6 +2694,112 @@ class iTensor(TensorBase):
             else:
                 return T3
     
+    def contract_v2(self, T2, V1=None, V2=None, final_ind_labels=None, 
+            out_Vc=False, data=None, use_buf=False, 
+            return_v3 = False, 
+            preserve_qsp=False, track_name=0,  info=0):
+        """
+            In this version, we dont permute T1 and T2 in ahead, but use einsum
+            to do the contraction. This may avoid copying data, which is more
+            efficient. However, einsum may not be able to handle all cases.
+            
+            Will be v2 faster than v1? 
+                This is a tradeoff between one large data-movement operation
+                (v1) vs many small ones plus repeated per-call overhead (v2).
+        
+        """
+        
+        V1 = self.ind_labels if V1 is None else V1   #issue: when self contract with self but with different ind_labels, this cause problem
+        V2 = T2.ind_labels if V2 is None else V2
+        rank1 = self.rank 
+        rank2 = T2.rank 
+        
+        V_1n2, Vp1, Vp2, V3 = self.prepare_leg(T2, V1, V2)        
+        div = len(V_1n2)
+        shift = self.rank - div
+        
+        common = []
+        qsp_list = []
+        for i in range(self.rank):
+            if V1[i] in V2:
+                common.append(V1[i])
+            else:
+                qsp_list.append(self.QSp[i])
+        
+        for i in range(T2.rank):   # issue this can be more efficient, of order self.rank + T2. rank 
+            if V2[i] not in common:
+                qsp_list.append(T2.QSp[i])
+                
+        
+        xp = np if self.use_gpu!=1 else cp
+        assert self.use_gpu != 2, "use_gpu=2 is not supported for contract_v2, only supported by contract_v1, use that instead"
+
+        tQN = self.totQN.__add__(T2.totQN)
+        rank3 = self.rank + T2.rank - 2*len(V_1n2) 
+        dtype = np.promote_types(self.dtype, T2.dtype)  # 自动根据 self.dtype 和 T2.dtype 推导最精准的输出类型（完美支持 32位/64位 和 实数/复数）
+        if self.dtype != dtype:
+            self.change_dtype(dtype)
+        if T2.dtype != dtype:
+            T2.change_dtype(dtype)
+        
+        T3 = iTensor(rank=rank3, QSp=qsp_list, totQN=tQN, buffer=data, 
+                dtype=dtype, use_buf=use_buf, use_gpu=self.use_gpu)
+        T3.data[:]=0.0 
+        
+        data3_max = np.max(T3.Block_idx[:T3.nidx, 1])
+        #print_vars(vars(),  ['data3_max', 'self.nidx'])
+        data3_buffer = np.empty(data3_max, dtype=dtype)
+        
+        if rank3==0:
+            qsp_list = []
+        
+        
+        nidx3 = 0
+        iQN1 = np.empty(self.rank + 1, int)
+        iQN2 = np.empty(T2.rank + 1, int)        
+        iQN3 = np.empty(T3.rank + 1, int) # +1 to avoid T3.rank=0
+        
+        for idx2 in range(T2.nidx):
+            #iQN2[0] = 0  #!for rank=0
+            iQN2 = T2.Addr_idx[0:rank2, idx2]
+            iQN2_p  = [iQN2[Vp2[i]] for i in range(T2.rank)]
+            
+            data2 = T2.get_block(idx2, linear=False, order='F')  
+                
+            for idx1 in range(self.nidx):
+                #iQN1[0] = 1 #!for rank=0
+                iQN1 =self.Addr_idx[0:rank1, idx1]
+                iQN1_p  = [iQN1[Vp1[i]] for i in range(self.rank)]
+                
+                iseq = np.all(iQN1_p[shift:shift+div] == iQN2_p[0:div])  #注意这里写得不适当，准确地，如果是U1 symm 的话应该是T1, T2相应的量子数的值正好差个符号, 而这里是用量子数的位置处理了, 并假定T1和T2收缩的leg已经相差一个conj
+                if not iseq:  #如果量子数组合相等(其实是共轭)则收缩
+                    continue
+                
+                data1 = self.get_block(idx1, linear=False, order='F')
+                
+                
+                iQN3[0:shift] = iQN1_p[0:shift]  #iQN3[0] = 1 #!for rank=1
+                iQN3[shift:rank3] = iQN2_p[div:rank2]
+                
+                if 1:
+                    data3 = T3.get_block(iQN3[:T3.rank])  
+                    temp = xp.einsum(data1, V1,  data2, V2, V3, optimize=True)
+                    data3 += temp.ravel(order='F')  # accumulate into T3.data in Fortran order
+                else:
+                    #while np.einsum support param 'out', cp.eisnsum does not. 
+                    #The following code works for np but not for cp. So I disable this at the moment
+                    data3 = T3.get_block(iQN3[:T3.rank], linear=False, order='F')  
+                    temp = data3_buffer[:data3.size]
+                    temp = temp.reshape(data3.shape, order='F')
+                    xp.einsum(data1, V1,  data2, V2, V3, out=temp,  optimize=True)
+                    data3 += temp  # accumulate into T3.data in Fortran order
+                   
+                #If you need finer control for path optimization, consider replacing cupy.einsum() by cuquantum.contract() instead.
+        
+        return T3
+     
+    contract = contract_v1
+        
     @staticmethod 
     def contract_tensor_list(tlist, final_ind_labels=None, check=False):   #def ctl
         """
@@ -2515,12 +2831,15 @@ class iTensor(TensorBase):
     ctl = CTL= contract_tensor_list 
     
     def set_ind_labels(*args):
+        """
+        """
         n = len(args)//2 
         for i in range(n):
             o = args[i*2]
             ind = args[i*2+1]
             o.ind_labels= ind 
-    
+     
+
     def dot(self, other, data=None,  use_buf=False): 
         """
             mainly for compatible with numpy 
@@ -2729,8 +3048,8 @@ class iTensor(TensorBase):
             u = iTensor.diagonal_tensor_rank2(q)
             
             label = list(range(self.rank))
-            label[i] = -1
-            label_u = [-1, 1000]
+            label[i] = self.rank
+            label_u = [self.rank, 50]
             #A, _ = self.contract(u, [0, 1, 2], [2, 3],  use_buf=use_buf)
             A = self.contract(u, label, label_u, use_buf=use_buf)
             if i != self.rank-1:  #need re-order the legs 
@@ -2812,7 +3131,7 @@ class iTensor(TensorBase):
                     
                     data_coord.append(int(d + data_coord_in_block[i]))
                 
-                data_pos=Tp.get_position(data_coord)
+                data_pos=Tp.ravel_qn_ind_tuple(data_coord)
                 print("\t\t data_coord",data_coord,"data_pos",data_pos, end=' ')
                 
                 Tp.data[data_pos] = self.data[block_pos_in_data+dat_pos_in_blk]
@@ -2980,7 +3299,7 @@ class iTensor(TensorBase):
                     V3[i+rank1] = V2[i]
                     V3[i+rank1+rank3] = V2[i+rank2]
                 #idx3 linear position of  qn combination V3
-                idx3 = T3.get_position(V3[:rank3*2])   
+                idx3 = T3.ravel_qn_ind_tuple(V3[:rank3*2])   
                 
                 pidx3 = T3.Block_idx[0, T3.idx[idx3]]
                     #print 'selffff.idx', T1.idx, T2.idx
@@ -3195,7 +3514,7 @@ class iTensor(TensorBase):
         for idx  in range(self.nidx):
             p1 = self.Block_idx[0,idx] #-1
             iQN[0:rank] = self.Addr_idx[0:rank, idx]
-            pidx2 = T2.get_position(iQN)
+            pidx2 = T2.ravel_qn_ind_tuple(iQN)
             idx2 = T2.idx[pidx2]
             p2 = T2.Block_idx[0,idx2] #-1
             # above find the start address p1 and p2 for corresonding blocks
@@ -3394,7 +3713,7 @@ class performance_iTensor(object):
     def __init__(self, symmetry):
         self.symmetry = symmetry
         pass
-    
+   
     def _permute(self, symmetry="U1", rank=8, dim=4, nqn=None,  NUM_OF_THREADS=8, iter_times=1000):
         import os
         os.environ["OMP_NUM_THREADS"] = str(NUM_OF_THREADS)
@@ -3875,8 +4194,8 @@ class Test_iTensor(unittest.TestCase):
         if 1:  #pass 
             t = iTensor(QSp=[qa*qb, qc, qd*qe]); t.data[:] = np.arange(t.size)
             t2=t.split_qsp(0, [qa, qb], 2, [qd, qe])
-            c2 = t.contract(t, [0, 100, 1], [0, 1000, 1])
-            c3 = t2.contract(t2, [0, 1, 100, 2, 3], [0, 1, 1000, 2, 3])
+            c2 = t.contract(t, [0, 20, 1], [0, 30, 1])
+            c3 = t2.contract(t2, [0, 1, 10, 2, 3], [0, 1, 20, 2, 3])
             c2.show_data()
             c3.show_data()
             self.assertTrue(np.all(c2.data==c3.data))
@@ -3884,15 +4203,15 @@ class Test_iTensor(unittest.TestCase):
         if 1: 
             t = iTensor(QSp=[qa*qb, qc*qd, qe]); t.data[:] = np.arange(t.size)
             t2=t.split_qsp(0, [qa, qb], 1, [qc, qd])
-            c2 = t.contract(t, [0, 1, 100], [0, 1, 1000])
-            c3 = t2.contract(t2, [0, 1, 2, 3, 100], [0, 1, 2, 3, 1000])
+            c2 = t.contract(t, [0, 1, 30], [0, 1, 40])
+            c3 = t2.contract(t2, [0, 1, 2, 3, 20], [0, 1, 2, 3, 30])
             self.assertTrue(np.all(c2.data==c3.data))
        
         if 1:   #pass 
             t = iTensor(QSp=[qa*qb*qc*qd, qe]); t.data[:] = np.arange(t.size)
             t2=t.split_qsp(0, [qa, qb, qc, qd])
             c2 = t.contract(t, [0, 2], [0, 1])
-            c3 = t2.contract(t2, [0, 1, 2, 3, 100], [0, 1, 2, 3, 1000])
+            c3 = t2.contract(t2, [0, 1, 2, 3, 20], [0, 1, 2, 3, 30])
             self.assertTrue(np.all(c2.data==c3.data))
     
     def test_merge_qsp(self): 
@@ -4110,7 +4429,7 @@ class Test_iTensor(unittest.TestCase):
                 j2, m2 = 2, -2 
                 cg = clebsch_gordan(j0, j1, j2, m0, m1, m2)
                 print_vars(vars(),  ['cg'])
-                raise  
+                raise    
 
             t = iTensor(QSp=[q0, q1, q2])
             print_vars(vars(),  ['t'])
@@ -4124,9 +4443,102 @@ class Test_iTensor(unittest.TestCase):
 
             t = iTensor(QSp=[q0, q1, q2, q3])
             #print_vars(vars(),  ['t'])
-            print_vars(vars(),  ['t.cg_coeff'])
+            print_vars(vars(),  ['t.cg_coeff', ])
+    
+    def test_contract_2(self):
+        if 0: # note this test not passed 
+            q0 = qsp_any('U1', [0, 1, -1], [3, 3, 2])
+            q1 = qsp_any('U1', [0, 1, -1], [3, 3, 2])
+            t0 = iTensor(QSp=[q0, q1])
+            t0.data[:] = np.arange(t0.size)
+            t1 = t0.conj()
+            res_a = t0.contract_v1(t1, [0, 1, 2], [3, 4, 5])
+            res_b = t0.contract_v2(t1, [0, 1, 2], [3, 4, 5])
+            self.assertTrue(np.all(res_a.data==res_b.data))
+            
+        if 1: 
+            q = qsp_any('U1', [0, 1, -1], [3, 3, 2])
+            qsp = q.copy_many(3)
+            
+            t = iTensor(QSp=qsp)
+            t.data[:] = np.arange(t.data.size)
+            t1 = t.conj()
+            res_a = t.contract_v1(t1, [0, 1, 3], [1, 0, 4])
+            print_vars(vars(),  ['res_a.data[:100]'])
+            
+            print("="*100)
+            
+            res_b = t.contract_v2(t1, [0, 1, 3], [1, 0, 4])
+            print_vars(vars(),  ['res_b.data[:100]'])
+            self.assertTrue(np.all(res_a.data==res_b.data))
+            
+    def xtest_contract_v1_vs_v2_perf_gpu(self):
+        """Compare correctness and performance of contract_v1 vs contract_v2 on GPU."""
+        try:
+            import cupy as cp
+        except ImportError:
+            print("cupy not available, skipping GPU contract test.")
+            return
+
+        np.set_printoptions(legacy="1.21")
+        warnings.filterwarnings("ignore")
+        
+        M = 10  # Number of repetitions for timing
+        #dtype = np.float32
+        dtype = np.float32
+        use_gpu = 0
+        
+        #for n in [10, 50, 100, 500, 1000, 2000]:
+        for n in [10, 50, 100, 500, 1000, ]:
+            dims = [2.7, 1.2, 1]
+            _dims = [int(n * i) for i in dims]
+            Dl = qsp_any('U1', qns=[0, 1, -1, ], dims=_dims)
+            Dr = qsp_any('U1', qns=[0, 1, -1, ], dims=_dims)
+            d = qsp_any('U1', qns=[1, -1], dims=[1, 1])
+            qsp = [Dl, Dr, d]
+
+            t = iTensor(QSp=qsp, use_gpu=use_gpu, dtype=dtype)
+            t.set_data_random()
+            tc = t.conj()
+
+            # Warm-up runs to trigger GPU kernel compilation
+            _ = t.contract_v1(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
+            _ = t.contract_v2(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
+            
+
+            # Time contract_v1
+            t0 = time.perf_counter()
+            for i in range(M):
+                res_v1 = t.contract_v1(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
+            
+            t1 = time.perf_counter()
+            time_v1 = t1 - t0
+
+            # Time contract_v2
+            t0 = time.perf_counter()
+            for i in range(M):
+                res_v2 = t.contract_v2(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
+            t1 = time.perf_counter()
+            time_v2 = t1 - t0
+            
+            # Correctness check
+            v1_data = cp.asnumpy(res_v1.data, ) if isinstance(res_v1.data, cp.ndarray) else res_v1.data
+            v2_data = cp.asnumpy(res_v2.data, ) if isinstance(res_v2.data, cp.ndarray) else res_v2.data
+            if dtype==np.float32:
+                self.assertTrue(np.allclose(v1_data, v2_data, atol=1e-5),
+                                "contract_v1 and contract_v2 results differ!")
+            else:
+                self.assertTrue(np.allclose(v1_data, v2_data, atol=1e-12),
+                                "contract_v1 and contract_v2 results differ!")
+
+            # Performance report
+            print(f"\nGPU Performance Comparison (n={n}):")
+            print(f"  contract_v1 time: {time_v1:.6f} sec")
+            print(f"  contract_v2 time: {time_v2:.6f} sec")
+            print(f"  Speed-up (v1/v2): {time_v1/time_v2:.4f}x")
     
     def test_temp(self): 
+        np.set_printoptions(legacy="1.21")
         warnings.filterwarnings("ignore")
         
         from merapy.tensor_svd import Tensor_svd
@@ -4157,13 +4569,12 @@ class Test_iTensor(unittest.TestCase):
                 tc = t.conj()
                 t0 = time.time()
                 for i in range(1):
-                    t.contract(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
+                    t.contract_v1(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
+                    #t.contract_v2(tc, (0, 1, 2), (3, 1, 2), use_buf=0)
                 t1 = time.time()
 
                 print(f'time for iTensor contraction on {use_gpu}: {t1-t0}')
             
-    
-        
             
 
 
@@ -4195,14 +4606,16 @@ if __name__ == "__main__":
            #'test_merge_qsp_by_contract', 
            #'test_reshape', 
            #'test_reshape_u1', 
-           #
+           
            #'test_conj_new', 
            #'test_reduce_and_insert_1d_qsp', 
            #'test_tensor_player_single', 
            #'test_tensor_player_multiple', 
            #'test_itensor_gpu'
            #'dev_test_su2_symm', 
-           'test_temp', 
+           #'test_contract_2',
+           'xtest_contract_v1_vs_v2_perf_gpu',
+           #'test_temp', 
         ]
         
         
@@ -4210,4 +4623,4 @@ if __name__ == "__main__":
             suite.addTest(Test_iTensor(a))
         unittest.TextTestRunner().run(suite)
        
-  
+
