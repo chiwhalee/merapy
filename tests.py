@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 #coding=utf8
 
-from __future__ import unicode_literals
-from __future__ import print_function
-from __future__ import division
-from __future__ import absolute_import
-from future import standard_library
-standard_library.install_aliases()
-from builtins import *
+
 import unittest
 import psutil 
+import sys 
 
 from merapy.config import TestIt as Test_config
 from merapy.utilities import TestIt as Test_util 
@@ -57,7 +52,8 @@ else:
         else:
             ncpu = psutil.cpu_count()
         suite = ConcurrentTestSuite(suite, fork_for_tests(ncpu))
-    unittest.TextTestRunner(verbosity=0).run(suite)
-
+    #unittest.TextTestRunner(verbosity=0).run(suite)
+    result = unittest.TextTestRunner(verbosity=0).run(suite)
+    sys.exit(0 if result.wasSuccessful() else 1)
 
 #

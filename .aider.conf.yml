@@ -1,0 +1,22 @@
+# .aider.conf.yml
+read: AGENTS.md          # 每次会话都自动加载,只读、可被 prompt cache 命中
+
+edit-format: udiff
+subtree-only: true    # constrain repo map to just scan current sub-tree,  not entire repository 
+auto-commits: true
+attribute-author: true
+map-tokens: 2048                # 你的代码库涉及底层 kernel,适当调大 repo map 预算
+auto-test: true    # 全量测试约1秒，可以放心每次编辑后自动跑
+#edit-format:  diff,  udiff, search-replace
+test-cmd: "python tests.py"
+
+file:
+  - tensor_py.py
+  - quantum_number.py
+  - quantum_number_py.py
+  - tensor_player_multiple.py
+  - tensor_svd.py
+  - context_util.py
+  
+
+  
